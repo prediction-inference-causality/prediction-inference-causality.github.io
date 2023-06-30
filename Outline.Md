@@ -1,3 +1,4 @@
+Dates are (Skip | Adam)
 
 # Part 1
 
@@ -41,11 +42,12 @@ Universality
 Exact via normal approximation, normality based
 Repeat for differences
 
-#### Order Flips, Adam is now ahead of Skip
+
 
 
 ### Lecture 4 (Sept 6 | Sept 5) 
 Causality and Prediction
+#### Order Flips here: Adam is now ahead of Skip
 
 ### Lecture 5  (Sept 11 | Sept 7)
 Discrete Case—description
