@@ -1,9 +1,11 @@
 Dates are (Skip | Adam + Allison)
+[Lecture description in square brackets]
+
 
 # Part 1
 
 ### Lecture 1  (Aug 23 | Aug 24)
-Descriptive stats w/ 1 binary covariate  
+[Descriptive stats w/ 1 binary covariate] 
 Start w/ data, then versions of the question  
 Does everybody who goes to college make more (Lebron etc)  
 Do more people who go to college make at least x (fraction; number then cdf plot)  
@@ -20,8 +22,9 @@ Syllabus
 Closing:  
 Nested means vs nested medians  
 
+
 ### Lecture 2  (Aug 28 | Aug 29)
-Random sampling  
+[Random sampling and sampling distributions within each value of the covariate separately]
 Why need? Efficiency (survey vs census, QC)  
 Why sensible?  
 Samples tend to agree with big thing.  
@@ -33,8 +36,9 @@ Infinite Population Approx ?
 Calculations with densities  
 Why? Helps us think, more or less  
 
+
 ### Lecture 3 (Aug 30 | Aug 31)
-Sampling distn and confidence intervals.  
+[Sampling distns and confidence intervals within each value of the covariate and difference across the covariate].  
 (Chebyshev)  
 Coverage prob (conservative)   
 
@@ -43,13 +47,12 @@ Exact via normal approximation, normality based
 Repeat for differences  
 
 
+### Lecture 4 (Sept 6 | Sept 5)  order flips here: Adam + Allison now ahead of Skip
+[Causality and Prediction]   
 
-
-### Lecture 4 (Sept 6 | Sept 5)  order flips here: Adam is now ahead of Skip
-Causality and Prediction   
 
 ### Lecture 5  (Sept 11 | Sept 7)
-Discrete Case—description  
+1 Discrete Covariate (beyond binary)—description  
 Zoom in and it’s binary; new challenges are complex comparisons and sparsity  
 Solan to former: be clear. Examples!  
 Soln to the latter:   
