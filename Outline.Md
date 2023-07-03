@@ -1,4 +1,4 @@
-Dates are (Skip | Adam)
+Dates are (Skip | Adam + Allison)
 
 # Part 1
 
