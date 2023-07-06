@@ -49,7 +49,8 @@ Repeat for differences
 
 ### Lecture 4 (Sept 6 | Sept 5)  order flips here: Adam + Allison now ahead of Skip
 [Causality and Prediction]   
-
+Using regression to predict/impute missing outcome data
+Causal inference
 
 ### Lecture 5  (Sept 11 | Sept 7)
 1 Discrete Covariate (beyond binary)—description  
