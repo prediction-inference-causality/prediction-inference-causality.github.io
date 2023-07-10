@@ -1,0 +1,538 @@
+\documentclass[8pt]{beamer}
+\input{../preamble.tex}
+
+\subtitle{Lecture 5: Working with more than two categories}
+
+<<echo=FALSE, warning=FALSE, message=FALSE>>=
+source('../../shared-code/plotting.R')
+theme_set(simplified.theme)
+
+
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+library(cpsR)
+library(dplyr)
+library(magrittr)
+library(kableExtra)
+library(scales)
+
+cps.data = cpsR::get_asec(year=2022, vars=c('h_numper', 'htotval', 'a_age', 'a_hga'), key=census.api.key)
+all.earnings = data.frame(age=cps.data$a_age,
+                          income=cps.data$htotval, 
+                          education=case_match(cps.data$a_hga,
+                                           0  ~ 0,   # child
+                                           31 ~ 0,   # < grade 1
+                                           32 ~ 4,   #  grade 1-4
+                                           33 ~ 6,   #  grade 5-6
+                                           34 ~ 8,   #  grade 7-8 
+                                           35 ~ 9,   #  grade 9
+                                           36 ~ 10,  #  grade 10
+                                           37 ~ 11,  #  grade 11
+                                           38 ~ 11,  #  grade 12 no diploma
+                                           39 ~ 12,  #  high school grad
+                                           40 ~ 13,  #  some college
+                                           41 ~ 14,  #  associate degree (vocational)
+                                           42 ~ 14,  #  associate degree (academic)
+                                           43 ~ 16,  #  bachelors degree
+                                           44 ~ 18,  #  masters degree
+                                           45 ~ 20,  #  professional school degree
+                                           46 ~ 20)) #  doctorate
+
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+earnings = all.earnings[all.earnings$age %>% in.interval(c(25,35)) & 
+                        all.earnings$education >= 11, ]
+
+earnings$raw.income = earnings$income
+earnings$degree = factor(earnings$education >= 16, 
+                     levels=c(FALSE, TRUE), 
+                     labels=c('no 4-year degree','4-year degree')) 
+rownames(earnings)=NULL
+@
+
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+\section{Intuition}
+
+\begin{frame}{CPS Income Data}
+\begin{center}
+So far, we've been looking at our income data as if people fall into two groups. \\
+Our groups are people \textcolor{twocolor-green}{with} and \textcolor{twocolor-red}{without} 4-year degrees. Here's some of the data.
+\end{center}
+\bigskip
+\begin{figure}
+<<out.width='.8\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+earnings.tab = earnings[1:12, c('income', 'degree')]
+earnings.tab$income = sprintf('$%dk', round(earnings.tab$income / 1000))
+earnings.tab %>% 
+  kable() %>%
+  kable_styling() %>%
+  row_spec(which(earnings.tab$degree=='4-year degree'), background='twocolor-green') %>%
+  row_spec(which(earnings.tab$degree!='4-year degree'), background='twocolor-red')
+@
+\end{figure}
+\bigskip
+\begin{center}
+In what's shown here, most people with 4-year degrees make more than most without. \\
+But not all of them. And this is just a small fraction of the data. Let's look at all of it.
+\end{center}
+\end{frame}
+
+\begin{frame}{A Scatter Plot}
+\begin{figure}
+\only<1>{
+<<out.width='.8\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), position=position_jitter(w=.4), alpha=.2) + 
+                   scale_y_continuous(labels=label_dollar()) + 
+                  theme(legend.position="none") 
+@
+}
+\only<2>{
+<<out.width='.8\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), position=position_jitter(w=.4), alpha=.2) + 
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   theme(legend.position="none") 
+@
+}
+\end{figure}
+
+
+\begin{overprint}
+\only<1>{
+\begin{itemize}
+\item Here I've plotted one dot per person. 
+\item There's lot of people, so the dots are all lying on top of one another. 
+\item You can see what most people make by looking for a dark band.
+\item But you really have to look carefully to compare them.
+\item It's hard to see much because so little space is given to what most people make.
+\item We need to do that to include people who make \emph{a lot of money}.
+\end{itemize}
+}
+\only<2>{
+\begin{itemize}
+\item We can see things a bit better when we zoom in on people who make $\le \$300$k. \\
+\item This leaves out a few millionaires, but that's mostly fine. We can do that.
+\item And if that's still hard to work with, we can use another visualization.
+\end{itemize}
+}
+\end{overprint}
+\end{frame}
+
+\begin{frame}{A Histogram}
+\begin{figure}
+<<out.width='.8\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+ggplot(earnings[earnings$income<3e5, ]) + 
+                   geom_histogram(aes(x=income, y=after_stat(density)), alpha=.5, bins=40) + 
+                   coord_flip() + facet_wrap(~degree, strip.position='bottom') + aes(fill=degree) + 
+                   scale_x_continuous(labels=label_dollar()) + 
+                   theme(legend.position="none", axis.text.x = element_blank()) 
+    
+@
+\end{figure}
+\begin{itemize}
+\item The bar length at each income level indicates the fraction \\
+      of people that make roughly that amount of money.
+\item You can see what most people make by looking for the peak.
+\end{itemize}
+\begin{center} Which group tends to make more money? And how much more? \end{center}
+\visible<2>{
+\begin{itemize}
+\item People with 4 year degrees tend to make more.
+\item Roughly \$50k more, comparing the two peaks.
+\item TODO: Recall confidence statement about the mean from last week.
+\end{itemize}
+}
+\end{frame}
+
+
+\begin{frame}{Taking a Closer Look}
+Using two categories is throwing away a lot of information about education. \\
+We can, for example, categorize people by the \textbf{years of education} they've had. \\
+\begin{figure}
+\only<1-3>{
+<<out.width='.8\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), position=position_jitter(w=.4), alpha=.2) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none")
+@
+} 
+\only<4>{
+<<out.width='.8\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+ggplot(earnings[earnings$income<3e5, ]) + 
+                   geom_histogram(aes(x=income, y=after_stat(density)), alpha=.5, bins=40) + aes(fill=degree) + 
+                   coord_flip() + facet_wrap(~education, strip.position='bottom', ncol=length(unique(earnings$education))) + 
+                   scale_x_continuous(labels=label_dollar()) + 
+                   theme(legend.position="none", axis.text.x = element_blank()) 
+@
+}
+\end{figure}
+\begin{overprint}
+\only<1>{
+This includes same information we were working with before. 
+\[ \text{ 16 years education } \quad \implies \quad  \text{ 4-year degree } \]
+If we shuffled all the red and green dots, we'd get the plot we had before. \\
+} \only<2-3>{
+But looking at it this way tells us more. \\
+When we don't shuffle, we see an upward trend within each group.
+\begin{center} What does this mean? \end{center}
+\visible<3>{}
+Even among people with (and without) a 4-year degree, \\
+people with more education tend to make more money.
+}
+\only<4>{
+And we aren't stuck looking for dark bands in scatter plots. \\
+If we like, we can draw histograms broken down like this too.\\
+}
+\end{overprint}
+\end{frame}
+
+\begin{frame}{CPS Income Data by Years Education}
+This does, of course, require that our survey asks about years of education. \\
+And it does, more or less. The Current Population Survey includes lots of questions.\\
+
+\begin{figure}
+<<out.width='.8\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+earnings.tab = earnings[1:12, c('income', 'education', 'degree')]
+earnings.tab$income = sprintf('$%dk', round(earnings.tab$income / 1000))
+earnings.tab$education = sprintf('%d years', earnings.tab$education)
+earnings.tab %>% 
+  kable() %>%
+  kable_styling() %>%
+  row_spec(which(earnings.tab$degree=='4-year degree'), background='twocolor-green') %>%
+  row_spec(which(earnings.tab$degree!='4-year degree'), background='twocolor-red')
+@
+\end{figure}
+\begin{itemize}
+\item The survey doesn't ask exactly this `how many years' question.
+\item It takes a little pre-processing to get this.
+\item And it takes a little care interpreting, too.
+\item But we can more or less do it. That's part of data analysis.
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}[fragile]{Our pre-processing}
+\begin{figure}
+<<include=TRUE, eval=FALSE>>=
+all.earnings = 
+  data.frame(age=cps.data$a_age,
+             income=cps.data$htotval, 
+             education=case_match(cps.data$a_hga,
+                          0  ~ 0,   # child
+                          31 ~ 0,   # < grade 1
+                          32 ~ 4,   #  grade 1-4
+                          33 ~ 6,   #  grade 5-6
+                          34 ~ 8,   #  grade 7-8 
+                          35 ~ 9,   #  grade 9
+                          36 ~ 10,  #  grade 10
+                          37 ~ 11,  #  grade 11
+                          38 ~ 11,  #  grade 12 no diploma
+                          39 ~ 12,  #  high school grad
+                          40 ~ 13,  #  some college
+                          41 ~ 14,  #  associate degree (vocational)
+                          42 ~ 14,  #  associate degree (academic)
+                          43 ~ 16,  #  bachelors degree
+                          44 ~ 18,  #  masters degree
+                          45 ~ 20,  #  professional school degree
+                          46 ~ 20)) #  doctorate
+@          
+\end{figure}
+\end{frame}
+
+\subsection{Some New Questions}
+
+\begin{frame}[fragile]{What should I look at to answer these?}
+\begin{minipage}{.45\linewidth}
+\only<1,3,5,7,8>{
+<<out.width='.9\\textwidth', fig.width=4, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), position=position_jitter(w=.4), alpha=.2) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+@
+}
+\only<2>{
+<<out.width='.9\\textwidth', fig.width=4, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), position=position_jitter(w=.4), alpha=.2, 
+                              data=earnings[earnings$education == 12, ]) +
+                  geom_point(aes(x=education, y=income), position=position_jitter(w=.4), alpha=.005, 
+                              data=earnings[earnings$education != 12, ]) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+@
+} 
+\only<4>{
+<<out.width='.9\\textwidth', fig.width=4, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=education>16), position=position_jitter(w=.4), alpha=.2, 
+                              data=earnings[earnings$education %in% c(16,18), ]) +
+                  geom_point(aes(x=education, y=income), position=position_jitter(w=.4), alpha=.005, 
+                              data=earnings[!(earnings$education %in% c(16,18)), ]) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+@
+}
+\only<6>{
+<<out.width='.9\\textwidth', fig.width=4, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=education > 12), position=position_jitter(w=.4), alpha=.2, 
+                              data=earnings[earnings$education %in% c(12,13,14), ]) +
+                  geom_point(aes(x=education, y=income), position=position_jitter(w=.4), alpha=.005, 
+                              data=earnings[!(earnings$education %in% c(12,13,14)), ]) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+@
+}
+\end{minipage}\begin{minipage}{.45\linewidth}
+<<include=TRUE, eval=FALSE>>=
+case_match(cps.data$a_hga,
+37 ~ 11,  #  grade 11
+38 ~ 11,  #  grade 12 no diploma
+39 ~ 12,  #  high school grad
+40 ~ 13,  #  some college
+41 ~ 14,  #  associate degree (vocational)
+42 ~ 14,  #  associate degree (academic)
+43 ~ 16,  #  bachelors degree
+44 ~ 18,  #  masters degree
+45 ~ 20,  #  professional school degree
+46 ~ 20)  #  doctorate
+@
+\end{minipage}
+
+\begin{overprint}
+\only<1-2>{ 
+\begin{center}\textbf{Q.} \end{center}
+\begin{enumerate}
+\item  What's the typical income of a high school graduate that didn't attend college? 
+\item  How varied are the incomes of these people?
+\item  How many of them are there?
+\end{enumerate}
+\visible<2>{
+\begin{center}\textbf{A.}\end{center}
+We can answer these questions by looking at a group defined at a \\
+\emph{finer resolution} than the \textcolor{twocolor-green}{4 year degree} vs. \textcolor{twocolor-red}{not} groups we've been using.
+}
+}
+\only<3-4>{
+\textbf{Q.} What's the typical difference in income between \ldots ?
+\begin{enumerate}
+\item \textcolor{twocolor-green}{A person with a 4-year degree and no further education.}
+\item \textcolor{twocolor-red}{A person with a masters degree.}
+\end{enumerate}
+\visible<4>{
+\begin{center}\textbf{A.}\end{center}
+Same  deal. Now we're comparing groups defined at this finer resolution. \\
+To indicate the groups we're comparing, we might want to recolor our data.
+}
+}
+\only<5-6>{
+\begin{center} \textbf{Q.}  \end{center}
+\begin{enumerate}
+\item What's the typical income of a person who has completed \\ high school but does not have a 4-year degree? \\
+\item How varied the incomes of these people?
+\end{enumerate}
+\visible<6>{ 
+\begin{center}\textbf{A.}\end{center}
+To answer this question, we have to \emph{aggregate} data from multiple groups. \\
+Our old aggregates, \textcolor{twocolor-green}{4-year degree} vs. \textcolor{twocolor-red}{no}, are irrelevant.
+}
+} 
+\only<7-8> {
+\textbf{Q.} What's the typical difference in income between \ldots ?
+\begin{enumerate}
+\item \textcolor{twocolor-green}{A person with a four year degree}
+\item \textcolor{twocolor-red}{A person without one}
+\end{enumerate}
+\visible<8>{
+\begin{center} \textbf{A.} \end{center}
+This one we've done in previous lectures.\\
+But now we're thinking of our old groups
+as aggregates of smaller ones.
+}
+}
+\end{overprint}
+\end{frame}
+
+
+\section{Calculating Descriptive Summaries}
+
+\begin{frame}{Our Sample}
+Our sample is the set of people who responded to the CPS and \ldots
+\begin{itemize}
+\item were between 25 and 35
+\item were living alone
+\item had at least an 11th-grade education
+\end{itemize}
+
+\begin{figure}
+<<out.width='.45\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), position=position_jitter(w=.4), alpha=.2) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+@
+\end{figure}
+\begin{overprint}
+\only<1>{
+For each person, we observe two things.
+\begin{align*}
+X_i &= \text{years of education} \\
+Y_i &= \text{income}
+\end{align*}
+}
+\only<2>{
+There are some groups we talk about associated with specific levels of $X_i$.
+\begin{align*}
+X_i & < 12 \implies \text{not a high school graduate} \\
+X_i & = 12 \implies \text{high school graduate, no college} \\
+X_i & = 13 \implies \text{attended college, no degree} \\
+X_i & = 14 \implies \text{two-year college degree}   \\
+X_i &\ge 16 \implies \text{four-year college degree} \\
+X_i &> 16 \implies \text{graduate degree}
+\end{align*}
+}
+\end{overprint}
+\end{frame}
+
+
+\begin{frame}{Some Questions, Formalized}
+
+\begin{center}
+<<out.width='.45\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), position=position_jitter(w=.4), alpha=.2, 
+                              data=earnings[earnings$education == 12, ]) +
+                  geom_point(aes(x=education, y=income), position=position_jitter(w=.4), alpha=.005, 
+                              data=earnings[earnings$education != 12, ]) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+@
+\end{center}
+\textbf{Q.} What's the \textbf{mean} income of high school graduates that didn't attend college? \\
+\visible<2->{ 
+\[ \overline{Y}_{X=12} = \frac{1}{N_{X=12}}\sum_{i:X_i=12} Y_i \quad \text{ where } \quad \overline{N}_{X=12} = \sum_{i:X_i=12} 1 \]
+}
+\textbf{Q.} What's the \textbf{standard deviation} of their incomes? \\
+\visible<3-> {
+\[ \sqrt{V_{X=12}} \quad \text{ where } \quad V_{X=12} = \frac{1}{N_{X=12}}\sum_{i:X_i=12} \p*{ Y_i - \overline{Y}_{X=12} }^2 \]
+}
+\textbf{Q.} What \textbf{proportion} of our sample graduated high school but didn't attend college? \\
+\visible<4-> {
+\[ \frac{N_{X=12}}{n} \]
+}
+\end{frame}
+
+
+\begin{frame}{More}
+\begin{center}
+<<out.width='.45\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=education>16), position=position_jitter(w=.4), alpha=.2, 
+                              data=earnings[earnings$education %in% c(16,18), ]) +
+                  geom_point(aes(x=education, y=income), position=position_jitter(w=.4), alpha=.005, 
+                              data=earnings[!(earnings$education %in% c(16,18)), ]) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+@
+\end{center}
+\textbf{Q.} What's the \textbf{mean} difference in income between \ldots ?
+\begin{enumerate}
+\item A person with a 4-year degree and no further education
+\item A person with a masters degree
+\end{enumerate}
+\visible<2>{
+\[ ... \]
+}
+\end{frame}
+
+\begin{frame}{ More }
+\begin{center}
+<<out.width='.45\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=education > 12), position=position_jitter(w=.4), alpha=.2, 
+                              data=earnings[earnings$education %in% c(12,13,14), ]) +
+                  geom_point(aes(x=education, y=income), position=position_jitter(w=.4), alpha=.005, 
+                              data=earnings[!(earnings$education %in% c(12,13,14)), ]) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+@
+\end{center}
+\textbf{Q.} What's the \textbf{mean} income of a person who has completed \\ high school but does not have a 4-year degree?
+\visible<2>{}
+\[ ... \]
+\textbf{Q.} What's the \textbf{standard deviation} of these incomes? 
+\visible<3>{
+\[ ... \]
+}
+\end{frame}
+
+\begin{frame}{More}
+\begin{center}
+<<out.width='.45\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), position=position_jitter(w=.4), alpha=.2) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+@
+\end{center}
+\textbf{Q.} What's the \textbf{mean} difference in income between \ldots ?
+\begin{enumerate}
+\item A person with a four year degree
+\item A person without one
+\end{enumerate}
+\visible<2>{
+This is a familiar question. We answered it in the coarsened data...
+\begin{align*} 
+&\text{Do by averaging over people} \\
+&\text{then rewrite as a weighted average over groups}
+\end{align*}
+}
+\end{frame}
+
+\section{Estimating Population Summaries}
+
+
+\begin{frame}{Our Population}
+\begin{itemize}
+\item Our people are sampled uniformly at random from \\ 
+      the set of all 2022 US residents that \ldots
+\begin{itemize}
+\item were between 25 and 35
+\item were living alone
+\item had at least an 11th-grade education
+\end{itemize}
+\item That's essentially true. 
+\item The CPS is a uniformly-at-random sample of households in the census.
+\item And we've excluded people who don't meet those criteria. \\
+      \textcolor{lightgray}{TODO: Let's have talked about rejection sampling earlier.}
+\item There are enough households that it's reasonable to act as if \\
+      we've got independent samples from an infinite population. 
+\item And we can formalize our questions as questions about this population.
+\end{itemize}
+\end{frame}
+
+\end{document}
