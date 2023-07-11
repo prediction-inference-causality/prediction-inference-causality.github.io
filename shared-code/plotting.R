@@ -19,7 +19,9 @@ simplified.theme = theme_get()
 theme_update(axis.text.x   = element_blank(), 
 	     axis.text.y   = element_blank())
 blank.theme = theme_get()
-
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+	     panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
 
 savefig = function(filename) { 
     ggsave(filename, bg='transparent', width=7, height=4)
@@ -33,4 +35,3 @@ savefig.both = function(filename) {
     ggsave(filename, bg='transparent', width=7, height=7)
     ggsave(gsub("\\.pdf", "-7x4.pdf", filename), width=7, height=4)
 }
-    
