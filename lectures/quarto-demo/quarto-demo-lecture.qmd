@@ -1,0 +1,1020 @@
+---
+title: "Fitting Curves Better"
+subtitle: "QTM 220 Week 3"
+format: 
+  revealjs:
+    theme: class.scss
+    show-notes: separate-page
+    slide-number: true
+    pdf-max-pages-per-slide: 1
+    pdf-separate-fragments: true
+---
+
+
+
+
+
+# Lessons from our last lab
+
+::: {.hidden}
+$$
+\require{color}
+\DeclareMathOperator*{\argmin}{argmin}
+$$ 
+:::
+
+```{r}
+library(purrr)
+library(ggplot2)
+library(htmltools)
+source('../../shared-code/plotting.R')
+theme_set(blank.theme)
+knitr::opts_chunk$set(dev.args=list(bg="transparent"))
+```
+
+
+```{r}
+curves = list(step     = function(x) { 1*(x >= 0) },
+                   line     = function(x) { x },
+                   stepline = function(x) { x*(x >= 0) }, 
+                   sin      = function(x) { sin(pi*x) })
+
+fourier.series = function(const, sin.coef, cos.coef) {
+  k = 1:(length(sin.coef))
+  function(x) { 
+    as.vector(const + 2 * sin.coef %*% sin(pi*outer(k,x)/2) + 
+                      2 * cos.coef %*% cos(pi*outer(k,x))/2)
+  }
+}
+
+compressed.curve = function(K) {
+  k=1:K
+   list(step      = fourier.series(1/2, 1/(pi*k), 0*k),
+        line      = fourier.series(0,   2*(-1)^(k+1) / (pi*k),   0*k),
+        stepline  = fourier.series(1/4, (-1)^(k+1) / (pi*k), ((-1)^k-1)/(pi^2*k^2)),
+        sin       = fourier.series(0, .5*(k==2), 0*k))  
+}
+
+n=10
+X = seq(-1,1,length.out=n)
+densepoints = data.frame(X=seq(-1,1,by=.001))
+
+K = 10
+compressed.curves = compressed.curve(K)
+sigmas = map2(compressed.curves, curves, function(mu.compressed, mu) {
+     sd(mu.compressed(X) - mu(X)) 
+})
+
+formulas =  list(poly9=Y~poly(X,9), tenpiece.constant=Y~cut(X,10), fivepiece.linear=Y~cut(X,5)*X, 
+                 poly3=Y~poly(X,3), fourpiece.constant=Y~cut(X,4), twopiece.linear=Y~cut(X,2)*X,
+                 constant=Y~1)
+```
+
+
+```{r}
+X = seq(-1,1,length.out=10)
+plots = function(X, sigmas, formulas, point.alpha=1) {
+
+n=length(X)
+set.seed(1)
+Z = sqrt(3)*runif(n, min=-1, max=1)
+
+observations = pmap_dfr(list(curves, compressed.curves, sigmas, names(curves)), function(mu, mu.compressed, sigma, curve) {
+    data.frame(X=X, Y.noiseless=mu(X), Y.compressed=mu.compressed(X), Y.random=mu(X)+sigma*Z, curve=curve)
+})
+
+fits = pmap_dfr(list(curves, compressed.curves, sigmas, names(curves)), function(mu, mu.compressed, sigma, curve) {
+  map_dfr(formulas, .id="formula", function(formula) {  
+    noiseless.observations = data.frame(X=X, Y=mu(X))
+    compressed.observations = data.frame(X=X, Y=mu.compressed(X))
+    random.observations = data.frame(X=X, Y=mu(X)+sigma*Z)
+    
+    noiseless.model  = lm(formula, data=noiseless.observations)
+    random.model     = lm(formula, data=random.observations)
+    compressed.model = lm(formula, data=compressed.observations)
+    
+    densepoints$mu.hat.noiseless  = predict(noiseless.model,  newdata=densepoints)
+    densepoints$mu.hat.compressed = predict(compressed.model, newdata=densepoints)
+    densepoints$mu.hat.random     = predict(random.model,     newdata=densepoints)
+    densepoints$mu     = mu(densepoints$X)
+    densepoints$curve = curve
+    densepoints
+  })
+})
+
+plot.curve = function(curve, formula) {
+  obs = observations[observations$curve==curve, ]
+  fit = fits[fits$curve == curve & fits$formula == formula, ] 
+  lims = range(fits[fits$curve == curve, ]$mu.hat.noiseless)
+  ggplot() + geom_point(aes(x=X, y=Y.noiseless),       data=obs, alpha=point.alpha) +
+             geom_line(aes(x=X,  y=mu),                data=fit,  size=1,       alpha=.3) +
+             geom_line(aes(x=X,  y=mu.hat.noiseless),  data=fit,  color='blue', alpha=1) +
+             ylim(lims[1], lims[2])
+}
+
+plot.compressed = function(curve, formula, noiseless.alpha=.5) {
+  obs = observations[observations$curve==curve, ]
+  fit = fits[fits$curve == curve & fits$formula == formula, ] 
+  lims = range(c(fits[fits$curve == curve, ]$mu.hat.compressed, obs$Y.compressed)) 
+  ggplot() + geom_point(aes(x=X, y=Y.compressed),       data=obs, alpha=point.alpha) +
+             geom_line(aes(x=X,  y=mu),                 data=fit,  size=1,       alpha=.3) +
+             geom_line(aes(x=X,  y=mu.hat.noiseless),   data=fit,  color='blue', alpha=noiseless.alpha) +
+             geom_line(aes(x=X,  y=mu.hat.compressed),  data=fit,  color='red',  alpha=1) + 
+             ylim(lims[1], lims[2])
+}
+
+plot.random = function(curve, formula, include.compressed=FALSE, noiseless.alpha=.5, compressed.alpha=.7) {
+  obs = observations[observations$curve==curve, ]
+  fit = fits[fits$curve == curve & fits$formula == formula, ] 
+  lims = range(c(fits[fits$curve == curve, ]$mu.hat.random, obs$Y.random))
+  p = ggplot() + geom_point(aes(x=X, y=Y.random),       data=obs, alpha=point.alpha) +
+             geom_line(aes(x=X,  y=mu),                 data=fit,  size=1,         alpha=.3) +
+             geom_line(aes(x=X,  y=mu.hat.noiseless),   data=fit,  color='blue',   alpha=noiseless.alpha) +
+             geom_line(aes(x=X,  y=mu.hat.random),      data=fit,  color='purple', alpha=1) 
+  if(include.compressed) { 
+    p + geom_line(aes(x=X,  y=mu.hat.compressed),  data=fit,  color='red',    alpha=compressed.alpha) 
+  } else { p  } + ylim(lims[1], lims[2])
+}
+
+
+list(random=plot.random, compressed=plot.compressed, curve=plot.curve)
+}
+
+plot = plots(X, sigmas, formulas)
+```
+
+```{r}
+plots = function(X, sigmas, formulas, point.alpha=1) {
+
+n=length(X)
+set.seed(1)
+Z = sqrt(3)*runif(n, min=-1, max=1)
+
+observations = pmap_dfr(list(curves, compressed.curves, sigmas, names(curves)), function(mu, mu.compressed, sigma, curve) {
+    data.frame(X=X, Y.noiseless=mu(X), Y.compressed=mu.compressed(X), Y.random=mu(X)+sigma*Z, curve=curve)
+})
+
+fits = pmap_dfr(list(curves, compressed.curves, sigmas, names(curves)), function(mu, mu.compressed, sigma, curve) {
+  map_dfr(formulas, .id="formula", function(formula) {  
+    noiseless.observations = data.frame(X=X, Y=mu(X))
+    compressed.observations = data.frame(X=X, Y=mu.compressed(X))
+    random.observations = data.frame(X=X, Y=mu(X)+sigma*Z)
+    
+    noiseless.model  = lm(formula, data=noiseless.observations)
+    random.model     = lm(formula, data=random.observations)
+    compressed.model = lm(formula, data=compressed.observations)
+    
+    densepoints$mu.hat.noiseless  = predict(noiseless.model,  newdata=densepoints)
+    densepoints$mu.hat.compressed = predict(compressed.model, newdata=densepoints)
+    densepoints$mu.hat.random     = predict(random.model,     newdata=densepoints)
+    densepoints$mu     = mu(densepoints$X)
+    densepoints$curve = curve
+    densepoints
+  })
+})
+
+plot.curve = function(curve, formula) {
+  obs = observations[observations$curve==curve, ]
+  fit = fits[fits$curve == curve & fits$formula == formula, ] 
+  lims = range(fits[fits$curve == curve, ]$mu.hat.noiseless)
+  ggplot() + geom_point(aes(x=X, y=Y.noiseless),       data=obs, alpha=point.alpha) +
+             geom_line(aes(x=X,  y=mu),                data=fit,  size=1,       alpha=.3) +
+             geom_line(aes(x=X,  y=mu.hat.noiseless),  data=fit,  color='blue', alpha=1) +
+             ylim(lims[1], lims[2])
+}
+
+plot.compressed = function(curve, formula, noiseless.alpha=.5, compressed.alpha=1) {
+  obs = observations[observations$curve==curve, ]
+  fit = fits[fits$curve == curve & fits$formula == formula, ] 
+  lims = range(c(fits[fits$curve == curve, ]$mu.hat.compressed, obs$Y.compressed)) 
+  ggplot() + geom_point(aes(x=X, y=Y.compressed),       data=obs, alpha=point.alpha) +
+             geom_line(aes(x=X,  y=mu),                 data=fit,  size=1,       alpha=.3) +
+             geom_line(aes(x=X,  y=mu.hat.noiseless),   data=fit,  color='blue', alpha=noiseless.alpha) +
+             geom_line(aes(x=X,  y=mu.hat.compressed),  data=fit,  color='red',  alpha=compressed.alpha) + 
+             ylim(lims[1], lims[2])
+}
+
+plot.random = function(curve, formula, include.compressed=FALSE, noiseless.alpha=.5, compressed.alpha=.7) {
+  obs = observations[observations$curve==curve, ]
+  fit = fits[fits$curve == curve & fits$formula == formula, ] 
+  lims = range(c(fits[fits$curve == curve, ]$mu.hat.random, obs$Y.random))
+  p = ggplot() + geom_point(aes(x=X, y=Y.random),       data=obs, alpha=point.alpha) +
+             geom_line(aes(x=X,  y=mu),                 data=fit,  size=1,         alpha=.3) +
+             geom_line(aes(x=X,  y=mu.hat.noiseless),   data=fit,  color='blue',   alpha=noiseless.alpha) +
+             geom_line(aes(x=X,  y=mu.hat.random),      data=fit,  color='purple', alpha=1) 
+  if(include.compressed) { 
+    p + geom_line(aes(x=X,  y=mu.hat.compressed),  data=fit,  color='red',    alpha=compressed.alpha) 
+  } else { p  } + ylim(lims[1], lims[2])
+}
+
+
+list(random=plot.random, compressed=plot.compressed, curve=plot.curve)
+}
+
+plot = plots(X, sigmas, formulas)
+```
+
+
+## There are good and bad ways to fit the data.
+
+```{r}
+#| layout-ncol: 4
+#| layout-nrow: 3
+#| layout-valign: bottom
+#| fig.width: 3.8
+#| fig.asp: .6
+ 
+for(formula in c('poly9', 'tenpiece.constant', 'fivepiece.linear')) {
+  for(curve in names(curves)) {
+    print(plot$curve(curve, formula))
+  }
+}
+```
+-   Even when you fit it perfectly, i.e. interpolate the observations.
+-   Even when you see points right on the curve you want to estimate.
+
+## We fit 10 observations with 10-dimensional models. 
+
+This let us fit the observations we had perfectly.
+```{r}
+#| layout-ncol: 3
+#| layout-nrow: 2
+#| layout-valign: bottom
+#| fig.width: 3
+#| fig.asp: .5
+
+two.curves = c('step', 'line') 
+for(curve in names(curves[two.curves])) {
+  for(formula in c('poly9', 'tenpiece.constant', 'fivepiece.linear')) {
+    print(plot$curve(curve, formula))
+    savefig(sprintf('%s-%s-clean.pdf', curve, formula))
+  }
+}
+```
+
+
+:::: {.r-stack}
+
+::: {.fragment .fade-out data-fragment-index="0"}
+What we got between them depended on the model.
+
+-   High-order polynomial fits wiggle.
+-   Piecewise-constant fits staircase.
+-   Piecewise-linear fits kink.
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+-   Wiggling can be very bad in places. 
+-   Staircasing causes smaller problems.
+-   Kinking is somewhere in between.
+
+In essence, higher-order the polynomials $\implies$ bigger problems.
+:::
+
+::::
+
+## This matters more if you observe the curve with error
+
+```{r}
+#| layout-ncol: 3
+#| layout-nrow: 2
+#| layout-valign: bottom
+#| fig.width: 4
+#| fig.asp: .67
+
+for(curve in names(curves[two.curves])) {
+  for(formula in c('poly9', 'tenpiece.constant', 'fivepiece.linear')) {
+    print(plot$compressed(curve, formula))
+    savefig(sprintf('%s-%s-compressed.pdf', curve, formula))
+  }
+}
+```
+Even if the errors are pretty small, like these compression errors.
+
+## But less so when you use smaller models
+
+```{r}
+#| layout-ncol: 3
+#| layout-nrow: 2
+#| layout-valign: bottom
+#| fig.width: 4
+#| fig.asp: .67
+
+for(curve in names(curves[two.curves])) {
+  for(formula in c('poly3', 'fourpiece.constant', 'twopiece.linear')) {
+     print(plot$compressed(curve, formula))
+     savefig(sprintf('%s-%s-compressed.pdf', curve, formula))
+  }
+}
+```
+These ones are four parameter models.
+
+## That's still pretty big 
+-   One rule of thumb is that you want ten observations per parameter.
+    +   That only justifies fitting a constant to the ten we have.
+    +   But we've been able to do very well with these larger models.
+    +   Especially in the zero-errors case.
+-   That rule of thumb assumes errors are of **typical size**.
+    +   Our errors here have been zero or very small.
+    +   That's what allows us to get away with relatively large models.
+    +   And that's what a lot of signal processing applications look like.
+
+## That's not what all applications look like
+
+```{r}
+#| fig-cap: Test scores vs. enrollment in fake Israeli schools
+school = read.csv('israel-schools-1200-points.csv')
+school = school[school$enrollment < 80, ]
+school$enrollment = round(school$enrollment)
+
+ggplot(school) + geom_point(aes(x=enrollment, y=score), alpha=.2) 
+savefig(sprintf('school-data.pdf'))
+```
+
+Enrollment has some predictive power, but there's a ton of variation.
+
+## To get closer to these applications, let's scale up our errors
+-   We can't really do it with the compression errors we've been using.
+-   But we can do it with random errors.
+-   And often, random errors will give you the same behavior.
+-   You can think of random errors as a **model** for your non-random ones.
+
+Here's our compression errors and random ones with matched variance.
+
+:::: {.r-stack}
+
+```{r}
+errors = pmap_dfr(list(compressed.curves, curves, sigmas, as.list(names(curves))), function(mu.compressed, mu, sigma, curve) {
+    Z = sqrt(3)*runif(10, min=-1, max=1)
+    data.frame(X=X,
+               compression = mu.compressed(X) - mu(X),
+               random      = sigma*Z,
+               curve=curve)
+})
+```
+
+
+::: {.fragment .fade-out data-fragment-index="0"}
+```{r}
+#| layout-ncol: 4
+#| layout-valign: bottom
+#| fig.width: 3
+#| fig.asp: .9
+for(curve in names(curves[two.curves])) {
+  print(ggplot(errors[errors$curve==curve, ]) + geom_point(aes(x=X, y=compression)))
+  savefig(sprintf('%s-compression-errors.pdf', curve))
+  print(ggplot(errors[errors$curve==curve, ]) + geom_point(aes(x=X, y=random)))
+  savefig(sprintf('%s-random-errors.pdf', curve))
+}
+```
+Take a look. Guess which is which.
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+```{r}
+#| layout-ncol: 4
+#| layout-valign: bottom
+#| fig.width: 3
+#| fig.asp: .9
+for(curve in names(curves[two.curves])) {
+  print(ggplot(errors[errors$curve==curve, ]) + geom_point(aes(x=X, y=compression), color='red'))
+  savefig(sprintf('%s-compression-errors-colored.pdf', curve))
+  print(ggplot(errors[errors$curve==curve, ]) + geom_point(aes(x=X, y=random),      color='purple'))
+  savefig(sprintf('%s-compression-errors-colored.pdf', curve))
+}
+```
+The red ones are compression errors. Let's fit models with the purple.
+:::
+
+::::
+
+## Random errors vs. Compression Errors
+
+
+:::: {.r-stack}
+
+::: {.fragment .fade-out data-fragment-index="0"}
+```{r}
+#| layout-ncol: 3
+#| layout-nrow: 2
+#| layout-valign: bottom
+#| fig.width: 4
+#| fig.asp: .67
+
+for(curve in names(curves[two.curves])) {
+  for(formula in c('poly9', 'tenpiece.constant', 'fivepiece.linear')) {
+    print(plot$random(curve, formula, include.compressed=TRUE, noiseless.alpha=0))
+    savefig(sprintf('%s-%s-random-vs-compression.pdf', curve, formula))
+  }
+}
+```
+The behavior of our interpolating fits is qualitiatively similar.
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+```{r}
+#| layout-ncol: 3
+#| layout-nrow: 2
+#| layout-valign: bottom
+#| fig.width: 4
+#| fig.asp: .67
+
+for(curve in names(curves[two.curves])) {
+  for(formula in c('poly3', 'fourpiece.constant', 'twopiece.linear')) {
+    print(plot$random(curve, formula, include.compressed=TRUE, noiseless.alpha=0))
+    savefig(sprintf('%s-%s-random-vs-compression.pdf', curve, formula))
+  }
+}
+```
+It's similar when we fit smaller models, too. 
+:::
+
+::::
+
+# What Happens at Typical Error Levels
+
+## These models are too big.
+```{r}
+n=10
+X = seq(-1,1,length.out=n)
+sigmas = map2(compressed.curves, curves, function(mu.compressed, mu) {
+    1
+})
+```
+
+:::: {.r-stack}
+
+::: {.fragment .fade-out data-fragment-index="0"}
+```{r}
+#| layout-ncol: 4
+#| layout-nrow: 3
+#| layout-valign: bottom
+#| fig.width: 4
+#| fig.asp: .67
+
+plot = plots(X, sigmas, formulas)
+for(formula in c('poly9', 'tenpiece.constant', 'fivepiece.linear')) {
+  for(curve in names(curves)) {
+    print(plot$random(curve, formula, include.compressed=FALSE, noiseless.alpha=.2))
+    savefig(sprintf('%s-%s-typical-errors.pdf', curve, formula))
+  }
+}
+```
+When errors are bigger, the interpolating models are outright terrible.
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+```{r}
+#| layout-ncol: 4
+#| layout-nrow: 3
+#| layout-valign: bottom
+#| fig.width: 4
+#| fig.asp: .67
+
+for(formula in c('poly3', 'fourpiece.constant', 'twopiece.linear')) {
+  for(curve in names(curves)) {
+    print(plot$random(curve, formula, include.compressed=FALSE, noiseless.alpha=.2))
+    savefig(sprintf('%s-%s-typical-errors.pdf', curve, formula))
+  }
+}
+```
+The four parameter models are much better but still awful.
+:::
+
+::: {.fragment .current-visible data-fragment-index="1"}
+```{r}
+#| layout-ncol: 4
+#| layout-nrow: 3
+#| layout-valign: bottom
+#| fig.width: 4
+#| fig.asp: .67
+
+plot = plots(X, sigmas, formulas[4:7])
+for(formula in c('poly3', 'fourpiece.constant', 'twopiece.linear')) {
+  for(curve in names(curves)) {
+    print(plot$random(curve, formula, include.compressed=FALSE, noiseless.alpha=.2))
+    savefig(sprintf('%s-%s-typical-errors-zoomed.pdf', curve, formula))
+  }
+}
+```
+Here's what it looks like if we zoom in.
+:::
+
+::::
+
+## We could fit a constant.
+
+```{r}
+#| layout-ncol: 2
+#| layout-nrow: 2
+#| layout-valign: bottom
+#| fig.width: 5
+#| fig.asp: .5
+
+for(curve in names(curves)) {
+  for(formula in c('constant')) {
+    print(plot$random(curve, formula, include.compressed=FALSE, noiseless.alpha=.2))
+  }
+}
+```
+
+But who wants that?   
+What we need is more data.
+
+## Usually we have more.
+
+```{r}
+n=100
+X = seq(-1,1,length.out=n)
+```
+
+:::: {.r-stack}
+
+::: {.fragment .fade-out data-fragment-index="0"}
+```{r}
+#| layout-ncol: 4
+#| layout-nrow: 3
+#| layout-valign: bottom
+#| fig.width: 4
+#| fig.asp: .67
+
+plot = plots(X, sigmas, formulas[1:3], point.alpha=.2)
+for(formula in c('poly9', 'tenpiece.constant', 'fivepiece.linear')) {
+  for(curve in names(curves)) {
+    print(plot$random(curve, formula, include.compressed=FALSE, noiseless.alpha=.2))
+  }
+}
+```
+With 100 observations, the ten-parameter models often do ok.
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+```{r}
+#| layout-ncol: 4
+#| layout-nrow: 3
+#| layout-valign: bottom
+#| fig.width: 4
+#| fig.asp: .67
+
+plot = plots(X, sigmas, formulas[4:7], point.alpha=.2)
+for(formula in c('poly3', 'fourpiece.constant', 'twopiece.linear')) {
+  for(curve in names(curves)) {
+    print(plot$random(curve, formula, include.compressed=FALSE, noiseless.alpha=.5))
+  }
+}
+```
+And our four parameter models are pretty insensitive to errors.
+:::
+
+::::
+
+## But we're left with an uncomfortable choice
+
+```{r}
+#| layout-ncol: 2
+#| fig.width: 4
+#| fig.asp: 1
+plot = plots(X, sigmas, formulas, point.alpha=.2)
+plot$random('sin',  'twopiece.linear',  noiseless.alpha=0)
+plot$random('sin', 'fivepiece.linear', noiseless.alpha=0)
+```
+-   The smaller models can't always capture the trend.
+-   The bigger models exhibit some weird artifacts.
+
+
+## There's got to be something better than this
+-   There is an inevitable trade-off between the flexibility 
+    to fit the stuff we want and tendency to fit the stuff we don't.
+-   But the knobs we have to fiddle with may not be the ones we want.
+-   If we're talking about piecewise-polynomial fits, we've got two knobs.
+    +   The degree of each polynomial.
+    +   The number of breaks.
+-   These don't complement each other very well.
+
+# Let's fiddle with them a little and try to fit some data
+
+## The Data
+```{r}
+
+psat = data.frame(x=c(180, 185, 187, 190, 191, 195, 199, 205, 207, 210, 212, 215, 217, 219, 
+                      220, 227, 225, 227, 229, 230, 232, 232, 235, 237, 238, 240, 240, 240),
+                  y=c(10,    0,   6,  11,   5,   7,  12,   3,   1,   4,  11,   5,   3,  10,
+                       9,    11,  13, 6,   15,  21,   6,  12,   2,   9,  0,   0,   0.2,  0.4))
+plot.data = data.frame(x=seq(180, 240, .1))
+```
+```{r}
+plot.fit = function(model) { 
+  plot.data$y.hat = predict(model, newdata = plot.data)
+  ggplot() + geom_line(aes(x=x,y=y.hat), data=plot.data, color='blue') +
+             geom_point(aes(x=x, y=y), data=psat)
+}
+
+ggplot(psat, aes(x=x,y=y)) + geom_point()
+```
+
+## Linear fit 
+```{r}
+model = lm(y ~ x, data=psat)
+plot.fit(model)
+```
+
+## Cubic polynomial fit
+```{r}
+model = lm(y ~ poly(x,3), data=psat)
+plot.fit(model)
+```
+
+## 5th-order polynomial fit
+```{r}
+model = lm(y ~ poly(x,5), data=psat)
+plot.fit(model)
+```
+
+## 7th-order polynomial fit
+```{r}
+model = lm(y ~ poly(x,7), data=psat)
+plot.fit(model)
+```
+
+## 9th-order polynomial fit
+```{r}
+model = lm(y ~ poly(x,9), data=psat)
+plot.fit(model)
+```
+
+## 11th-order polynomial fit
+```{r}
+model = lm(y ~ poly(x,11), data=psat)
+plot.fit(model)
+```
+
+## This just doesn't work
+
+-   Low-order polynomials (e.g. lines, cubics) can't fit the data.
+-   High-order polynomials exhibit weird **non-local** behavior.
+-   To fit better where there's more data,   
+    they'll do crazy things where there isn't much.
+-   You might hope that a piecewise polynomial fit would be better.
+
+## A piecewise-cubic fit
+
+```{r}
+model = lm(y~poly(x,3) * I(x > 200) * I(x > 220), data=psat)
+plot.fit(model)
+```
+
+##  This may be even worse.
+-   Polynomials can do weird things at the boundaries of the data.
+-   Now we've put boundaries in the middle of the data, too.
+-   These problems are like the ones from lab, but worse.
+    +   In lab, our observations were evenly spaced. That's as good as it gets.
+    +   Here, they're not. That's usually the case.
+    
+##  Fixing this problem is easy.
+-   Instead of using all piecewise-polynomial functions, use only ones that:
+    +   Are continuous, i.e., with polynomials that match at the breaks.
+    +   Are differentiable, i.e., with matched derivatives too.
+    +   Maybe twice differentiable, i.e. with matched second derivative too.
+-   These functions are called **splines**. 
+-   The breaks, where we stitch our polynomials together, are called **knots**.
+-   Usually people use cubic polynomials with 
+    +   Two matched derivatives
+    +   Enough knots to give the flexibility they want.
+
+## These work pretty nicely
+```{r}
+library(splines)
+model = lm(y~bs(x,5), data=psat)
+plot.fit(model)
+```
+A cubic spline with two knots.
+
+## Even with a lot of parameters
+```{r}
+library(splines)
+model = lm(y~bs(x,11), data=psat)
+plot.fit(model)
+```
+A cubic spline with 8 knots.
+
+
+# Spline Models
+
+##  Splines are linear models.
+
+-   If you add two piecewise-polynomial curves, you get another. 
+-   If you add add two differentiable curves, you get another.
+-   So if you add two differentiable piecewise-polynomial curves, ...
+```{r}
+#| layout-ncol: 2
+#| fig.width: 4
+#| fig.asp: 1
+psat2 = psat
+psat2$y = sqrt(psat$y)+.9*psat$y
+model1 = lm(y~poly(x,3) * I(x > 200) * I(x > 220), data=psat)
+model2 = lm(y~poly(x,3) * I(x > 200) * I(x > 220), data=psat2)
+y.hat = predict(model1,   newdata=plot.data)
+y.hat.2 = predict(model2, newdata=plot.data)
+ggplot() + geom_line(aes(x=x,y=y.hat), data=plot.data, color='blue') +
+           geom_line(aes(x=x,y=y.hat.2), data=plot.data, color='red') +
+           geom_line(aes(x=x,y=y.hat.2+y.hat), data=plot.data, color='purple', linetype=2) 
+
+psat2 = psat
+psat2$y = sqrt(psat$y)+.9*psat$y
+model1 = lm(y~bs(x,5),    data=psat)
+model2 = lm(y~bs(x,11),   data=psat2)
+y.hat = predict(model1,   newdata=plot.data)
+y.hat.2 = predict(model2, newdata=plot.data)
+ggplot() + geom_line(aes(x=x,y=y.hat), data=plot.data, color='blue') +
+           geom_line(aes(x=x,y=y.hat.2), data=plot.data, color='red') +
+           geom_line(aes(x=x,y=y.hat.2+y.hat), data=plot.data, color='purple', linetype=2) 
+```
+To use spline models, we'll need a basis. That's easy enough.
+
+## A Basis for Splines with Knots at Zero 
+For a cubic spline with one knot at zero, we can work out a general formula.
+$$
+\begin{align*}
+m_{\beta}(x) 
+&= \left(\beta_0 + \beta_1 x + \beta_2 x^2 + \beta_3 x^3 \right) \\
+&+\left(\beta_{0,+} + \beta_{1,+} x + \beta_{2,+} x^2 + \beta_{3,+}x^3 \right)1(x \ge 0).
+\end{align*}
+$$
+with these continuity and differentiability constraints:
+
+::: {.fragment .fade-in data-fragment-index="0"}
+$$
+\begin{align*}
+\beta_{0} &= \beta_{0} + \beta_{0,+} && \text{ continuous at zero } \\
+\beta_{1} &= \beta_{1} + \beta_{1,+} && \text{ differentiable at zero } \\
+\beta_{2} &= \beta_{2} + \beta_{2,+} && \text{ twice-differentiable at zero } \\
+\end{align*}
+$$
+which gives us the simplified form
+$$
+\begin{align*}
+m_{\beta}(x) 
+&= \beta_{0} + \beta_{1} x + \beta_{2} x^2 + \beta_{3}x^3 + \beta_{3,+}x^3 1(x \ge 0).
+\end{align*}
+$$
+Generalizing this to splines with knots elsewhere is pretty easy.
+:::
+
+
+## A Basis for Splines 
+
+For a cubic spline with knots at $x_1 \ldots x_k$, there's a similar formula.
+$$
+\begin{align*}
+m_{\beta}(x) &= \beta_0 + \beta_1 x + \beta_2 x^2 + \beta_3 x^3 + \sum_{k=1}^K \beta_{3,k}(x-x_k)^3 1(x \ge x_k).
+\end{align*}
+$$
+This is easy enough to implement plug into `R`, but you won't have to.   
+It has splines integrated into its formula language.
+
+## Boundary Issues
+Splines like this don't do a great job past the boundary of the data.
+```{r}
+long.plot.data = data.frame(x=seq(170,240, by=.1))
+model = lm(y~bs(x,5),   data=psat)
+y.hat = predict(model, newdata=long.plot.data)
+ggplot() + geom_point(aes(x=x, y=y), psat) + geom_line(aes(x=x,y=y.hat), data=long.plot.data, color='blue')
+```
+-   Obviously we don't know much about what we should predict there.  
+-   But continuing a polynomial that fit in the range of the data leads to counterintuitive predictions.
+-   There's no evidence here justifying the steep dive we see on the left.
+
+
+## Natural Splines
+**Natural cubic splines** satisfy an additional constraint.   
+They are linear at, and beyond, the edges of the data. 
+```{r}
+long.plot.data = data.frame(x=seq(170,240, by=.1))
+model = lm(y~ns(x,5),   data=psat)
+y.hat = predict(model, newdata=long.plot.data)
+ggplot() + geom_point(aes(x=x, y=y), psat) + geom_line(aes(x=x,y=y.hat), data=long.plot.data, color='blue')
+```
+-   This is probably what you want. 
+-   Finding a basis for these is a bit more complicated.
+-   But `R` will do it for you.
+
+## Defaults
+
+-   Natural cubic splines are a good model to use by default.
+-   Next week we'll talk about a **local polynomial regression**.
+-   If you're doing regression in 1D, you're pretty safe using either. 
+-   The week after next we'll talk about higher-dimensional data.
+-   That's where model choice gets complicated. 
+    +   There aren't really any good universal defaults.
+    +   That's where you come in.
+
+# Regression with Transformed Outcomes
+
+## Sometimes the outcome we observe isn't what we want to predict
+
+```{r}
+#| fig-ncol: 2 
+school = read.csv('israel-schools-1200-points.csv')
+school = school[school$enrollment < 80, ]
+school$enrollment = round(school$enrollment)
+
+ggplot(school) + geom_point(aes(x=enrollment, y=score), alpha=.2) 
+ggplot() + geom_point(aes(x=enrollment, y=1*I(score >= 1)), alpha=.1, data=school)
+```
+-   Maybe we're not interested in predicting test scores themselves.
+-   We might be interested in predicting whether they exceed a threshold $T$.
+-   We can fit a curve that does that.
+
+We do it by predicting an **indicator** that the score exceeds the threshold.
+$$ Y_i = 1(\text{score}_i \ge T) $$
+
+
+## Predicting an indicator
+```{r}
+model = lm(I(score > 1)~bs(enrollment,5),   data=school)
+x = seq(1,80, by=.1)
+y.hat = predict(model, newdata=data.frame(enrollment=x))
+ggplot() + geom_point(aes(x=enrollment, y=1*I(score >= 1)), alpha=.1, data=school) + 
+           geom_line(aes(x=x,y=y.hat), color='blue')
+```
+We can and often do fit models to indicators via least squares.
+$$
+\hat \mu = \argmin_{m \in \mathcal{M}} \frac{1}{n}\sum_{i=1}^n \{ Y_i - m(X_i) \}^2. 
+$$
+
+:::: {.r-stack }
+
+::: {.fragment .fade-out data-fragment-index="0"}
+-   The curve this estimates is, as usual, essentially the mean of $y$ at a given $x$. 
+-   And because $y$ is an indicator, its mean is a **frequency**.
+-   It's the proportion of observations at $x$ you expect to exceed the threhold.
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+-   The main difference is that the plots are hard to look at.
+-   The transformed observations all lie on top of each other.
+:::
+
+::::
+
+## Sometimes the outcome we observe is hard to predict linearly
+
+This happens, in particular, when there's **exponential growth**.
+
+```{r}
+#| fig.width: 7
+#| fig.asp: .5
+#| 
+set.seed(1)
+x = seq(0,5,by=.2)
+y=exp(x + rnorm(length(x))/2)
+ggplot() + geom_point(aes(x=x, y=y))
+```
+
+:::: {.r-stack }
+
+::: {.fragment .fade-out data-fragment-index="0"}
+-   In financial data, this arises from compound interest.
+-   In disease data, this happens because sick people make people sick.
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+We could try to fit this outcome using a linear model for fast-growing curves.
+$$ m_{\beta}(x) = \beta_0 + \beta_1 e^{x} + \beta_2 e^{2x} + \ldots $$
+But it often makes more sense to fit the outcome's logarithm.
+$$ Y_i = \log(\text{outcome}_i). $$
+:::
+
+::::
+## Predicting a log
+```{r}
+#| fig.ncol: 2
+model = lm(log(y)~ns(x,5))
+mu.log = predict(model, newdata=data.frame(x=x))
+ggplot() + geom_point(aes(x=x, y=log(y))) + geom_line(aes(x=x,y=mu.log), color='blue')
+ggplot() + geom_point(aes(x=x, y=y)) + geom_line(aes(x=x, y=exp(mu.log)), color='blue')
+```
+- We fit the logarithm via least squares using a more typical linear model.
+- Then we exponentiate its predictions to predict the observed outcome.
+
+
+$$
+\text{outcome at x} \approx e^{\hat \mu_{log}(x)} \ \text{ where } \ \hat\mu_{log} = \argmin_{m \in \mathcal{M}}  \frac{1}{n}\sum_{i=1}^{n}\{ \log(\text{outcome}_i) - m(X_i) \}^2. 
+$$
+
+## Other transformations
+You can fit other transformations of the outcome you observe.
+
+$$ 
+\begin{align*}
+\hat \mu(X_i) &\approx Y_i^2 && \text{squares} \\
+\hat \mu(X_i) &\approx \sqrt{Y_i} && \text{square roots} \\
+\hat \mu(X_i) &\approx f(Y_i) && \text{any function of the outcome at all}
+\end{align*}
+$$
+
+It's very normal to do this.
+
+-   There's nothing special about the variables you have in your dataset.
+-   If you observe some variables, you observe all functions of them, too.
+-   In fact, what you observe is often not what was originally collected.
+    +   People transform, save, and redistribute data all the time.
+    +   What you get reflects the thinking of the person you got the data from.
+
+# Where Errors Come From
+
+## Errors in Signal Processing
+
+![](noisy-pencil-image.jpg)
+
+In signal processing, it's easy to think of where errors come from.
+
+-   Compression, like recoving a signal from an MP3.
+-   Energy leakage in digital photography.
+-   Quantum fluctuations in low-light photography.
+
+In short, it's physics stuff.  
+That's why it's nice to talk about signal processing.
+
+## Errors in Social Science Data
+
+
+```{r}
+#| fig.width: 7
+#| fig.asp: .7
+#| 
+ggplot() + geom_point(aes(x=enrollment, y=score), alpha=.2, data=school)
+```
+
+In social science data, it's not so easy.
+
+-   There's always going to be variation.
+-   No two people, schools, etc. are going to be exactly alike.
+-   But usually some of the variation we see can be explained.
+
+## Explaining Variation
+```{r}
+#| fig.ncol: 2
+#| fig.asp:  1
+ggplot() + geom_point(aes(x=enrollment, y=score), alpha=.4, data=school[school$msa=='haifa',]) + ylim(0,4)
+ggplot() + geom_point(aes(x=enrollment, y=score), alpha=.4, data=school[school$msa=='jerusalem',]) + ylim(0,4)
+```
+
+If we break our test scores data down by city, some of the variation goes away.
+
+## Explaining More Variation
+```{r}
+#| fig.ncol: 2
+#| fig.asp:  1
+pop.cut.jerusalem = median(school$pop[school$msa=='jerusalem'])
+pop.cut.haifa     = median(school$pop[school$msa=='haifa'])
+ggplot() + geom_point(aes(x=enrollment, y=score), alpha=.4, color='blue', data=school[school$msa=='haifa' & school$pop <= pop.cut.haifa,]) + 
+           geom_point(aes(x=enrollment, y=score), alpha=.4,  color='red',  data=school[school$msa=='haifa' & school$pop >  pop.cut.haifa,]) + ylim(0,4)
+ggplot() + geom_point(aes(x=enrollment, y=score), alpha=.4, color='blue', data=school[school$msa=='jerusalem' & school$pop <= pop.cut.jerusalem,]) + 
+           geom_point(aes(x=enrollment, y=score), alpha=.4,  color='red',  data=school[school$msa=='jerusalem' & school$pop >  pop.cut.jerusalem,]) + ylim(0,4)
+```
+
+If we break it down by school-district population density too, even more does.
+
+## Explaining it all?
+
+$$ Y_i = \underset{\textcolor{lightgray}{\text{trend}}}{\mu(X_i, \text{etc}_i)}  + \underset{\textcolor{lightgray}{\text{error}}}{\varepsilon_i} $$
+
+-   In this context, what we mean by errors depends on what we model.
+-   It's just variation we aren't able to explain.
+-   You can imagine that if you had enough info, there'd be no variation left.
+    +   Like a clean, uncompressed audio signal
+    +   Or a perfectly sharp image
+    +   Or whatever that would be for a school  
+-   But that's really just an abstraction. 
+    +   We won't get there. 
+    +   Often we won't get close.
+-   That's why it's a pain talking about social science data.
+    +   It's hard to describe what you want to explain and what you don't.
+    +   We'll develop some language later, but it'll take a while.
+
+
+## Good news!
+
+-   Until we've got that language, we'll basically stick to signal processing.
+-   It may sound like we're talking about social science, but we'll be using fake data.
+-   That means we'll know exactly what the **clean signal** is and how it's compressed.
+-   Working with well-thought-out fake data is a good way to check your approach.
+-   If your approach fails on fake data, why would you trust it on the real stuff?
+
+
+## This Friday
+
+-   It'll be a lab like last Wednesday's.
+-   Very much like last Wednesday's. 
+    +   We'll still be doing signal processing in 1D.
+    +   And we'll use the same signals and everything.
+-   But there'll be a few new ingredients.
+    +   Bigger errors.
+    +   Unevenly-spaced sampling.
+    +   Spline models.
+-   To prepare, make sure you have code from last week's lab to build on.
+    +   You can try to get your own code into shape.
+    +   Or you can get comfortable with the code from the solution.
+    +   Or mix and match.
+
