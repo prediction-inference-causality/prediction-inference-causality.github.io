@@ -6,8 +6,13 @@ format:
     theme: class.scss
     show-notes: separate-page
     slide-number: true
-    pdf-max-pages-per-slide: 1
     pdf-separate-fragments: true
+    fig-format: svg
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+execute: 
+  cache: true
 ---
 
 
@@ -247,7 +252,6 @@ two.curves = c('step', 'line')
 for(curve in names(curves[two.curves])) {
   for(formula in c('poly9', 'tenpiece.constant', 'fivepiece.linear')) {
     print(plot$curve(curve, formula))
-    savefig(sprintf('%s-%s-clean.pdf', curve, formula))
   }
 }
 ```
@@ -285,7 +289,6 @@ In essence, higher-order the polynomials $\implies$ bigger problems.
 for(curve in names(curves[two.curves])) {
   for(formula in c('poly9', 'tenpiece.constant', 'fivepiece.linear')) {
     print(plot$compressed(curve, formula))
-    savefig(sprintf('%s-%s-compressed.pdf', curve, formula))
   }
 }
 ```
@@ -303,7 +306,6 @@ Even if the errors are pretty small, like these compression errors.
 for(curve in names(curves[two.curves])) {
   for(formula in c('poly3', 'fourpiece.constant', 'twopiece.linear')) {
      print(plot$compressed(curve, formula))
-     savefig(sprintf('%s-%s-compressed.pdf', curve, formula))
   }
 }
 ```
@@ -328,7 +330,6 @@ school = school[school$enrollment < 80, ]
 school$enrollment = round(school$enrollment)
 
 ggplot(school) + geom_point(aes(x=enrollment, y=score), alpha=.2) 
-savefig(sprintf('school-data.pdf'))
 ```
 
 Enrollment has some predictive power, but there's a ton of variation.
@@ -362,9 +363,7 @@ errors = pmap_dfr(list(compressed.curves, curves, sigmas, as.list(names(curves))
 #| fig.asp: .9
 for(curve in names(curves[two.curves])) {
   print(ggplot(errors[errors$curve==curve, ]) + geom_point(aes(x=X, y=compression)))
-  savefig(sprintf('%s-compression-errors.pdf', curve))
   print(ggplot(errors[errors$curve==curve, ]) + geom_point(aes(x=X, y=random)))
-  savefig(sprintf('%s-random-errors.pdf', curve))
 }
 ```
 Take a look. Guess which is which.
@@ -378,9 +377,7 @@ Take a look. Guess which is which.
 #| fig.asp: .9
 for(curve in names(curves[two.curves])) {
   print(ggplot(errors[errors$curve==curve, ]) + geom_point(aes(x=X, y=compression), color='red'))
-  savefig(sprintf('%s-compression-errors-colored.pdf', curve))
   print(ggplot(errors[errors$curve==curve, ]) + geom_point(aes(x=X, y=random),      color='purple'))
-  savefig(sprintf('%s-compression-errors-colored.pdf', curve))
 }
 ```
 The red ones are compression errors. Let's fit models with the purple.
@@ -404,7 +401,6 @@ The red ones are compression errors. Let's fit models with the purple.
 for(curve in names(curves[two.curves])) {
   for(formula in c('poly9', 'tenpiece.constant', 'fivepiece.linear')) {
     print(plot$random(curve, formula, include.compressed=TRUE, noiseless.alpha=0))
-    savefig(sprintf('%s-%s-random-vs-compression.pdf', curve, formula))
   }
 }
 ```
@@ -422,7 +418,6 @@ The behavior of our interpolating fits is qualitiatively similar.
 for(curve in names(curves[two.curves])) {
   for(formula in c('poly3', 'fourpiece.constant', 'twopiece.linear')) {
     print(plot$random(curve, formula, include.compressed=TRUE, noiseless.alpha=0))
-    savefig(sprintf('%s-%s-random-vs-compression.pdf', curve, formula))
   }
 }
 ```
@@ -456,7 +451,6 @@ plot = plots(X, sigmas, formulas)
 for(formula in c('poly9', 'tenpiece.constant', 'fivepiece.linear')) {
   for(curve in names(curves)) {
     print(plot$random(curve, formula, include.compressed=FALSE, noiseless.alpha=.2))
-    savefig(sprintf('%s-%s-typical-errors.pdf', curve, formula))
   }
 }
 ```
@@ -474,7 +468,6 @@ When errors are bigger, the interpolating models are outright terrible.
 for(formula in c('poly3', 'fourpiece.constant', 'twopiece.linear')) {
   for(curve in names(curves)) {
     print(plot$random(curve, formula, include.compressed=FALSE, noiseless.alpha=.2))
-    savefig(sprintf('%s-%s-typical-errors.pdf', curve, formula))
   }
 }
 ```
@@ -493,7 +486,6 @@ plot = plots(X, sigmas, formulas[4:7])
 for(formula in c('poly3', 'fourpiece.constant', 'twopiece.linear')) {
   for(curve in names(curves)) {
     print(plot$random(curve, formula, include.compressed=FALSE, noiseless.alpha=.2))
-    savefig(sprintf('%s-%s-typical-errors-zoomed.pdf', curve, formula))
   }
 }
 ```
