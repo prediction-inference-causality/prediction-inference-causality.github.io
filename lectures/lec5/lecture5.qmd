@@ -3,16 +3,20 @@ title: "Working with Non-Binary Covariates"
 subtitle: "QTM 220 Lecture 5"
 format: 
   revealjs:
-    theme: class.scss
+    theme: white 
+    smaller: true
     show-notes: separate-page
     slide-number: true
     pdf-separate-fragments: true
     fig-format: svg
+    fig-align: left
     fig.width: 10
     fig.asp: 2
 knitr:
   opts_chunk:
     fig.path: generated-figures/
+    dev.args:
+      bg: transparent
 execute: 
   cache: true
 ---
@@ -26,7 +30,6 @@ library(htmltools)
 
 source('../../shared-code/plotting.R')
 theme_set(simplified.theme)
-knitr::opts_chunk$set(dev.args=list(bg="transparent"))
 ```
 
 ```{r data-setup}
@@ -68,12 +71,18 @@ earnings$raw.income = earnings$income
 earnings$degree = factor(earnings$education >= 16, 
                      levels=c(FALSE, TRUE), 
                      labels=c('no 4-year degree','4-year degree')) 
+set.seed(1)
+earnings = earnings[sample(1:nrow(earnings)), ]
 rownames(earnings)=NULL
 ```
 
-# Intuition
+# Review and Intuition
 
 ## CPS Income Data
+- Today, we'll work with data from the Current Population Survey.
+- We'll look at the relationship between income and education.
+- We've already compared people  [with]{.twocolor-green} and [without]{.twocolor-red} 4-year degrees.
+- We'll start there to review, then talk about how to make other comparisons.
 
 ::: {.hidden}
 $$
@@ -83,22 +92,33 @@ $$
 $$ 
 :::
 
-So far, we've been looking at our income data as if people fall into two groups. \
-Our groups are people [with]{.twocolor-green} and [without]{.twocolor-red} 4-year degrees. Here's some of the data.
+The survey includes a lot of people, so we can't show them all. Here's a few.
 ```{r}
-earnings.tab = earnings[1:12, c('income', 'degree')]
+earnings.tab = earnings[1:10, c('income', 'degree')]
 earnings.tab$income = sprintf('$%dk', round(earnings.tab$income / 1000))
-earnings.tab %>% 
+styled.tab = earnings.tab %>% 
   kable() %>%
   kable_styling() %>%
   row_spec(which(earnings.tab$degree=='4-year degree'), background='#00BFC4') %>%
   row_spec(which(earnings.tab$degree!='4-year degree'), background='#F8766D') 
+styled.tab
 ```
 
-In what's shown here, most people with 4-year degrees make more than most without. 
-But not all of them. And this is just a small fraction of the data. Let's look at all of it.
 
-## A Scatter Plot
+## What we see 
+
+```{r}
+styled.tab
+```
+Among the people in the table:
+
+- Most people with 4-year degrees make more than most without. 
+- But not all of them. 
+
+And this is just a tiny fraction of the data. Let's look at all of it. \
+We can't do that with a table, but we can with a scatter plot.
+
+## Comparing Incomes using a Scatter Plot
 
 :::: {.r-stack }
 
@@ -129,14 +149,14 @@ p +  scale_y_continuous(labels=label_dollar(), limits=c(0,3e5))
 p +  scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) 
 ```
 
-- We can see things a bit better when we zoom in on people who make $\le \$300$k. 
+- We can see things better when we zoom in on people who make $\le \$300$k. 
 - This leaves out a few millionaires, but that's mostly fine. We can do that.
 - And if that's still hard to work with, we can use another visualization.
 :::
 
 ::::
 
-## A Histogram
+## Comparing incomes using a Histogram
 
 ```{r}
 ggplot(earnings[earnings$income<3e5, ]) + 
@@ -146,31 +166,72 @@ ggplot(earnings[earnings$income<3e5, ]) +
                    theme(legend.position="none", axis.text.x = element_blank()) 
 ```
 
-:::: {.r-stack}
-
-::: {.fragment .fade-out data-fragment-index="0"}
-
-- The bar length at each income level indicates the fraction 
-      of people that make roughly that amount of money.
+- In this histogram, the length of the bar at each income level  
+  shows the fraction of people that make roughly that much.
 - You can see what most people make by looking for the peak.
+- Compared to the scatter plot, we've traded darkness for length.
 
+
+# Review Questions
+
+## Question 1
+
+```{r}
+p = ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), position=position_jitter(w=.4), alpha=.2) + 
+                       scale_y_continuous(labels=label_dollar()) + theme(legend.position="none") 
+p +  scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) 
+```
+
+**Q**. Which group tends to make more money? 
+
+::: {.fragment}
+People with 4 year degrees tend to make more.
 :::
 
-::: {.fragment .current-visible data-fragment-index="0"}
-**Q**. Which group tends to make more money? And how much more? 
+## Question 2
+```{r}
+ggplot(earnings[earnings$income<3e5, ]) + 
+                   geom_histogram(aes(x=income, y=after_stat(density)), alpha=.5, bins=40) + 
+                   coord_flip() + facet_wrap(~degree, strip.position='bottom') + aes(fill=degree) + 
+                   scale_x_continuous(labels=label_dollar()) + 
+                   theme(legend.position="none", axis.text.x = element_blank()) 
+```
 
+**Q**. Roughly how much more?
+
+::: {.fragment}
+ \$50k more, comparing the two peaks in the histogram.
 :::
 
-::: {.fragment .fade-in data.fragment-index="1"}
+## Question 3
 
-- People with 4 year degrees tend to make more.
-- Roughly \$50k more, comparing the two peaks.
-- Recall confidence statement about the difference in means from last week.
+```{r}
+p = ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), position=position_jitter(w=.4), alpha=.2) + 
+                       scale_y_continuous(labels=label_dollar()) + theme(legend.position="none") 
+p +  scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) 
+```
 
-:::
+**Q**. How would we calculate the difference in *mean income*
+       between ... in our ...
 
-::::
 
+## Question 4
+
+Population Quantity this estimates
+
+## Question 5
+
+Confidence Interval for population quantity
+
+
+**Q**. How can we calculate a 95\% confidence interval for this quantity?
+Something about a confidence statement about the difference in means from last week.
+
+## Question 6
+
+What does that confidence interval mean?
+
+# Beyond Binary Comparisons
 
 ## Taking a Closer Look
 Using two categories is throwing away a lot of information about education. \
