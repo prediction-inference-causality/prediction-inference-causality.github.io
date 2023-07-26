@@ -6,7 +6,7 @@
 <<echo=FALSE, warning=FALSE, message=FALSE>>=
 source('../../shared-code/plotting.R')
 theme_set(simplified.theme)
-
+knitr::opts_chunk$set(cache=TRUE)
 
 # for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
 census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
@@ -50,7 +50,6 @@ rownames(earnings)=NULL
 @
 
 \begin{document}
-\SweaveOpts{concordance=TRUE}
 
 \begin{frame}
 \titlepage
@@ -133,27 +132,33 @@ ggplot(earnings[earnings$income<3e5, ]) +
     
 @
 \end{figure}
+\begin{overprint}
+\only<1>{
 \begin{itemize}
 \item The bar length at each income level indicates the fraction \\
       of people that make roughly that amount of money.
 \item You can see what most people make by looking for the peak.
 \end{itemize}
-\begin{center} Which group tends to make more money? And how much more? \end{center}
-\visible<2>{
+} 
+\only<2-3>{
+\begin{center} \textbf{Q.} Which group tends to make more money? And how much more? \end{center}
+\visible<3>{
 \begin{itemize}
 \item People with 4 year degrees tend to make more.
 \item Roughly \$50k more, comparing the two peaks.
-\item TODO: Recall confidence statement about the mean from last week.
+\item TODO: Recall confidence statement about the difference in means from last week.
 \end{itemize}
 }
+}
+\end{overprint}
 \end{frame}
 
 
 \begin{frame}{Taking a Closer Look}
 Using two categories is throwing away a lot of information about education. \\
-We can, for example, categorize people by the \textbf{years of education} they've had. \\
+We can, for example, categorize people by the \textbf{years of education} they've had. 
 \begin{figure}
-\only<1-3>{
+\only<1-2>{
 <<out.width='.8\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
 years = unique(earnings$education)
 ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), position=position_jitter(w=.4), alpha=.2) +
@@ -162,7 +167,7 @@ ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), position
                    theme(legend.position="none")
 @
 } 
-\only<4>{
+\only<3-6>{
 <<out.width='.8\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
 ggplot(earnings[earnings$income<3e5, ]) + 
                    geom_histogram(aes(x=income, y=after_stat(density)), alpha=.5, bins=40) + aes(fill=degree) + 
@@ -177,17 +182,19 @@ ggplot(earnings[earnings$income<3e5, ]) +
 This includes same information we were working with before. 
 \[ \text{ 16 years education } \quad \implies \quad  \text{ 4-year degree } \]
 If we shuffled all the red and green dots, we'd get the plot we had before. \\
-} \only<2-3>{
-But looking at it this way tells us more. \\
-When we don't shuffle, we see an upward trend within each group.
-\begin{center} What does this mean? \end{center}
-\visible<3>{}
-Even among people with (and without) a 4-year degree, \\
-people with more education tend to make more money.
-}
+} \only<2-6>{
+This means we can still see that people with 4 year degrees make more. \\
+\begin{center}
+But we can see some new stuff too. What else can we see? 
+\end{center}
 \only<4>{
-And we aren't stuck looking for dark bands in scatter plots. \\
-If we like, we can draw histograms broken down like this too.\\
+1. Even among people with (and without) a 4-year degree, \\
+people with more education tend to make more money.
+} \only<5>{
+2. 
+} \only<6> {
+3.
+}
 }
 \end{overprint}
 \end{frame}
@@ -245,9 +252,185 @@ all.earnings =
 \end{figure}
 \end{frame}
 
-\subsection{Some New Questions}
+\subsection{New Questions}
 
-\begin{frame}[fragile]{What should I look at to answer these?}
+\begin{frame}
+\begin{center} 
+Let's pose and answer a few questions using this data. 
+\end{center}
+
+<<out.width='.8\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
+                                  position=position_jitter(w=.4)) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+@
+\begin{center}
+We'll start with vague questions and qualitative answers. 
+That way, before getting into calculations, we can think about
+focusing on \emph{where} and \emph{how} to look at the data.
+\end{center}
+\end{frame}
+
+\begin{frame}
+\begin{center}
+\textbf{ Q.} What's the typical income of a high school graduate that didn't attend college? 
+\end{center}
+
+\begin{figure}
+\only<1>{
+<<out.width='.6\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+earnings$highlight = 0.0 + (earnings$education==12)
+p = ggplot(earnings[earnings$income < 3e5, ]) + 
+  geom_point(aes(x=education, y=income, color=degree, alpha=highlight), position=position_jitter(w=.4)) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+p + scale_alpha_continuous(range=c(.2,.2))
+@
+}
+\only<2>{
+<<out.width='.6\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+p + scale_alpha_continuous(range=c(.02,.2))
+@
+} 
+\only<3-4> {
+<<out.width='.6\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+p = ggplot(earnings[earnings$income<3e5, ]) + 
+                   geom_histogram(aes(x=income, y=after_stat(density), alpha=highlight), bins=40) + aes(fill=degree) + 
+                   coord_flip() + facet_wrap(~education, strip.position='bottom', ncol=length(unique(earnings$education))) + 
+                   scale_x_continuous(labels=label_dollar()) +
+                   theme(legend.position="none", axis.text.x = element_blank()) 
+p + scale_alpha_continuous(range=c(.05,.5))
+@
+}
+\end{figure}
+
+\begin{center} \textbf{1}. Where do we look? \end{center}
+\visible<2-4>{ 
+At the high school graduates that didn't attend college, \\ 
+i.e., the people with exactly 12 years of education.}
+\begin{center} \textbf{2.} How do we look at it? \end{center}
+\visible<3-4>{ We look at where their incomes are \emph{centered}. \\
+               Often, that's easier with a histogram, so let's use one. }
+\begin{center} \textbf{3.} What is the answer? \end{center}
+\visible<4>{  It's around \$50,000. }
+\end{frame}
+
+\end{document}
+
+\begin{frame}
+\begin{center}
+\textbf{ Q.} How varied are the incomes of high school graduates that didn't attend college? 
+\end{center}
+
+\begin{minipage}{.45\linewidth}
+\only<1>{
+<<out.width='.9\\textwidth', fig.width=4, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+earnings$highlight = 0.0 + (earnings$education==12)
+p = ggplot(earnings[earnings$income < 3e5, ]) + 
+  geom_point(aes(x=education, y=income, color=degree, alpha=highlight), position=position_jitter(w=.4)) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+p + scale_alpha_continuous(range=c(.2,.2))
+@
+}
+\only<2>{
+<<out.width='.9\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+p + scale_alpha_continuous(range=c(.02,.2))
+@
+} 
+\only<3-4> {
+<<out.width='.9\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+p = ggplot(earnings[earnings$income<3e5, ]) + 
+                   geom_histogram(aes(x=income, y=after_stat(density), alpha=highlight), bins=40) + aes(fill=degree) + 
+                   coord_flip() + facet_wrap(~education, strip.position='bottom', ncol=length(unique(earnings$education))) + 
+                   scale_x_continuous(labels=label_dollar()) +
+                   theme(legend.position="none", axis.text.x = element_blank()) 
+p + scale_alpha_continuous(range=c(.05,.5))
+@
+}
+\end{minipage}\begin{minipage}{.45\linewidth}
+<<include=TRUE, eval=FALSE>>=
+case_match(cps.data$a_hga,
+37 ~ 11,  #  grade 11
+38 ~ 11,  #  grade 12 no diploma
+39 ~ 12,  #  high school grad
+40 ~ 13,  #  some college
+41 ~ 14,  #  associate degree (vocational)
+42 ~ 14,  #  associate degree (academic)
+43 ~ 16,  #  bachelors degree
+44 ~ 18,  #  masters degree
+45 ~ 20,  #  professional school degree
+46 ~ 20)  #  doctorate
+@
+\end{minipage}
+
+\begin{center} \textbf{1}. Where do we look? \end{center}
+\visible<2-4>{ 
+Again, at the people with exactly 12 years of education.
+}
+\begin{center} \textbf{2.} How do we look at it? \end{center}
+\visible<3-4>{ We look at how far incomes are \emph{from their center}.}
+               Again, we'll use a histogram because it's easier. }
+\begin{center} \textbf{3.} What is the answer? \end{center}
+\visible<4>{  Again, it's around \$50,000. }
+\end{frame}
+
+\end{document}
+
+\begin{figure}
+
+\only<1>{
+<<out.width='.6\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+years = unique(earnings$education)
+earnings$highlight = 0.0 + (earnings$education==12)
+p = ggplot(earnings[earnings$income < 3e5, ]) + 
+  geom_point(aes(x=education, y=income, color=degree, alpha=highlight), position=position_jitter(w=.4)) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none", 
+                         axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1))
+p + scale_alpha_continuous(range=c(.2,.2))
+@
+}
+\only<2>{
+<<out.width='.6\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+p + scale_alpha_continuous(range=c(.02,.2))
+@
+} 
+\only<3-4> {
+<<out.width='.6\\textwidth', fig.width=7, fig.height=4, echo=FALSE, warning=FALSE>>=
+p = ggplot(earnings[earnings$income<3e5, ]) + 
+                   geom_histogram(aes(x=income, y=after_stat(density), alpha=highlight), bins=40) + aes(fill=degree) + 
+                   coord_flip() + facet_wrap(~education, strip.position='bottom', ncol=length(unique(earnings$education))) + 
+                   scale_x_continuous(labels=label_dollar()) +
+                   theme(legend.position="none", axis.text.x = element_blank()) 
+p + scale_alpha_continuous(range=c(.05,.5))
+@
+}
+\end{figure}
+
+
+\begin{frame}{Reflection}
+\begin{center} What's changed from when we had only two categories? \end{center}
+\visible<2>{ Very little. Once we've identified the people we're looking at, we do exactly the same thing with them. }
+\end{frame}
+
+\end{document}
+
+
+
+\end{frame}
+\begin{frame}[fragile]{}
 \begin{minipage}{.45\linewidth}
 \only<1,3,5,7,8>{
 <<out.width='.9\\textwidth', fig.width=4, fig.height=4, echo=FALSE, warning=FALSE>>=
@@ -316,16 +499,17 @@ case_match(cps.data$a_hga,
 
 \begin{overprint}
 \only<1-2>{ 
-\begin{center}\textbf{Q.} \end{center}
 \begin{enumerate}
-\item  What's the typical income of a high school graduate that didn't attend college? 
-\item  How varied are the incomes of these people?
-\item  How many of them are there?
+\item  \textbf{Q.} What's the typical income of a high school graduate that didn't attend college? 
+\item  \textbf{Q.} How varied are the incomes of these people?
+\item  \textbf{Q}. How many of them are there?
 \end{enumerate}
+\ \\
 \visible<2>{
-\begin{center}\textbf{A.}\end{center}
-We can answer these questions by looking at a group defined at a \\
-\emph{finer resolution} than the \textcolor{twocolor-green}{4 year degree} vs. \textcolor{twocolor-red}{not} groups we've been using.
+We can answer these questions by looking at the people with exactly 12 years of education.\\
+We couldn't do that before, when we were looking at only.
+
+were thinking of education as binary: as \textcolor{twocolor-green}{4 year degree} vs. \textcolor{twocolor-red}{not} groups we've been using.
 }
 }
 \only<3-4>{
@@ -439,6 +623,15 @@ ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), position
 \visible<4-> {
 \[ \frac{N_{X=12}}{n} \]
 }
+
+\end{frame}
+
+\begin{frame}{Lesson}
+\begin{center} 
+There's nothing essentially new here. We're describing tisThis is exactly what it looks like
+when 
+We've worked with subgroups  at one group
+\end{center}
 \end{frame}
 
 

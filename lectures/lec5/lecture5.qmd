@@ -1,0 +1,214 @@
+---
+title: "Working with Non-Binary Covariates"
+subtitle: "QTM 220 Lecture 5"
+format: 
+  revealjs:
+    theme: class.scss
+    show-notes: separate-page
+    slide-number: true
+    pdf-separate-fragments: true
+    fig-format: svg
+    fig.width: 10
+    fig.asp: 2
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+execute: 
+  cache: true
+---
+
+
+
+```{r setup}
+library(purrr)
+library(ggplot2)
+library(htmltools)
+
+source('../../shared-code/plotting.R')
+theme_set(simplified.theme)
+knitr::opts_chunk$set(dev.args=list(bg="transparent"))
+```
+
+```{r data-setup}
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+library(cpsR)
+library(dplyr)
+library(magrittr)
+library(kableExtra)
+library(scales)
+
+cps.data = cpsR::get_asec(year=2022, vars=c('h_numper', 'htotval', 'a_age', 'a_hga'), key=census.api.key)
+all.earnings = data.frame(age=cps.data$a_age,
+                          income=cps.data$htotval, 
+                          education=case_match(cps.data$a_hga,
+                                           0  ~ 0,   # child
+                                           31 ~ 0,   # < grade 1
+                                           32 ~ 4,   #  grade 1-4
+                                           33 ~ 6,   #  grade 5-6
+                                           34 ~ 8,   #  grade 7-8 
+                                           35 ~ 9,   #  grade 9
+                                           36 ~ 10,  #  grade 10
+                                           37 ~ 11,  #  grade 11
+                                           38 ~ 11,  #  grade 12 no diploma
+                                           39 ~ 12,  #  high school grad
+                                           40 ~ 13,  #  some college
+                                           41 ~ 14,  #  associate degree (vocational)
+                                           42 ~ 14,  #  associate degree (academic)
+                                           43 ~ 16,  #  bachelors degree
+                                           44 ~ 18,  #  masters degree
+                                           45 ~ 20,  #  professional school degree
+                                           46 ~ 20)) #  doctorate
+
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+earnings = all.earnings[all.earnings$age %>% in.interval(c(25,35)) & 
+                        all.earnings$education >= 11, ]
+
+earnings$raw.income = earnings$income
+earnings$degree = factor(earnings$education >= 16, 
+                     levels=c(FALSE, TRUE), 
+                     labels=c('no 4-year degree','4-year degree')) 
+rownames(earnings)=NULL
+```
+
+# Intuition
+
+## CPS Income Data
+
+::: {.hidden}
+$$
+\require{color}
+\definecolor{twocolor-red}{HTML}{F8766D}    % red   used by ggplot in plots w/ 2 colors 
+\definecolor{twocolor-green}{HTML}{00BFC4}  % green used by ggplot in plots w/ 2 colors
+$$ 
+:::
+
+So far, we've been looking at our income data as if people fall into two groups. \
+Our groups are people [with]{.twocolor-green} and [without]{.twocolor-red} 4-year degrees. Here's some of the data.
+```{r}
+earnings.tab = earnings[1:12, c('income', 'degree')]
+earnings.tab$income = sprintf('$%dk', round(earnings.tab$income / 1000))
+earnings.tab %>% 
+  kable() %>%
+  kable_styling() %>%
+  row_spec(which(earnings.tab$degree=='4-year degree'), background='#00BFC4') %>%
+  row_spec(which(earnings.tab$degree!='4-year degree'), background='#F8766D') 
+```
+
+In what's shown here, most people with 4-year degrees make more than most without. 
+But not all of them. And this is just a small fraction of the data. Let's look at all of it.
+
+## A Scatter Plot
+
+:::: {.r-stack }
+
+::: {.fragment .fade-out data-fragment-index="0"}
+```{r}
+p = ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), position=position_jitter(w=.4), alpha=.2) + 
+                       scale_y_continuous(labels=label_dollar()) + theme(legend.position="none") 
+p
+```
+
+- Here I've plotted one dot per person. 
+- There's lot of people, so the dots are all lying on top of one another. 
+- You can see what most people make by looking for a dark band.
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+```{r}
+p +  scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) 
+```
+
+- But you really have to look carefully to compare them.
+- It's hard to see much because so little space is given to what most people make.
+- We need to do that to include people who make *a lot* of money.
+::: 
+
+::: {.fragment .current-visible}
+```{r}
+p +  scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) 
+```
+
+- We can see things a bit better when we zoom in on people who make $\le \$300$k. 
+- This leaves out a few millionaires, but that's mostly fine. We can do that.
+- And if that's still hard to work with, we can use another visualization.
+:::
+
+::::
+
+## A Histogram
+
+```{r}
+ggplot(earnings[earnings$income<3e5, ]) + 
+                   geom_histogram(aes(x=income, y=after_stat(density)), alpha=.5, bins=40) + 
+                   coord_flip() + facet_wrap(~degree, strip.position='bottom') + aes(fill=degree) + 
+                   scale_x_continuous(labels=label_dollar()) + 
+                   theme(legend.position="none", axis.text.x = element_blank()) 
+```
+
+:::: {.r-stack}
+
+::: {.fragment .fade-out data-fragment-index="0"}
+
+- The bar length at each income level indicates the fraction 
+      of people that make roughly that amount of money.
+- You can see what most people make by looking for the peak.
+
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+**Q**. Which group tends to make more money? And how much more? 
+
+:::
+
+::: {.fragment .fade-in data.fragment-index="1"}
+
+- People with 4 year degrees tend to make more.
+- Roughly \$50k more, comparing the two peaks.
+- Recall confidence statement about the difference in means from last week.
+
+:::
+
+::::
+
+
+## Taking a Closer Look
+Using two categories is throwing away a lot of information about education. \
+We can, for example, categorize people by the **years of education** they've had. 
+:::: {.r-stack}
+
+::: {.fragment}
+```{r}
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), position=position_jitter(w=.4), alpha=.2) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none")
+```
+
+This includes same information we were working with before. 
+$$ \text{ 16 years education } \quad \implies \quad  \text{ 4-year degree } $$
+If we shuffled all the red and green dots, we'd get the plot we had before. 
+
+This means we can still see that people with 4 year degrees make more. \
+But we can see some new stuff too. What else can we see? 
+
+A thing: Even among people with (and without) a 4-year degree, \
+people with more education tend to make more money.
+:::
+
+::: {.fragment}
+ ```{r}
+ggplot(earnings[earnings$income<3e5, ]) + 
+                   geom_histogram(aes(x=income, y=after_stat(density)), alpha=.5, bins=40) + aes(fill=degree) + 
+                   coord_flip() + facet_wrap(~education, strip.position='bottom', ncol=length(unique(earnings$education))) + 
+                   scale_x_continuous(labels=label_dollar()) + 
+                   theme(legend.position="none", axis.text.x = element_blank()) 
+```
+:::
+
+::::
+
+
+
+
