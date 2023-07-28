@@ -12,7 +12,9 @@ editor: visual
 ```{r}
 library(foreign)
 library(ggplot2)
+theme_update(plot.title = element_text(hjust = 0.5))
 library(tinytex)
+library(gridExtra)
 
 #students change working directory? 
 #setwd("/Users/acuttne/Documents/GitHub/qtm220/lectures/lec1")
@@ -26,40 +28,43 @@ library(magrittr)
 library(scales)
 
 #cps.data = cpsR::get_asec(year=2022, vars=c('h_numper', 'htotval', 'a_age', 'a_hga'), key=census.api.key)
-cps.data = cpsR::get_asec(year=2022, vars=c('h_numper', 'htotval', 'a_age', 'a_hga','gereg', 'a_maritl', 'a_sex','peafever'), key=census.api.key)
+cps.data = cpsR::get_asec(year=2022, vars=c('h_numper', 'htotval', 'a_age', 'a_hga','gereg', 'a_maritl', 'a_sex','peafever','a_wkstat'), key=census.api.key)
 
 all.earnings = data.frame(age=cps.data$a_age,
-                          income=cps.data$htotval, 
+                         income=cps.data$htotval, 
                           education=case_match(cps.data$a_hga,
-                                           0  ~ 0,   # child
-                                           31 ~ 0,   # < grade 1
-                                           32 ~ 4,   #  grade 1-4
-                                           33 ~ 6,   #  grade 5-6
-                                           34 ~ 8,   #  grade 7-8 
-                                           35 ~ 9,   #  grade 9
-                                           36 ~ 10,  #  grade 10
-                                           37 ~ 11,  #  grade 11
-                                           38 ~ 11,  #  grade 12 no diploma
-                                           39 ~ 12,  #  high school grad
-                                           40 ~ 13,  #  some college
-                                           41 ~ 14,  #  associate degree (vocational)
-                                           42 ~ 14,  #  associate degree (academic)
-                                           43 ~ 16,  #  bachelors degree
+                                          0  ~ 0,   # child
+                                          31 ~ 0,   # < grade 1
+                                        32 ~ 4,   #  grade 1-4
+                                         33 ~ 6,   #  grade 5-6
+                                         34 ~ 8,   #  grade 7-8 
+                                          35 ~ 9,   #  grade 9
+                                          36 ~ 10,  #  grade 10
+                                          37 ~ 11,  #  grade 11
+                                         38 ~ 11,  #  grade 12 no diploma
+                                          39 ~ 12,  #  high school grad
+                                         40 ~ 13,  #  some college
+                                        41 ~ 14,  #  associate degree(vocational)
+                                         42 ~ 14,  #  associate degree (academic)
+                                          43 ~ 16,  #  bachelors degree
                                            44 ~ 18,  #  masters degree
-                                           45 ~ 20,  #  professional school degree
-                                           46 ~ 20)) #  doctorate
+                                          45 ~ 20,  #  professional school degree
+                                          46 ~ 20)) #  doctorate
 
 #in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
 #earnings = all.earnings[all.earnings$age %>% in.interval(c(25,35)) & 
                         #all.earnings$education >= 11, ]
+all.earnings$employed<- ifelse(cps.data$a_wkstat >5, 0,ifelse(cps.data$a_wkstat<2,NA,1))
+
 
 earnings <- all.earnings
 
 earnings$raw.income = earnings$income
 earnings$degree = factor(earnings$education >= 16, 
-                     levels=c(FALSE, TRUE), 
-                     labels=c('no 4-year degree','4-year degree')) 
+                    levels=c(FALSE, TRUE), 
+                    labels=c('no 4-year degree','4-year degree')) 
 rownames(earnings)=NULL
+earnings$fouryrdegree<- ifelse(earnings$degree=="4-year degree", 1,0)
 
 
 ```
@@ -155,9 +160,10 @@ Household & income   \\
 
 ```{r}
 attach(earnings)
-hist(income,freq=FALSE,col="blue",ylim=c(-0.0000001,.0000075), xlab="Income")
-lines(density(income),col="red",lwd=2)
-rug(income,lwd=1.5)
+ ggplot(earnings, aes(x=income)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="blue")+
+ geom_density(alpha=.2, colour="red") + geom_rug(aes(income, y = NULL)) + ggtitle("Histogram of Income")  
+
 ```
 
 ## Description/Summarization
@@ -172,8 +178,10 @@ rug(income,lwd=1.5)
 ## Univariate Activity
 
 ```{r}
-hist(income,freq=FALSE,col="blue",ylim=c(-0.0000001,.0000075),xlab="Income")
-lines(density(income),col="red",lwd=2)
+h<- ggplot(earnings, aes(x=income)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="blue")+
+ geom_density(alpha=.2, colour="red") + ggtitle("Histogram of Income")
+h
 ```
 
 Find the rough location of the mean and median.
@@ -181,10 +189,8 @@ Find the rough location of the mean and median.
 ## Univariate Activity Solution
 
 ```{r}
-hist(income,freq=FALSE,col="blue",ylim=c(-0.0000001,.0000075), xlab="Income")
-lines(density(income),col="red",lwd=2)
-points(x=mean(income),y=-.00000015,pch=2,cex=3,lwd=2,col="red")
-points(x=median(income),y=-.00000015,pch="|",cex=3,lwd=2,col="red")
+h + geom_point(aes(x=mean(income),y=-0.0000001),colour="red",shape=2,size=3) + geom_point(aes(x=median(income),y=-0.0000001),colour="red",shape=20,size=3)
+
 ```
 
 ## Mean/Median Discussion
@@ -354,11 +360,8 @@ S &= \sqrt{S^2}
 ## Mean and Standard Deviation
 
 ```{r}
-hist(income,freq=FALSE,col="blue",ylim=c(-0.0000001,.0000075), xlab="Income")
-lines(density(income),col="red",lwd=2)
-points(x=mean(income),y=0,pch=2,cex=3,lwd=2,col="red")
-points(x=mean(income)-sd(income),y=0,pch="[",cex=2,lwd=2,col="red")
-points(x=mean(income)+sd(income),y=0,pch="]",cex=2,lwd=2,col="red")
+h + geom_point(aes(x=mean(income),y=-0.0000001),colour="red",shape=2,size=3) + geom_point(aes(x=mean(income)-sd(income),y=-0.0000001),colour="red",shape=3,size=3) + geom_point(aes(x=mean(income)+sd(income),y=-0.0000001),colour="red",shape=3,size=3)
+
 ```
 
 ## Variance as turning force
@@ -384,51 +387,202 @@ points(x=mean(income)+sd(income),y=0,pch="]",cex=2,lwd=2,col="red")
 
 ## Chebyshev for Non-Normal Histograms
 
+At most 25% outside of 2 SDs
+
 ```{r}
-hist(income,freq=FALSE,col="blue",ylim=c(-0.0000001,.0000075),xlab="Income",main="At most 25% outside of 2 SDs")
-lines(density(income),col="red",lwd=2)
-points(x=mean(income),y=0,pch=2,cex=3,lwd=2,col="red")
-points(x=mean(income)-2*sd(income),y=0,pch="[",cex=2,lwd=2,col="red")
-points(x=mean(income)+2*sd(income),y=0,pch="]",cex=2,lwd=2,col="red")
+
+h + geom_point(aes(x=mean(income),y=-0.0000001),colour="red",shape=2,size=3) + geom_point(aes(x=mean(income)-2*sd(income),y=-0.0000001),colour="red",shape=3,size=3) + geom_point(aes(x=mean(income)+2*sd(income),y=-0.0000001),colour="red",shape=3,size=3)
+
 ```
 
 ## Special Case: Binary Variables
-
-```{r}
-earnings$fouryrdegree<- ifelse(earnings$degree=="4-year degree", 1,0)
-```
 
 ```{=tex}
 \begin{table}[h]
 \begin{center}
 \begin{tabular}{r|r}
-Household & Education (4-year degree)   \\
+Household & Employed   \\
 \hline
-1 & 0  \\
+1 & 1  \\
 \vdots & \vdots\\
 25 & 1 \\
-26 & 0 \\
+26 & 1 \\
 \vdots & \vdots \\
-152732 & 0 \\
+29522 & 0 \\
+\vdots & \vdots \\
+152732 & 1 \\
 \hline
-Proportion & 38983/152732\\
+Proportion & 71214/73863\\
 \end{tabular}
 \end{center}
 \end{table}
+
+Note the denominator is different because we exclude those that are not in the labor force 
 ```
-## Mean and Variance for 4-Year Degree Variable
+## Mean and Variance for Employment Status
 
 ```{=tex}
 \begin{align*}
 \bar{y} &= \frac{1}{N}\sum_{i=1}^{N} y_i \\
-&= \frac{0 + \dots+ 1+ 0 + \dots + 1 + 0 + \dots+ 0}{152732} \\
-&= \frac{38983}{152732}\\
+&= \frac{1 + \dots+ 1+ 1 + \dots + 1 + 0 + \dots+ 1}{73863} \\
+&= \frac{71214}{73863}\\
 &\\
 S^2 &= \frac{\sum_{i=1}^{N} (y_i-\bar{y})^2}{N-1} \\ 
-&= \frac{(0-.255)^2 + \dots+ (1-.255)^2}{152732-1}  \\ 
-&=  \left(\frac{152732}{152732-1}\right)[\bar{y} \cdot(1-\bar{y})]
+&= \frac{(0-.0.964)^2 + \dots+ (1-0/964)^2}{73863-1}  \\ 
+&=  \left(\frac{73863}{73863-1}\right)[\bar{y} \cdot(1-\bar{y})]
 \end{align*}
 ```
 ## Outline
 
 Descriptive Regression with a Binary Covariate
+
+## Conditional Means
+
+```{=tex}
+\begin{itemize}
+\item In this class, we focus on a single ``outcome'' variable. 
+\item All additional variables adjust how we consider the outcome, often by conditioning. \pause
+\item Typically, we consider the mean of $y$ conditional on values of other variables (called covariates). \pause
+\item Consider the binary covariate 4-year Degree (no 4-year degree 0, 4-year degree 1).
+\end{itemize}
+```
+## From Univariate to Regression
+
+```{r}
+ ggplot(earnings, aes(x=income)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="blue",bins=100) + ggtitle("Histogram of Income") + geom_point(aes(x=mean(income),y=-0.0000001),colour="red",shape=2,size=3) + geom_point(aes(x=median(income),y=-0.0000001),colour="red",shape=20,size=3)
+
+```
+## From Univariate to Regression
+
+```{r}
+ ggplot(earnings, aes(x=income)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="blue",bins=100) + ggtitle("Histogram of Income") + geom_point(aes(x=mean(income),y=-0.0000001),colour="red",shape=2,size=3) + geom_point(aes(x=median(income),y=-0.0000001),colour="red",shape=20,size=3) + coord_flip()
+```
+
+## Binary Covariate Regression
+```{r}
+
+hdegree<-  ggplot(subset(earnings,fouryrdegree==1), aes(x=income)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="blue",bins=100) + ggtitle("Income 4-yr Degree") + geom_point(aes(x=mean(income[fouryrdegree==1]),y=-0.0000001),colour="red",shape=2,size=3) + geom_point(aes(x=median(income[fouryrdegree==1]),y=-0.0000001),colour="red",shape=20,size=3) + coord_flip()
+
+hnodegree<-  ggplot(subset(earnings,fouryrdegree==0), aes(x=income)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="blue",bins=100) + ggtitle("Income No 4-yr Degree") + geom_point(aes(x=mean(income[fouryrdegree==0]),y=-0.0000001),colour="red",shape=2,size=3) + geom_point(aes(x=median(income[fouryrdegree==0]),y=-0.0000001),colour="red",shape=20,size=3) + coord_flip()
+
+grid.arrange(hdegree, hnodegree, ncol = 2) 
+
+```
+
+## Conditional Mean/Median Discussion
+
+In pairs, discuss ...
+
+```{=tex}
+\begin{enumerate}
+\item What do the mean and median represent in the context of the income for respondents with and without four-year degrees?
+\item What does it mean for the mean to be larger those with four-year degrees than those without? 
+\item What does it mean for the difference in means to be larger than the difference in medians?
+\end{enumerate}
+```
+
+## Scatterplot Representation
+
+```{r}
+#ggplot(earnings, aes(x=degree, y=income)) + geom_jitter(shape=1)+ geom_point(aes(y=mean(income[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=2,size=3) + geom_point(aes(y=mean(income[fouryrdegree==1]),x="4-year degree"),colour="red",shape=2,size=3)
+
+ggplot(earnings, aes(x=degree, y=income)) + geom_point(shape=1) + geom_point(aes(y=mean(income[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=17,size=3) + geom_point(aes(y=mean(income[fouryrdegree==1]),x="4-year degree"),colour="red",shape=17,size=3)
+```
+
+## OLS Regression
+
+```{r}
+reg<-lm(income ~ degree)                      
+  
+#get intercept and slope value
+coeff<-coefficients(reg)          
+intercept<-coeff[1]
+slope<- coeff[2]
+  
+ ggplot(earnings, aes(x=degree, y=income)) + geom_point(shape=1) + geom_point(aes(y=mean(income[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=17,size=3) + geom_point(aes(y=mean(income[fouryrdegree==1]),x="4-year degree"),colour="red",shape=17,size=3) +geom_abline(intercept = intercept, slope = slope, color="red", linetype="dashed") 
+```
+## Intercept and Slope Discussion
+
+In pairs, discuss ...
+
+```{=tex}
+\begin{enumerate}
+\item The substantive interpretation of the intercept and slope of the line in terms of having a four-year degree.
+\item What does it mean for the mean to be larger for those with four-year degrees? 
+\item What does it mean for the difference in means to be larger than the difference in medians?
+\end{enumerate}
+```
+## Conditional Standard Deviations
+```{r}
+ ggplot(earnings, aes(x=degree, y=income)) + geom_point(shape=1) + geom_point(aes(y=mean(income[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=17,size=3) + geom_point(aes(y=mean(income[fouryrdegree==1]),x="4-year degree"),colour="red",shape=17,size=3) +geom_abline(intercept = intercept, slope = slope, color="red", linetype="dashed") + geom_point(aes(y=mean(income[fouryrdegree==0])-sd(income[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=3,size=3) + geom_point(aes(y=mean(income[fouryrdegree==0])+sd(income[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=3,size=3) +
+  geom_point(aes(y=mean(income[fouryrdegree==1])+sd(income[fouryrdegree==1]),x="4-year degree"),colour="red",shape=3,size=3) +  geom_point(aes(y=mean(income[fouryrdegree==1])-sd(income[fouryrdegree==1]),x="4-year degree"),colour="red",shape=3,size=3) 
+```
+## Special Case: Binary Outcomes
+
+```{=tex}
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{r|rr}
+Household & Degree & Employed  \\
+\hline
+1 & 0 & 1 \\
+2 & 1  & 1 \\
+\vdots & \vdots \\
+number & 0 & 0\\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+```
+## Binary Outcome OLS Regression
+
+```{r}
+laborforce<- subset(earnings,!(is.na(employed)))
+attach(laborforce)
+
+reg2<-lm(employed ~ degree)                      
+coeff2<-coefficients(reg2)          
+intercept2<-coeff2[1]
+slope2<- coeff2[2]
+
+
+
+
+ggplot(laborforce, aes(x=degree, y=employed)) + geom_point(shape=1) +geom_point(aes(y=mean(employed[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=17,size=3) + geom_point(aes(y=mean(employed[fouryrdegree==1]),x="4-year degree"),colour="red",shape=17,size=3)  + geom_abline(intercept = intercept2, slope = slope2, color="red", linetype="dashed")
+```
+
+## Binary Outcome OLS Regression
+
+```{r}
+ggplot(laborforce, aes(x=degree, y=employed)) + geom_jitter(shape=1) +geom_point(aes(y=mean(employed[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=17,size=3) + geom_point(aes(y=mean(employed[fouryrdegree==1]),x="4-year degree"),colour="red",shape=17,size=3)  + geom_abline(intercept = intercept2, slope = slope2, color="red", linetype="dashed")
+```
+
+## Conditional Standard Deviations
+
+```{r}
+ggplot(laborforce, aes(x=degree, y=employed)) + geom_point(shape=1) +geom_point(aes(y=mean(employed[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=17,size=3) + geom_point(aes(y=mean(employed[fouryrdegree==1]),x="4-year degree"),colour="red",shape=17,size=3)  + geom_abline(intercept = intercept2, slope = slope2, color="red", linetype="dashed") + geom_point(aes(y=mean(employed[fouryrdegree==0])-sd(employed[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=3,size=3) + geom_point(aes(y=mean(employed[fouryrdegree==0])+sd(employed[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=3,size=3) +
+  geom_point(aes(y=mean(employed[fouryrdegree==1])+sd(employed[fouryrdegree==1]),x="4-year degree"),colour="red",shape=3,size=3) +  geom_point(aes(y=mean(employed[fouryrdegree==1])-sd(employed[fouryrdegree==1]),x="4-year degree"),colour="red",shape=3,size=3) 
+```
+
+## Conditional Standard Deviations
+
+```{r}
+ggplot(laborforce, aes(x=degree, y=employed)) + geom_jitter(shape=1) +geom_point(aes(y=mean(employed[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=17,size=3) + geom_point(aes(y=mean(employed[fouryrdegree==1]),x="4-year degree"),colour="red",shape=17,size=3)  + geom_abline(intercept = intercept2, slope = slope2, color="red", linetype="dashed") + geom_point(aes(y=mean(employed[fouryrdegree==0])-sd(employed[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=3,size=3) + geom_point(aes(y=mean(employed[fouryrdegree==0])+sd(employed[fouryrdegree==0]),x="no 4-year degree"),colour="red",shape=3,size=3) +
+  geom_point(aes(y=mean(employed[fouryrdegree==1])+sd(employed[fouryrdegree==1]),x="4-year degree"),colour="red",shape=3,size=3) +  geom_point(aes(y=mean(employed[fouryrdegree==1])-sd(employed[fouryrdegree==1]),x="4-year degree"),colour="red",shape=3,size=3) 
+```
+
+## Binary Outcome OLS Discussion
+
+In pairs, discuss ...
+
+```{=tex}
+\begin{enumerate}
+\item The substantive interpretation of the intercept and slope of the line in terms of those with and without four-year degrees.
+\item Why is the SD smaller for those with four-year degrees than those without (hint: look at the variance formula for binary variables)
+\end{enumerate}
+```
+## Summary
