@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<script src="lecture5 AKC_files/libs/clipboard/clipboard.min.js"></script>
+<script src="lecture5 AKC_files/libs/quarto-html/tabby.min.js"></script>
+<script src="lecture5 AKC_files/libs/quarto-html/popper.min.js"></script>
+<script src="lecture5 AKC_files/libs/quarto-html/tippy.umd.min.js"></script>
+<link href="lecture5 AKC_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="lecture5 AKC_files/libs/quarto-html/light-border.css" rel="stylesheet">
+<link href="lecture5 AKC_files/libs/quarto-html/quarto-html.min.css" rel="stylesheet" data-mode="light">
+<link href="lecture5 AKC_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles"><meta charset="utf-8">
+  <meta name="generator" content="quarto-1.4.241">
+
+  <title>Working with Non-Binary Covariates</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+  <link rel="stylesheet" href="lecture5 AKC_files/libs/revealjs/dist/reset.css">
+  <link rel="stylesheet" href="lecture5 AKC_files/libs/revealjs/dist/reveal.css">
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+      vertical-align: middle;
+    }
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      { color: #003b4f; background-color: #f1f3f5; }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span { color: #003b4f; } /* Normal */
+    code span.al { color: #ad0000; } /* Alert */
+    code span.an { color: #5e5e5e; } /* Annotation */
+    code span.at { color: #657422; } /* Attribute */
+    code span.bn { color: #ad0000; } /* BaseN */
+    code span.bu { } /* BuiltIn */
+    code span.cf { color: #003b4f; } /* ControlFlow */
+    code span.ch { color: #20794d; } /* Char */
+    code span.cn { color: #8f5902; } /* Constant */
+    code span.co { color: #5e5e5e; } /* Comment */
+    code span.cv { color: #5e5e5e; font-style: italic; } /* CommentVar */
+    code span.do { color: #5e5e5e; font-style: italic; } /* Documentation */
+    code span.dt { color: #ad0000; } /* DataType */
+    code span.dv { color: #ad0000; } /* DecVal */
+    code span.er { color: #ad0000; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #ad0000; } /* Float */
+    code span.fu { color: #4758ab; } /* Function */
+    code span.im { color: #00769e; } /* Import */
+    code span.in { color: #5e5e5e; } /* Information */
+    code span.kw { color: #003b4f; } /* Keyword */
+    code span.op { color: #5e5e5e; } /* Operator */
+    code span.ot { color: #003b4f; } /* Other */
+    code span.pp { color: #ad0000; } /* Preprocessor */
+    code span.sc { color: #5e5e5e; } /* SpecialChar */
+    code span.ss { color: #20794d; } /* SpecialString */
+    code span.st { color: #20794d; } /* String */
+    code span.va { color: #111111; } /* Variable */
+    code span.vs { color: #20794d; } /* VerbatimString */
+    code span.wa { color: #5e5e5e; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="lecture5 AKC_files/libs/revealjs/dist/theme/quarto.css">
+  <link href="lecture5 AKC_files/libs/revealjs/plugin/quarto-line-highlight/line-highlight.css" rel="stylesheet">
+  <link href="lecture5 AKC_files/libs/revealjs/plugin/reveal-menu/menu.css" rel="stylesheet">
+  <link href="lecture5 AKC_files/libs/revealjs/plugin/reveal-menu/quarto-menu.css" rel="stylesheet">
+  <link href="lecture5 AKC_files/libs/revealjs/plugin/quarto-support/footer.css" rel="stylesheet">
+  <style type="text/css">
+
+  .callout {
+    margin-top: 1em;
+    margin-bottom: 1em;  
+    border-radius: .25rem;
+  }
+
+  .callout.callout-style-simple { 
+    padding: 0em 0.5em;
+    border-left: solid #acacac .3rem;
+    border-right: solid 1px silver;
+    border-top: solid 1px silver;
+    border-bottom: solid 1px silver;
+    display: flex;
+  }
+
+  .callout.callout-style-default {
+    border-left: solid #acacac .3rem;
+    border-right: solid 1px silver;
+    border-top: solid 1px silver;
+    border-bottom: solid 1px silver;
+  }
+
+  .callout .callout-body-container {
+    flex-grow: 1;
+  }
+
+  .callout.callout-style-simple .callout-body {
+    font-size: 1rem;
+    font-weight: 400;
+  }
+
+  .callout.callout-style-default .callout-body {
+    font-size: 0.9rem;
+    font-weight: 400;
+  }
+
+  .callout.callout-titled.callout-style-simple .callout-body {
+    margin-top: 0.2em;
+  }
+
+  .callout:not(.callout-titled) .callout-body {
+      display: flex;
+  }
+
+  .callout:not(.no-icon).callout-titled.callout-style-simple .callout-content {
+    padding-left: 1.6em;
+  }
+
+  .callout.callout-titled .callout-header {
+    padding-top: 0.2em;
+    margin-bottom: -0.2em;
+  }
+
+  .callout.callout-titled .callout-title  p {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+  }
+    
+  .callout.callout-titled.callout-style-simple .callout-content  p {
+    margin-top: 0;
+  }
+
+  .callout.callout-titled.callout-style-default .callout-content  p {
+    margin-top: 0.7em;
+  }
+
+  .callout.callout-style-simple div.callout-title {
+    border-bottom: none;
+    font-size: .9rem;
+    font-weight: 600;
+    opacity: 75%;
+  }
+
+  .callout.callout-style-default  div.callout-title {
+    border-bottom: none;
+    font-weight: 600;
+    opacity: 85%;
+    font-size: 0.9rem;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+  }
+
+  .callout.callout-style-default div.callout-content {
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+  }
+
+  .callout.callout-style-simple .callout-icon::before {
+    height: 1rem;
+    width: 1rem;
+    display: inline-block;
+    content: "";
+    background-repeat: no-repeat;
+    background-size: 1rem 1rem;
+  }
+
+  .callout.callout-style-default .callout-icon::before {
+    height: 0.9rem;
+    width: 0.9rem;
+    display: inline-block;
+    content: "";
+    background-repeat: no-repeat;
+    background-size: 0.9rem 0.9rem;
+  }
+
+  .callout-title {
+    display: flex
+  }
+    
+  .callout-icon::before {
+    margin-top: 1rem;
+    padding-right: .5rem;
+  }
+
+  .callout.no-icon::before {
+    display: none !important;
+  }
+
+  .callout.callout-titled .callout-body > .callout-content > :last-child {
+    padding-bottom: 0.5rem;
+    margin-bottom: 0;
+  }
+
+  .callout.callout-titled .callout-icon::before {
+    margin-top: .5rem;
+    padding-right: .5rem;
+  }
+
+  .callout:not(.callout-titled) .callout-icon::before {
+    margin-top: 1rem;
+    padding-right: .5rem;
+  }
+
+  /* Callout Types */
+
+  div.callout-note {
+    border-left-color: #4582ec !important;
+  }
+
+  div.callout-note .callout-icon::before {
+    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAIKADAAQAAAABAAAAIAAAAACshmLzAAAEU0lEQVRYCcVXTWhcVRQ+586kSUMMxkyaElstCto2SIhitS5Ek8xUKV2poatCcVHtUlFQk8mbaaziwpWgglJwVaquitBOfhQXFlqlzSJpFSpIYyXNjBNiTCck7x2/8/LeNDOZxDuEkgOXe++553zfefee+/OYLOXFk3+1LLrRdiO81yNqZ6K9cG0P3MeFaMIQjXssE8Z1JzLO9ls20MBZX7oG8w9GxB0goaPrW5aNMp1yOZIa7Wv6o2ykpLtmAPs/vrG14Z+6d4jpbSKuhdcSyq9wGMPXjonwmESXrriLzFGOdDBLB8Y6MNYBu0dRokSygMA/mrun8MGFN3behm6VVAwg4WR3i6FvYK1T7MHo9BK7ydH+1uurECoouk5MPRyVSBrBHMYwVobG2aOXM07sWrn5qgB60rc6mcwIDJtQrnrEr44kmy+UO9r0u9O5/YbkS9juQckLed3DyW2XV/qWBBB3ptvI8EUY3I9p/67OW+g967TNr3Sotn3IuVlfMLVnsBwH4fsnebJvyGm5GeIUA3jljERmrv49SizPYuq+z7c2H/jlGC+Ghhupn/hcapqmcudB9jwJ/3jvnvu6vu5lVzF1fXyZuZZ7U8nRmVzytvT+H3kilYvH09mLWrQdwFSsFEsxFVs5fK7A0g8gMZjbif4ACpKbjv7gNGaD8bUrlk8x+KRflttr22JEMRUbTUwwDQScyzPgedQHZT0xnx7ujw2jfVfExwYHwOsDTjLdJ2ebmeQIlJ7neo41s/DrsL3kl+W2lWvAga0tR3zueGr6GL78M3ifH0rGXrBC2aAR8uYcIA5gwV8zIE8onoh8u0Fca/ciF7j1uOzEnqcIm59sEXoGc0+z6+H45V1CvAvHcD7THztu669cnp+L0okAeIc6zjbM/24LgGM1gZk7jnRu1aQWoU9sfUOuhrmtaPIO3YY1KLLWZaEO5TKUbMY5zx8W9UJ6elpLwKXbsaZ4EFl7B4bMtDv0iRipKoDQT2sNQI9b1utXFdYisi+wzZ/ri/1m7QfDgEuvgUUEIJPq3DhX/5DWNqIXDOweC2wvIR90Oq3lDpdMIgD2r0dXvGdsEW5H6x6HLRJYU7C69VefO1x8Gde1ZFSJLfWS1jbCnhtOPxmpfv2LXOA2Xk2tvnwKKPFuZ/oRmwBwqRQDcKNeVQkYcOjtWVBuM/JuYw5b6isojIkYxyYAFn5K7ZBF10fea52y8QltAg6jnMqNHFBmGkQ1j+U43HMi2xMar1Nv0zGsf1s8nUsmUtPOOrbFIR8bHFDMB5zL13Gmr/kGlCkUzedTzzmzsaJXhYawnA3UmARpiYj5ooJZiUoxFRtK3X6pgNPv+IZVPcnwbOl6f+aBaO1CNvPW9n9LmCp01nuSaTRF2YxHqZ8DYQT6WsXT+RD6eUztwYLZ8rM+rcPxamv1VQzFUkzFXvkiVrySGQgJNvXHJAxiU3/NwiC03rSf05VBaPtu/Z7/B8Yn/w7eguloAAAAAElFTkSuQmCC');
+  }
+
+  div.callout-note.callout-style-default .callout-title {
+    background-color: #dae6fb
+  }
+
+  div.callout-important {
+    border-left-color: #d9534f !important;
+  }
+
+  div.callout-important .callout-icon::before {
+    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAIKADAAQAAAABAAAAIAAAAACshmLzAAAEKklEQVRYCcVXTWhcVRS+575MJym48A+hSRFr00ySRQhURRfd2HYjk2SSTokuBCkU2o0LoSKKraKIBTcuFCoidGFD08nkBzdREbpQ1EDNIv8qSGMFUboImMSZd4/f9zJv8ibJMC8xJQfO3HPPPef7zrvvvnvviIkpC9nsw0UttFunbUhpFzFtarSd6WJkStVMw5xyVqYTvkwfzuf/5FgtkVoB0729j1rjXwThS7Vio+Mo6DNnvLfahoZ+i/o32lULuJ3NNiz7q6+pyAUkJaFF6JwaM2lUJlV0MlnQn5aTRbEu0SEqHUa0A4AdiGuB1kFXRfVyg5d87+Dg4DL6m2TLAub60ilj7A1Ec4odSAc8X95sHh7+ZRPCFo6Fnp7HfU/fBng/hi10CjCnWnJjsxvDNxWw0NfV6Rv5GgP3I3jGWXumdTD/3cbEOP2ZbOZp69yniG3FQ9z1jD7bnBu9Fc2tKGC2q+uAJOQHBDRiZX1x36o7fWBs7J9ownbtO+n0/qWkvW7UPIfc37WgT6ZGR++EOJyeQDSb9UB+DZ1G6DdLDzyS+b/kBCYGsYgJbSQHuThGKRcw5xdeQf8YdNHsc6ePXrlSYMBuSIAFTGAtQo+VuALo4BX83N190NWZWbynBjhOHsmNfFWLeL6v+ynsA58zDvvAC8j5PkbOcXCMg2PZFk3q8MjI7WAG/Dp9AwP7jdGBOOQkAvlFUB+irtm16I1Zw9YBcpGTGXYmk3kQIC/Cds55l+iMI3jqhjAuaoe+am2Jw5GT3Nbz3CkE12NavmzN5+erJW7046n/CH1RO/RVa8lBLozXk9uqykkGAyRXLWlLv5jyp4RFsG5vGVzpDLnIjTWgnRy2Rr+tDKvRc7Y8AyZq10jj8DqXdnIRNtFZb+t/ZRtXcDiVnzpqx8mPcDWxgARUqx0W1QB9MeUZiNrV4qP+Ehc+BpNgATsTX8ozYKL2NtFYAHc84fG7ndxUPr+AR/iQSns7uSUufAymwDOb2+NjK27lEFocm/EE2WpyIy/Hi66MWuMKJn8RvxIcj87IM5Vh9663ziW36kR0HNenXuxmfaD8JC7tfKbrhFr7LiZCrMjrzTeGx+PmkosrkNzW94ObzwocJ7A1HokLolY+AvkTiD/q1H0cN48c5EL8Crkttsa/AXQVDmutfyku0E7jShx49XqV3MFK8IryDhYVbj7Sj2P2eBxwcXoe8T8idsKKPRcnZw1b+slFTubwUwhktrfnAt7J++jwQtLZcm3sr9LQrjRzz6cfMv9aLvgmnAGvpoaGLxM4mAEaLV7iAzQ3oU0IvD5x9ix3yF2RAAuYAOO2f7PEFWCXZ4C9Pb2UsgDeVnFSpbFK7/IWu7TPTvBqzbGdCHOJQSxiEjt6IyZmxQyEJHv6xyQsYk//moVFsN2zP6fRImjfq7/n/wFDguUQFNEwugAAAABJRU5ErkJggg==');
+  }
+
+  div.callout-important.callout-style-default .callout-title {
+    background-color: #f7dddc
+  }
+
+  div.callout-warning {
+    border-left-color: #f0ad4e !important;
+  }
+
+  div.callout-warning .callout-icon::before {
+    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAIKADAAQAAAABAAAAIAAAAACshmLzAAAETklEQVRYCeVWW2gcVRg+58yaTUnizqbipZeX4uWhBEniBaoUX1Ioze52t7sRq6APio9V9MEaoWlVsFasRq0gltaAPuxms8lu0gcviE/FFOstVbSIxgcv6SU7EZqmdc7v9+9mJtNks51NTUH84ed889/PP+cmxP+d5FIbMJmNbpREu4WUkiTtCicKny0l1pIKmBzovF2S+hIJHX8iEu3hZJ5lNZGqyRrGSIQpq15AzF28jgpeY6yk6GVdrfFqdrD6Iw+QlB8g0YS2g7dyQmXM/IDhBhT0UCiRf59lfqmmDvzRt6kByV/m4JjtzuaujMUM2c5Z2d6JdKrRb3K2q6mA+oYVz8JnDdKPmmNthzkAk/lN63sYPgevrguc72aZX/L9C6x09GYyxBgCX4NlvyGUHOKELlm5rXeR1kchuChJt4SSwyddZRXgvwMGvYo4QSlk3/zkHD8UHxwVJA6zjZZqP8v8kK8OWLnIZtLyCAJagYC4rTGW/9Pqj92N/c+LUaAj27movwbi19tk/whRCIE7Q9vyI6yvRpftAKVTdUjOW40X3h5OXsKCdmFcx0xlLJoSuQngnrJe7Kcjm4OMq9FlC7CMmScQANuNvjfP3PjGXDBaUQmbp296S5L4DrpbrHN1T87ZVEZVCzg1FF0Ft+dKrlLukI+/c9ENo+TvlTDbYFvuKPtQ9+l052rXrgKoWkDAFnvh0wTOmYn8R5f4k/jN/fZiCM1tQx9jQQ4ANhqG4hiL0qIFTGViG9DKB7GYzgubnpofgYRwO+DFjh0Zin2m4b/97EDkXkc+f6xYAPX0KK2I/7fUQuwzuwo/L3AkcjugPNixC8cHf0FyPjWlItmLxWw4Ou9YsQCr5fijMGoD/zpdRy95HRysyXA74MWOnscpO4j2y3HAVisw85hX5+AFBRSHt4ShfLFkIMXTqyKFc46xdzQM6XbAi702a7sy04J0+feReMFKp5q9esYLCqAZYw/k14E/xcLLsFElaornTuJB0svMuJINy8xkIYuL+xPAlWRceH6+HX7THJ0djLUom46zREu7tTkxwmf/FdOZ/sh6Q8qvEAiHpm4PJ4a/doJe0gH1t+aHRgCzOvBvJedEK5OFE5jpm4AGP2a8Dxe3gGJ/pAutug9Gp6he92CsSsWBaEcxGx0FHytmIpuqGkOpldqNYQK8cSoXvd+xLxXADw0kf6UkJNFtdo5MOgaLjiQOQHcn+A6h5NuL2s0qsC2LOM75PcF3yr5STuBSAcGG+meA14K/CI21HcS4LBT6tv0QAh8Dr5l93AhZzG5ZJ4VxAqdZUEl9z7WJ4aN+svMvwHHL21UKTd1mqvChH7/Za5xzXBBKrUcB0TQ+Ulgkfbi/H/YT5EptrGzsEK7tR1B7ln9BBwckYfMiuSqklSznIuoIIOM42MQO+QnduCoFCI0bpkzjCjddHPN/F+2Yu+sd9bKNpVwHhbS3LluK/0zgfwD0xYI5dXuzlQAAAABJRU5ErkJggg==');
+  }
+
+  div.callout-warning.callout-style-default .callout-title {
+    background-color: #fcefdc
+  }
+
+  div.callout-tip {
+    border-left-color: #02b875 !important;
+  }
+
+  div.callout-tip .callout-icon::before {
+    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAIKADAAQAAAABAAAAIAAAAACshmLzAAADr0lEQVRYCe1XTWgTQRj9ZjZV8a9SPIkKgj8I1bMHsUWrqYLVg4Ue6v9BwZOxSYsIerFao7UiUryIqJcqgtpimhbBXoSCVxUFe9CTiogUrUp2Pt+3aUI2u5vdNh4dmMzOzHvvezuz8xNFM0mjnbXaNu1MvFWRXkXEyE6aYOYJpdW4IXuA4r0fo8qqSMDBU0v1HJUgVieAXxzCsdE/YJTdFcVIZQNMyhruOMJKXYFoLfIfIvVIMWdsrd+Rpd86ZmyzzjJmLStqRn0v8lzkb4rVIXvnpScOJuAn2ACC65FkPzEdEy4TPWRLJ2h7z4cArXzzaOdKlbOvKKX25Wl00jSnrwVxAg3o4dRxhO13RBSdNvH0xSARv3adTXbBdTf64IWO2vH0LT+cv4GR1DJt+DUItaQogeBX/chhbTBxEiZ6gftlDNXTrvT7co4ub5A6gp9HIcHvzTa46OS5fBeP87Qm0fQkr4FsYgVQ7Qg+ZayaDg9jhg1GkWj8RG6lkeSacrrHgDaxdoBiZPg+NXV/KifMuB6//JmYH4CntVEHy/keA6x4h4CU5oFy8GzrBS18cLJMXcljAKB6INjWsRcuZBWVaS3GDrqB7rdapVIeA+isQ57Eev9eCqzqOa81CY05VLd6SamW2wA2H3SiTbnbSxmzfp7WtKZkqy4mdyAlGx7ennghYf8voqp9cLSgKdqNfa6RdRsAAkPwRuJZNbpByn+RrJi1RXTwdi8RQF6ymDwGMAtZ6TVE+4uoKh+MYkcLsT0Hk8eAienbiGdjJHZTpmNjlbFJNKDVAp2fJlYju6IreQxQ08UJDNYdoLSl6AadO+fFuCQqVMB1NJwPm69T04Wv5WhfcWyfXQB+wXRs1pt+nCknRa0LVzSA/2B+a9+zQJadb7IyyV24YAxKp2Jqs3emZTuNnKxsah+uabKbMk7CbTgJx/zIgQYErIeTKRQ9yD9wxVof5YolPHqaWo7TD6tJlh7jQnK5z2n3+fGdggIOx2kaa2YI9QWarc5Ce1ipNWMKeSG4DysFF52KBmTNMmn5HqCFkwy34rDg05gDwgH3bBi+sgFhN/e8QvRn8kbamCOhgrZ9GJhFDgfcMHzFb6BAtjKpFhzTjwv1KCVuxHvCbsSiEz4CANnj84cwHdFXAbAOJ4LTSAawGWFn5tDhLMYz6nWeU2wJfIhmIJBefcd/A5FWQWGgrWzyORZ3Q6HuV+Jf0Bj+BTX69fm1zWgK7By1YTXchFDORywnfQ7GpzOo6S+qECrsx2ifVQAAAABJRU5ErkJggg==');
+  }
+
+  div.callout-tip.callout-style-default .callout-title {
+    background-color: #ccf1e3
+  }
+
+  div.callout-caution {
+    border-left-color: #fd7e14 !important;
+  }
+
+  div.callout-caution .callout-icon::before {
+    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAIKADAAQAAAABAAAAIAAAAACshmLzAAACV0lEQVRYCdVWzWoUQRCuqp2ICBLJXgITZL1EfQDBW/bkzUMUD7klD+ATSHBEfAIfQO+iXsWDxJsHL96EHAwhgzlkg8nBg25XWb0zIb0zs9muYYWkoKeru+vn664fBqElyZNuyh167NXJ8Ut8McjbmEraKHkd7uAnAFku+VWdb3reSmRV8PKSLfZ0Gjn3a6Xlcq9YGb6tADjn+lUfTXtVmaZ1KwBIvFI11rRXlWlatwIAAv2asaa9mlB9wwygiDX26qaw1yYPzFXg2N1GgG0FMF8Oj+VIx7E/03lHx8UhvYyNZLN7BwSPgekXXLribw7w5/c8EF+DBK5idvDVYtEEwMeYefjjLAdEyQ3M9nfOkgnPTEkYU+sxMq0BxNR6jExrAI31H1rzvLEfRIdgcv1XEdj6QTQAS2wtstEALLG1yEZ3QhH6oDX7ExBSFEkFINXH98NTrme5IOaaA7kIfiu2L8A3qhH9zRbukdCqdsA98TdElyeMe5BI8Rs2xHRIsoTSSVFfCFCWGPn9XHb4cdobRIWABNf0add9jakDjQJpJ1bTXOJXnnRXHRf+dNL1ZV1MBRCXhMbaHqGI1JkKIL7+i8uffuP6wVQAzO7+qVEbF6NbS0LJureYcWXUUhH66nLR5rYmva+2tjRFtojkM2aD76HEGAD3tPtKM309FJg5j/K682ywcWJ3PASCcycH/22u+Bh7Aa0ehM2Fu4z0SAE81HF9RkB21c5bEn4Dzw+/qNOyXr3DCTQDMBOdhi4nAgiFDGCinIa2owCEChUwD8qzd03PG+qdW/4fDzjUMcE1ZpIAAAAASUVORK5CYII=');
+  }
+
+  div.callout-caution.callout-style-default .callout-title {
+    background-color: #ffe5d0
+  }
+
+  </style>
+  <style type="text/css">
+    .reveal div.sourceCode {
+      margin: 0;
+      overflow: auto;
+    }
+    .reveal div.hanging-indent {
+      margin-left: 1em;
+      text-indent: -1em;
+    }
+    .reveal .slide:not(.center) {
+      height: 100%;
+    }
+    .reveal .slide.scrollable {
+      overflow-y: auto;
+    }
+    .reveal .footnotes {
+      height: 100%;
+      overflow-y: auto;
+    }
+    .reveal .slide .absolute {
+      position: absolute;
+      display: block;
+    }
+    .reveal .footnotes ol {
+      counter-reset: ol;
+      list-style-type: none; 
+      margin-left: 0;
+    }
+    .reveal .footnotes ol li:before {
+      counter-increment: ol;
+      content: counter(ol) ". "; 
+    }
+    .reveal .footnotes ol li > p:first-child {
+      display: inline-block;
+    }
+    .reveal .slide ul,
+    .reveal .slide ol {
+      margin-bottom: 0.5em;
+    }
+    .reveal .slide ul li,
+    .reveal .slide ol li {
+      margin-top: 0.4em;
+      margin-bottom: 0.2em;
+    }
+    .reveal .slide ul[role="tablist"] li {
+      margin-bottom: 0;
+    }
+    .reveal .slide ul li > *:first-child,
+    .reveal .slide ol li > *:first-child {
+      margin-block-start: 0;
+    }
+    .reveal .slide ul li > *:last-child,
+    .reveal .slide ol li > *:last-child {
+      margin-block-end: 0;
+    }
+    .reveal .slide .columns:nth-child(3) {
+      margin-block-start: 0.8em;
+    }
+    .reveal blockquote {
+      box-shadow: none;
+    }
+    .reveal .tippy-content>* {
+      margin-top: 0.2em;
+      margin-bottom: 0.7em;
+    }
+    .reveal .tippy-content>*:last-child {
+      margin-bottom: 0.2em;
+    }
+    .reveal .slide > img.stretch.quarto-figure-center,
+    .reveal .slide > img.r-stretch.quarto-figure-center {
+      display: block;
+      margin-left: auto;
+      margin-right: auto; 
+    }
+    .reveal .slide > img.stretch.quarto-figure-left,
+    .reveal .slide > img.r-stretch.quarto-figure-left  {
+      display: block;
+      margin-left: 0;
+      margin-right: auto; 
+    }
+    .reveal .slide > img.stretch.quarto-figure-right,
+    .reveal .slide > img.r-stretch.quarto-figure-right  {
+      display: block;
+      margin-left: auto;
+      margin-right: 0; 
+    }
+  </style>
+  <script src="lecture5 AKC_files/libs/kePrint-0.0.1/kePrint.js"></script>
+  <link href="lecture5 AKC_files/libs/lightable-0.0.1/lightable.css" rel="stylesheet">
+</head>
+<body class="quarto-light">
+  <div class="reveal">
+    <div class="slides">
+
+<section id="title-slide" class="quarto-title-block center">
+  <h1 class="title">Working with Non-Binary Covariates</h1>
+  <p class="subtitle">QTM 220 Lecture 5</p>
+
+<div class="quarto-title-authors">
+</div>
+
+</section>
+<section id="overview" class="slide level2">
+<h2>Overview</h2>
+<ul>
+<li>Today, we’ll work with data from the 2022 Current Population Survey.</li>
+<li>We’ll look at the relationship between income and education.</li>
+<li>We’ve already compared people <span class="twocolor-green">with</span> and <span class="twocolor-red">without</span> 4-year degrees.</li>
+<li>That’s a way of summarizing what we see in the data based on a <em>binary covariate</em> <span class="math display">\[
+X_i = \begin{cases}
+1 &amp; \text{ if } \ \text{person}_i \ \text{has a 4-year degree} \\
+0 &amp; \text{ otherwise }
+\end{cases}
+\]</span></li>
+<li>Today, we’ll talk about summaries based on <em>non-binary covariates</em>
+<ul>
+<li>e.g., the years of education they have</li>
+<li>e.g., the size of the city they live in</li>
+</ul></li>
+<li>We’re going to be generalizing a lot of ideas and techniques we used with binary ones.</li>
+<li>We’ll start with a thorough review to get you thinking about them in a way that generalizes.</li>
+</ul>
+</section>
+<section>
+<section id="review" class="title-slide slide level1 center">
+<h1>Review</h1>
+
+</section>
+<section id="sampling-scheme" class="slide level2">
+<h2>Sampling Scheme</h2>
+<div class="columns">
+<div class="column">
+<h3 id="the-sample">The Sample</h3>
+<p>We’ll look at the survey recipients who</p>
+<ul>
+<li>were California residents</li>
+<li>between 25 and 35</li>
+<li>who lived alone</li>
+</ul>
+<p>This sample includes 166 people.</p>
+</div><div class="column">
+<h3 id="the-finite-population">The finite population</h3>
+<p>It’s approximately correct to think of them as</p>
+<ul>
+<li>being chosen randomly</li>
+<li>with equal probability</li>
+<li>from the set of all people meeting these criteria</li>
+</ul>
+<p>There are a lot of people like this.<br>
+Roughly 2500 times that many.</p>
+</div>
+</div>
+<p>A Picture</p>
+<ul>
+<li>Left: Some dots in California</li>
+<li>Right: More dots in California, some colored the same way as the left ones</li>
+</ul>
+<p>Arrow right to left</p>
+</section>
+<section id="an-infinite-population-approximation" class="slide level2">
+<h2>An infinite-population approximation</h2>
+<p>We can think of the people in our finite population as a large number of independent draws</p>
+<ul>
+<li>from an infinite population of people</li>
+<li>meeting those critera</li>
+<li>that <em>could exist</em>.</li>
+</ul>
+<p>That’s an approximation, but it makes our life simple.<br>
+It implies the people in our sample are drawn the same way the same population.</p>
+<p>A Picture</p>
+<ul>
+<li>Left: Some dots in California</li>
+<li>Right: More dots in California, some colored the same way as the left ones</li>
+<li>Below: Some kind of population heat map of california.</li>
+</ul>
+<p>Arrows</p>
+<ul>
+<li>right to left (the finite pop version)</li>
+<li>below to both (commutative diagram)</li>
+</ul>
+</section>
+<section id="subsamples-and-subpopulations" class="slide level2">
+<h2>Subsamples and Subpopulations</h2>
+<p>TODO</p>
+</section>
+<section id="comparing-incomes-by-eyeballing-a-table" class="slide level2">
+<h2>Comparing incomes by eyeballing a table</h2>
+<div class="hidden">
+<p><span class="math display">\[
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{Var}
+\require{color}
+\definecolor{twocolor-red}{HTML}{F8766D}    % red   used by ggplot in plots w/ 2 colors
+\definecolor{twocolor-green}{HTML}{00BFC4}  % green used by ggplot in plots w/ 2 colors
+\]</span></p>
+</div>
+<div class="columns">
+<div class="column">
+<div class="cell" data-hash="lecture5-AKC_cache/revealjs/unnamed-chunk-3_d27b1f17baf9449c4f99a0a30a86fe9e">
+<div class="cell-output-display">
+<table class="table" data-quarto-postprocess="true" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr class="header">
+<th style="text-align: left;" data-quarto-table-cell-role="th"></th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">income</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">degree</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left; background-color: #00BFC4 !important;">68</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$100k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #00BFC4 !important;">129</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$30k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left; background-color: #00BFC4 !important;">162</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$58k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #00BFC4 !important;">43</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$105k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left; background-color: #F8766D !important;">14</td>
+<td style="text-align: left; background-color: #F8766D !important;">$59k</td>
+<td style="text-align: left; background-color: #F8766D !important;">no 4-year degree</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #F8766D !important;">51</td>
+<td style="text-align: left; background-color: #F8766D !important;">$36k</td>
+<td style="text-align: left; background-color: #F8766D !important;">no 4-year degree</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left; background-color: #F8766D !important;">85</td>
+<td style="text-align: left; background-color: #F8766D !important;">$23k</td>
+<td style="text-align: left; background-color: #F8766D !important;">no 4-year degree</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #00BFC4 !important;">21</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$86k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left; background-color: #F8766D !important;">106</td>
+<td style="text-align: left; background-color: #F8766D !important;">$15k</td>
+<td style="text-align: left; background-color: #F8766D !important;">no 4-year degree</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #00BFC4 !important;">74</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$107k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left; background-color: #00BFC4 !important;">7</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$102k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #00BFC4 !important;">73</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$13k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+</tr>
+</tbody>
+</table>
+
+
+</div>
+</div>
+</div><div class="column">
+<ul>
+<li>A table including all 166 people in our sample would be big.</li>
+<li>It’d be hard to look at it all at once, but we can look at a small part of it.</li>
+<li>I’m showing randomly-chosen people on the left.</li>
+</ul>
+<p>What does this table tell us about who makes more?<br>
+Is it people people <span class="twocolor-green">with</span> or <span class="twocolor-red">without</span> four year degrees?</p>
+<div class="fragment">
+<ul>
+<li>Most <span class="twocolor-green">with</span> 4-year degrees make more than most <span class="twocolor-red">without</span>.</li>
+<li>But not all of them.</li>
+</ul>
+<p>We can get an idea of what’s going on by looking at the table,<br>
+but it helps to use other visualizations that let us look at all the data.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="comparing-incomes-using-a-scatter-plot" class="slide level2">
+<h2>Comparing Incomes using a Scatter Plot</h2>
+<div class="r-stack">
+<div class="fragment fade-out" data-fragment-index="0">
+<div class="cell" data-hash="lecture5-AKC_cache/revealjs/unnamed-chunk-4_85dc76c9f2f775ac0d93c50863acfe58">
+<div class="cell-output-display">
+<p><img data-src="generated-figures/unnamed-chunk-4-1.png"></p>
+</div>
+</div>
+<ul>
+<li>Here I’ve plotted one dot per person.</li>
+<li>There’s lot of people, so the dots are all lying on top of one another.</li>
+<li>You can see what most people make by looking for a dark band.</li>
+</ul>
+</div>
+<div class="fragment current-visible" data-fragment-index="0">
+<div class="cell" data-hash="lecture5-AKC_cache/revealjs/unnamed-chunk-5_66d0cc518c6cd236a4fb2e449032f6ef">
+<div class="cell-output-display">
+<p><img data-src="generated-figures/unnamed-chunk-5-1.png"></p>
+</div>
+</div>
+<ul>
+<li>But you really have to look carefully to compare them.</li>
+<li>It’s hard to see much because so little space is given to what most people make.</li>
+<li>We need to do that to include people who make <em>a lot</em> of money.</li>
+</ul>
+</div>
+<div class="fragment current-visible">
+<div class="cell" data-hash="lecture5-AKC_cache/revealjs/unnamed-chunk-6_83b9800981faf9c6f3c6b5778e4bc461">
+<div class="cell-output-display">
+<p><img data-src="generated-figures/unnamed-chunk-6-1.png"></p>
+</div>
+</div>
+<ul>
+<li>We can see things better when we zoom in on people who make <span class="math inline">\(\le \$300\)</span>k.</li>
+<li>This leaves out a few millionaires, but that’s mostly fine. We can do that.</li>
+<li>And if that’s still hard to work with, we can use another visualization.</li>
+</ul>
+</div>
+</div>
+</section>
+<section id="comparing-incomes-using-a-histogram" class="slide level2">
+<h2>Comparing incomes using a Histogram</h2>
+
+<img data-src="generated-figures/unnamed-chunk-7-1.png" class="r-stretch"><ul>
+<li>In this histogram, the length of the bar at each income level<br>
+shows the fraction of people that make roughly that much.</li>
+<li>You can see what most people make by looking for the peak.</li>
+<li>Compared to the scatter plot, we’ve traded darkness for length.</li>
+</ul>
+</section></section>
+<section id="review-questions" class="title-slide slide level1 center">
+<h1>Review Questions</h1>
+
+</section>
+
+<section>
+<section id="question-1" class="title-slide slide level1 center">
+<h1>Question 1</h1>
+
+</section>
+<section id="section" class="slide level2">
+<h2></h2>
+
+<img data-src="generated-figures/unnamed-chunk-8-1.png" class="r-stretch"><p><strong>Q</strong>. Which group tends to make more money?</p>
+<div class="fragment">
+<p>People with 4 year degrees tend to make more.</p>
+</div>
+</section></section>
+<section>
+<section id="question-2" class="title-slide slide level1 center">
+<h1>Question 2</h1>
+
+</section>
+<section id="section-1" class="slide level2">
+<h2></h2>
+
+<img data-src="generated-figures/unnamed-chunk-9-1.png" class="r-stretch"><p><strong>Q</strong>. Roughly how much more?</p>
+<div class="fragment">
+<p>Typically $50k more, comparing the two peaks in the histogram.</p>
+</div>
+</section></section>
+<section>
+<section id="question-3" class="title-slide slide level1 center">
+<h1>Question 3</h1>
+
+</section>
+<section id="section-2" class="slide level2">
+<h2></h2>
+
+<img data-src="generated-figures/unnamed-chunk-10-1.png" class="r-stretch"><p>How would we calculate the difference in <strong>mean income</strong> between people in our sample with and without 4-year degrees?</p>
+<h3 id="outline">Outline</h3>
+<div class="fragment">
+<ol type="1">
+<li>We calculate the mean income among the <em>subsample</em> <span class="twocolor-green">with</span> 4-year degrees.</li>
+<li>We do the same for the subsample <span class="twocolor-red">without</span> degrees.</li>
+<li>We subtract.</li>
+</ol>
+</div>
+</section>
+<section id="step-1" class="slide level2">
+<h2>Step 1</h2>
+
+<img data-src="generated-figures/unnamed-chunk-11-1.png" class="r-stretch"><p>We calculate the mean income among the <em>subsample</em> <span class="twocolor-green">with</span> 4-year degrees.</p>
+<div class="r-stack">
+<div class="fragment current-visible" data-frame-index="1">
+<p>We can write it out in mathematical notation.</p>
+<p><span class="math display">\[
+\hat\mu(\text{with}) = \frac{\sum_{i : X_i=\text{with}} Y_i }{ \sum_{i : X_i=\text{with}} 1 }
+\]</span></p>
+</div>
+<div class="fragment current-visible" data-frame-index="2">
+<p>Writing it in <em>R</em> actually gives us an answer.</p>
+<div class="cell" data-hash="lecture5-AKC_cache/revealjs/unnamed-chunk-13_78c68fb717f9430c015d090a87e80c0f">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1"></a>mu.hat.with <span class="ot">=</span> <span class="fu">mean</span>(Y[X <span class="sc">==</span> <span class="st">'4-year degree'</span>])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>What we get is roughly $106000.</p>
+</div>
+</div>
+</section>
+<section id="step-2" class="slide level2">
+<h2>Step 2</h2>
+
+<img data-src="generated-figures/unnamed-chunk-14-1.png" class="r-stretch"><p>We do the same for the subsample <span class="twocolor-red">without</span> degrees.</p>
+<div class="r-stack">
+<div class="fragment current-visible" data-frame-index="1">
+<p>We can write it out in mathematical notation.</p>
+<p><span class="math display">\[
+\hat\mu(\text{with}) = \frac{\sum_{i : X_i=\text{without}} Y_i }{ \sum_{i : X_i=\text{without}} 1 }
+\]</span></p>
+</div>
+<div class="fragment current-visible" data-frame-index="2">
+<p>Writing it in <em>R</em> actually gives us an answer.</p>
+<div class="cell" data-hash="lecture5-AKC_cache/revealjs/unnamed-chunk-15_dc702042937be0ff6fb0e83ffa603dab">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1"></a>mu.hat.without <span class="ot">=</span> <span class="fu">mean</span>(Y[X <span class="sc">!=</span> <span class="st">'4-year degree'</span>])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>What we get is roughly $42000.</p>
+</div>
+</div>
+</section>
+<section id="step-3" class="slide level2">
+<h2>Step 3</h2>
+
+<img data-src="generated-figures/unnamed-chunk-16-1.png" class="r-stretch"><p>We subtract.</p>
+<div class="r-stack">
+<div class="fragment current-visible" data-frame-index="1">
+<p>Here’s the math. <span class="math display">\[
+\hat \Delta = \hat\mu(\text{with}) - \hat\mu(\text{without})  \vphantom{ \frac{\sum_{i : X_i=\text{without}} Y_i} { \sum_{i : X_i=\text{without}} 1 } }
+\]</span></p>
+</div>
+<div class="fragment current-visible" data-frame-index="2">
+<p>Here’s the code.</p>
+<div class="cell" data-hash="lecture5-AKC_cache/revealjs/unnamed-chunk-17_9cb3a1d3357c0efe930fe95cbbcdc7ff">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1"></a>difference <span class="ot">=</span> mu.hat.with <span class="sc">-</span> mu.hat.without</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>What we get is roughly $64000.</p>
+</div>
+</div>
+</section></section>
+<section>
+<section id="question-4" class="title-slide slide level1 center">
+<h1>Question 4</h1>
+
+</section>
+<section id="section-3" class="slide level2">
+<h2></h2>
+
+<img data-src="generated-figures/unnamed-chunk-18-1.png" class="r-stretch"><p>What <em>Summary of the Population</em> does this estimate?</p>
+<div class="fragment">
+<ul>
+<li>The difference in mean income among <em>subpopulations</em> with and without 4-year degrees.<br>
+</li>
+<li>That’s a difference in conditional expectations. <span class="math display">\[
+\Delta = \mu(\text{with})-\mu(\text{without}) \quad \text{ where } \quad \mu(x)=\E[Y_i \mid X_i=x]
+\]</span></li>
+</ul>
+</div>
+</section></section>
+<section>
+<section id="question-5" class="title-slide slide level1 center">
+<h1>Question 5</h1>
+
+</section>
+<section id="section-4" class="slide level2">
+<h2></h2>
+<p><span class="math display">\[\text{What is our estimator's bias,} \ \E \hat\Delta - \Delta ? \]</span></p>
+<div class="fragment">
+<!-- -->
+<h4 id="its-zero.-why">It’s zero. Why?</h4>
+</div>
+<p><span class="math display">\[
+\]</span></p>
+<div class="r-stack">
+<div class="fragment current-visible" data-frame-index="2">
+<!-- -->
+<h4 id="part-of-the-story-subsample-means-are-unbiased-estimators-of-subpopulation-means.">Part of the story: subsample means are <strong>unbiased</strong> estimators of subpopulation means.</h4>
+<ul>
+<li>In particular, <span class="math inline">\(\hat\mu(x)\)</span> is an unbiased estiate of <span class="math inline">\(\mu(x)\)</span>. <span class="math display">\[
+  \E\hat\mu(x)=\mu(x)
+  \]</span></li>
+<li>We proved this in Homework ? using the law of iterated expectations.</li>
+</ul>
+<p><span class="math display">\[
+TODO: Proof
+\]</span></p>
+</div>
+<div class="fragment current-visible" data-frame-index="3">
+<!-- -->
+<h4 id="the-rest-expectation-is-linear.">The rest: Expectation is <strong>linear</strong>.</h4>
+<ul>
+<li>The expectation of a difference is the difference in expectations.</li>
+<li>Subtracting unbiased estimates of our subpopulation means gives us<br>
+an unbiased estimate of the <strong>difference in those subpopulation means</strong>. <span class="math display">\[
+\begin{aligned}
+\E \hat\Delta
+&amp;= \E \left\{ \hat\mu(\text{with}) - \hat\mu(\text{without}) \right\} &amp;&amp; \text{definition} \\
+&amp;= \E \hat\mu(\text{with}) - \E \hat \mu(\text{without}) &amp;&amp; \text{linearity} \\
+&amp;= \mu(\text{with}) - \mu(\text{without})  &amp;&amp; \text{unbiasedness} \\
+&amp;= \Delta &amp;&amp; \text{definition}
+\end{aligned}
+\]</span></li>
+</ul>
+</div>
+</div>
+</section></section>
+<section>
+<section id="question-6" class="title-slide slide level1 center">
+<h1>Question 6</h1>
+
+</section>
+<section id="section-5" class="slide level2">
+<h2></h2>
+<p>How can we approximate the <em>sampling distribution</em> of this estimator?</p>
+<p><span class="math display">\[
+\]</span></p>
+<p>TODO: Picture of sampling dist vs approximation</p>
+<h3 id="outline-1">Outline</h3>
+<div class="fragment">
+<ol type="1">
+<li>We find normal approximations to the sampling distributions of each of our subsample means.</li>
+<li>We characterize their difference as another normal distribution.</li>
+<li>We calculate its mean.</li>
+<li>We calculate its variance.</li>
+</ol>
+</div>
+</section>
+<section id="step-1-1" class="slide level2">
+<h2>Step 1</h2>
+<p>We observe that our subsample means are <em>approximately independent and normal</em> <span class="math display">\[
+\hat\mu(x) \approx Z_x \quad \text{ for } \quad Z_x \sim N\left( \E \hat\mu(x), \ \Var \hat\mu(x) \right)
+\]</span> and <span class="math display">\[
+Z_{x} \quad \text{ is independent of } \quad Z_{x'}  \quad  \text{ when } \quad x \neq x'.
+\]</span></p>
+<p>They’re approximately independent because our subsamples are <em>disjoint</em>, i.e., nobody is in both.</p>
+</section>
+<section id="step-2-1" class="slide level2">
+<h2>Step 2</h2>
+<p>We’ll approximate the difference in our subsample means by the corresponding difference of <em>independent normals</em>. <span class="math display">\[
+\hat\mu(\text{with}) - \hat\mu(\text{without}) \approx Z_{\text{with}} - Z_{\text{without}}
+\]</span> Then use the rule for subtracting independent normals: subtract the means; add the variances. <span class="math display">\[
+\begin{aligned}
+Z_{\text{with}} - Z_{\text{without}} &amp;\sim  N\left( \mu_{\Delta}, \sigma^2_\Delta \right) \\
+\text{ where } \quad    \mu_{\Delta} &amp;= \E \hat\mu(\text{with})  - \E \hat\mu(\text{without}) \\
+\text{ and  } \ \ \quad \sigma^2_\Delta &amp;= \Var \hat\mu(\text{with}) + \Var \hat\mu(\text{without})
+\end{aligned}
+\]</span></p>
+</section>
+<section id="step-3-1" class="slide level2">
+<h2>Step 3</h2>
+<p>We subtract the means, i.e., we calculate this difference. <span class="math display">\[
+\mu_{\Delta} = \E \hat\mu(\text{with})  - \E \hat\mu(\text{without}).
+\]</span> We know, from our last question, that this is the population summary we want. <span class="math display">\[\mu_{\Delta} = \hat\mu(\text{with})  - \hat\mu(\text{without}) = \Delta\]</span></p>
+</section>
+<section id="step-4" class="slide level2">
+<h2>Step 4</h2>
+<p>We add the variances, i.e., we calculate this sum. <span class="math display">\[
+\sigma^2_\Delta = \Var \hat\mu(\text{with}) + \Var \hat\mu(\text{without})
+\]</span> The <strong>variance</strong> of each subsample mean <span class="math inline">\(\hat\mu(x)\)</span> is determined by</p>
+<ol type="1">
+<li>The conditional variance of the terms in it</li>
+<li>The size of the subsample.</li>
+</ol>
+<p><span class="math display">\[
+\sigma^2_\Delta = \frac{\Var(Y_i \mid X_i = \text{with})}{n_\text{with}} + \frac{\Var(Y_i \mid X_i = \text{without})}{n_{\text{without}}}
+\]</span></p>
+<p>TODO: Do we define <span class="math inline">\(n_\text{with}\)</span> and <span class="math inline">\(n_\text{with}\)</span> properly as expectations of inverses of proportions?</p>
+</section>
+<section id="summary." class="slide level2">
+<h2>Summary.</h2>
+<p>We can approximate the sampling distribution of our estimator by that of a <em>normal random variable</em> with the mean we want. <span class="math display">\[
+\begin{aligned}
+\hat\mu(\text{with}) - \hat\mu(\text{without}) &amp;\approx Z_{\Delta} \quad \text{ for } \quad Z_{\Delta} \sim N(\Delta, \sigma^2_\Delta) \\
+\text{ where } \quad \sigma^2_\Delta &amp;= \frac{\Var(Y_i \mid X_i = \text{with})}{n_\text{with}} + \frac{\Var(Y_i \mid X_i = \text{without})}{n_{\text{without}}}
+\end{aligned}
+\]</span></p>
+</section></section>
+<section>
+<section id="question-7" class="title-slide slide level1 center">
+<h1>Question 7</h1>
+
+</section>
+<section id="section-6" class="slide level2">
+<h2></h2>
+<p>How can we use this to calculate a 95% confidence interval for this summary <span class="math inline">\(\Delta\)</span>?</p>
+<p><span class="math display">\[ \]</span></p>
+<h3 id="outline-2">Outline</h3>
+<div class="fragment">
+<ol type="1">
+<li>We transform our estimate into a <em>pivot</em>: a random variable with an known sampling distribution.</li>
+<li>We choose an interval that contains the pivot with 95% probability.</li>
+<li>We invert our transformation to get an interval for our estimate.</li>
+</ol>
+<p>TODO: Fix up to deal with approximate pivots.</p>
+</div>
+</section>
+<section id="step-1-2" class="slide level2">
+<h2>Step 1</h2>
+<p>t-stat calculation + picture of std normal reference distn</p>
+</section>
+<section id="step-2-2" class="slide level2">
+<h2>Step 2</h2>
+<p>formula + picture of interval in reference distribution</p>
+</section>
+<section id="step-3-2" class="slide level2">
+<h2>Step 3</h2>
+<p>formula + picture of transformed reference distributon</p>
+</section>
+<section id="summary" class="slide level2">
+<h2>Summary</h2>
+<p>something</p>
+</section></section>
+<section>
+<section id="beyond-binary-comparisons" class="title-slide slide level1 center">
+<h1>Beyond Binary Comparisons</h1>
+
+</section>
+<section id="section-7" class="slide level2">
+<h2></h2>
+<ul>
+<li>Using two categories is throwing away a lot of information about education.<br>
+</li>
+<li>We can, for example, categorize people by the <strong>years of education</strong> they’ve had.</li>
+</ul>
+
+<img data-src="generated-figures/unnamed-chunk-19-1.png" class="r-stretch"><div class="r-stack">
+<div class="fragment current-visible" data-frame-index="0">
+<!-- -->
+<h3 id="we-havent-lost-anything.">We haven’t lost anything.</h3>
+<ul>
+<li>You have a four year degree if, and only if, you have <span class="math inline">\(12+4=6\)</span> years of education.</li>
+<li>Thinking visually, we can get the plot we had before by shuffling the red and green dots.</li>
+<li>This means we can still see how much more people with 4 year degrees make.</li>
+<li>But not shuffling lets us see some new stuff, too.</li>
+</ul>
+<h3 id="what-else-is-there-to-see">What else is there to see?</h3>
+</div>
+<div class="fragment current-visible" data-frame-index="1">
+<!-- -->
+<h3 id="in-visual-terms">In visual terms</h3>
+<p><span class="math display">\[
+\]</span></p>
+<h3 id="meaning">Meaning</h3>
+<p><span class="math display">\[
+\]</span></p>
+</div>
+<div class="fragment current-visible" data-frame-index="2">
+<!-- -->
+<h3 id="one-thing-i-see">One thing I see</h3>
+<p>The centers of our subsamples are going up as we move to the right.</p>
+<h3 id="meaning-1">Meaning</h3>
+<p>Even among people with (and without) a 4-year degree,<br>
+people with more education tend to make more money.</p>
+</div>
+</div>
+</section>
+<section id="including-years-of-education" class="slide level2">
+<h2>Including Years of Education</h2>
+<ul>
+<li>This does, of course, require that our survey asks about years of education.</li>
+<li>And it does, more or less, so we can make a table like this.</li>
+</ul>
+<div class="cell" data-hash="lecture5-AKC_cache/revealjs/unnamed-chunk-20_ea2863df31d92166fadbe752f2178c6e">
+<div class="cell-output-display">
+<table class="table" data-quarto-postprocess="true" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr class="header">
+<th style="text-align: left;" data-quarto-table-cell-role="th"></th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">income</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">degree</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">education</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left; background-color: #00BFC4 !important;">68</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$100k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">16 years</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #00BFC4 !important;">129</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$30k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">16 years</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left; background-color: #00BFC4 !important;">162</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$58k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">16 years</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #00BFC4 !important;">43</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$105k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">16 years</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left; background-color: #F8766D !important;">14</td>
+<td style="text-align: left; background-color: #F8766D !important;">$59k</td>
+<td style="text-align: left; background-color: #F8766D !important;">no 4-year degree</td>
+<td style="text-align: left; background-color: #F8766D !important;">12 years</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #F8766D !important;">51</td>
+<td style="text-align: left; background-color: #F8766D !important;">$36k</td>
+<td style="text-align: left; background-color: #F8766D !important;">no 4-year degree</td>
+<td style="text-align: left; background-color: #F8766D !important;">13 years</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left; background-color: #F8766D !important;">85</td>
+<td style="text-align: left; background-color: #F8766D !important;">$23k</td>
+<td style="text-align: left; background-color: #F8766D !important;">no 4-year degree</td>
+<td style="text-align: left; background-color: #F8766D !important;">11 years</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #00BFC4 !important;">21</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$86k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">16 years</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left; background-color: #F8766D !important;">106</td>
+<td style="text-align: left; background-color: #F8766D !important;">$15k</td>
+<td style="text-align: left; background-color: #F8766D !important;">no 4-year degree</td>
+<td style="text-align: left; background-color: #F8766D !important;">13 years</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #00BFC4 !important;">74</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$107k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">16 years</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left; background-color: #00BFC4 !important;">7</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$102k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">16 years</td>
+</tr>
+<tr class="even">
+<td style="text-align: left; background-color: #00BFC4 !important;">73</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">$13k</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">4-year degree</td>
+<td style="text-align: left; background-color: #00BFC4 !important;">16 years</td>
+</tr>
+</tbody>
+</table>
+
+
+</div>
+</div>
+<ul>
+<li>The survey doesn’t ask exactly this <em>how many years</em> question.</li>
+<li>It takes a little pre-processing to get this.</li>
+</ul>
+</section>
+<section id="pre-processing" class="slide level2">
+<h2>Pre-processing</h2>
+<div class="cell" data-hash="lecture5-AKC_cache/revealjs/unnamed-chunk-21_adf52ad5d3c9a381ea33fdb18ff96906">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1"></a>education<span class="ot">=</span><span class="fu">case_match</span>(cps.data<span class="sc">$</span>a_hga,</span>
+<span id="cb4-2"><a href="#cb4-2"></a>                          <span class="dv">0</span>  <span class="sc">~</span> <span class="dv">0</span>,   <span class="co"># child</span></span>
+<span id="cb4-3"><a href="#cb4-3"></a>                          <span class="dv">31</span> <span class="sc">~</span> <span class="dv">0</span>,   <span class="co"># &lt; grade 1</span></span>
+<span id="cb4-4"><a href="#cb4-4"></a>                          <span class="dv">32</span> <span class="sc">~</span> <span class="dv">4</span>,   <span class="co">#  grade 1-4</span></span>
+<span id="cb4-5"><a href="#cb4-5"></a>                          <span class="dv">33</span> <span class="sc">~</span> <span class="dv">6</span>,   <span class="co">#  grade 5-6</span></span>
+<span id="cb4-6"><a href="#cb4-6"></a>                          <span class="dv">34</span> <span class="sc">~</span> <span class="dv">8</span>,   <span class="co">#  grade 7-8 </span></span>
+<span id="cb4-7"><a href="#cb4-7"></a>                          <span class="dv">35</span> <span class="sc">~</span> <span class="dv">9</span>,   <span class="co">#  grade 9</span></span>
+<span id="cb4-8"><a href="#cb4-8"></a>                          <span class="dv">36</span> <span class="sc">~</span> <span class="dv">10</span>,  <span class="co">#  grade 10</span></span>
+<span id="cb4-9"><a href="#cb4-9"></a>                          <span class="dv">37</span> <span class="sc">~</span> <span class="dv">11</span>,  <span class="co">#  grade 11</span></span>
+<span id="cb4-10"><a href="#cb4-10"></a>                          <span class="dv">38</span> <span class="sc">~</span> <span class="dv">11</span>,  <span class="co">#  grade 12 no diploma</span></span>
+<span id="cb4-11"><a href="#cb4-11"></a>                          <span class="dv">39</span> <span class="sc">~</span> <span class="dv">12</span>,  <span class="co">#  high school grad</span></span>
+<span id="cb4-12"><a href="#cb4-12"></a>                          <span class="dv">40</span> <span class="sc">~</span> <span class="dv">13</span>,  <span class="co">#  some college</span></span>
+<span id="cb4-13"><a href="#cb4-13"></a>                          <span class="dv">41</span> <span class="sc">~</span> <span class="dv">14</span>,  <span class="co">#  associate degree (vocational)</span></span>
+<span id="cb4-14"><a href="#cb4-14"></a>                          <span class="dv">42</span> <span class="sc">~</span> <span class="dv">14</span>,  <span class="co">#  associate degree (academic)</span></span>
+<span id="cb4-15"><a href="#cb4-15"></a>                          <span class="dv">43</span> <span class="sc">~</span> <span class="dv">16</span>,  <span class="co">#  bachelors degree</span></span>
+<span id="cb4-16"><a href="#cb4-16"></a>                          <span class="dv">44</span> <span class="sc">~</span> <span class="dv">18</span>,  <span class="co">#  masters degree</span></span>
+<span id="cb4-17"><a href="#cb4-17"></a>                          <span class="dv">45</span> <span class="sc">~</span> <span class="dv">20</span>,  <span class="co">#  professional school degree</span></span>
+<span id="cb4-18"><a href="#cb4-18"></a>                          <span class="dv">46</span> <span class="sc">~</span> <span class="dv">20</span>)  <span class="co">#  doctorate</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<ul>
+<li>We’ve had to make a few things up in translation.
+<ul>
+<li>There’s no differentiation between a 1 or 2-year masters; we assume 2.</li>
+<li>We’re assuming professional and doctoral degrees take 4 years; that’s approximate.</li>
+<li>Nobody has 17 or 19 years in our plots; that’s why.</li>
+</ul></li>
+<li>That’s part of data analysis.</li>
+<li>Ultimately, you’ll want to be careful about quirks introduced by translation.</li>
+<li>But it’s easier to pretend we’ve really measured years of education. Let’s do that to start.</li>
+</ul>
+</section>
+<section id="subsamples-and-subpopulations-1" class="slide level2">
+<h2>Subsamples and Subpopulations</h2>
+<p>New def of covariate, new def of conditional mean.</p>
+</section>
+<section id="exercise-1" class="slide level2">
+<h2>Exercise 1</h2>
+<p>Calculate old subpop means using new ones ## Exercise 2 Calculate old subsample means using new ones</p>
+</section>
+<section id="new-questions" class="slide level2">
+<h2>New Questions</h2>
+<ol type="1">
+<li>What’s the typical difference in income between people with <em>exactly</em> 16 years of education and <em>exactly</em> 12?
+<ul>
+<li>This is a different question than the one we addressed in review, but it has a similar structure.</li>
+<li>We want a summary of income differences in two groups. Those can be subsamples or subpopulations.</li>
+<li>We can calculate and relate these summaries exactly like we did in review.</li>
+</ul></li>
+<li>What’s the typical difference in income between people with 4-year degrees and people without them?
+<ul>
+<li>That’s exactly the question we talked about in review.</li>
+<li>We’ll talk about how to calculate it a different way that’ll generalize better to other questions.</li>
+<li>We can check our work. Obviously our answers should be exactly the same as we got earlier.</li>
+</ul></li>
+<li>How much change would we expect in a similar population in which people tend to get an additional year of education?
+<ul>
+<li>This is a question unlike the ones we talked about earlier.</li>
+<li>We’ll need to be a bit careful about what we mean.</li>
+<li>But once we’ve gotten there, we can base our calculations on the ones we did in the last question.</li>
+</ul></li>
+</ol>
+</section>
+<section id="most-of-the-remainder" class="slide level2">
+<h2>Most of the Remainder</h2>
+<p>We’ll answer the questions</p>
+</section>
+<section id="hopefully-this-fits-at-the-end" class="slide level2">
+<h2>Hopefully this fits at the end</h2>
+<ul>
+<li>We’ll explain why we might need an unsaturated model and how that results in bias.</li>
+<li>We’ll imagine a reality in which we know whether there are 1 or 2 year masters degrees and think of the bias associated with grouping them for Question 3.</li>
+</ul>
+<div class="footer footer-default">
+
+</div>
+</section></section>
+    </div>
+  </div>
+
+  <script>window.backupDefine = window.define; window.define = undefined;</script>
+  <script src="lecture5 AKC_files/libs/revealjs/dist/reveal.js"></script>
+  <!-- reveal.js plugins -->
+  <script src="lecture5 AKC_files/libs/revealjs/plugin/quarto-line-highlight/line-highlight.js"></script>
+  <script src="lecture5 AKC_files/libs/revealjs/plugin/pdf-export/pdfexport.js"></script>
+  <script src="lecture5 AKC_files/libs/revealjs/plugin/reveal-menu/menu.js"></script>
+  <script src="lecture5 AKC_files/libs/revealjs/plugin/reveal-menu/quarto-menu.js"></script>
+  <script src="lecture5 AKC_files/libs/revealjs/plugin/quarto-support/support.js"></script>
+  
+
+  <script src="lecture5 AKC_files/libs/revealjs/plugin/notes/notes.js"></script>
+  <script src="lecture5 AKC_files/libs/revealjs/plugin/search/search.js"></script>
+  <script src="lecture5 AKC_files/libs/revealjs/plugin/zoom/zoom.js"></script>
+  <script src="lecture5 AKC_files/libs/revealjs/plugin/math/math.js"></script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script>
+
+  <script>
+
+      // Full list of configuration options available at:
+      // https://revealjs.com/config/
+      Reveal.initialize({
+'controlsAuto': true,
+'previewLinksAuto': false,
+'pdfSeparateFragments': true,
+'autoAnimateEasing': "ease",
+'autoAnimateDuration': 1,
+'autoAnimateUnmatched': true,
+'menu': {"side":"left","useTextContentForMissingTitles":true,"markers":false,"loadIcons":false,"custom":[{"title":"Tools","icon":"<i class=\"fas fa-gear\"></i>","content":"<ul class=\"slide-menu-items\">\n<li class=\"slide-tool-item active\" data-item=\"0\"><a href=\"#\" onclick=\"RevealMenuToolHandlers.fullscreen(event)\"><kbd>f</kbd> Fullscreen</a></li>\n<li class=\"slide-tool-item\" data-item=\"1\"><a href=\"#\" onclick=\"RevealMenuToolHandlers.speakerMode(event)\"><kbd>s</kbd> Speaker View</a></li>\n<li class=\"slide-tool-item\" data-item=\"2\"><a href=\"#\" onclick=\"RevealMenuToolHandlers.overview(event)\"><kbd>o</kbd> Slide Overview</a></li>\n<li class=\"slide-tool-item\" data-item=\"3\"><a href=\"#\" onclick=\"RevealMenuToolHandlers.togglePdfExport(event)\"><kbd>e</kbd> PDF Export Mode</a></li>\n<li class=\"slide-tool-item\" data-item=\"4\"><a href=\"#\" onclick=\"RevealMenuToolHandlers.keyboardHelp(event)\"><kbd>?</kbd> Keyboard Help</a></li>\n</ul>"}],"openButton":true},
+'smaller': true,
+ 
+        // Display controls in the bottom right corner
+        controls: false,
+
+        // Help the user learn the controls by providing hints, for example by
+        // bouncing the down arrow when they first encounter a vertical slide
+        controlsTutorial: false,
+
+        // Determines where controls appear, "edges" or "bottom-right"
+        controlsLayout: 'edges',
+
+        // Visibility rule for backwards navigation arrows; "faded", "hidden"
+        // or "visible"
+        controlsBackArrows: 'faded',
+
+        // Display a presentation progress bar
+        progress: true,
+
+        // Display the page number of the current slide
+        slideNumber: 'c/t',
+
+        // 'all', 'print', or 'speaker'
+        showSlideNumber: 'all',
+
+        // Add the current slide number to the URL hash so that reloading the
+        // page/copying the URL will return you to the same slide
+        hash: true,
+
+        // Start with 1 for the hash rather than 0
+        hashOneBasedIndex: false,
+
+        // Flags if we should monitor the hash and change slides accordingly
+        respondToHashChanges: true,
+
+        // Push each slide change to the browser history
+        history: true,
+
+        // Enable keyboard shortcuts for navigation
+        keyboard: true,
+
+        // Enable the slide overview mode
+        overview: true,
+
+        // Disables the default reveal.js slide layout (scaling and centering)
+        // so that you can use custom CSS layout
+        disableLayout: false,
+
+        // Vertical centering of slides
+        center: false,
+
+        // Enables touch navigation on devices with touch input
+        touch: true,
+
+        // Loop the presentation
+        loop: false,
+
+        // Change the presentation direction to be RTL
+        rtl: false,
+
+        // see https://revealjs.com/vertical-slides/#navigation-mode
+        navigationMode: 'linear',
+
+        // Randomizes the order of slides each time the presentation loads
+        shuffle: false,
+
+        // Turns fragments on and off globally
+        fragments: true,
+
+        // Flags whether to include the current fragment in the URL,
+        // so that reloading brings you to the same fragment position
+        fragmentInURL: false,
+
+        // Flags if the presentation is running in an embedded mode,
+        // i.e. contained within a limited portion of the screen
+        embedded: false,
+
+        // Flags if we should show a help overlay when the questionmark
+        // key is pressed
+        help: true,
+
+        // Flags if it should be possible to pause the presentation (blackout)
+        pause: true,
+
+        // Flags if speaker notes should be visible to all viewers
+        showNotes: "separate-page",
+
+        // Global override for autoplaying embedded media (null/true/false)
+        autoPlayMedia: null,
+
+        // Global override for preloading lazy-loaded iframes (null/true/false)
+        preloadIframes: null,
+
+        // Number of milliseconds between automatically proceeding to the
+        // next slide, disabled when set to 0, this value can be overwritten
+        // by using a data-autoslide attribute on your slides
+        autoSlide: 0,
+
+        // Stop auto-sliding after user input
+        autoSlideStoppable: true,
+
+        // Use this method for navigation when auto-sliding
+        autoSlideMethod: null,
+
+        // Specify the average time in seconds that you think you will spend
+        // presenting each slide. This is used to show a pacing timer in the
+        // speaker view
+        defaultTiming: null,
+
+        // Enable slide navigation via mouse wheel
+        mouseWheel: false,
+
+        // The display mode that will be used to show slides
+        display: 'block',
+
+        // Hide cursor if inactive
+        hideInactiveCursor: true,
+
+        // Time before the cursor is hidden (in ms)
+        hideCursorTime: 5000,
+
+        // Opens links in an iframe preview overlay
+        previewLinks: false,
+
+        // Transition style (none/fade/slide/convex/concave/zoom)
+        transition: 'none',
+
+        // Transition speed (default/fast/slow)
+        transitionSpeed: 'default',
+
+        // Transition style for full page slide backgrounds
+        // (none/fade/slide/convex/concave/zoom)
+        backgroundTransition: 'none',
+
+        // Number of slides away from the current that are visible
+        viewDistance: 3,
+
+        // Number of slides away from the current that are visible on mobile
+        // devices. It is advisable to set this to a lower number than
+        // viewDistance in order to save resources.
+        mobileViewDistance: 2,
+
+        // The "normal" size of the presentation, aspect ratio will be preserved
+        // when the presentation is scaled to fit different resolutions. Can be
+        // specified using percentage units.
+        width: 1050,
+
+        height: 700,
+
+        // Factor of the display size that should remain empty around the content
+        margin: 0.1,
+
+        math: {
+          mathjax: 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js',
+          config: 'TeX-AMS_HTML-full',
+          tex2jax: {
+            inlineMath: [['\\(','\\)']],
+            displayMath: [['\\[','\\]']],
+            balanceBraces: true,
+            processEscapes: false,
+            processRefs: true,
+            processEnvironments: true,
+            preview: 'TeX',
+            skipTags: ['script','noscript','style','textarea','pre','code'],
+            ignoreClass: 'tex2jax_ignore',
+            processClass: 'tex2jax_process'
+          },
+        },
+
+        // reveal.js plugins
+        plugins: [QuartoLineHighlight, PdfExport, RevealMenu, QuartoSupport,
+
+          RevealMath,
+          RevealNotes,
+          RevealSearch,
+          RevealZoom
+        ]
+      });
+    </script>
+    
+    <script>
+      // htmlwidgets need to know to resize themselves when slides are shown/hidden.
+      // Fire the "slideenter" event (handled by htmlwidgets.js) when the current
+      // slide changes (different for each slide format).
+      (function () {
+        // dispatch for htmlwidgets
+        function fireSlideEnter() {
+          const event = window.document.createEvent("Event");
+          event.initEvent("slideenter", true, true);
+          window.document.dispatchEvent(event);
+        }
+
+        function fireSlideChanged(previousSlide, currentSlide) {
+          fireSlideEnter();
+
+          // dispatch for shiny
+          if (window.jQuery) {
+            if (previousSlide) {
+              window.jQuery(previousSlide).trigger("hidden");
+            }
+            if (currentSlide) {
+              window.jQuery(currentSlide).trigger("shown");
+            }
+          }
+        }
+
+        // hookup for slidy
+        if (window.w3c_slidy) {
+          window.w3c_slidy.add_observer(function (slide_num) {
+            // slide_num starts at position 1
+            fireSlideChanged(null, w3c_slidy.slides[slide_num - 1]);
+          });
+        }
+
+      })();
+    </script>
+
+    <script id="quarto-html-after-body" type="application/javascript">
+    window.document.addEventListener("DOMContentLoaded", function (event) {
+      const toggleBodyColorMode = (bsSheetEl) => {
+        const mode = bsSheetEl.getAttribute("data-mode");
+        const bodyEl = window.document.querySelector("body");
+        if (mode === "dark") {
+          bodyEl.classList.add("quarto-dark");
+          bodyEl.classList.remove("quarto-light");
+        } else {
+          bodyEl.classList.add("quarto-light");
+          bodyEl.classList.remove("quarto-dark");
+        }
+      }
+      const toggleBodyColorPrimary = () => {
+        const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+        if (bsSheetEl) {
+          toggleBodyColorMode(bsSheetEl);
+        }
+      }
+      toggleBodyColorPrimary();  
+      const tabsets =  window.document.querySelectorAll(".panel-tabset-tabby")
+      tabsets.forEach(function(tabset) {
+        const tabby = new Tabby('#' + tabset.id);
+      });
+      const isCodeAnnotation = (el) => {
+        for (const clz of el.classList) {
+          if (clz.startsWith('code-annotation-')) {                     
+            return true;
+          }
+        }
+        return false;
+      }
+      const clipboard = new window.ClipboardJS('.code-copy-button', {
+        text: function(trigger) {
+          const codeEl = trigger.previousElementSibling.cloneNode(true);
+          for (const childEl of codeEl.children) {
+            if (isCodeAnnotation(childEl)) {
+              childEl.remove();
+            }
+          }
+          return codeEl.innerText;
+        }
+      });
+      clipboard.on('success', function(e) {
+        // button target
+        const button = e.trigger;
+        // don't keep focus
+        button.blur();
+        // flash "checked"
+        button.classList.add('code-copy-button-checked');
+        var currentTitle = button.getAttribute("title");
+        button.setAttribute("title", "Copied!");
+        let tooltip;
+        if (window.bootstrap) {
+          button.setAttribute("data-bs-toggle", "tooltip");
+          button.setAttribute("data-bs-placement", "left");
+          button.setAttribute("data-bs-title", "Copied!");
+          tooltip = new bootstrap.Tooltip(button, 
+            { trigger: "manual", 
+              customClass: "code-copy-button-tooltip",
+              offset: [0, -8]});
+          tooltip.show();    
+        }
+        setTimeout(function() {
+          if (tooltip) {
+            tooltip.hide();
+            button.removeAttribute("data-bs-title");
+            button.removeAttribute("data-bs-toggle");
+            button.removeAttribute("data-bs-placement");
+          }
+          button.setAttribute("title", currentTitle);
+          button.classList.remove('code-copy-button-checked');
+        }, 1000);
+        // clear code selection
+        e.clearSelection();
+      });
+      function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+        const config = {
+          allowHTML: true,
+          maxWidth: 500,
+          delay: 100,
+          arrow: false,
+          appendTo: function(el) {
+              return el.closest('section.slide') || el.parentElement;
+          },
+          interactive: true,
+          interactiveBorder: 10,
+          theme: 'light-border',
+          placement: 'bottom-start',
+        };
+        if (contentFn) {
+          config.content = contentFn;
+        }
+        if (onTriggerFn) {
+          config.onTrigger = onTriggerFn;
+        }
+        if (onUntriggerFn) {
+          config.onUntrigger = onUntriggerFn;
+        }
+          config['offset'] = [0,0];
+          config['maxWidth'] = 700;
+        window.tippy(el, config); 
+      }
+      const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+      for (var i=0; i<noterefs.length; i++) {
+        const ref = noterefs[i];
+        tippyHover(ref, function() {
+          // use id or data attribute instead here
+          let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+          try { href = new URL(href).hash; } catch {}
+          const id = href.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          return note.innerHTML;
+        });
+      }
+      const findCites = (el) => {
+        const parentEl = el.parentElement;
+        if (parentEl) {
+          const cites = parentEl.dataset.cites;
+          if (cites) {
+            return {
+              el,
+              cites: cites.split(' ')
+            };
+          } else {
+            return findCites(el.parentElement)
+          }
+        } else {
+          return undefined;
+        }
+      };
+      var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+      for (var i=0; i<bibliorefs.length; i++) {
+        const ref = bibliorefs[i];
+        const citeInfo = findCites(ref);
+        if (citeInfo) {
+          tippyHover(citeInfo.el, function() {
+            var popup = window.document.createElement('div');
+            citeInfo.cites.forEach(function(cite) {
+              var citeDiv = window.document.createElement('div');
+              citeDiv.classList.add('hanging-indent');
+              citeDiv.classList.add('csl-entry');
+              var biblioDiv = window.document.getElementById('ref-' + cite);
+              if (biblioDiv) {
+                citeDiv.innerHTML = biblioDiv.innerHTML;
+              }
+              popup.appendChild(citeDiv);
+            });
+            return popup.innerHTML;
+          });
+        }
+      }
+    });
+    </script>
+    
+
+</body></html>
