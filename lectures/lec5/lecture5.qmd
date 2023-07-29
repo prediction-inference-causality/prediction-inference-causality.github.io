@@ -59,6 +59,7 @@ all.earnings = data.frame(state.code = cps.data$gestfips,
                           age=cps.data$a_age,
                           income=cps.data$htotval, 
                           residents=cps.data$h_numper,
+                          education.code=cps.data$a_hga,
                           education=case_match(cps.data$a_hga,
                                            0  ~ 0,   # child
                                            31 ~ 0,   # < grade 1
@@ -89,13 +90,12 @@ all.earnings = data.frame(state.code = cps.data$gestfips,
 in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
 earnings = all.earnings[all.earnings$residents==1 &
                         all.earnings$state.code == california.state.code &
-                        all.earnings$age %>% in.interval(c(25,35)) & 
-                        all.earnings$education >= 11, ]
+                        all.earnings$age %>% in.interval(c(25,35)) &
+                        all.earnings$education >= 8, ]
 
 earnings$degree = factor(earnings$education >= 16, 
                      levels=c(FALSE, TRUE), 
                      labels=c('no 4-year degree','4-year degree')) 
-rownames(earnings)=NULL
 ```
 
 ```{r}
@@ -158,7 +158,7 @@ finite.population$group=1
 finite.population$degree = sample(earnings$degree, nrow(finite.population), replace=TRUE)
 
 # to go easy on ggplot, we won't really display everbody 
-display.population = sample_n(finite.population, 250000) 
+display.population = sample_n(finite.population, 100000) 
 # and we'll force the degree-distribution in the sample to match our survey responses
 our.sample = sample_n(finite.population, nrow(earnings))
 our.sample$degree=earnings$degree
@@ -169,18 +169,20 @@ pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.populat
 sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, color='red',    alpha=1)
 ```
 
+## Overview
+
 ::: {.hidden}
 $$
 \require{color}
 % color defs aren't making it into MathJax
 %\definecolor{twocolor-red}{RGB}{248, 118, 109}   % red   used by ggplot in plots w/ 2 colors 
 %\definecolor{twocolor-green}{RGB}{0, 191, 196}   % green used by ggplot in plots w/ 2 colors
-% so do the same thing with commands
+% so create commands for using those colors instead
 \newcommand{\inred}[1]{\textcolor[RGB]{248,118,109}{#1}}
 \newcommand{\ingreen}[1]{\textcolor[RGB]{0,191,196}{#1}}
 
-\newcommand{\with}{\ingreen{\text{with}}}
-\newcommand{\without}{\inred{\text{without}}}
+\newcommand{\with}{\ingreen{\text{degree}}}}
+\newcommand{\without}{\inred{\text{no degree}}}
 
 \DeclareMathOperator{\E}{E}
 \DeclareMathOperator{\Var}{Var}
@@ -191,7 +193,6 @@ twocolor.green = 'rgb(0,191,196)'
 ```
 :::
 
-## Overview
 - Today, we'll work with data from the 2022 Current Population Survey.
 - We'll look at the relationship between income and education.
 - We've already compared people  [with]{.twocolor-green} and [without]{.twocolor-red} 4-year degrees.
@@ -206,6 +207,8 @@ $$
     - e.g.,  the years of education they have
     - e.g.,  the size of the city they live in
 
+
+# Review
 
 ## 
 
@@ -291,7 +294,7 @@ Interpretation aside, we don't need the finite population at all.
 ```{r}
 #| layout-ncol: 2
 #| layout-valign: bottom
-sample.plot.inf
+sample.plot.inf + theme(legend.position="none")
 ca.pop.plot
 ```
 :::
@@ -313,6 +316,9 @@ Let's think about where the people in our infinite population tend to live.
 
 ## Subsamples and subpopulations
 
+:::: {.r-stack}
+
+::: {.fragment .fade-out data-fragment-index="0"}
   - Our survey doesn't tell us much about location. We've made that up.
   - But it does tell us some things about education.
     - It tells us whether the respondent [has]{.twocolor-green} 
@@ -322,6 +328,17 @@ Let's think about where the people in our infinite population tend to live.
     with [with]{.twocolor-green} and [without]{.twocolor-red} degrees.
   - And think of our population in terms of corresponding **subpopulations**
     they're drawn from.
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+  - The **subsample** of [green dots]{.twocolor-green} on the left are survey recipients [with 4-year degrees]{.twocolor-green}.
+  - They're selected randomly from the **finite subpopulation** drawn as [green dots]{.twocolor-green} on the right.
+    - i.e. the population of California residents, 25-35 and living alone, [with 4 year-degrees]{.twocolor-green}. 
+  
+  - And therefore drawn from an **infinite subpopulation** of people like this who could exist.
+:::
+
+::::
 
 ```{r}
 #| layout-ncol: 2
@@ -331,21 +348,14 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, alpha=1)
 ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, alpha=.01) + 
           theme(legend.position="none")
 ```
-  - The **subsample** of [green dots]{.twocolor-green} on the left are survey recipients [with 4-year degrees]{.twocolor-green}.
-  - They're selected randomly from the **finite subpopulation** drawn as [green dots]{.twocolor-green} on the right.
-    - i.e. the population of California residents, 25-35 and living alone, [with 4 year-degrees]{.twocolor-green}. 
-  
-  - And therefore drawn from an **infinite subpopulation** of people like this who could exist.
-  
+
 
 ## Subsample and subpopulation means
 
 
+# Today's Data
 
-
-## Comparing incomes by eyeballing a table
-
-
+## A Tabular View
 
 :::: columns
 
@@ -355,6 +365,7 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, 
 earnings.tab.rows = sample(1:nrow(earnings))[1:12]
 earnings.tab = earnings[earnings.tab.rows, c('income', 'degree')]
 earnings.tab$income = sprintf('$%dk', round(earnings.tab$income / 1000))
+rownames(earnings.tab) = NULL
 styled.tab = earnings.tab %>% 
   kable() %>%
   kable_styling() %>%
@@ -389,7 +400,7 @@ but it helps to use other visualizations that let us look at all the data.
 
 
 
-## Comparing Incomes using a Scatter Plot
+## A Scatter Plot
 
 :::: {.r-stack }
 
@@ -421,14 +432,14 @@ earnings.scatter
 earnings.scatter +  scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) 
 ```
 
-- We can see things better when we zoom in on people who make $\le \$300$k. 
+- We can see things better when we zoom in on people who make less than \$300k. 
 - This leaves out a few millionaires, but that's mostly fine. We can do that.
 - And if that's still hard to work with, we can use another visualization.
 :::
 
 ::::
 
-## Comparing incomes using a Histogram
+## A Histogram
 
 ```{r}
 earnings.histogram = ggplot(earnings[earnings$income<3e5, ]) + 
@@ -443,6 +454,8 @@ earnings.histogram
   shows the fraction of people that make roughly that much.
 - You can see what most people make by looking for the peak.
 - Compared to the scatter plot, we've traded darkness for length.
+
+## Question Lock-in
 
 
 # Beyond Binary Comparisons
