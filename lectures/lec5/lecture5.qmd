@@ -5,14 +5,22 @@ format:
   clean-revealjs:
     theme: [default, "class.scss"]
     smaller: true
-    show-notes: separate-page
     slide-number: true
+    show-notes: separate-page
     pdf-separate-fragments: true
     fig-format: svg
     fig.width: 10
     fig.asp: 2
     fig-align: left
     html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+        </script>
 knitr:
   opts_chunk:
     fig.path: generated-figures/
@@ -48,8 +56,8 @@ census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
 
 california.state.code = 6
 years = 2022
-cps.data = purrr::map_dfr(years, function(year) {
-  cpsR::get_asec(year=year, vars=c('h_numper', 'htotval', 'a_age', 'a_hga', 'gestfips', 'gtcbsasz'), key=census.api.key)
+cps.data = map_dfr(years, function(year) {
+  get_asec(year=year, vars=c('h_numper', 'htotval', 'a_age', 'a_hga', 'gestfips', 'gtcbsasz'), key=census.api.key)
 })
 ```
 
@@ -173,7 +181,6 @@ sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, 
 
 ::: {.hidden}
 $$
-\require{color}
 % color defs aren't making it into MathJax
 %\definecolor{twocolor-red}{RGB}{248, 118, 109}   % red   used by ggplot in plots w/ 2 colors 
 %\definecolor{twocolor-green}{RGB}{0, 191, 196}   % green used by ggplot in plots w/ 2 colors
@@ -181,12 +188,13 @@ $$
 \newcommand{\inred}[1]{\textcolor[RGB]{248,118,109}{#1}}
 \newcommand{\ingreen}[1]{\textcolor[RGB]{0,191,196}{#1}}
 
-\newcommand{\with}{\ingreen{\text{degree}}}}
+\newcommand{\with}{\ingreen{\text{degree}}}
 \newcommand{\without}{\inred{\text{no degree}}}
 
 \DeclareMathOperator{\E}{E}
 \DeclareMathOperator{\Var}{Var}
 $$ 
+
 ```{r}
 twocolor.red   = 'rgb(248,118,109)'
 twocolor.green = 'rgb(0,191,196)'
@@ -352,6 +360,33 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, 
 
 ## Subsample and subpopulation means
 
+- A reasonable starting point for describing an outcome is its mean
+- We can think of the mean of our sample as an estimate of the mean of the finite population
+- Or as an estimate of the mean of the infinite population
+$$
+\begin{aligned}
+\mu(x) &= \E[Y_i \mid X_i=x] \\
+\hat\mu(x) &= \frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) Y_i \quad \text{ for } \quad N_x = \sum_{i=1}^n 1(X_i=x)
+\end{aligned}
+$$
+
+A subsample mean is an *unbiased estimate* of the corresponding subpopulation mean
+Let's prove it.
+
+::: fragment
+$$
+\begin{aligned}
+\E\qty[\hat\mu(x)] &= \E\qty[\frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) Y_i] \qfor N_x = \sum_{i=1}^n 1(X_i=x) \\
+&= \E\qty[ \E\qty[ \frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) Y_i \mid X_1 \ldots X_n] ] && \text{iterated expectations} \\
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) \E\qty[ Y_i \mid X_1 \ldots X_n] ] && \text{linearity of expectation} \\
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) \mu(x) ] && \text{definition of } \mu(x) \\
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) ] \mu(x) && \text{pulling out constant} \\
+&= \E\qty[ \frac{N_x}{N_x} ] \mu(x) && \text{definition of } N_x \\
+&= \mu(x) && \text{cancelling } N_x
+\end{aligned}
+$$
+
+:::
 
 # Today's Data
 
