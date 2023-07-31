@@ -2,16 +2,25 @@
 title: "Working with Non-Binary Covariates"
 subtitle: "QTM 220 Lecture 5"
 format: 
-  revealjs:
-    theme: white 
+  clean-revealjs:
+    theme: [default, "class.scss"]
     smaller: true
-    show-notes: separate-page
     slide-number: true
+    show-notes: separate-page
     pdf-separate-fragments: true
     fig-format: svg
     fig.width: 10
     fig.asp: 2
     fig-align: left
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+        </script>
 knitr:
   opts_chunk:
     fig.path: generated-figures/
@@ -23,17 +32,22 @@ execute:
 
 ```{r setup}
 library(purrr)
-library(ggplot2)
-library(htmltools)
+library(tibble)
 library(dplyr)
 library(magrittr)
+library(stringr)
+library(ggplot2)
+library(htmltools)
 library(kableExtra)
 library(scales)
 library(cpsR)
+library(mapdata)
 
 source('../../shared-code/plotting.R')
 theme_set(simplified.theme)
 set.seed(1)
+
+compact_number = label_number(accuracy=.1, scale_cut=cut_short_scale())
 ```
 
 ```{r data-setup}
@@ -42,8 +56,8 @@ census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
 
 california.state.code = 6
 years = 2022
-cps.data = purrr::map_dfr(years, function(year) {
-  cpsR::get_asec(year=year, vars=c('h_numper', 'htotval', 'a_age', 'a_hga', 'gestfips', 'gtcbsasz'), key=census.api.key)
+cps.data = map_dfr(years, function(year) {
+  get_asec(year=year, vars=c('h_numper', 'htotval', 'a_age', 'a_hga', 'gestfips', 'gtcbsasz'), key=census.api.key)
 })
 ```
 
@@ -53,6 +67,7 @@ all.earnings = data.frame(state.code = cps.data$gestfips,
                           age=cps.data$a_age,
                           income=cps.data$htotval, 
                           residents=cps.data$h_numper,
+                          education.code=cps.data$a_hga,
                           education=case_match(cps.data$a_hga,
                                            0  ~ 0,   # child
                                            31 ~ 0,   # < grade 1
@@ -83,40 +98,132 @@ all.earnings = data.frame(state.code = cps.data$gestfips,
 in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
 earnings = all.earnings[all.earnings$residents==1 &
                         all.earnings$state.code == california.state.code &
-                        all.earnings$age %>% in.interval(c(25,35)) & 
-                        all.earnings$education >= 11, ]
+                        all.earnings$age %>% in.interval(c(25,35)) &
+                        all.earnings$education >= 8, ]
 
 earnings$degree = factor(earnings$education >= 16, 
                      levels=c(FALSE, TRUE), 
                      labels=c('no 4-year degree','4-year degree')) 
-rownames(earnings)=NULL
+```
+
+```{r}
+# To give our survey recipients a bit more reality, we'll give them fake locations on a map
+# And we'll make up a population of California residents that they're sampled from
+
+# maps are based on code from https://eriqande.github.io/rep-res-eeb-2017/map-making-in-R.html
+# additional county info from https://en.wikipedia.org/wiki/List_of_counties_in_California
+# converted to csv using https://wikitable2csv.ggor.de
+
+to.number = function(s) { as.numeric(str_trim(gsub(",", "", s))) }
+
+counties = map_data("county")
+ca_county = counties %>%
+  filter(region == "california")
+ca_county_centers = ca_county %>%
+  group_by(subregion) %>%
+  summarize(county.lat = mean(lat), county.long=mean(long))
+ca_county_info = read.csv('california_county_info.csv') %>%
+  mutate(subregion = tolower(sub(' County', '', County))) %>%
+  mutate(pop = to.number(Population..2022.)) %>%
+  mutate(area = to.number(sub('sq.*', '', Area))) 
+ca_county_more = left_join(ca_county_centers, ca_county_info, by="subregion")
+ca_all = left_join(ca_county, ca_county_more, by="subregion")
+
+
+ca.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(fill='gray', color = "white") +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+
+ca.pop.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(aes(fill = pop/area), color = "white") +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+
+## we'll make up a population as follows
+# 1. choose the number of people to be the number of people in our sample scaled up to account for the cps sampling ratio
+# 2. for each, sample a county with probability proportional to its finite.population
+# 3. for each, sample a latitude and longitude by taking a randomly weighted combination of the    
+#    county's vertices. As long as the county is convex, these points will be inside the county.
+# 4. we'll give them a degree too, chosen independently of all else from the empirical distribution on the sample
+n = nrow(earnings) / cps.sampling.ratio 
+finite.population.subregion = sample(ca_county_more$subregion, size=n, replace=TRUE, prob=ca_county_more$pop)
+finite.population = unique(finite.population.subregion) %>% 
+  map_dfr(function(subregion) { 
+    vertices = ca_county[ca_county$subregion==subregion, c('lat','long')]
+    U = sum(finite.population.subregion==subregion)
+    V = nrow(vertices)
+    weights = abs(rt(U*V, 1))
+    dim(weights) = c(U,V)
+    weights = (1/rowSums(weights)) * weights
+    data.frame(subregion=subregion,
+               lat  = weights %*% vertices$lat,
+               long = weights %*% vertices$long)
+  })
+finite.population$group=1
+finite.population$degree = sample(earnings$degree, nrow(finite.population), replace=TRUE)
+
+# to go easy on ggplot, we won't really display everbody 
+display.population = sample_n(finite.population, 100000) 
+# and we'll force the degree-distribution in the sample to match our survey responses
+our.sample = sample_n(finite.population, nrow(earnings))
+our.sample$degree=earnings$degree
+
+pop.plot = ca.plot + geom_point(aes(x=long, y=lat), data=display.population, color='red', alpha=.01) 
+sample.plot = ca.plot + geom_point(aes(x=long, y=lat), data=our.sample, color='red',    alpha=1)
+pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.population, color='red', alpha=.01)  
+sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, color='red',    alpha=1)
 ```
 
 ## Overview
+
+::: {.hidden}
+$$
+% color defs aren't making it into MathJax
+%\definecolor{twocolor-red}{RGB}{248, 118, 109}   % red   used by ggplot in plots w/ 2 colors 
+%\definecolor{twocolor-green}{RGB}{0, 191, 196}   % green used by ggplot in plots w/ 2 colors
+% so create commands for using those colors instead
+\newcommand{\inred}[1]{\textcolor[RGB]{248,118,109}{#1}}
+\newcommand{\ingreen}[1]{\textcolor[RGB]{0,191,196}{#1}}
+
+\newcommand{\with}{\ingreen{\text{degree}}}
+\newcommand{\without}{\inred{\text{no degree}}}
+
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{Var}
+$$ 
+
+```{r}
+twocolor.red   = 'rgb(248,118,109)'
+twocolor.green = 'rgb(0,191,196)'
+```
+:::
+
 - Today, we'll work with data from the 2022 Current Population Survey.
 - We'll look at the relationship between income and education.
 - We've already compared people  [with]{.twocolor-green} and [without]{.twocolor-red} 4-year degrees.
 - That's a way of summarizing what we see in the data based on a *binary covariate*
 $$ 
 X_i = \begin{cases} 
-  1 & \text{ if } \ \text{person}_i \ \text{has a 4-year degree} \\
-  0 & \text{ otherwise }
+  \with & \text{ if } \ \text{person}_i \ \text{has a 4-year degree} \\
+  \without & \text{ otherwise }
   \end{cases}
 $$
 - Today, we'll talk about summaries based on *non-binary covariates*
     - e.g.,  the years of education they have
     - e.g.,  the size of the city they live in
-- We're going to be generalizing a lot of ideas and techniques we used with binary ones.
-- We'll start with a thorough review to get you thinking about them in a way that generalizes.
 
-# Review 
 
-## Sampling Scheme
+# Review
+
+## 
 
 :::: columns
 
 ::: column
-### The Sample
+### The sample
 We'll look at the survey recipients who
 
   - were California residents 
@@ -128,26 +235,43 @@ This sample includes `r nrow(earnings)` people.
 
 ::: column
 ### The finite population
-It's approximately correct to think of them as  
+It's roughly correct to think of them as  
 
 - being chosen randomly
 - with equal probability
-- from the set of all people meeting these criteria
+- from the set of all people like this
 
-There are a lot of people like this. \
-Roughly 2500 times that many.
+This includes about `r compact_number(nrow(earnings) / cps.sampling.ratio)` people.
 :::
 ::::
 
-A Picture
 
- - Left: Some dots in California
- - Right: More dots in California, some colored the same way as the left ones
 
-Arrow right to left
+```{r}
+#| layout-ncol: 2
+#| layout-valign: bottom
+sample.plot
+pop.plot
+```
 
+::: {.notes}
+Thinking about where these people might live can help us build intuition about our sample and population. 
+
+- Each dot on the left map represents a person in the sample.
+- Each dot on right map represents one in the population.
+
+These locations are, to be clear, totally made up.
+
+- The survey doesn't give us much location data.
+- These made-up locations are just to make the people we talk about feel real.
+
+:::
 
 ## An infinite-population approximation
+
+:::: {.r-stack}
+
+::: {.fragment .fade-out data-fragment-index="0"}
 
 We can think of the people in our finite population as a large number of independent draws
 
@@ -155,38 +279,118 @@ We can think of the people in our finite population as a large number of indepen
   - meeting those critera
   - that *could exist*. 
 
-That's an approximation, but it makes our life simple. \
-It implies the people in our sample are drawn the same way the same population.
+Our sample is a small number of these people, chosen randomly.
 
-A Picture
-
- - Left: Some dots in California
- - Right: More dots in California, some colored the same way as the left ones
- - Below: Some kind of population heat map of california. 
-
-Arrows 
-
-- right to left (the finite pop version)
-- below to both (commutative diagram)
-
-## Subsamples and Subpopulations
-TODO
-
-## Comparing incomes by eyeballing a table
-
-::: {.hidden}
-$$
-\DeclareMathOperator{\E}{E}
-\DeclareMathOperator{\Var}{Var}
-\require{color}
-\definecolor{twocolor-red}{HTML}{F8766D}    % red   used by ggplot in plots w/ 2 colors 
-\definecolor{twocolor-green}{HTML}{00BFC4}  % green used by ggplot in plots w/ 2 colors
-$$ 
 ```{r}
-twocolor.red   = '#F8766D'
-twocolor.green = '#00BFC4'
+#| layout-ncol: 2
+#| layout-valign: bottom
+sample.plot
+pop.plot.inf
 ```
 :::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+
+This *implies* that our sample is a smaller number of draws from the same infinite population.
+
+  - The infinite population isn't real; it's an abstraction we use to make some things simple.
+  - We tend to estimate summaries of this (abstract) infinite population.
+  - Then interpret them in relation to our (real) finite population.
+
+Interpretation aside, we don't need the finite population at all.
+
+```{r}
+#| layout-ncol: 2
+#| layout-valign: bottom
+sample.plot.inf + theme(legend.position="none")
+ca.pop.plot
+```
+:::
+
+::::
+
+
+::: {.notes}
+Let's think about where the people in our infinite population tend to live.
+
+- I've mapped the *probability density* of their locations.
+- A person drawn from this infinite population, 
+  i.e. one in our finite population,
+  tends to live in areas of high density (SF,LA).
+- A person in the sample *is* a person in the finite population;
+  they'll live in the same places with the same probabilities.
+
+:::
+
+## Subsamples and subpopulations
+
+:::: {.r-stack}
+
+::: {.fragment .fade-out data-fragment-index="0"}
+  - Our survey doesn't tell us much about location. We've made that up.
+  - But it does tell us some things about education.
+    - It tells us whether the respondent [has]{.twocolor-green} 
+      or [doesn't have]{.twocolor-red} a four-year degree.
+    - That's what we've been using so far.
+  - This lets us break our sample into **subsamples** of people 
+    with [with]{.twocolor-green} and [without]{.twocolor-red} degrees.
+  - And think of our population in terms of corresponding **subpopulations**
+    they're drawn from.
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+  - The **subsample** of [green dots]{.twocolor-green} on the left are survey recipients [with 4-year degrees]{.twocolor-green}.
+  - They're selected randomly from the **finite subpopulation** drawn as [green dots]{.twocolor-green} on the right.
+    - i.e. the population of California residents, 25-35 and living alone, [with 4 year-degrees]{.twocolor-green}. 
+  
+  - And therefore drawn from an **infinite subpopulation** of people like this who could exist.
+:::
+
+::::
+
+```{r}
+#| layout-ncol: 2
+#| layout-valign: bottom
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, alpha=1) + 
+          theme(legend.position="none")
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, alpha=.01) + 
+          theme(legend.position="none")
+```
+
+
+## Subsample and subpopulation means
+
+- A reasonable starting point for describing an outcome is its mean
+- We can think of the mean of our sample as an estimate of the mean of the finite population
+- Or as an estimate of the mean of the infinite population
+$$
+\begin{aligned}
+\mu(x) &= \E[Y_i \mid X_i=x] \\
+\hat\mu(x) &= \frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) Y_i \quad \text{ for } \quad N_x = \sum_{i=1}^n 1(X_i=x)
+\end{aligned}
+$$
+
+A subsample mean is an *unbiased estimate* of the corresponding subpopulation mean
+Let's prove it.
+
+::: fragment
+$$
+\begin{aligned}
+\E\qty[\hat\mu(x)] &= \E\qty[\frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) Y_i] \qfor N_x = \sum_{i=1}^n 1(X_i=x) \\
+&= \E\qty[ \E\qty[ \frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) Y_i \mid X_1 \ldots X_n] ] && \text{iterated expectations} \\
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) \E\qty[ Y_i \mid X_1 \ldots X_n] ] && \text{linearity of expectation} \\
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) \mu(x) ] && \text{definition of } \mu(x) \\
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n 1(X_i=x) ] \mu(x) && \text{pulling out constant} \\
+&= \E\qty[ \frac{N_x}{N_x} ] \mu(x) && \text{definition of } N_x \\
+&= \mu(x) && \text{cancelling } N_x
+\end{aligned}
+$$
+
+:::
+
+# Today's Data
+
+## A Tabular View
 
 :::: columns
 
@@ -196,6 +400,7 @@ twocolor.green = '#00BFC4'
 earnings.tab.rows = sample(1:nrow(earnings))[1:12]
 earnings.tab = earnings[earnings.tab.rows, c('income', 'degree')]
 earnings.tab$income = sprintf('$%dk', round(earnings.tab$income / 1000))
+rownames(earnings.tab) = NULL
 styled.tab = earnings.tab %>% 
   kable() %>%
   kable_styling() %>%
@@ -230,7 +435,7 @@ but it helps to use other visualizations that let us look at all the data.
 
 
 
-## Comparing Incomes using a Scatter Plot
+## A Scatter Plot
 
 :::: {.r-stack }
 
@@ -262,14 +467,14 @@ earnings.scatter
 earnings.scatter +  scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) 
 ```
 
-- We can see things better when we zoom in on people who make $\le \$300$k. 
+- We can see things better when we zoom in on people who make less than \$300k. 
 - This leaves out a few millionaires, but that's mostly fine. We can do that.
 - And if that's still hard to work with, we can use another visualization.
 :::
 
 ::::
 
-## Comparing incomes using a Histogram
+## A Histogram
 
 ```{r}
 earnings.histogram = ggplot(earnings[earnings$income<3e5, ]) + 
@@ -284,6 +489,117 @@ earnings.histogram
   shows the fraction of people that make roughly that much.
 - You can see what most people make by looking for the peak.
 - Compared to the scatter plot, we've traded darkness for length.
+
+## Question Lock-in
+
+
+# Beyond Binary Comparisons
+
+## 
+- Using two categories is throwing away a lot of information about education. \
+- We can, for example, categorize people by the **years of education** they've had. 
+
+```{r}
+years = unique(earnings$education)
+ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), size=10, position=position_jitter(w=.2), alpha=.2) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none")
+```
+
+:::: {.r-stack}
+
+::: {.fragment .current-visible data-frame-index="0"}
+### We haven't lost anything.
+
+- You have a four year degree if, and only if, you have $12+4=6$ years of education.
+- Thinking visually, we can get the plot we had before by shuffling the red and green dots.
+- This means we can still see how much more people with 4 year degrees make.
+- But not shuffling lets us see some new stuff, too. 
+
+### What else is there to see?
+:::
+
+::: {.fragment .current-visible data-frame-index="1"}
+
+### In visual terms
+$$
+$$
+
+### Meaning 
+$$
+$$
+
+:::
+
+::: {.fragment .current-visible data-frame-index="2"}
+
+### One thing I see
+The centers of our subsamples are going up as we move to the right.
+
+### Meaning
+
+Even among people with (and without) a 4-year degree, \
+people with more education tend to make more money.
+
+:::
+
+::::
+
+## Including Years of Education
+- This does, of course, require that our survey asks about years of education. 
+- And it does, more or less, so we can make a table like this.
+
+```{r}
+earnings.tab$education = sprintf('%d years', earnings$education[earnings.tab.rows])
+earnings.tab %>% 
+  kable() %>%
+  kable_styling() %>%
+  row_spec(which(earnings.tab$degree=='4-year degree'), background=twocolor.green) %>%
+  row_spec(which(earnings.tab$degree!='4-year degree'), background=twocolor.red)
+```
+- The survey doesn't ask exactly this *how many years* question.
+- It takes a little pre-processing to get this.
+
+## Pre-processing
+
+```{r}
+#| echo: true
+education=case_match(cps.data$a_hga,
+                          0  ~ 0,   # child
+                          31 ~ 0,   # < grade 1
+                          32 ~ 4,   #  grade 1-4
+                          33 ~ 6,   #  grade 5-6
+                          34 ~ 8,   #  grade 7-8 
+                          35 ~ 9,   #  grade 9
+                          36 ~ 10,  #  grade 10
+                          37 ~ 11,  #  grade 11
+                          38 ~ 11,  #  grade 12 no diploma
+                          39 ~ 12,  #  high school grad
+                          40 ~ 13,  #  some college
+                          41 ~ 14,  #  associate degree (vocational)
+                          42 ~ 14,  #  associate degree (academic)
+                          43 ~ 16,  #  bachelors degree
+                          44 ~ 18,  #  masters degree
+                          45 ~ 20,  #  professional school degree
+                          46 ~ 20)  #  doctorate
+```         
+
+- We've had to make a few things up in translation.
+  - There's no differentiation between a 1 or 2-year masters; we assume 2.
+  - We're assuming professional and doctoral degrees take 4 years; that's approximate.
+  - Nobody has 17 or 19 years in our plots; that's why.
+- That's part of data analysis. 
+- Ultimately, you'll want to be careful about quirks introduced by translation.
+- But it's easier to pretend we've really measured years of education. Let's do that to start.
+
+## Subsamples and Subpopulations
+New def of covariate, new def of conditional mean.
+
+## Exercise 1
+Calculate old subpop means using new ones
+## Exercise 2
+Calculate old subsample means using new ones
 
 
 # Review Questions
@@ -382,7 +698,7 @@ We do the same for the subsample [without]{.twocolor-red} degrees.
 We can write it out in mathematical notation.
 
 $$
-\hat\mu(\text{with}) = \frac{\sum_{i : X_i=\text{without}} Y_i }{ \sum_{i : X_i=\text{without}} 1 }
+\hat\mu(\text{with}) = \frac{\sum_{i : X_i=\without} Y_i }{ \sum_{i : X_i=\without} 1 }
 $$
 :::
 
@@ -442,7 +758,7 @@ What *Summary of the Population* does this estimate?
 - The difference in mean income among *subpopulations* with and without 4-year degrees. \
 - That's a difference in conditional expectations.
 $$
-\Delta = \mu(\text{with})-\mu(\text{without}) \quad \text{ where } \quad \mu(x)=\E[Y_i \mid X_i=x]
+\Delta = \mu(\with)-\mu(\text{without}) \quad \text{ where } \quad \mu(x)=\E[Y_i \mid X_i=x]
 $$
 :::
 
@@ -611,113 +927,6 @@ formula + picture of transformed reference distributon
 ## Summary
 something
 
-# Beyond Binary Comparisons
-
-## 
-- Using two categories is throwing away a lot of information about education. \
-- We can, for example, categorize people by the **years of education** they've had. 
-
-```{r}
-years = unique(earnings$education)
-ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), size=10, position=position_jitter(w=.2), alpha=.2) +
-                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
-                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
-                   theme(legend.position="none")
-```
-
-:::: {.r-stack}
-
-::: {.fragment .current-visible data-frame-index="0"}
-### We haven't lost anything.
-
-- You have a four year degree if, and only if, you have $12+4=6$ years of education.
-- Thinking visually, we can get the plot we had before by shuffling the red and green dots.
-- This means we can still see how much more people with 4 year degrees make.
-- But not shuffling lets us see some new stuff, too. 
-
-### What else is there to see?
-:::
-
-::: {.fragment .current-visible data-frame-index="1"}
-
-### In visual terms
-$$
-$$
-
-### Meaning 
-$$
-$$
-
-:::
-
-::: {.fragment .current-visible data-frame-index="2"}
-
-### One thing I see
-The centers of our subsamples are going up as we move to the right.
-
-### Meaning
-
-Even among people with (and without) a 4-year degree, \
-people with more education tend to make more money.
-
-:::
-
-::::
-
-## Including Years of Education
-- This does, of course, require that our survey asks about years of education. 
-- And it does, more or less, so we can make a table like this.
-
-```{r}
-earnings.tab$education = sprintf('%d years', earnings$education[earnings.tab.rows])
-earnings.tab %>% 
-  kable() %>%
-  kable_styling() %>%
-  row_spec(which(earnings.tab$degree=='4-year degree'), background=twocolor.green) %>%
-  row_spec(which(earnings.tab$degree!='4-year degree'), background=twocolor.red)
-```
-- The survey doesn't ask exactly this *how many years* question.
-- It takes a little pre-processing to get this.
-
-## Pre-processing
-
-```{r}
-#| echo: true
-education=case_match(cps.data$a_hga,
-                          0  ~ 0,   # child
-                          31 ~ 0,   # < grade 1
-                          32 ~ 4,   #  grade 1-4
-                          33 ~ 6,   #  grade 5-6
-                          34 ~ 8,   #  grade 7-8 
-                          35 ~ 9,   #  grade 9
-                          36 ~ 10,  #  grade 10
-                          37 ~ 11,  #  grade 11
-                          38 ~ 11,  #  grade 12 no diploma
-                          39 ~ 12,  #  high school grad
-                          40 ~ 13,  #  some college
-                          41 ~ 14,  #  associate degree (vocational)
-                          42 ~ 14,  #  associate degree (academic)
-                          43 ~ 16,  #  bachelors degree
-                          44 ~ 18,  #  masters degree
-                          45 ~ 20,  #  professional school degree
-                          46 ~ 20)  #  doctorate
-```         
-
-- We've had to make a few things up in translation.
-  - There's no differentiation between a 1 or 2-year masters; we assume 2.
-  - We're assuming professional and doctoral degrees take 4 years; that's approximate.
-  - Nobody has 17 or 19 years in our plots; that's why.
-- That's part of data analysis. 
-- Ultimately, you'll want to be careful about quirks introduced by translation.
-- But it's easier to pretend we've really measured years of education. Let's do that to start.
-
-## Subsamples and Subpopulations
-New def of covariate, new def of conditional mean.
-
-## Exercise 1
-Calculate old subpop means using new ones
-## Exercise 2
-Calculate old subsample means using new ones
 
 ## New Questions
 
