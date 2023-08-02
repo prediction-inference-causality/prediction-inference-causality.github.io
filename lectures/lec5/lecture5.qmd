@@ -212,10 +212,8 @@ X_i = \begin{cases}
   \without & \text{ otherwise }
   \end{cases}
 $$
-- Today, we'll talk about summaries based on *non-binary covariates*
-    - e.g.,  the years of education they have
-    - e.g.,  the size of the city they live in
-
+- Today, we'll talk about summaries based on a *non-binary covariate*
+- We'll categorize people by the years of education they've had
 
 # Review
 
@@ -359,175 +357,16 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, 
           theme(legend.position="none")
 ```
 
+## What we really have
 
-## Subsample and subpopulation means
-
-- A reasonable starting point for describing income in a subsample is its mean income.
-  - We'll think about the subsample with $X_i=x$ for some value $x$, 
-  - e.g. $X_i=\with$ for people with 4-year degrees.
-- We can think of our subsample's  mean as an estimate of the mean of the corresponding finite subpopulation.
-- But we'll focus on interpreting it as an estimate of the mean of the *infinite subpopulation* from which they're both drawn.
-$$
-\begin{aligned}
-\hat\mu(x) &= \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i \quad \text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) && \text{subsample mean} \\
-\mu(x) &= \E[Y_i \mid X_i=x] && \text{infinite subpopulation mean} \\
-\end{aligned}
-$$
-
-- The subsample mean is an *unbiased estimate* of the subpopulation mean. 
-- That means its expectation *is* the subpopulation mean: $\E\{ \hat\mu(x) \} = \mu(x)$ 
-- To warm up our calculation skills, we'll prove it.
-- We'll start by reviewing a few things from probability.
-
-##  Properties of Population Means: Conditioning
-
-### The law of iterated expectations
-$$
-\E\qty{ \E\qty( Y \mid X ) } \quad \text{ for any random variables $X, Y$} \\
-$$
-To calculate the mean of $Y$, we can average within subpopulations, then across subpopulations.
-
-### Irrelevance of independent conditioning variables
-$$ \E \qty( Y \mid X, X' ) = \E \qty( Y \mid X ) \quad \text{ when $X'$ is independent of $X,Y$ } $$
-If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the relationship between them.
-
-## Properties of Population Means: Linearity
-
-### The linearity of expectations
-$$ 
-\begin{aligned}
-\E\qty( a Y + b Z ) 
-&= \E\qty(aY) + \E\qty(bZ) \\
-&= a\E(Y) + b\E(Z)  \quad \text{ for random variables $Y, Z$ and numbers $a,b$ }
-\end{aligned}
-$$
-  There are two things going on here.
-
-  - To average a sum of two things, we can take two averages and sum.
-  - To average a constant times a random variable, we can multiply the random variable's average by the constant.
-  - In other words, we can *distribute* expectations and can pull constants out of them.
-
-### The linearity of *conditional* expectations
-$$ 
-\begin{aligned}
-\E\qty{ a(X) Y + b(X) Z \mid X } 
-&= \E\qty{a(X)Y \mid X} + \E\qty{ b(X)Z \mid X} \\
-&= a(X)\E\qty(Y \mid X) + b(X)\E\qty(Z \mid X)
-\end{aligned}
-$$
-   
-This is like linearity of expectations, but with a twist.
-
-   - When we condition on $X$, we're working with subpopulations in which $X$ is constant.
-   - This means we can we can act as if functions of $X$ *are* constants.
-   - So we can pull them out of expectations that are conditional on $X$.
-
-## Thinking clearly about conditioning
-
-- It's important to distinguish between two things
-  1.  The *conditional expectation function* $\mu(x)=\E[Y \mid X=x]$.
-    - $\mu$ is a function; evaluated at $x$, it's a number. It's not random.
-    - It's the mean of the infinite subpopulation of people with $X=x$.
-    - This is the thing we're trying to estimate with $\hat\mu(x)$.
-  2.  The conditional expectation $\mu(X)=E[Y \mid X]$.
-    - $\mu(X)$ is the mean of a *random* infinite subpopulation of people.
-    - It's the conditional expectation function *evaluated at* the random variable $X$.
-    - This is the sort of thing that shows up when we use the law of iterated expectations.
-- Let's do an easy calculation to try to make this clear. 
-- We'll calculate the mean income in our population using the law of iterated expectations. 
-
-## Example: Conditioning
-  
-  - Let's think about a random person drawn from this population
-    - $Y$ is their income 
-    - $X$ is an indicator for having a four-year degree. 
-  - Suppose the subpopulation means are [100k]{.twocolor-green} for people with degrees 
-    and [50k]{.twocolor-red} for people without.
-  - And that 7/10 of our population has degrees.
-  
-  What is $\E(Y \mid X)$?
-
-::: fragment
-
-  - $\E(Y \mid X)$ is a random variable that is *either* 100k or 50k
-    - It's [100k]{.twocolor-green} with probability $7/10$,   when $X=\with$. 
-    - And it's [50k]{.twocolor-red} with probability $3/10$, when $X=\without$.
-  
-
-:::
-
-What is $\E(Y)$?
-
-::: fragment
-
-  - It's the mean of this random variable---a number.
-$$
-\begin{aligned} 
-E\qty{ E\qty( Y \mid X ) } 
-&= E(Y \mid X=\with)P(X=\with) + E(Y \mid X=\without)P(X=\without) \\
-&= 100k \cdot 7/10 + 50k \cdot 3/10 = 70k + 15k = 85k.
-\end{aligned}
-$$
-
-:::
-
-## Exercise: Unbiasedness of the sample mean
-$$
-\begin{aligned}
-\text{Prove } \ \E[\hat\mu(x)] &= \mu(x) \qquad \text{ where } \\
-\hat\mu(x) &= \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i \quad \text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) \\
-\mu(x) &= \E[Y_i \mid X_i=x] && 
-\end{aligned}
-$$
-
-### Hint
-- Using law of iterated expectations, we can derive an expression in terms of the random variable $\mu(X_i)$
-- The indicator variable $\ind{x}(X_i)$ that we have here are the key to replacing that
-with $\mu(x)$.
-- Observe that $\ind{x}(X_i)f(X_i) = \ind{x}(X_i)f(x)$ for any function $f$. Why?
-
-::: {.notes}
-$$
-{\tiny
-\begin{aligned}
-\E \hat\mu(x) =& \E\qty{\frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i}  \\
-\underset{iterated}{=}& \E\qty[ \E\qty{ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ] \\
-\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \E\qty{ \sum_{i=1}^n \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ]  \\ 
-\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \E\qty{ \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ]  \\ 
-\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \E\qty{ Y_i \mid X_1 \ldots X_n} ]  \\
-\underset{irrelevance}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \E\qty{Y_i \mid X_i} ] \\
-\underset{definition}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \mu(X_i) ]  \\
-\underset{hint}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \mu(x) ] \\   
-\underset{linearity}{=}& \mu(x) \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) ]   \\
-\underset{definition}{=}& \mu(x) \E\qty[ \frac{1}{N_x} N_{x}    ] = \mu(x)\E[ 1 ] = \mu(x)   
-\end{aligned}
-}
-$$
-
-
-
-:::
-
-# Today's Data
-
-## The sample (again)
-
-:::: columns
-::: column
-We'll look at the survey recipients who
-
-  - were California residents 
-  - between 25 and 35
-  - who lived alone
-
-This sample includes `r nrow(earnings)` people.
-:::
-
-::: column
-As an illustration, I've been drawing these people on a map.
-
+- As an illustration, I've been drawing these people on a map.
 - But that's fake. We don't have their addresses. 
 - From here on, we'll focus on information we actually do have.
+- Start where we've been...acting as if binary...
+
+Two ways of looking at everything 
+- Table, Scatter plot
+- Long; Compressed
 :::
 
 ::::
@@ -621,12 +460,18 @@ earnings.scatter = ggplot(earnings) +
   theme(legend.position="none") 
 earnings.scatter
 ```
+
 - It's called *jittering.* There's no meaning to the horizontal spread. It's just to make space.
 - Now it's easier to see where there are more dots and where there are less.
 - That can give you a rough sense of how much most people make.
 :::
 
 ::::
+
+## Descriptive Summarization
+  - Mean [plot on scatter plot]
+  - Standard Deviation [plot sd on scatter plot]
+  - Histogram
 
 ## A Histogram
 
@@ -639,14 +484,34 @@ earnings.histogram = ggplot(earnings[earnings$income<3e5, ]) +
 earnings.histogram
 ```
 
-- So far this semester, we've mostly use histograms; not scatter plots. 
+- So far this semester, we've used histograms instead of jittered scatter plots.
 - In this histogram, the length of the bar at each income level  
   shows the fraction of people that make roughly that much.
 - Compared to the scatter plot, we've traded dot density for bar length.
   - You can see what most people make by looking for the peak. That's easier. 
 - But we'll be using scatter plots more going forward. 
   - They work better when we have more values of the covariate $X_i$.
-  - That's where we're going next.
+
+
+## Statistical Summarization
+ - Point estimates
+ - Interval Estimates [last week]
+
+ ## Point Estimate Properties
+ - Unbiased (not in itself interesting, but ...)
+ - Convergent: sd $\propto 1/\sqrt{n}$ 
+ - Approx normal 
+ - Review in Detail Later
+
+## Interval Estimate Properties 
+  - Coverage
+  - More next time
+
+## 
+
+
+
+
 
 
 ## Beyond Binary Comparisons
@@ -762,7 +627,9 @@ ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree),
                    scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
                    scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
                    theme(legend.position="none")
+
 ```
+
 
 :::: {.r-stack}
 
@@ -781,30 +648,284 @@ ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree),
      - To get these, we combine our finer subsamples.
 - People whose highest degree is graduate, 4-year,  2-year, high-school, or none.
       - That's in between. It's a finer aggregate.
+
 :::
 
 ::: {.fragment .current-visible data-fragment-index="1"}
 - Naturally, it's the same for subpopulations.
 - For each subsample, there's a corresponding subpopulation.
+
 :::
 
 ::::
 
 
-## Subsample and Subpopulation Means
+## New Questions
 
-Now aggregates...
+Taking this more granular view of education allows us to pose new questions.
+
+1. What's the typical difference in income between people with *exactly* 16 years of education
+   and *exactly* 12?
+    - This is a different question than the one we addressed in review, but it has a similar structure.
+    - We want a summary of income differences in two groups. Those can be subsamples or subpopulations.
+    - We can calculate and relate these summaries exactly like we did in review.
+2. What's the typical difference in income between people with 4-year degrees and people without them?
+    - That's exactly the question we talked about in review.
+    - We'll talk about how to calculate it a different way that'll generalize better to other questions.
+    - We can check our work. Obviously our answers should be exactly the same as we got earlier.
+3. How much change would we expect in a similar population in which people tend to get an additional year of education?
+    - This is a question unlike the ones we talked about earlier.
+    - We'll need to be a bit careful about what we mean.
+    - But once we've gotten there, we can base our calculations on the ones we did in the last question.
+4. Homework
+    - Grad vs Ugrad
+
+# Descriptive analysis
+
+## Q1
+
+```{r}
+earnings$highest.degree = case_match(earnings$education,
+                            0:11 ~ 'none',
+                            12:13 ~ 'high school',
+                            14  ~   'associates',
+                            16  ~   'bachelors',
+                            18:20 ~ 'graduate')
+
+fine = earnings %>% group_by(education) %>% summarize(mean.income = mean(income))
+coarse = earnings %>% group_by(degree) %>% summarize(mean.income = mean(income), lb=min(education), ub=max(education)) 
+intermediate = earnings %>% group_by(highest.degree) %>% summarize(mean.income = mean(income), lb=min(education), ub=max(education))
+
+base.plot = ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
+                              size=dot.size, position=position_jitter(w=.2), alpha=.2) +
+                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
+                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
+                   theme(legend.position="none")
+
+base.plot + geom_segment(aes(x=education-.2, xend=education+.2, y=mean.income, yend=mean.income), data=fine)
+```
+
+
+
+## Q2
+```{r}
+base.plot + geom_segment(aes(x=lb-.2, xend=ub+.2, y=mean.income, yend=mean.income), data=coarse) 
+```
+
+  - Means of Aggregates are Aggregates of Means
+  - Weighted Aggregates
+  - [do somethoing with fine picture combo]
+
+## Q3
+
+- some kind of picture showing jumps
+
+# Population analyis: Review
+
+## Unbiasedness Subsample and subpopulation means
+
+- A reasonable starting point for describing income in a subsample is its mean income.
+  - We'll think about the subsample with $X_i=x$ for some value $x$, 
+  - e.g. $X_i=\with$ for people with 4-year degrees.
+- We can think of our subsample's  mean as an estimate of the mean of the corresponding finite subpopulation.
+- But we'll focus on interpreting it as an estimate of the mean of the *infinite subpopulation* from which they're both drawn.
+$$
+\begin{aligned}
+\hat\mu(x) &= \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i \quad \text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) && \text{subsample mean} \\
+\mu(x) &= \E[Y_i \mid X_i=x] && \text{infinite subpopulation mean} \\
+\end{aligned}
+$$
+
+- The subsample mean is an *unbiased estimate* of the subpopulation mean. 
+- That means its expectation *is* the subpopulation mean: $\E \hat\mu(x) = \mu(x)$ 
+- As a warm up exercise, we'll prove it
+- We'll start by reviewing a few things from probability.
+
+##  Properties of Population Means: Conditioning
+
+### The law of iterated expectations
+$$
+\E\qty{ \E\qty( Y \mid X ) } \quad \text{ for any random variables $X, Y$} \\
+$$
+To calculate the mean of $Y$, we can average within subpopulations, then across subpopulations.
+
+### Irrelevance of independent conditioning variables
+$$ \E \qty( Y \mid X, X' ) = \E \qty( Y \mid X ) \quad \text{ when $X'$ is independent of $X,Y$ } $$
+If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the relationship between them.
+
+## Properties of Population Means: Linearity
+
+### The linearity of expectations
+$$ 
+\begin{aligned}
+\E\qty( a Y + b Z ) 
+&= \E\qty(aY) + \E\qty(bZ) \\
+&= a\E(Y) + b\E(Z)  \quad \text{ for random variables $Y, Z$ and numbers $a,b$ }
+\end{aligned}
+$$
+  There are two things going on here.
+
+  - To average a sum of two things, we can take two averages and sum.
+  - To average a constant times a random variable, we can multiply the random variable's average by the constant.
+  - In other words, we can *distribute* expectations and can pull constants out of them.
+
+### The linearity of *conditional* expectations
+$$ 
+\begin{aligned}
+\E\qty{ a(X) Y + b(X) Z \mid X } 
+&= \E\qty{a(X)Y \mid X} + \E\qty{ b(X)Z \mid X} \\
+&= a(X)\E\qty(Y \mid X) + b(X)\E\qty(Z \mid X)
+\end{aligned}
+$$
+   
+This is like linearity of expectations, but with a twist.
+
+   - When we condition on $X$, we're working with subpopulations in which $X$ is constant.
+   - This means we can we can act as if functions of $X$ *are* constants.
+   - So we can pull them out of expectations that are conditional on $X$.
+
+## Thinking clearly about conditioning
+
+- It's important to distinguish between two things
+  1.  The *conditional expectation function* $\mu(x)=\E[Y \mid X=x]$.
+    - $\mu$ is a function; evaluated at $x$, it's a number. It's not random.
+    - It's the mean of the infinite subpopulation of people with $X=x$.
+    - This is the thing we're trying to estimate with $\hat\mu(x)$.
+  2.  The conditional expectation $\mu(X)=E[Y \mid X]$.
+    - $\mu(X)$ is the mean of a *random* infinite subpopulation of people.
+    - It's the conditional expectation function *evaluated at* the random variable $X$.
+    - This is the sort of thing that shows up when we use the law of iterated expectations.
+- Let's do an easy calculation to try to make this clear. 
+- We'll calculate the mean income in our population using the law of iterated expectations. 
+
+## Example: Conditioning
+  
+  - Let's think about a random person drawn from this population
+    - $Y$ is their income 
+    - $X$ is an indicator for having a four-year degree. 
+  - Suppose the subpopulation means are [100k]{.twocolor-green} for people with degrees 
+    and [50k]{.twocolor-red} for people without.
+  - And that 7/10 of our population has degrees.
+  
+  What is $\E(Y \mid X)$?
+
+::: fragment
+
+  - It's a random variable that is *either* 100k or 50k. A *random value* of the function $\mu$.
+    - It's [$\mu(\with)=100k$]{.twocolor-green} with probability $7/10$,   when $X=\with$. 
+    - And it's [$\mu(\without)=50k$]{.twocolor-red} with probability $3/10$, when $X=\without$.
+:::
+
+What is $\E(Y)$?
+
+::: fragment
+
+  - It's the mean of this random variable. A number.
+$$
+\begin{aligned} 
+E\qty{ E\qty( Y \mid X ) } 
+&= E(Y \mid X=\with)P(X=\with) + E(Y \mid X=\without)P(X=\without) \\
+&= 100k \cdot 7/10 + 50k \cdot 3/10 = 70k + 15k = 85k.
+\end{aligned}
+$$
+
+:::
+
+
+## Exercise: Unbiasedness of the sample mean
+$$
+\begin{aligned}
+\text{Prove } \ \E \hat\mu(x) &= \mu(x) \qquad \text{ where } \\
+\hat\mu(x) &= \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i \quad \text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) \\
+\mu(x) &= \E[Y_i \mid X_i=x] && 
+\end{aligned}
+$$
+
+
+### Hint: The Indicator Trick
+
+- Using the properties we've reviewed, we can write $\E \hat \mu(x)$ in terms of the random variable $\mu(X_i)$.
+  - That's a *random value* of the conditional expectation function $\mu$.
+  - We want an expression in terms of the value $\mu(x)$ it takes on when $X_i=x$. 
+- In this context, it seems like they should be the same. Everyone in our subsample has $X_i=x$.
+- To formalize this, we observe that $\mu(X_i)$ appears multiplied by the indicator $\ind{x}(X_i)$.
+- And when that indicator is nonzero, $\mu(X_i)$ and $\mu(x)$ coincide.
+$$
+\mu(X_i)\ind{x}(X_i) = 
+\begin{cases} 
+\mu(X_i) & \text{ when } X_i=x \\
+0 &      \text{ otherwise}
+\end{cases} 
+=
+\begin{cases}
+\mu(x)  & \text{ when } X_i=x \\
+0       & \text{ otherwise }
+\end{cases} 
+= \mu(x)\ind{x}(X_i)
+$$
 
 
 
 
-## Exercise 1
-Calculate old subpop means using new ones
-## Exercise 2
-Calculate old subsample means using new ones
+::: {.notes}
+$$
+{\tiny
+\begin{aligned}
+\E \hat\mu(x) =& \E\qty{\frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i}  \\
+\underset{iterated}{=}& \E\qty[ \E\qty{ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ] \\
+\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \E\qty{ \sum_{i=1}^n \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ]  \\ 
+\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \E\qty{ \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ]  \\ 
+\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \E\qty{ Y_i \mid X_1 \ldots X_n} ]  \\
+\underset{irrelevance}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \E\qty{Y_i \mid X_i} ] \\
+\underset{definition}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \mu(X_i) ]  \\
+\underset{hint}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \mu(x) ] \\   
+\underset{linearity}{=}& \mu(x) \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) ]   \\
+\underset{definition}{=}& \mu(x) \E\qty[ \frac{1}{N_x} N_{x}    ] = \mu(x)\E[ 1 ] = \mu(x)   
+\end{aligned}
+}
+$$
 
 
-# Review Questions
+
+## The Indicator Trick in General
+
+- It's useful to generalize the *indicator trick* we've just used.
+- We can expand a function of a random variable $X$ as a sum of 
+  - the value it takes at every distinct value of $X$
+  - times an indicator that $X$ takes on that value
+$$
+f(X) = f(a) \ind{a}(X) + f(b) \ind{b}(X) + f(c) \ind{c}(X) + \ldots \qfor a\neq b \neq c \ldots.
+$$
+
+- In our exercise, we essentially used this for the function $\mu$.
+- Multiplying by the indicator $1_{x}(X_i)$ *picked out* one term in the expansion.
+$$ 
+\begin{aligned}
+\ind{x}(X_i) \mu(X_i) &= \ind{x}(X_i) \sum_{x'} \ind{x'}(X_i) \mu(x') \\
+                      &= \sum_{x'} \ind{x}(X_i)\ind{x'}(X_i) \mu(x') = \mu(x) 
+\end{aligned}
+$$
+- We'll be using this later on. 
+- Sometimes we'll multiply nu an indicator that picks out multiple terms.
+
+
+::: notes
+It's easy to check this equivalence. 
+  - When $X=a$, the expansion's first indicator 'hits' and the others don't. 
+  - That means the expanded version is $f(a)$. That's right.
+  - It's the same for $b,c,\ldots$.
+:::
+
+# Q1
+
+# Q2
+
+# Q3
+
+
+
+
+# Junk after this point; maybe can be cut into something
 
 # Question 1
 
@@ -1129,22 +1250,6 @@ formula + picture of transformed reference distributon
 ## Summary
 something
 
-
-## New Questions
-
-1. What's the typical difference in income between people with *exactly* 16 years of education
-   and *exactly* 12?
-    - This is a different question than the one we addressed in review, but it has a similar structure.
-    - We want a summary of income differences in two groups. Those can be subsamples or subpopulations.
-    - We can calculate and relate these summaries exactly like we did in review.
-2. What's the typical difference in income between people with 4-year degrees and people without them?
-    - That's exactly the question we talked about in review.
-    - We'll talk about how to calculate it a different way that'll generalize better to other questions.
-    - We can check our work. Obviously our answers should be exactly the same as we got earlier.
-3. How much change would we expect in a similar population in which people tend to get an additional year of education?
-    - This is a question unlike the ones we talked about earlier.
-    - We'll need to be a bit careful about what we mean.
-    - But once we've gotten there, we can base our calculations on the ones we did in the last question.
 
 ## Most of the Remainder
 We'll answer the questions
