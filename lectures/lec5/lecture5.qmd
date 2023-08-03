@@ -3,16 +3,13 @@ title: "Working with Non-Binary Covariates"
 subtitle: "QTM 220 Lecture 5"
 format: 
   clean-revealjs:
+    height: 1000
+    width: 1290
     theme: [default, "class.scss"]
     smaller: true
-    embed-resources: true
     slide-number: true
-    show-notes: separate-page
     pdf-separate-fragments: true
     fig-format: svg
-    fig.width: 10
-    fig.asp: 2
-    fig-align: left
     html-math-method: mathjax
     include-in-header: 
       text: |
@@ -21,6 +18,7 @@ format:
           loader: {load: ['[tex]/physics']},
           tex: {packages: {'[+]': ['physics']}}
           }
+    
         </script>
 knitr:
   opts_chunk:
@@ -227,13 +225,13 @@ $$
 
 ## Outline
 
-1. A quick review of the binary case including
+- A quick review of the binary case including
   - *descriptive statistics*: summaries of the data.
   - *inferential statistics*: summaries of a related population.
-2. Descriptive statistics in many-valued case.
-3. Inferential statistics in the many-valued case.
-    a. A more calculation-focused review of the binary case.
-    b. Generalizations for the many-valued case 
+- Descriptive statistics in many-valued case.
+- Inferential statistics in the many-valued case.
+    - A more calculation-focused review of the binary case.
+    - Generalizations for the many-valued case 
       - We'll do this as a set of in-class exercises.
       - I'll introduce techniques that'll make this straightforward.
       
@@ -380,8 +378,6 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, 
 
 ## Our Sample
 
- - We've looked at the raw data---the data without any summarization---in two ways.
-
 $$
 $$
 
@@ -389,7 +385,7 @@ $$
 
 ::: column
 
-### A Table
+### In a Table
 ```{r binary-table-in-columns}
 style.table = function(tab) {
   tab$income = sprintf('$%dk', round(tab$income / 1000))
@@ -400,16 +396,16 @@ style.table = function(tab) {
     row_spec(which(tab$degree!='4-year degree'), background=twocolor.red) 
 }
 
-style.table( earnings[, c('income', 'degree')] )
+style.table( earnings[1:12, c('income', 'degree')] )
 ```
 ::: 
 
 ::: column
 
-### A Scatter Plot
+### In a Scatter Plot
 
 ```{r binary-scatter-in-columns}
-#| fig.asp = .8
+#| out-size: 500px
 dot.size = 5
 earnings.scatter = ggplot(earnings) + 
   geom_point(aes(x=degree, y=income, color=degree), size=dot.size, alpha=.2) + 
@@ -475,7 +471,7 @@ style.table( earnings[random.rows, c('income', 'degree')] )
 
 - What does this table tell us about who makes more?  
     - Is it people [with]{.twocolor-green} or [without]{.twocolor-red} four year degrees?
-    - And roughly how much more do they tend to make?
+    - Roughly how much more do they tend to make?
 
 :::
 
@@ -496,6 +492,7 @@ style.table( earnings[random.rows, c('income', 'degree')] )
 
 ::: {.fragment .fade-out data-fragment-index="0"}
 ```{r binary-scatter-no-scaling}
+#| out-height: 300px
 dot.size = 5
 earnings.scatter = ggplot(earnings) + 
   geom_point(aes(x=degree, y=income, color=degree), size=dot.size, alpha=.2) + 
@@ -514,6 +511,7 @@ earnings.scatter
 
 ::: {.fragment .current-visible data-fragment-index="0"}
 ```{r binary-scatter-scaled}
+#| out-height: 300px
 earnings.scatter + scale_y_continuous(labels=label_dollar(), limits=c(0,3e5))  
 ```
 
@@ -526,6 +524,7 @@ earnings.scatter + scale_y_continuous(labels=label_dollar(), limits=c(0,3e5))
 
 ::: {.fragment .current-visible data-fragment-index="1"}
 ```{r binary-jittered}
+#| out-height: 300px
 earnings.scatter.jittered =  ggplot(earnings) + 
   geom_point(aes(x=degree, y=income, color=degree), 
              position=position_jitter(w=.2), size=dot.size, alpha=.2) + 
@@ -545,6 +544,7 @@ earnings.scatter.jittered + scale_y_continuous(labels=label_dollar(), limits=c(0
 ## Answering Questions using Scatter Plots
 
 ```{r binary-scatter-jitter-2}
+#| out-height: 300px
 earnings.scatter.jittered + scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) 
 ```
 
@@ -586,6 +586,8 @@ difference.in.means = as.numeric(summaries[summaries$degree=='4-year degree', 'm
 ## Mean and Standard Deviation
 
 ```{r binary-mean-sd-plot}
+#| out-height: 250px
+#| fig-asp: .3 
 earnings.scatter.jittered + 
   geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) +
   ylim(-1e5, 4e5)
@@ -650,6 +652,8 @@ earnings.scatter.jittered +
 ## Histograms
 
 ```{r}
+#| out-height: 300px
+#| fig-asp: .5 
 earnings.histogram = ggplot(earnings) + 
   geom_histogram(aes(x=income, y=after_stat(count/sum(count))), alpha=.5, binwidth=25000) + 
   coord_flip() + facet_wrap(~degree, strip.position='bottom') + aes(fill=degree) +
@@ -660,6 +664,8 @@ earnings.histogram = ggplot(earnings) +
 
 ::: {.fragment .fade-out data-fragment-index="0"}
 ```{r}
+#| out-height: 300px
+#| fig-asp: .5 
 earnings.histogram + scale_x_continuous(labels=label_dollar(), limits=c(0,3e5)) 
 ```
 
@@ -674,6 +680,8 @@ earnings.histogram + scale_x_continuous(labels=label_dollar(), limits=c(0,3e5))
 ::: {.fragment .current-visible data-fragment-index="0"}
 
 ```{r}
+#| out-height: 300px
+#| fig-asp: .5 
 earnings.histogram + scale_x_continuous(labels=label_dollar())
 ```
 
@@ -848,6 +856,7 @@ $$ \E\qty{ \hat \mu(\with) - \hat \mu(\without) } = \mu(\with) - \mu(\without)  
 - We can categorize people by the **years of education** they've had. 
 
 ```{r}
+#| out-height: 250px
 years = unique(earnings$education)
 ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
                               size=dot.size, position=position_jitter(w=.2), alpha=.2) +
@@ -947,6 +956,7 @@ education=case_match(cps.data$a_hga,
 ## Subsamples 
 
 ```{r}
+#| out-height: 250px
 years = unique(earnings$education)
 ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
                               size=dot.size, position=position_jitter(w=.2), alpha=.2) +
@@ -1003,6 +1013,7 @@ More for HW.
 ## Q1
 
 ```{r}
+#| out-height: 250px
 earnings$highest.degree = case_match(earnings$education,
                             0:11 ~ 'none',
                             12:13 ~ 'high school',
