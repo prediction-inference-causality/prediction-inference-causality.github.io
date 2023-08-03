@@ -7,10 +7,10 @@ class.theme = theme(plot.background = element_rect(fill = "transparent", colour 
                     legend.key = element_rect(fill="transparent", colour = NA),
 		    axis.ticks.x = element_blank(),
 		    axis.ticks.y = element_blank(),
-		    axis.text.x  = element_text(colour = "#dddddd"),
-		    axis.text.y  = element_text(colour = "#dddddd"),
-		    axis.title.x  = element_text(colour = "#dddddd"),
-		    axis.title.y  = element_text(colour = "#dddddd", angle=90)
+		    axis.text.x  = element_text(colour = "#aaaaaa"),
+		    axis.text.y  = element_text(colour = "#aaaaaa"),
+		    axis.title.x  = element_text(colour = "#aaaaaa"),
+		    axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
 )
 theme_set(class.theme)
 theme_update(axis.title.x  = element_blank(),

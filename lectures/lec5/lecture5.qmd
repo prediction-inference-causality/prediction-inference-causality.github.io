@@ -26,11 +26,9 @@ knitr:
     fig.path: generated-figures/
     dev.args:
       bg: transparent
-execute: 
-  cache: true
 ---
 
-```{r setup}
+```{r load-libraries}
 library(purrr)
 library(tibble)
 library(dplyr)
@@ -50,7 +48,9 @@ set.seed(1)
 compact_number = label_number(accuracy=.1, scale_cut=cut_short_scale())
 ```
 
-```{r data-setup}
+```{r get-data}
+#| cache: true
+#| 
 # for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
 census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
 
@@ -61,7 +61,9 @@ cps.data = map_dfr(years, function(year) {
 })
 ```
 
-```{r}
+```{r transform-data}
+#| cache: true
+#| 
 cps.sampling.ratio = 1/25000
 all.earnings = data.frame(state.code = cps.data$gestfips,
                           age=cps.data$a_age,
@@ -106,7 +108,10 @@ earnings$degree = factor(earnings$education >= 16,
                      labels=c('no 4-year degree','4-year degree')) 
 ```
 
-```{r}
+```{r make-maps}
+#| cache: true
+#| 
+
 # To give our survey recipients a bit more reality, we'll give them fake locations on a map
 # And we'll make up a population of California residents that they're sampled from
 
@@ -166,7 +171,10 @@ finite.population$group=1
 finite.population$degree = sample(earnings$degree, nrow(finite.population), replace=TRUE)
 
 # to go easy on ggplot, we won't really display everbody 
-display.population = sample_n(finite.population, 100000) 
+display.population = sample_n(finite.population, min(100000, nrow(finite.population)))
+```
+
+```{r make-sample}
 # and we'll force the degree-distribution in the sample to match our survey responses
 our.sample = sample_n(finite.population, nrow(earnings))
 our.sample$degree=earnings$degree
@@ -187,6 +195,7 @@ $$
 % so create commands for using those colors instead
 \newcommand{\inred}[1]{\textcolor[RGB]{248,118,109}{#1}}
 \newcommand{\ingreen}[1]{\textcolor[RGB]{0,191,196}{#1}}
+\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
 
 \newcommand{\ind}[1]{1_{\{#1\}}}
 \newcommand{\with}{\ingreen{\text{degree}}}
@@ -196,7 +205,7 @@ $$
 \DeclareMathOperator{\Var}{Var}
 $$ 
 
-```{r}
+```{r define-colors}
 twocolor.red   = 'rgb(248,118,109)'
 twocolor.green = 'rgb(0,191,196)'
 ```
@@ -246,7 +255,7 @@ This includes about `r compact_number(nrow(earnings) / cps.sampling.ratio)` peop
 
 
 
-```{r}
+```{r map-sample-and-finite-pop}
 #| layout-ncol: 2
 #| layout-valign: bottom
 sample.plot
@@ -280,7 +289,7 @@ We can think of the people in our finite population as a large number of indepen
 
 Our sample is a small number of these people, chosen randomly.
 
-```{r}
+```{r map-sample-and-infinite-pop}
 #| layout-ncol: 2
 #| layout-valign: bottom
 sample.plot
@@ -298,10 +307,10 @@ This *implies* that our sample is a smaller number of draws from the same infini
 
 Interpretation aside, we don't need the finite population at all.
 
-```{r}
+```{r map-sample-over-infinite-pop}
 #| layout-ncol: 2
 #| layout-valign: bottom
-sample.plot.inf + theme(legend.position="none")
+sample.plot.inf + guides(fill=FALSE)
 ca.pop.plot
 ```
 :::
@@ -348,174 +357,466 @@ Let's think about where the people in our infinite population tend to live.
 
 ::::
 
-```{r}
+```{r map-subsamples}
 #| layout-ncol: 2
 #| layout-valign: bottom
-ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, alpha=1) + 
-          theme(legend.position="none")
-ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, alpha=.01) + 
-          theme(legend.position="none")
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, alpha=1)  + guides(color=FALSE)
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, alpha=.01) + guides(color=FALSE)
 ```
 
-## What we really have
+## Our Sample
 
-- As an illustration, I've been drawing these people on a map.
-- But that's fake. We don't have their addresses. 
-- From here on, we'll focus on information we actually do have.
-- Start where we've been...acting as if binary...
+ - We've looked at the raw data---the data without any summarization---in two ways.
 
-Two ways of looking at everything 
-- Table, Scatter plot
-- Long; Compressed
-:::
-
-::::
-
-```{r}
-sample.plot
-```
-
-## A Tabular View
+$$
+$$
 
 :::: columns
 
 ::: column
 
-```{r}
-earnings.tab.rows = sample(1:nrow(earnings))[1:12]
-earnings.tab = earnings[earnings.tab.rows, c('income', 'degree')]
-earnings.tab$income = sprintf('$%dk', round(earnings.tab$income / 1000))
-rownames(earnings.tab) = NULL
-styled.tab = earnings.tab %>% 
-  kable() %>%
-  kable_styling() %>%
-  row_spec(which(earnings.tab$degree=='4-year degree'), background=twocolor.green) %>%
-  row_spec(which(earnings.tab$degree!='4-year degree'), background=twocolor.red) 
-styled.tab
+### A Table
+```{r binary-table-in-columns}
+style.table = function(tab) {
+  tab$income = sprintf('$%dk', round(tab$income / 1000))
+  rownames(tab) = NULL
+  kable(tab) %>%
+    kable_styling() %>%
+    row_spec(which(tab$degree=='4-year degree'), background=twocolor.green) %>%
+    row_spec(which(tab$degree!='4-year degree'), background=twocolor.red) 
+}
+
+style.table( earnings[, c('income', 'degree')] )
 ```
 ::: 
 
 ::: column
 
-- We can make a table including all `r nrow(earnings)`, but it'd be big.
-  - It'd be hard to look at it all at once.
-  - But it's easy to look at a small part of it.
-- I'm showing `r nrow(earnings.tab)` randomly-chosen people on the left. 
+### A Scatter Plot
 
+```{r binary-scatter-in-columns}
+#| fig.asp = .8
+dot.size = 5
+earnings.scatter = ggplot(earnings) + 
+  geom_point(aes(x=degree, y=income, color=degree), size=dot.size, alpha=.2) + 
+  scale_y_continuous(labels=label_dollar()) + guides(color=FALSE) + class.theme + xlab('') + class.theme
+earnings.scatter
+```
 
-What does this table tell us about who makes more?  \
-Is it people people [with]{.twocolor-green} or [without]{.twocolor-red} four year degrees?
-
-::: fragment
-- Most [with]{.twocolor-green} 4-year degrees make more than most [without]{.twocolor-red}. 
-- But not all of them. 
-
-
-We can get an idea of what's going on by looking at the table, \
-but it helps to use other visualizations that show all the data.
 :::
+
+
+::::
+
+::: {.notes}
+
+- Neither of these is a complete success.
+  - The table is huge, so you can't look at it all at once.
+  - The scatter plot is dense, so you can't see individual points.
+- But there are tricks to making them work.
+
+:::
+
+
+## Making Tables Usable
+
+:::: columns
+
+::: column
+
+```{r short-binary-table}
+random.rows = sample(1:nrow(earnings), 12)
+style.table( earnings[random.rows, c('income', 'degree')] )
+```
+
+:::
+
+::: column
+
+- The major downside of tables is that they're usually big. 
+  - It's hard to look at all `r nrow(earnings)` people at once.
+  - But it's easy to look at a small part of it.
+- I'm showing `r length(random.rows)` randomly-chosen people on the left. 
+  - This is less overwhelming so we can see something.
+  - But it is only a fraction of the data.
 
 :::
 
 ::::
 
+## Answering Questions by Looking at Tables
 
 
-## A Scatter Plot
+:::: columns
+
+::: column
+
+```{r short-binary-table-2}
+style.table( earnings[random.rows, c('income', 'degree')] )
+```
+
+:::
+
+::: column
+
+- What does this table tell us about who makes more?  
+    - Is it people [with]{.twocolor-green} or [without]{.twocolor-red} four year degrees?
+    - And roughly how much more do they tend to make?
+
+:::
+
+::::
+
+::: notes
+- Of the randomly-chosen people we're looking at, 
+  most [with 4-year degrees]{.twocolor-green} make more than most [without]{.twocolor-red}
+- But the incomes we're seeing are all over the place, so
+  - it's not clear that this holds up in the sample 
+  - it's hard to quantify the difference
+:::
+
+
+## Making Scatter Plots Usable
 
 :::: {.r-stack }
 
 ::: {.fragment .fade-out data-fragment-index="0"}
-```{r}
+```{r binary-scatter-no-scaling}
 dot.size = 5
 earnings.scatter = ggplot(earnings) + 
   geom_point(aes(x=degree, y=income, color=degree), size=dot.size, alpha=.2) + 
   scale_y_continuous(labels=label_dollar()) + 
-  theme(legend.position="none") 
+  guides(color=FALSE) + xlab('') + class.theme
 earnings.scatter
 ```
-- Here I've plotted one dot per person.
-- It's hard to see much because almost almost everyone is clustered at the bottom.
+
+- The major downside of scatter plots is that they can be dense.
+  - I've plotted one dot for each person. 
+  - They overlap to the point we can't see individual dots.
+- Part of problem is wasted space. Everyone is clustered at the bottom.
 - We can zoom in there, cutting off a few high-earners, to get a better look.
+
 :::
 
 ::: {.fragment .current-visible data-fragment-index="0"}
-```{r}
-earnings.scatter = ggplot(earnings) + 
-  geom_point(aes(x=degree, y=income, color=degree), size=dot.size, alpha=.2) + 
-  scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
-  theme(legend.position="none") 
-earnings.scatter
+```{r binary-scatter-scaled}
+earnings.scatter + scale_y_continuous(labels=label_dollar(), limits=c(0,3e5))  
 ```
-- This is better, but it's still hard to see much.
-- There are only two values of $X_i$, so the dots are all lying on top of one another. 
-- We can spread them out a little horizontally to get a better look. 
+
+- Now I've cut off people who make more than \$300k
+  - This is better, but the dots are still overlapping too much.
+- That's still a problem of wasted space, but now the problem is mostly horizontal.
+  - There are only two values of $X_i$, so we've got two vertical lines and a lot of blank space.
+  - We can spread them out a little horizontally to get a better look. 
 :::
 
 ::: {.fragment .current-visible data-fragment-index="1"}
-```{r}
-earnings.scatter = ggplot(earnings) + 
-  geom_point(aes(x=degree, y=income, color=degree), size=dot.size, position=position_jitter(w=.2), alpha=.2) + 
-  scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
-  theme(legend.position="none") 
-earnings.scatter
+```{r binary-jittered}
+earnings.scatter.jittered =  ggplot(earnings) + 
+  geom_point(aes(x=degree, y=income, color=degree), 
+             position=position_jitter(w=.2), size=dot.size, alpha=.2) + 
+  guides(color=FALSE) + xlab('') + class.theme
+earnings.scatter.jittered + scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) 
 ```
 
-- It's called *jittering.* There's no meaning to the horizontal spread. It's just to make space.
+- To use the horizontal space, we use a technique called *jittering*. 
+  - We just give the points some arbitrary horizontal spread.
+  - There's no meaning to it. It's just to use the space better.
 - Now it's easier to see where there are more dots and where there are less.
 - That can give you a rough sense of how much most people make.
 :::
 
 ::::
 
-## Descriptive Summarization
-  - Mean [plot on scatter plot]
-  - Standard Deviation [plot sd on scatter plot]
-  - Histogram
+## Answering Questions using Scatter Plots
 
-## A Histogram
-
-```{r}
-earnings.histogram = ggplot(earnings[earnings$income<3e5, ]) + 
-  geom_histogram(aes(x=income, y=after_stat(density)), alpha=.5, bins=15) + 
-  coord_flip() + facet_wrap(~degree, strip.position='bottom') + aes(fill=degree) + 
-  scale_x_continuous(labels=label_dollar()) + 
-  theme(legend.position="none", axis.text.x = element_blank()) 
-earnings.histogram
+```{r binary-scatter-jitter-2}
+earnings.scatter.jittered + scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) 
 ```
 
-- So far this semester, we've used histograms instead of jittered scatter plots.
-- In this histogram, the length of the bar at each income level  
-  shows the fraction of people that make roughly that much.
-- Compared to the scatter plot, we've traded dot density for bar length.
-  - You can see what most people make by looking for the peak. That's easier. 
-- But we'll be using scatter plots more going forward. 
-  - They work better when we have more values of the covariate $X_i$.
+
+- What does this plot tell us about who makes more?  
+  - Is it people [with]{.twocolor-green} or [without]{.twocolor-red} four year degrees?
+  - And roughly how much more do they make?
+
+::: notes
+- People [with 4-year degrees]{.twocolor-green} in the plot tend to make more than most [without]{.twocolor-red}. 
+  - Now we're looking at all but a couple people.
+  - So that's true about our sample as a whole.
+- And it looks like they make roughly \$50k more.
+  - Shifting up the dense cluster of [red dots]{.twocolor-red} by \$50k will
+    roughly align it with the dense cluster of [green ones]{.twocolor-green}.
+:::
 
 
-## Statistical Summarization
- - Point estimates
- - Interval Estimates [last week]
+## Sample Summaries
 
- ## Point Estimate Properties
- - Unbiased (not in itself interesting, but ...)
- - Convergent: sd $\propto 1/\sqrt{n}$ 
- - Approx normal 
- - Review in Detail Later
+```{r binary-mean-sd}
+summaries = earnings %>% 
+          group_by(degree) %>% 
+          summarize(mean=mean(income), sd=sd(income))
 
-## Interval Estimate Properties 
-  - Coverage
-  - More next time
+
+difference.in.means = as.numeric(summaries[summaries$degree=='4-year degree', 'mean'] - 
+                                 summaries[summaries$degree=='no 4-year degree', 'mean'])
+```
+
+- Looking at the raw data helps us get a sense of what's going on.
+- It's a good way to get rough answers to vague questions.
+- But when we want to describe a sample or subsample precisely, we use *summaries*.
+    - e.g., the mean and standard deviation
+    - e.g., a histogram
+- One way to pose the 'how much more' question precisely to ask for the difference in subsample means
+- It's \$`r compact_number(difference.in.means)`. That's close to our visual estimate of \$50k.
+
+## Mean and Standard Deviation
+
+```{r binary-mean-sd-plot}
+earnings.scatter.jittered + 
+  geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) +
+  ylim(-1e5, 4e5)
+```
+
+:::: {.r-stack}
+
+::: {.fragment .fade-out data-fragment-index="0"}
+### Means
+- The subsample means are location summaries. 
+  - They tell us where our subsamples are centered.
+$$
+\hat\mu(x) = \frac{1}{N_x} \sum_{i:X_i=x} Y_i \qfor N_x = \sum_{i:X_i=x} 1
+$$
+  - The black dots in our plot are these means.
+  - We've got one for $x=\with$ and another for $x=\without$.
+
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+### Standard Deviations
+- The subsample standard deviations are spread summaries. 
+  - They tell us how spread out our subsamples are.
+$$
+\hat\sigma(x) = \sqrt{ \frac{1}{N_x} \sum_{i: X_i=x}  \qty{ Y_i - \hat\mu(x) }^2 }  \qfor N_x = \sum_{i : X_i=x} 1
+$$
+  - It's the square root of the *mean squared distance* between the incomes in our subsample and their mean
+  - The black bars in our plot show one standard deviation above and below the mean
+  - We expect most of the incomes in our subsample to be within these bars.
+:::
+
+::::
+
+
+## Issues
+
+:::: columns
+
+::: column
+```{r binary-mean-sd-col}
+earnings.scatter.jittered + 
+  geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) +
+  ylim(-1e5, 4e5)
+```
+:::
+
+::: column
+```{r binary-mean-sd-col-tall}
+earnings.scatter.jittered + 
+  geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) 
+```
+:::
+
+::::
+
+- Means and standard deviations are strongly affected by extreme observations
+  - That's why the mean for [people with degrees]{.twocolor-green} is a bit
+    bigger than the typical value we estimated by eye.
+  - It's also why their standard deviation is so big.
+- There are many alternatives, but we'll mostly focus on one this semester: histograms.
+
+## Histograms
+
+```{r}
+earnings.histogram = ggplot(earnings) + 
+  geom_histogram(aes(x=income, y=after_stat(count/sum(count))), alpha=.5, binwidth=25000) + 
+  coord_flip() + facet_wrap(~degree, strip.position='bottom') + aes(fill=degree) +
+  guides(fill=FALSE) + scale_y_continuous(labels=label_percent()) + ylab('') + class.theme
+```
+
+:::: {.r-stack}
+
+::: {.fragment .fade-out data-fragment-index="0"}
+```{r}
+earnings.histogram + scale_x_continuous(labels=label_dollar(), limits=c(0,3e5)) 
+```
+
+- In these histograms, we show the fraction of people
+  that make roughly a given amount of money.
+- To be precise, we show the *subsample means*
+  of **indicators** for different income ranges.
+- The ranges we're using are $[0 \ldots 25k)$, $[25k \ldots 50k)$, $[50k \ldots 75k)$, etc.
+
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+
+```{r}
+earnings.histogram + scale_x_continuous(labels=label_dollar())
+```
+
+- What we get in one income range doesn't affect the others.
+- That means our summaries of incomes in most ranges aren't
+  affected by how much our high-income folks make.
+- We just weren't showing the high-income folks in our last plot.
+
+:::
+
+::::
+
+$$
+\begin{aligned}
+\text{frac}_{[a \ldots b)} &= \frac{1}{N_x}\sum_{i:X_i=x} 1_{[a \ldots b)}(Y_i) \qfor  1_{[a,b)}(y) = \begin{cases} 1 & \text{ if } a \leq y < b \\
+                             0 & \text{ otherwise } \end{cases}
+\end{aligned}
+$$
+
+
+## Population Summaries
+ 
+ - Often, what we want isn't a summary of our sample.  We want to summarize our population instead.
+    - e.g., we don't want the mean income of the [people with 4-year degrees]{.twocolor-green} on the left map---the ones we've actually surveyed. 
+    - We want to know the now the mean income of [people with 4-year degrees]{.twocolor-green} on the right map---who we mostly haven't.
+$$
+$$
+
+```{r map-subsamples-again}
+#| layout-ncol: 2
+#| layout-valign: bottom
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, alpha=1)  + guides(color=FALSE)
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, alpha=.01) + guides(color=FALSE)
+```
+
+ - We can't do this perfectly because we're trying to summarize data we don't have.
+ - But we can **estimate** these population summaries using our sample.
+
+ ## Something about finite vs infinite population summaries
+  - Why one is one an expectation and the other is a sum
+
+## Point and Interval Estimation 
+
+- We've covered two types of estimate in this class.
+  - A **point estimate** is a single number that we think is close to the population summary.
+  - An **interval estimate** is a range of numbers that we think contains the population summary.
+- We'll focus on point estimates today and interval estimates next class.
+
+
+## Subsample and Subpopulation Means 
+
+- We can think of *subsample means* as point estimates of the corresponding *subpopulation means*.
+- When we do this, we're thinking of our sample as a random draw from our population.
+- And sample summaries, like the subsample mean $\hat\mu(x)$, are random variables. 
+
+:::: columns
+
+::: column
+### Subsample Mean
+$$
+\hat\mu(x) = \frac{1}{N_x} \sum_{i:X_i=x} Y_i \qfor N_x = \sum_{i:X_i=x} 1
+$$
+:::
+
+::: column
+### (Infinite) Subpopulation Mean
+$$
+\mu(x) = \E[ Y_i \mid X_i = x]
+$$
+
+:::
+
+::::
+
+## Sampling Distributions
+
+- We can think of a sample summary as a random draw from its **sampling distribution**.
+- That's the distribution the summary would have if we were to draw the sample, over and over, from the population.
+  - i.e., if we were to send out the Current Population Survey many times
+  - each time randomly selecting the people who receive it survey the same way.
+- In real life, we usually can't do that. 
+  - That means we see only one draw from the sampling distribution.
+  - We can, however, try to *estimate the sampling distribution* using only our sample.
+- When we're simulating data, we can redraw our sample as many times as we like.
+  - That means we can see what the sampling distribution looks like.
+  - This allows us to check, to some degree, whether our estimates work.
+
+
+  
+## Sampling Distributions: A Picture
+### TODO 
+Sequence of histograms of some summary statistic
+  - Maybe show K samples as scatter plots w/ mean plotted
+  - And a histogram the K subsample means
+  - e.g. for K=9, 9^2 [we can do 3x3 and 9x9 displays of the sample]
+
+
+### Expectations
+
+- Because a sample summary is a random variable, it has a mean, standard deviation, etc.
+- These are the mean and standard deviation of a draw from the summary's sampling distribution.
+
+### TODO: illustrate this as an overlay on one of the sampling distribution pictures
+
+## Subsample Means as Point Estimators
+  - They are unbiased, i.e., their expectation is what we're trying to estimate.
+  $$
+  \E \hat\mu(x) = \mu(x)
+  $$
+  - They are convergent, i.e., they get closer to that expectation as the sample gets bigger.
+    - In particular, their standard deviations are proportional to the inverse square root of the sample size.
+  $$
+  \sqrt{\Var \hat\mu(x)} = \E \frac{ \Var[Y_i \mid X_i=x] }{\sqrt{N_x}} 
+ $$ 
+ - They are approximately normal, i.e., their sampling distribution is close to normal for large samples.
+   - This is a consequence of the central limit theorem.
+   - It's a good thing because it lets us base **interval estimates** on these normal approximations.
+
+---
+# Maybe use this stuff in the next class
+# 
+### Interval Estimates
+#
+#  - Estimate of where the pop summary is that accounts for uncertainty
+#  - Based on the sampling distribution of our estimator
+#  - Intention: in 95/100 replications, the interval estimate contains the pop summary
+#  - Coverage: the fraction of replications where the interval estimate actually does contain
+#  - We'll focus on point estimation today and interval estimation next class
+---
+
+
+## Comparing Means
+- TODO: FINISH SLIDEE
+- Just like we've subtracted one
+- To We can use subsample means to compare subpopulations.
+- interval estimation based on sampling dist of comparison...
+- unbiasedness; approx independence; normal approx
+- Differences of normals: subtract the means; add the variances. 
+
+## Limitations of what we've done
+  - TODO: FINISH SLIDEE
+  - We've done a fairly complete story of the relationship between income and education
+    - Descriptive: Sample summaries
+    - Inferential: Population summaries
+  - But we've based all of this on very coarse idea of education
+    - We've just asked whether people have a 4-year degree or not
+  - This means there are really only a couple questions to answer
+    1. How much/how much different
+    2. How spread out
+  - We can say much more if we think of education as being many-valued
+    - e.g. 0 years, 1 year, 2 years, ... 20 years of education.
+    - there are many more questions we can ask when we do that
+  - That's what we'll do now.
+
+# Beyond Binary Comparisons
 
 ## 
-
-
-
-
-
-
-## Beyond Binary Comparisons
-
 - Using two categories is throwing away a lot of information about education. \
 - We can, for example, categorize people by the **years of education** they've had. 
 
@@ -525,7 +826,7 @@ ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree),
                               size=dot.size, position=position_jitter(w=.2), alpha=.2) +
                    scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
                    scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
-                   theme(legend.position="none")
+                   guides(color=FALSE)
 ```
 
 :::: {.r-stack}
@@ -574,13 +875,11 @@ people with more education tend to make more money.
 - And it does, more or less, so we can make a table like this.
 
 ```{r}
-earnings.tab$education = sprintf('%d years', earnings$education[earnings.tab.rows])
-earnings.tab %>% 
-  kable() %>%
-  kable_styling() %>%
-  row_spec(which(earnings.tab$degree=='4-year degree'), background=twocolor.green) %>%
-  row_spec(which(earnings.tab$degree!='4-year degree'), background=twocolor.red)
+earnings.tab = earnings
+earnings.tab$education = sprintf('%d years', earnings$education)
+style.table( earnings.tab[random.rows,  c('income', 'degree', 'education')] )
 ```
+
 - The survey doesn't ask exactly this *how many years* question.
 - It takes a little pre-processing to get this.
 
@@ -626,7 +925,7 @@ ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree),
                               size=dot.size, position=position_jitter(w=.2), alpha=.2) +
                    scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
                    scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
-                   theme(legend.position="none")
+                   guides(color=FALSE)
 
 ```
 
@@ -647,7 +946,7 @@ ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree),
      - This is a coarser breakdown. They're *aggregates*.
      - To get these, we combine our finer subsamples.
 - People whose highest degree is graduate, 4-year,  2-year, high-school, or none.
-      - That's in between. It's a finer aggregate.
+     - That's in between. It's a finer aggregate.
 
 :::
 
@@ -677,8 +976,8 @@ Taking this more granular view of education allows us to pose new questions.
     - This is a question unlike the ones we talked about earlier.
     - We'll need to be a bit careful about what we mean.
     - But once we've gotten there, we can base our calculations on the ones we did in the last question.
-4. Homework
-    - Grad vs Ugrad
+
+More for HW.
 
 # Descriptive analysis
 
@@ -700,7 +999,7 @@ base.plot = ggplot(earnings) + geom_point(aes(x=education, y=income, color=degre
                               size=dot.size, position=position_jitter(w=.2), alpha=.2) +
                    scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
                    scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
-                   theme(legend.position="none")
+                   guides(color=FALSE)
 
 base.plot + geom_segment(aes(x=education-.2, xend=education+.2, y=mean.income, yend=mean.income), data=fine)
 ```
@@ -720,26 +1019,353 @@ base.plot + geom_segment(aes(x=lb-.2, xend=ub+.2, y=mean.income, yend=mean.incom
 
 - some kind of picture showing jumps
 
-# Population analyis: Review
 
-## Unbiasedness Subsample and subpopulation means
 
-- A reasonable starting point for describing income in a subsample is its mean income.
-  - We'll think about the subsample with $X_i=x$ for some value $x$, 
+# Preparation for Inferential Analysis
+
+## Review of Calculation Techniques
+
+- All of our questions are comparisons, so the closest we've come is the comparison we did in the binary case.
+- We'll review what happens when we estimate the difference in population means by the difference in sample means.
+- In particular, we'll calculate an approximation that estimator's sampling distribution.
+  - We'll start by showing that it's unbiased.
+  - Then we'll calculate its variance.
+  - We'll wave our hands about normality.
+
+## Unbiasedness of subsample means
+- We'll start by showing that a subsample's mean is an unbiased estimate of the corresponding subpopulation mean.
+  - We'll think about the subsample and subpopulation with $X_i=x$ for some value $x$ 
   - e.g. $X_i=\with$ for people with 4-year degrees.
-- We can think of our subsample's  mean as an estimate of the mean of the corresponding finite subpopulation.
+- That means its expectation *is* the subpopulation mean. 
+- We can think of our subsample mean as an estimate of the mean of the corresponding *finite subpopulation*.
 - But we'll focus on interpreting it as an estimate of the mean of the *infinite subpopulation* from which they're both drawn.
 $$
 \begin{aligned}
-\hat\mu(x) &= \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i \quad \text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) && \text{subsample mean} \\
+\hat\mu(x) &= \frac{1}{N_x} \sum_{i:X_i=x} Y_i \quad \text{ for } \quad N_x = \sum_{i:X_i=x} 1  && \text{subsample mean} \\
 \mu(x) &= \E[Y_i \mid X_i=x] && \text{infinite subpopulation mean} \\
 \end{aligned}
 $$
 
-- The subsample mean is an *unbiased estimate* of the subpopulation mean. 
-- That means its expectation *is* the subpopulation mean: $\E \hat\mu(x) = \mu(x)$ 
-- As a warm up exercise, we'll prove it
-- We'll start by reviewing a few things from probability.
+## Proof Prep: Notation and Speaking Conventions
+  
+  - We'll use capitals for random variables and lower case for nonrandom ones
+    - e.g. we'll use $X$ for the random variable and $x$ for a value it can take on.
+    - and  we'll say **big x** and **little x** to distinguish between the two.
+    - same deal for $Y$ and $y$, \ $Z$ and $z$, etc.
+  - When describing a random sample, we'll use $X_i$ for the $i$th person's value of $X$.
+    - and we'll say **big x i** if we need to be precise. 
+    - but we'll usually just say **big x** and assume you know what we mean.
+   - This gives us a two ways to pronounce $X_i = x$ 
+      - **big x i equals little x** is the precise one.
+      - **big x equals little x** is the usual one.
+   
+
+## Proof Prep: Thinking clearly about conditioning
+
+- It's important to distinguish between two things
+  1.  The *conditional expectation function* $\mu(x)=\E[Y \mid X=x]$.
+    - $\mu$ is a function; evaluated at $x$, it's a number. It's not random.
+    - It's the mean of the infinite subpopulation of people with $X=x$.
+    - This is the thing we're trying to estimate with $\hat\mu(x)$.
+  2.  The conditional expectation $\mu(X)=E[Y \mid X]$.
+    - $\mu(X)$ is the mean of a *random* infinite subpopulation of people.
+    - It's the conditional expectation function *evaluated at* the random variable $X$.
+    - This is the sort of thing that shows up when we use the law of iterated expectations.
+- Let's do an easy calculation to try to make this clear. 
+- We'll calculate the mean income in our population using the law of iterated expectations. 
+
+## Example: Conditioning
+  
+  - Let's think about a random person drawn from this population
+    - $Y$ is their income 
+    - $X$ is an indicator for having a four-year degree. 
+  - Suppose the subpopulation means are [100k]{.twocolor-green} for people with degrees 
+    and [50k]{.twocolor-red} for people without.
+  - And that 7/10 of our population has degrees.
+  
+  What is $\E(Y \mid X)$?
+
+::: fragment
+
+  - It's a random variable that is *either* 100k or 50k. A *random value* of the function $\mu$.
+    - It's [$\mu(\with)=100k$]{.twocolor-green} with probability $7/10$,   when $X=\with$. 
+    - And it's [$\mu(\without)=50k$]{.twocolor-red} with probability $3/10$, when $X=\without$.
+:::
+
+What is $\E(Y)$?
+
+::: fragment
+
+  - It's the mean of this random variable. A number.
+$$
+\begin{aligned} 
+E\qty{ E\qty( Y \mid X ) } 
+&= E(Y \mid X=\with)P(X=\with) + E(Y \mid X=\without)P(X=\without) \\
+&= 100k \cdot 7/10 + 50k \cdot 3/10 = 70k + 15k = 85k.
+\end{aligned}
+$$
+
+:::
+
+## Unbiasedness Proof
+### Step 1
+
+- Rewrite so we're summing over the whole sample.
+- To do this, we use subsample indicators $1_x(X_i)$.
+- These are random variables that are 
+  - 1 if the person is in the subsample 
+  - 0 otherwise.
+$$
+\begin{aligned}
+\hat\mu(x) 
+&= \frac{1}{N_x} \sum_{i:X_i=x} Y_i               &&\text{ for } \quad N_x = \sum_{i:X_i=x} 1  \\
+&= \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ Y_i   &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) 
+\end{aligned}
+$$
+
+
+### Indicators
+:::: {.r-stack}
+
+::: {.fragment .fade-out data-fragment-index="0"}
+$$
+\ind{x}(X_i) = \begin{cases} 1 & \text{ if }  X_i = x \\
+                             0 & \text{ otherwise } \end{cases}
+$$
+
+:::
+
+::::
+
+## Unbiasedness Proof 
+### Step 2
+
+- Rewrite in terms of an expectation that's conditional on our covariates.
+- The law of iterated expectations tells us we can.
+$$
+\begin{aligned}
+\E \hat\mu(x) 
+&= \E\qty[\frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ Y_i] \quad &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) \\
+&= \E\qty[ \inblue{\E\qty{ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ Y_i  \mid X_1 \ldots X_n}} ] 
+\end{aligned}
+$$
+
+### The law of iterated expectations
+$$
+\E Y = \E\qty[ \E\qty{ Y \mid X  } ] 
+$$
+To calculate the mean of $Y$, we can 
+  - first average within subpopulations
+  - then across subpopulations.
+
+## Unbiasedness Proof
+### Step 3
+
+- Move the conditional expectation inward. It's linear, so we can.
+- We can go all the way in to $Y_i$. Everything else is a function of the covariates.
+$$
+\begin{aligned}
+\E \hat\mu(x) 
+&= \E\qty[ \inblue{\E \qty{ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ Y_i  \mid X_1 \ldots X_n}}  ]  &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) \\
+&= \E\qty[ \frac{1}{N_x} \inblue{\E\qty{ \sum_{i=1}^n \ind{x}(X_i)\ Y_i \mid X_1 \ldots X_n }} ]  \\
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \inblue{\E\qty{ \ind{x}(X_i)\ Y_i \mid X_1 \ldots X_n }} ]  \\
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\E\qty{ Y_i \mid X_1 \ldots X_n }} ]  
+\end{aligned}
+$$
+
+:::: columns
+::: column
+### Linearity of expectations
+$$ 
+\begin{aligned}
+\E\qty( a Y + b Z ) 
+&= \E\qty(aY) + \E\qty(bZ) \\
+&= a\E(Y) + b\E(Z)  
+\end{aligned}
+$$
+
+:::
+
+::: column
+
+### Linearity of *conditional* expectations
+$$ 
+\begin{aligned}
+\E\qty{ a(X) Y + b(X) Z \mid X } 
+&= \E\qty{a(X)Y \mid X} + \E\qty{ b(X)Z \mid X} \\
+&= a(X)\E\qty(Y \mid X) + b(X)\E\qty(Z \mid X)
+\end{aligned}
+$$
+
+:::
+
+::::
+
+::: notes
+
+  - Linearity tells us two things.
+    - To average a sum of two things, we can take two averages and sum.
+    - To average a constant times a random variable, we can multiply the random variable's average by the constant.
+    - In other words, we can *distribute* expectations and can pull constants out of them.
+  - Conditional linearity tells us the same thing, but with a twist.
+    - When we condition on $X$, we're working with subpopulations in which $X$ is constant.
+    - This means we can we can act as if functions of $X$ *are* constants.
+    - So we can pull them out of expectations that are conditional on $X$.
+    
+:::
+
+
+## Unbiasedness Proof
+### Step 4
+
+- Stop conditioning one person's outcome on *other people's covariates*. 
+- They're independent, so we can. And the result is familiar. 
+- We get each person's conditional mean outcome $\mu(X_i)$
+$$
+\begin{aligned}
+\E \hat\mu(x) 
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\E\qty{ Y_i \mid X_1 \ldots X_n }} ]  &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i)  \\
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\E\qty{ Y_i \mid X_i}} ] \\ 
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\mu(X_i)} ]  
+\end{aligned}
+$$
+
+### Irrelevance of independent conditioning variables
+$$ \E \qty( Y \mid X, X' ) = \E \qty( Y \mid X ) \quad \text{ when $X'$ is independent of $X,Y$ } $$
+If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the relationship between them.
+
+
+## Unbiasedness Proof
+### Step 5
+
+- It's the *random function value* $\mu(X_i)$.
+- We now replace with the fixed function value $\mu(x)$
+- We can because it's multiplied by an *indicator* that's nonzero only when $X_i=x$.
+$$
+\begin{aligned}
+\E \hat\mu(x) 
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\mu(X_i)} ]  &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i)  \\ 
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\mu(x)} ]  
+\end{aligned}
+$$
+
+### The Indicator Trick
+$$
+\begin{aligned}
+\ind{x}(X_i)\ \mu(X_i) & \ \ = \ \ 
+\begin{cases} 
+\mu(X_i) & \text{ when } X_i=x \\
+0 &      \text{ otherwise}
+\end{cases} \\
+& \ \ = \ \ 
+\begin{cases}
+\mu(x)  & \ \ \text{ when } X_i=x \\
+0       & \ \ \text{ otherwise }
+\end{cases} 
+\ \ = \ \ \ind{x}(X_i) \ \mu(x)
+\end{aligned}
+$$
+
+
+
+## Unbiasedness Proof
+### Step 6
+
+- We conclude by pulling the constant $\mu(x)$ out of the expectation.
+- We can because expectations are linear.
+- What's left inside is $1/N_x$ times $N_x$, i.e., 1.
+
+$$
+\begin{aligned}
+\E \hat\mu(x) 
+&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \ \inblue{\mu(x)} ]   &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) \\
+&= \inblue{\mu(x)} \ \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) ]  \\
+&= \inblue{\mu(x)} \ \E[1] = \inblue{\mu(x)}. 
+\end{aligned}
+$$
+
+### Linearity of Expectations
+$$ 
+\begin{aligned}
+\E\qty( a Y + b Z ) 
+&= \E\qty(aY) + \E\qty(bZ) \\
+&= a\E(Y) + b\E(Z)  
+\end{aligned}
+$$
+
+
+## Proof
+### Summary
+$$
+{\tiny
+\begin{aligned}
+\E \hat\mu(x) =& \E\qty{\frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i}  \\
+\underset{iterated}{=}& \E\qty[ \E\qty{ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ] \\
+\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \E\qty{ \sum_{i=1}^n \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ]  \\ 
+\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \E\qty{ \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ]  \\ 
+\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \E\qty{ Y_i \mid X_1 \ldots X_n} ]  \\
+\underset{irrelevance}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \E\qty{Y_i \mid X_i} ] \\
+\underset{definition}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \mu(X_i) ]  \\
+\underset{indicator}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \mu(x) ] \\   
+\underset{linearity}{=}& \mu(x) \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) ]   \\
+\underset{definition}{=}& \mu(x) \E\qty[ \frac{1}{N_x} N_{x}    ] = \mu(x)\E[ 1 ] = \mu(x)   
+\end{aligned}
+}
+$$
+
+## Remark: Indicator Notation
+
+- In this proof we used an *indicator* that $X_i$ was equal to $x$.
+- This is a special case of a more general concept: *indicators* that $X_i$ is *in a set*.
+  - In this special case, our set $\{x\}$ contained one element: $x$.
+  - We've used another one, in which our set was an interval $[a \ldots b)$, when we talked about histograms.
+- We can think of these as *indicator functions* evaluated at the random variable $X_i$.
+$$
+\begin{aligned}
+1_{A}(X) &= \begin{cases} 1 & \text{ if } \ X \in A \\
+                             0 & \text{ otherwise } \end{cases} && \text{general case} \\
+\ind{x}(X) &= \begin{cases} 1 & \text{ if }\  X = x \\
+                             0 & \text{ otherwise } \end{cases} && \text{one-element case} \\
+1_{[a \ldots b)}(X) &= \begin{cases} 1 & \text{ if }\  a \le X < b \\
+                             0 & \text{ otherwise } \end{cases} && \text{interval case} 
+\end{aligned}
+$$
+
+
+
+## Remark: Indicator Expansion
+
+- It's useful to generalize the *indicator trick* we've used in our proof.
+- We can expand a function of a random variable $X$ as a sum of 
+  - the value it takes at every distinct value of $X$
+  - times an indicator that $X$ takes on that value
+$$
+f(X) = f(a) \ \ind{a}(X) + f(b) \ \ind{b}(X) + f(c) \ \ind{c}(X) + \ldots \qfor a\neq b \neq c \ldots.
+$$
+
+- In our proof, we used this for the function $\mu$.
+- The subsample indicator $1_{x}(X_i)$ *picked out* one term in the expansion.
+$$ 
+\begin{aligned}
+\ind{x}(X_i) \mu(X_i) &= \inblue{\ind{x}(X_i)} \sum_{x'} \inblue{\ind{x'}(X_i)} \ \mu(x') \\
+                      &= \sum_{x'} \inblue{\ind{x}(X_i)\ind{x'}(X_i) }\ \mu(x') \\
+                      &= \sum_{x'} \mu(x') \inblue{\begin{cases} 1 & \text{ if } X_i=x' \text{ and } X_i=x \\
+                                                                 0 & \text{ otherwise } \end{cases}} \\
+                      &= \mu(x)  
+\end{aligned}
+$$
+
+
+::: notes
+It's easy to check this equivalence. 
+
+  - When $X=a$, the expansion's first indicator 'hits' and the others don't. 
+  - That means the expanded version is $f(a)$. That's right.
+  - It's the same for $b,c,\ldots$.
+:::
+
+
+# Below here is old
 
 ##  Properties of Population Means: Conditioning
 
@@ -832,7 +1458,7 @@ $$
 :::
 
 
-## Exercise: Unbiasedness of the sample mean
+Unbiasedness of the sample mean
 $$
 \begin{aligned}
 \text{Prove } \ \E \hat\mu(x) &= \mu(x) \qquad \text{ where } \\
@@ -867,54 +1493,9 @@ $$
 
 
 
-::: {.notes}
-$$
-{\tiny
-\begin{aligned}
-\E \hat\mu(x) =& \E\qty{\frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i}  \\
-\underset{iterated}{=}& \E\qty[ \E\qty{ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ] \\
-\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \E\qty{ \sum_{i=1}^n \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ]  \\ 
-\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \E\qty{ \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ]  \\ 
-\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \E\qty{ Y_i \mid X_1 \ldots X_n} ]  \\
-\underset{irrelevance}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \E\qty{Y_i \mid X_i} ] \\
-\underset{definition}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \mu(X_i) ]  \\
-\underset{hint}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \mu(x) ] \\   
-\underset{linearity}{=}& \mu(x) \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) ]   \\
-\underset{definition}{=}& \mu(x) \E\qty[ \frac{1}{N_x} N_{x}    ] = \mu(x)\E[ 1 ] = \mu(x)   
-\end{aligned}
-}
-$$
 
+## Variance ...
 
-
-## The Indicator Trick in General
-
-- It's useful to generalize the *indicator trick* we've just used.
-- We can expand a function of a random variable $X$ as a sum of 
-  - the value it takes at every distinct value of $X$
-  - times an indicator that $X$ takes on that value
-$$
-f(X) = f(a) \ind{a}(X) + f(b) \ind{b}(X) + f(c) \ind{c}(X) + \ldots \qfor a\neq b \neq c \ldots.
-$$
-
-- In our exercise, we essentially used this for the function $\mu$.
-- Multiplying by the indicator $1_{x}(X_i)$ *picked out* one term in the expansion.
-$$ 
-\begin{aligned}
-\ind{x}(X_i) \mu(X_i) &= \ind{x}(X_i) \sum_{x'} \ind{x'}(X_i) \mu(x') \\
-                      &= \sum_{x'} \ind{x}(X_i)\ind{x'}(X_i) \mu(x') = \mu(x) 
-\end{aligned}
-$$
-- We'll be using this later on. 
-- Sometimes we'll multiply nu an indicator that picks out multiple terms.
-
-
-::: notes
-It's easy to check this equivalence. 
-  - When $X=a$, the expansion's first indicator 'hits' and the others don't. 
-  - That means the expanded version is $f(a)$. That's right.
-  - It's the same for $b,c,\ldots$.
-:::
 
 # Q1
 
