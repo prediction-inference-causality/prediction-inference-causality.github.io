@@ -3,15 +3,13 @@ title: "Working with Non-Binary Covariates"
 subtitle: "QTM 220 Lecture 5"
 format: 
   clean-revealjs:
+    height: 1000
+    width: 1290
     theme: [default, "class.scss"]
     smaller: true
     slide-number: true
-    show-notes: separate-page
     pdf-separate-fragments: true
     fig-format: svg
-    fig.width: 10
-    fig.asp: 2
-    fig-align: left
     html-math-method: mathjax
     include-in-header: 
       text: |
@@ -20,6 +18,7 @@ format:
           loader: {load: ['[tex]/physics']},
           tex: {packages: {'[+]': ['physics']}}
           }
+    
         </script>
 knitr:
   opts_chunk:
@@ -185,7 +184,7 @@ pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.populat
 sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, color='red',    alpha=1)
 ```
 
-## Overview
+## Summary
 
 ::: {.hidden}
 $$
@@ -221,10 +220,23 @@ X_i = \begin{cases}
   \without & \text{ otherwise }
   \end{cases}
 $$
-- Today, we'll talk about summaries based on a *non-binary covariate*
+- Today, we'll talk about summaries based on a *many-valued covariate*
 - We'll categorize people by the years of education they've had
 
-# Review
+## Outline
+
+- A quick review of the binary case including
+  - *descriptive statistics*: summaries of the data.
+  - *inferential statistics*: summaries of a related population.
+- Descriptive statistics in many-valued case.
+- Inferential statistics in the many-valued case.
+    - A more calculation-focused review of the binary case.
+    - Generalizations for the many-valued case 
+      - We'll do this as a set of in-class exercises.
+      - I'll introduce techniques that'll make this straightforward.
+      
+
+# A Quick Review
 
 ## 
 
@@ -366,8 +378,6 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, 
 
 ## Our Sample
 
- - We've looked at the raw data---the data without any summarization---in two ways.
-
 $$
 $$
 
@@ -375,7 +385,7 @@ $$
 
 ::: column
 
-### A Table
+### In a Table
 ```{r binary-table-in-columns}
 style.table = function(tab) {
   tab$income = sprintf('$%dk', round(tab$income / 1000))
@@ -386,16 +396,16 @@ style.table = function(tab) {
     row_spec(which(tab$degree!='4-year degree'), background=twocolor.red) 
 }
 
-style.table( earnings[, c('income', 'degree')] )
+style.table( earnings[1:12, c('income', 'degree')] )
 ```
 ::: 
 
 ::: column
 
-### A Scatter Plot
+### In a Scatter Plot
 
 ```{r binary-scatter-in-columns}
-#| fig.asp = .8
+#| out-size: 500px
 dot.size = 5
 earnings.scatter = ggplot(earnings) + 
   geom_point(aes(x=degree, y=income, color=degree), size=dot.size, alpha=.2) + 
@@ -461,7 +471,7 @@ style.table( earnings[random.rows, c('income', 'degree')] )
 
 - What does this table tell us about who makes more?  
     - Is it people [with]{.twocolor-green} or [without]{.twocolor-red} four year degrees?
-    - And roughly how much more do they tend to make?
+    - Roughly how much more do they tend to make?
 
 :::
 
@@ -482,6 +492,7 @@ style.table( earnings[random.rows, c('income', 'degree')] )
 
 ::: {.fragment .fade-out data-fragment-index="0"}
 ```{r binary-scatter-no-scaling}
+#| out-height: 300px
 dot.size = 5
 earnings.scatter = ggplot(earnings) + 
   geom_point(aes(x=degree, y=income, color=degree), size=dot.size, alpha=.2) + 
@@ -500,6 +511,7 @@ earnings.scatter
 
 ::: {.fragment .current-visible data-fragment-index="0"}
 ```{r binary-scatter-scaled}
+#| out-height: 300px
 earnings.scatter + scale_y_continuous(labels=label_dollar(), limits=c(0,3e5))  
 ```
 
@@ -512,6 +524,7 @@ earnings.scatter + scale_y_continuous(labels=label_dollar(), limits=c(0,3e5))
 
 ::: {.fragment .current-visible data-fragment-index="1"}
 ```{r binary-jittered}
+#| out-height: 300px
 earnings.scatter.jittered =  ggplot(earnings) + 
   geom_point(aes(x=degree, y=income, color=degree), 
              position=position_jitter(w=.2), size=dot.size, alpha=.2) + 
@@ -531,6 +544,7 @@ earnings.scatter.jittered + scale_y_continuous(labels=label_dollar(), limits=c(0
 ## Answering Questions using Scatter Plots
 
 ```{r binary-scatter-jitter-2}
+#| out-height: 300px
 earnings.scatter.jittered + scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) 
 ```
 
@@ -549,7 +563,7 @@ earnings.scatter.jittered + scale_y_continuous(labels=label_dollar(), limits=c(0
 :::
 
 
-## Sample Summaries
+## Summary Statistics
 
 ```{r binary-mean-sd}
 summaries = earnings %>% 
@@ -563,7 +577,7 @@ difference.in.means = as.numeric(summaries[summaries$degree=='4-year degree', 'm
 
 - Looking at the raw data helps us get a sense of what's going on.
 - It's a good way to get rough answers to vague questions.
-- But when we want to describe a sample or subsample precisely, we use *summaries*.
+- But when we want to describe a sample or subsample precisely, we use *summary statistics*.
     - e.g., the mean and standard deviation
     - e.g., a histogram
 - One way to pose the 'how much more' question precisely to ask for the difference in subsample means
@@ -572,6 +586,8 @@ difference.in.means = as.numeric(summaries[summaries$degree=='4-year degree', 'm
 ## Mean and Standard Deviation
 
 ```{r binary-mean-sd-plot}
+#| out-height: 250px
+#| fig-asp: .3 
 earnings.scatter.jittered + 
   geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) +
   ylim(-1e5, 4e5)
@@ -636,6 +652,8 @@ earnings.scatter.jittered +
 ## Histograms
 
 ```{r}
+#| out-height: 300px
+#| fig-asp: .5 
 earnings.histogram = ggplot(earnings) + 
   geom_histogram(aes(x=income, y=after_stat(count/sum(count))), alpha=.5, binwidth=25000) + 
   coord_flip() + facet_wrap(~degree, strip.position='bottom') + aes(fill=degree) +
@@ -646,6 +664,8 @@ earnings.histogram = ggplot(earnings) +
 
 ::: {.fragment .fade-out data-fragment-index="0"}
 ```{r}
+#| out-height: 300px
+#| fig-asp: .5 
 earnings.histogram + scale_x_continuous(labels=label_dollar(), limits=c(0,3e5)) 
 ```
 
@@ -660,6 +680,8 @@ earnings.histogram + scale_x_continuous(labels=label_dollar(), limits=c(0,3e5))
 ::: {.fragment .current-visible data-fragment-index="0"}
 
 ```{r}
+#| out-height: 300px
+#| fig-asp: .5 
 earnings.histogram + scale_x_continuous(labels=label_dollar())
 ```
 
@@ -698,8 +720,16 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, 
  - We can't do this perfectly because we're trying to summarize data we don't have.
  - But we can **estimate** these population summaries using our sample.
 
- ## Something about finite vs infinite population summaries
-  - Why one is one an expectation and the other is a sum
+## Maybe something about finite vs infinite population summaries
+  - maybe to clarify why they look different
+    - one would look like a bigger sample average
+    - the other one is going to be an expectation
+  - perhaps say something about what makes the infinite population model convenient
+    - identical distribution lets us think of every observation as (distributionally) the same
+    - that makes it easier to summarize the population
+    - e.g. there is a function $\mu(x)=\E[Y_i \mid X_i=x]$ that doesn't depend on $i$.
+  - probably less that that, though
+
 
 ## Point and Interval Estimation 
 
@@ -713,7 +743,9 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, 
 
 - We can think of *subsample means* as point estimates of the corresponding *subpopulation means*.
 - When we do this, we're thinking of our sample as a random draw from our population.
-- And sample summaries, like the subsample mean $\hat\mu(x)$, are random variables. 
+- This means that summary statistics, like the subsample mean $\hat\mu(x)$, are random variables. 
+  - Why? It means the observations in our sample are random variables.
+  - And anything we calculate in terms of random variables is itself a random variable.
 
 :::: columns
 
@@ -736,8 +768,9 @@ $$
 
 ## Sampling Distributions
 
-- We can think of a sample summary as a random draw from its **sampling distribution**.
-- That's the distribution the summary would have if we were to draw the sample, over and over, from the population.
+- A summary statistic, like all random variables, has a distribution.
+- We call this its **sampling distribution**.
+- That's the distribution the summary would have if we were to redraw the sample, over and over, from the population.
   - i.e., if we were to send out the Current Population Survey many times
   - each time randomly selecting the people who receive it survey the same way.
 - In real life, we usually can't do that. 
@@ -759,10 +792,11 @@ Sequence of histograms of some summary statistic
 
 ### Expectations
 
-- Because a sample summary is a random variable, it has a mean, standard deviation, etc.
+- Because a summary statistics is a random variable, it has a mean, standard deviation, etc.
 - These are the mean and standard deviation of a draw from the summary's sampling distribution.
 
 ### TODO: illustrate this as an overlay on one of the sampling distribution pictures
+
 
 ## Subsample Means as Point Estimators
   - They are unbiased, i.e., their expectation is what we're trying to estimate.
@@ -772,7 +806,9 @@ Sequence of histograms of some summary statistic
   - They are convergent, i.e., they get closer to that expectation as the sample gets bigger.
     - In particular, their standard deviations are proportional to the inverse square root of the sample size.
   $$
-  \sqrt{\Var \hat\mu(x)} = \E \frac{ \Var[Y_i \mid X_i=x] }{\sqrt{N_x}} 
+  \begin{aligned}
+  \sqrt{\Var \hat\mu(x)} = \E\qty{ \frac{ \sigma^2(x) }{\sqrt{N_x}} } \qfor \sigma^2(x) &= \Var(Y_i \mid X_i=x) %\\ &= \E \qty[ \qty{ Y_i - \mu(x) }^2 \mid X_i=x] 
+  \end{aligned}
  $$ 
  - They are approximately normal, i.e., their sampling distribution is close to normal for large samples.
    - This is a consequence of the central limit theorem.
@@ -790,37 +826,37 @@ Sequence of histograms of some summary statistic
 #  - We'll focus on point estimation today and interval estimation next class
 ---
 
-
 ## Comparing Means
-- TODO: FINISH SLIDEE
-- Just like we've subtracted one
-- To We can use subsample means to compare subpopulations.
-- interval estimation based on sampling dist of comparison...
-- unbiasedness; approx independence; normal approx
-- Differences of normals: subtract the means; add the variances. 
+- If we want to compare means for two subpopulations, we can do the same thing.
+- The difference between the corresponding subsample means is an unbiased estimate.
+$$ \E\qty{ \hat \mu(\with) - \hat \mu(\without) } = \mu(\with) - \mu(\without)  $$
+- It's convergent and approximately normal, too.
+- We'll review all this later today.
 
 ## Limitations of what we've done
-  - TODO: FINISH SLIDEE
   - We've done a fairly complete story of the relationship between income and education
-    - Descriptive: Sample summaries
-    - Inferential: Population summaries
+    - We've talked about descriptive statistics, i.e., sample summaries
+    - We've talked about inferential statistics, i.e., population summaries
   - But we've based all of this on very coarse idea of education
     - We've just asked whether people have a 4-year degree or not
   - This means there are really only a couple questions to answer
-    1. How much/how much different
-    2. How spread out
-  - We can say much more if we think of education as being many-valued
-    - e.g. 0 years, 1 year, 2 years, ... 20 years of education.
-    - there are many more questions we can ask when we do that
-  - That's what we'll do now.
+    - How much people with and without them usually make?
+    - How different that is between the two groups.
+    - How much income varies, overall or within these two groups.
+  - We can say much more if we think of education as being many-valued.
+    - e.g. 0 years, 1 year, 2 years, ... 20 years of formal education.
+    - There are many more questions we can ask when we do that.
+  - That's what we'll talk about now.
 
-# Beyond Binary Comparisons
+# Beyond Binary Comparisons: Descriptive Analysis
 
-## 
-- Using two categories is throwing away a lot of information about education. \
-- We can, for example, categorize people by the **years of education** they've had. 
+## Making Education Multi-Valued 
+
+- Using two categories is throwing away a lot of information about education. 
+- We can categorize people by the **years of education** they've had. 
 
 ```{r}
+#| out-height: 250px
 years = unique(earnings$education)
 ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
                               size=dot.size, position=position_jitter(w=.2), alpha=.2) +
@@ -917,9 +953,10 @@ education=case_match(cps.data$a_hga,
   - It can help to ignore the quirks when you're getting started.
 
 
-## Subsamples and Subpopulations
+## Subsamples 
 
 ```{r}
+#| out-height: 250px
 years = unique(earnings$education)
 ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
                               size=dot.size, position=position_jitter(w=.2), alpha=.2) +
@@ -950,12 +987,6 @@ ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree),
 
 :::
 
-::: {.fragment .current-visible data-fragment-index="1"}
-- Naturally, it's the same for subpopulations.
-- For each subsample, there's a corresponding subpopulation.
-
-:::
-
 ::::
 
 
@@ -971,19 +1002,18 @@ Taking this more granular view of education allows us to pose new questions.
 2. What's the typical difference in income between people with 4-year degrees and people without them?
     - That's exactly the question we talked about in review.
     - We'll talk about how to calculate it a different way that'll generalize better to other questions.
-    - We can check our work. Obviously our answers should be exactly the same as we got earlier.
+    - We can check our work. Obviously our answers should be exactly the same as we got earlier in the semester.
 3. How much change would we expect in a similar population in which people tend to get an additional year of education?
     - This is a question unlike the ones we talked about earlier.
     - We'll need to be a bit careful about what we mean.
-    - But once we've gotten there, we can base our calculations on the ones we did in the last question.
+    - But once we've gotten there, we can base our calculations on ones we've done already.
 
 More for HW.
-
-# Descriptive analysis
 
 ## Q1
 
 ```{r}
+#| out-height: 250px
 earnings$highest.degree = case_match(earnings$education,
                             0:11 ~ 'none',
                             12:13 ~ 'high school',
