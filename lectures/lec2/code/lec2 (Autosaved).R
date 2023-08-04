@@ -114,7 +114,7 @@ legend("topleft",legend=c("Population Proportion","Sample Proportion"),col=c("bl
 dev.off()
 
 pdf("GitHub/qtm220/lectures/lec2/figs/samdistCImulti.pdf")
-par(mfrow=c(5,1))
+par(mfrow=c(3,1))
 S <-1000000
 y.bar <- rbinom(n=S,size=625,prob=.70)/625
 temp.hist <- hist(y.bar,breaks=seq(.55,.85,.0005),col="blue",yaxt="n",ylim=c(-7000,40000),main=expression(paste("Sampling Distribution of ",bar(Y)[625])),xlab=expression(bar(y)[625]),ylab=expression(paste(f[bar(Y)[625]],"(",bar(y)[625],")")))
