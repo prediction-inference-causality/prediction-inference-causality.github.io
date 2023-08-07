@@ -7,9 +7,12 @@ format:
     width: 1290
     theme: [default, "class.scss"]
     smaller: true
+    embed-resources: true
     slide-number: true
+    show-notes: separate-page
     pdf-separate-fragments: true
     fig-format: svg
+    fig-align: left
     html-math-method: mathjax
     include-in-header: 
       text: |
@@ -54,10 +57,8 @@ compact_number = label_number(accuracy=.1, scale_cut=cut_short_scale())
 census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
 
 california.state.code = 6
-years = 2022
-cps.data = map_dfr(years, function(year) {
-  get_asec(year=year, vars=c('h_numper', 'htotval', 'a_age', 'a_hga', 'gestfips', 'gtcbsasz'), key=census.api.key)
-})
+year = 2022
+cps.data = get_asec(year=year, vars=c('pearnval', 'a_age', 'a_hga', 'gestfips', 'gtco', 'gtcbsasz'), key=census.api.key)
 ```
 
 ```{r transform-data}
@@ -66,8 +67,7 @@ cps.data = map_dfr(years, function(year) {
 cps.sampling.ratio = 1/25000
 all.earnings = data.frame(state.code = cps.data$gestfips,
                           age=cps.data$a_age,
-                          income=cps.data$htotval, 
-                          residents=cps.data$h_numper,
+                          income=cps.data$pearnval, 
                           education.code=cps.data$a_hga,
                           education=case_match(cps.data$a_hga,
                                            0  ~ 0,   # child
@@ -97,8 +97,7 @@ all.earnings = data.frame(state.code = cps.data$gestfips,
                                            7~5e6))    # >= 5 mil  
 
 in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
-earnings = all.earnings[all.earnings$residents==1 &
-                        all.earnings$state.code == california.state.code &
+earnings = all.earnings[all.earnings$state.code == california.state.code &
                         all.earnings$age %>% in.interval(c(25,35)) &
                         all.earnings$education >= 8, ]
 
@@ -213,18 +212,19 @@ twocolor.green = 'rgb(0,191,196)'
 - Today, we'll work with data from the 2022 Current Population Survey.
 - We'll look at the relationship between income and education.
 - We've already compared people  [with]{.twocolor-green} and [without]{.twocolor-red} 4-year degrees.
-- That's a way of summarizing what we see in the data based on a *binary covariate*
+- That's a way of summarizing what we see in the data based on a *binary covariate*.
 $$ 
 X_i = \begin{cases} 
   \with & \text{ if } \ \text{person}_i \ \text{has a 4-year degree} \\
   \without & \text{ otherwise }
   \end{cases}
 $$
-- Today, we'll talk about summaries based on a *many-valued covariate*
-- We'll categorize people by the years of education they've had
+- Today, we'll talk about summaries based on a *many-valued covariate*.
+- We'll categorize people by the years of education they've had.
 
-## Outline
 
+<<<<<<< HEAD
+<<<<<<< HEAD
 - A quick review of the binary case including
   - *descriptive statistics*: summaries of the data.
   - *inferential statistics*: summaries of a related population.
@@ -232,6 +232,15 @@ $$
 - Inferential statistics in the many-valued case.
     - A more calculation-focused review of the binary case.
     - Generalizations for the many-valued case 
+=======
+1. A quick review of the binary case including
+  - *descriptive statistics*: summaries of the data.
+  - *inferential statistics*: summaries of a related population.
+2. Descriptive statistics in many-valued case.
+3. Inferential statistics in the many-valued case.
+    a. A more calculation-focused review of the binary case.
+    b. Generalizations for the many-valued case 
+>>>>>>> 02ffdda (minor changes to lec 5 + added compiled html version (lecture5.html))
       - We'll do this as a set of in-class exercises.
       - I'll introduce techniques that'll make this straightforward.
       
@@ -239,154 +248,29 @@ $$
 # A Quick Review
 
 ## 
+=======
+## Our sample
+>>>>>>> 11a3a80 (simplified lec 5; still incomplete)
 
 :::: columns
 
-::: column
-### The sample
-We'll look at the survey recipients who
+::: {.column}
+We'll look at the survey respondents who
 
   - were California residents 
   - between 25 and 35
   - who lived alone
 
-This sample includes `r nrow(earnings)` people.
-:::
+This sample includes `r nrow(earnings)` people. 
+You can think of them as living
 
-::: column
-### The finite population
-It's roughly correct to think of them as  
-
-- being chosen randomly
-- with equal probability
-- from the set of all people like this
-
-This includes about `r compact_number(nrow(earnings) / cps.sampling.ratio)` people.
-:::
-::::
-
-
-
-```{r map-sample-and-finite-pop}
-#| layout-ncol: 2
-#| layout-valign: bottom
-sample.plot
-pop.plot
-```
-
-::: {.notes}
-Thinking about where these people might live can help us build intuition about our sample and population. 
-
-- Each dot on the left map represents a person in the sample.
-- Each dot on right map represents one in the population.
-
-These locations are, to be clear, totally made up.
-
-- The survey doesn't give us much location data.
-- These made-up locations are just to make the people we talk about feel real.
-
-:::
-
-## An infinite-population approximation
-
-:::: {.r-stack}
-
-::: {.fragment .fade-out data-fragment-index="0"}
-
-We can think of the people in our finite population as a large number of independent draws
-
-  - from an infinite population of people 
-  - meeting those critera
-  - that *could exist*. 
-
-Our sample is a small number of these people, chosen randomly.
-
-```{r map-sample-and-infinite-pop}
-#| layout-ncol: 2
-#| layout-valign: bottom
-sample.plot
-pop.plot.inf
+```{r sample-map}
+ca.plot + geom_point(aes(x=long, y=lat), color='red', data=our.sample, alpha=1)  + guides(color=FALSE)
 ```
 :::
 
-::: {.fragment .current-visible data-fragment-index="0"}
-
-This *implies* that our sample is a smaller number of draws from the same infinite population.
-
-  - The infinite population isn't real; it's an abstraction we use to make some things simple.
-  - We tend to estimate summaries of this (abstract) infinite population.
-  - Then interpret them in relation to our (real) finite population.
-
-Interpretation aside, we don't need the finite population at all.
-
-```{r map-sample-over-infinite-pop}
-#| layout-ncol: 2
-#| layout-valign: bottom
-sample.plot.inf + guides(fill=FALSE)
-ca.pop.plot
-```
-:::
-
-::::
-
-
-::: {.notes}
-Let's think about where the people in our infinite population tend to live.
-
-- I've mapped the *probability density* of their locations.
-- A person drawn from this infinite population, 
-  i.e. one in our finite population,
-  tends to live in areas of high density (SF,LA).
-- A person in the sample *is* a person in the finite population;
-  they'll live in the same places with the same probabilities.
-
-:::
-
-## Subsamples and subpopulations
-
-:::: {.r-stack}
-
-::: {.fragment .fade-out data-fragment-index="0"}
-  - Our survey doesn't tell us much about location. We've made that up.
-  - But it does tell us some things about education.
-    - It tells us whether the respondent [has]{.twocolor-green} 
-      or [doesn't have]{.twocolor-red} a four-year degree.
-    - That's what we've been using so far.
-  - This lets us break our sample into **subsamples** of people 
-    with [with]{.twocolor-green} and [without]{.twocolor-red} degrees.
-  - And think of our population in terms of corresponding **subpopulations**
-    they're drawn from.
-:::
-
-::: {.fragment .current-visible data-fragment-index="0"}
-  - The **subsample** of [green dots]{.twocolor-green} on the left are survey recipients [with 4-year degrees]{.twocolor-green}.
-  - They're selected randomly from the **finite subpopulation** drawn as [green dots]{.twocolor-green} on the right.
-    - i.e. the population of California residents, 25-35 and living alone, [with 4 year-degrees]{.twocolor-green}. 
-  
-  - And therefore drawn from an **infinite subpopulation** of people like this who could exist.
-  - Same deal with the [red dots]{.twocolor-red} and recipients [without 4-year degrees]{.twocolor-red}.
-:::
-
-::::
-
-```{r map-subsamples}
-#| layout-ncol: 2
-#| layout-valign: bottom
-ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, alpha=1)  + guides(color=FALSE)
-ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, alpha=.01) + guides(color=FALSE)
-```
-
-## Our Sample
-
-$$
-$$
-
-:::: columns
-
-::: column
-
-### In a Table
-```{r binary-table-in-columns}
+::: {.column}
+```{r sample-table}
 style.table = function(tab) {
   tab$income = sprintf('$%dk', round(tab$income / 1000))
   rownames(tab) = NULL
@@ -396,13 +280,14 @@ style.table = function(tab) {
     row_spec(which(tab$degree!='4-year degree'), background=twocolor.red) 
 }
 
-style.table( earnings[1:12, c('income', 'degree')] )
+style.table( earnings[1:12, c('income', 'degree', 'education')] )
 ```
-::: 
+:::
+::::
 
-::: column
+## A binary look 
 
-### In a Scatter Plot
+## In a Scatter Plot
 
 ```{r binary-scatter-in-columns}
 #| out-size: 500px
@@ -412,20 +297,6 @@ earnings.scatter = ggplot(earnings) +
   scale_y_continuous(labels=label_dollar()) + guides(color=FALSE) + class.theme + xlab('') + class.theme
 earnings.scatter
 ```
-
-:::
-
-
-::::
-
-::: {.notes}
-
-- Neither of these is a complete success.
-  - The table is huge, so you can't look at it all at once.
-  - The scatter plot is dense, so you can't see individual points.
-- But there are tricks to making them work.
-
-:::
 
 
 ## Making Tables Usable
@@ -702,137 +573,6 @@ $$
 $$
 
 
-## Population Summaries
- 
- - Often, what we want isn't a summary of our sample.  We want to summarize our population instead.
-    - e.g., we don't want the mean income of the [people with 4-year degrees]{.twocolor-green} on the left map---the ones we've actually surveyed. 
-    - We want to know the now the mean income of [people with 4-year degrees]{.twocolor-green} on the right map---who we mostly haven't.
-$$
-$$
-
-```{r map-subsamples-again}
-#| layout-ncol: 2
-#| layout-valign: bottom
-ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, alpha=1)  + guides(color=FALSE)
-ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, alpha=.01) + guides(color=FALSE)
-```
-
- - We can't do this perfectly because we're trying to summarize data we don't have.
- - But we can **estimate** these population summaries using our sample.
-
-## Maybe something about finite vs infinite population summaries
-  - maybe to clarify why they look different
-    - one would look like a bigger sample average
-    - the other one is going to be an expectation
-  - perhaps say something about what makes the infinite population model convenient
-    - identical distribution lets us think of every observation as (distributionally) the same
-    - that makes it easier to summarize the population
-    - e.g. there is a function $\mu(x)=\E[Y_i \mid X_i=x]$ that doesn't depend on $i$.
-  - probably less that that, though
-
-
-## Point and Interval Estimation 
-
-- We've covered two types of estimate in this class.
-  - A **point estimate** is a single number that we think is close to the population summary.
-  - An **interval estimate** is a range of numbers that we think contains the population summary.
-- We'll focus on point estimates today and interval estimates next class.
-
-
-## Subsample and Subpopulation Means 
-
-- We can think of *subsample means* as point estimates of the corresponding *subpopulation means*.
-- When we do this, we're thinking of our sample as a random draw from our population.
-- This means that summary statistics, like the subsample mean $\hat\mu(x)$, are random variables. 
-  - Why? It means the observations in our sample are random variables.
-  - And anything we calculate in terms of random variables is itself a random variable.
-
-:::: columns
-
-::: column
-### Subsample Mean
-$$
-\hat\mu(x) = \frac{1}{N_x} \sum_{i:X_i=x} Y_i \qfor N_x = \sum_{i:X_i=x} 1
-$$
-:::
-
-::: column
-### (Infinite) Subpopulation Mean
-$$
-\mu(x) = \E[ Y_i \mid X_i = x]
-$$
-
-:::
-
-::::
-
-## Sampling Distributions
-
-- A summary statistic, like all random variables, has a distribution.
-- We call this its **sampling distribution**.
-- That's the distribution the summary would have if we were to redraw the sample, over and over, from the population.
-  - i.e., if we were to send out the Current Population Survey many times
-  - each time randomly selecting the people who receive it survey the same way.
-- In real life, we usually can't do that. 
-  - That means we see only one draw from the sampling distribution.
-  - We can, however, try to *estimate the sampling distribution* using only our sample.
-- When we're simulating data, we can redraw our sample as many times as we like.
-  - That means we can see what the sampling distribution looks like.
-  - This allows us to check, to some degree, whether our estimates work.
-
-
-  
-## Sampling Distributions: A Picture
-### TODO 
-Sequence of histograms of some summary statistic
-  - Maybe show K samples as scatter plots w/ mean plotted
-  - And a histogram the K subsample means
-  - e.g. for K=9, 9^2 [we can do 3x3 and 9x9 displays of the sample]
-
-
-### Expectations
-
-- Because a summary statistics is a random variable, it has a mean, standard deviation, etc.
-- These are the mean and standard deviation of a draw from the summary's sampling distribution.
-
-### TODO: illustrate this as an overlay on one of the sampling distribution pictures
-
-
-## Subsample Means as Point Estimators
-  - They are unbiased, i.e., their expectation is what we're trying to estimate.
-  $$
-  \E \hat\mu(x) = \mu(x)
-  $$
-  - They are convergent, i.e., they get closer to that expectation as the sample gets bigger.
-    - In particular, their standard deviations are proportional to the inverse square root of the sample size.
-  $$
-  \begin{aligned}
-  \sqrt{\Var \hat\mu(x)} = \E\qty{ \frac{ \sigma^2(x) }{\sqrt{N_x}} } \qfor \sigma^2(x) &= \Var(Y_i \mid X_i=x) %\\ &= \E \qty[ \qty{ Y_i - \mu(x) }^2 \mid X_i=x] 
-  \end{aligned}
- $$ 
- - They are approximately normal, i.e., their sampling distribution is close to normal for large samples.
-   - This is a consequence of the central limit theorem.
-   - It's a good thing because it lets us base **interval estimates** on these normal approximations.
-
----
-# Maybe use this stuff in the next class
-# 
-### Interval Estimates
-#
-#  - Estimate of where the pop summary is that accounts for uncertainty
-#  - Based on the sampling distribution of our estimator
-#  - Intention: in 95/100 replications, the interval estimate contains the pop summary
-#  - Coverage: the fraction of replications where the interval estimate actually does contain
-#  - We'll focus on point estimation today and interval estimation next class
----
-
-## Comparing Means
-- If we want to compare means for two subpopulations, we can do the same thing.
-- The difference between the corresponding subsample means is an unbiased estimate.
-$$ \E\qty{ \hat \mu(\with) - \hat \mu(\without) } = \mu(\with) - \mu(\without)  $$
-- It's convergent and approximately normal, too.
-- We'll review all this later today.
-
 ## Limitations of what we've done
   - We've done a fairly complete story of the relationship between income and education
     - We've talked about descriptive statistics, i.e., sample summaries
@@ -1049,6 +789,127 @@ base.plot + geom_segment(aes(x=lb-.2, xend=ub+.2, y=mean.income, yend=mean.incom
 
 - some kind of picture showing jumps
 
+
+## Population Summaries
+ 
+ - Often, what we want isn't a summary of our sample.  We want to summarize our population instead.
+    - e.g., we don't want the mean income of the [people with 4-year degrees]{.twocolor-green} on the left map---the ones we've actually surveyed. 
+    - We want to know the now the mean income of [people with 4-year degrees]{.twocolor-green} on the right map---who we mostly haven't.
+$$
+$$
+
+```{r map-subsamples-again}
+#| layout-ncol: 2
+#| layout-valign: bottom
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, alpha=1)  + guides(color=FALSE)
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=display.population, alpha=.01) + guides(color=FALSE)
+```
+
+ - We can't do this perfectly because we're trying to summarize data we don't have.
+ - But we can **estimate** these population summaries using our sample.
+
+
+## Point and Interval Estimation 
+
+- We've covered two types of estimate in this class.
+  - A **point estimate** is a single number that we think is close to the population summary.
+  - An **interval estimate** is a range of numbers that we think contains the population summary.
+- We'll focus on point estimates today and interval estimates next class.
+
+
+## Subsample and Subpopulation Means 
+
+- We can think of *subsample means* as point estimates of the corresponding *subpopulation means*.
+- When we do this, we're thinking of our sample as a random draw from our population.
+- This means that summary statistics, like the subsample mean $\hat\mu(x)$, are random variables. 
+  - Why? It means the observations in our sample are random variables.
+  - And anything we calculate in terms of random variables is itself a random variable.
+
+:::: columns
+
+::: column
+### Subsample Mean
+$$
+\hat\mu(x) = \frac{1}{N_x} \sum_{i:X_i=x} Y_i \qfor N_x = \sum_{i:X_i=x} 1
+$$
+:::
+
+::: column
+### Subpopulation Mean
+$$
+\mu(x) = \E[ Y_i \mid X_i = x]
+$$
+
+:::
+
+::::
+
+## Sampling Distributions
+
+- A summary statistic, like all random variables, has a distribution.
+- We call this its **sampling distribution**.
+- That's the distribution the summary would have if we were to redraw the sample, over and over, from the population.
+  - i.e., if we were to send out the Current Population Survey many times
+  - each time randomly selecting the people who receive it survey the same way.
+- In real life, we usually can't do that. 
+  - That means we see only one draw from the sampling distribution.
+  - We can, however, try to *estimate the sampling distribution* using only our sample.
+- When we're simulating data, we can redraw our sample as many times as we like.
+  - That means we can see what the sampling distribution looks like.
+  - This allows us to check, to some degree, whether our estimates work.
+  
+
+## Sampling Distributions: A Picture
+### TODO 
+Sequence of histograms of some summary statistic
+  - Maybe show K samples as scatter plots w/ mean plotted
+  - And a histogram the K subsample means
+  - e.g. for K=9, 9^2 [we can do 3x3 and 9x9 displays of the sample]
+
+
+### Expectations
+
+- Because a summary statistics is a random variable, it has a mean, standard deviation, etc.
+- These are the mean and standard deviation of a draw from the summary's sampling distribution.
+-
+
+### TODO: illustrate this as an overlay on one of the sampling distribution pictures
+
+
+## Subsample Means as Point Estimators
+  - They are unbiased, i.e., their expectation is what we're trying to estimate.
+  $$
+  \E \hat\mu(x) = \mu(x)
+  $$
+  - They are convergent, i.e., they get closer to that expectation as the sample gets bigger.
+    - In particular, their standard deviations are proportional to the inverse square root of the sample size.
+  $$
+  \begin{aligned}
+  \sqrt{\Var \hat\mu(x)} = \E\qty{ \frac{ \sigma^2(x) }{\sqrt{N_x}} } \qfor \sigma^2(x) &= \Var(Y_i \mid X_i=x) %\\ &= \E \qty[ \qty{ Y_i - \mu(x) }^2 \mid X_i=x] 
+  \end{aligned}
+ $$ 
+ - They are approximately normal, i.e., their sampling distribution is close to normal for large samples.
+   - This is a consequence of the central limit theorem.
+   - It's a good thing because it lets us base **interval estimates** on these normal approximations.
+
+---
+# Maybe use this stuff in the next class
+# 
+### Interval Estimates
+#
+#  - Estimate of where the pop summary is that accounts for uncertainty
+#  - Based on the sampling distribution of our estimator
+#  - Intention: in 95/100 replications, the interval estimate contains the pop summary
+#  - Coverage: the fraction of replications where the interval estimate actually does contain
+#  - We'll focus on point estimation today and interval estimation next class
+---
+
+## Comparing Means
+- If we want to compare means for two subpopulations, we can do the same thing.
+- The difference between the corresponding subsample means is an unbiased estimate.
+$$ \E\qty{ \hat \mu(\with) - \hat \mu(\without) } = \mu(\with) - \mu(\without)  $$
+- It's convergent and approximately normal, too.
+- We'll review all this later today.
 
 
 # Preparation for Inferential Analysis
