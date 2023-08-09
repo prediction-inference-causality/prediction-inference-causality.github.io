@@ -6,11 +6,6 @@ setwd("~/Documents") #different for each user
 
 ### Turnout Stuff ###
 
-
-
-
-qbinom(p=c(.025,.975),size=625,prob=.71)/625 - .71
-
 pdf("GitHub/qtm220/lectures/lec2/figs/samdist.pdf")
 S <-1000000
 y.bar <- rbinom(n=S,size=625,prob=.70)/625
@@ -113,116 +108,6 @@ segments(x0=.75-.037,x1=.75+.037,y0=-3000,col="green",lwd=2)
 legend("topleft",legend=c("Population Proportion","Sample Proportion"),col=c("blue","green"),lwd=2)
 dev.off()
 
-pdf("GitHub/qtm220/lectures/lec2/figs/samdistCImulti.pdf")
-par(mfrow=c(3,1))
-S <-1000000
-y.bar <- rbinom(n=S,size=625,prob=.70)/625
-temp.hist <- hist(y.bar,breaks=seq(.55,.85,.0005),col="blue",yaxt="n",ylim=c(-7000,40000),main=expression(paste("Sampling Distribution of ",bar(Y)[625])),xlab=expression(bar(y)[625]),ylab=expression(paste(f[bar(Y)[625]],"(",bar(y)[625],")")))
-axis(2,at=seq(0,35000,5000),labels=seq(0,35000,5000)/S)
-#segments(x0=quantile(y.bar,probs=c(.025,.975)),y0=0,y1=15000,col="red",lwd=2)
-segments(x0=.71,y0=-4000,y1=50000,col="blue",lwd=2)
-segments(x0=.68,y0=-4000,y1=25000,col="green",lwd=2)
-indmin <- max(which(temp.hist$breaks <= quantile(y.bar,probs=.025)))
-indmax <- min(which(temp.hist$breaks >= quantile(y.bar,probs=.975)))
-xx <- temp.hist$mids[indmin:indmax]
-yy <- temp.hist$counts[indmin:indmax]
-xx <- xx[yy > 0]
-yy <- yy[yy > 0]
-polygon(x=c(xx,rev(xx)),y=c(rep(0,length(yy)),rev(yy)),col=rgb(1,0,0,.35),border=NA)    
-#text(x=.7075,y=-1500,"Middle 95%",col="red")
-
-segments(x0=.68-.037,x1=.68+.037,y0=-3000,col="green",lwd=2)
-#text(x=.68,y=-5000,"95% Confidence Interval",col="green")
-legend("topleft",legend=c("Population Proportion","Sample Proportion"),col=c("blue","green"),lwd=2)
-S <-1000000
-y.bar <- rbinom(n=S,size=625,prob=.71)/625
-temp.hist <- hist(y.bar,breaks=seq(.55,.85,.0005),col="blue",yaxt="n",ylim=c(-7000,40000),main=expression(paste("Sampling Distribution of ",bar(Y)[625])),xlab=expression(bar(y)[625]),ylab=expression(paste(f[bar(Y)[625]],"(",bar(y)[625],")")))
-axis(2,at=seq(0,35000,5000),labels=seq(0,35000,5000)/S)
-#segments(x0=quantile(y.bar,probs=c(.025,.975)),y0=0,y1=15000,col="red",lwd=2)
-segments(x0=.71,y0=-4000,y1=50000,col="blue",lwd=2)
-segments(x0=.75,y0=-4000,y1=25000,col="green",lwd=2)
-indmin <- max(which(temp.hist$breaks <= quantile(y.bar,probs=.025)))
-indmax <- min(which(temp.hist$breaks >= quantile(y.bar,probs=.975)))
-xx <- temp.hist$mids[indmin:indmax]
-yy <- temp.hist$counts[indmin:indmax]
-xx <- xx[yy > 0]
-yy <- yy[yy > 0]
-polygon(x=c(xx,rev(xx)),y=c(rep(0,length(yy)),rev(yy)),col=rgb(1,0,0,.35),border=NA)    
-#text(x=.7075,y=-1500,"Middle 95%",col="red")
-segments(x0=.75-.037,x1=.75+.037,y0=-3000,col="green",lwd=2)
-#text(x=.75,y=-5000,"95% Confidence Interval",col="green")
-legend("topleft",legend=c("Population Proportion","Sample Proportion"),col=c("blue","green"),lwd=2)
-dev.off()
-
-
-# Margin of Error
-
-pdf("MoE.pdf")
-S <-1000000
-y.bar <- rbinom(n=S,size=625,prob=.68)/625
-temp.hist <- hist(y.bar,breaks=seq(.55,.85,.0005),col="green",yaxt="n",ylim=c(-7000,40000),main=expression(paste("Estimated Sampling Distribution of ",bar(Y)[625])),xlab=expression(bar(y)[625]),ylab=expression(paste(hat(f)[bar(Y)[625]],"(",bar(y)[625],")")))
-axis(2,at=seq(0,35000,5000),labels=seq(0,35000,5000)/S)
-segments(x0=.68,y0=-4000,y1=50000,col="green",lwd=2)
-indmin <- max(which(temp.hist$breaks <= quantile(y.bar,probs=.025)))
-indmax <- min(which(temp.hist$breaks >= quantile(y.bar,probs=.975)))
-xx <- temp.hist$mids[indmin:indmax]
-yy <- temp.hist$counts[indmin:indmax]
-xx <- xx[yy > 0]
-yy <- yy[yy > 0]
-polygon(x=c(xx,rev(xx)),y=c(rep(0,length(yy)),rev(yy)),col=rgb(0,1,0,.35),border=NA)    
-lb <- quantile(y.bar,probs=.025)
-ub <- quantile(y.bar,probs=.975)
-#segments(x0=.68,x1=ub,y0=-3000,col="green",lwd=2)
-text(x=.68 ,y=-5000,"Middle 95%",col="green")
-legend("topleft",legend=c("Sample Proportion"),col=c("green"),lwd=2)
-dev.off()
-
-
-## CI Sampling Distribution
-
-pdf("samdistCIplot.pdf")
-S <-1000
-y.bar <- rbinom(n=S,size=625,prob=.71)/625
-par(mfrow=c(1,2))
-temp.hist <- hist(y.bar,breaks=seq(.6,.8,.01),col="blue",yaxt="n",main=expression(paste("Sampling Distribution of ",bar(Y)[625])),xlab=expression(bar(y)[625]),ylab=expression(paste(f[bar(Y)[625]],"(",bar(y)[625],")")))
-axis(2,at=seq(0,35000,5000),labels=seq(0,35000,5000)/S)
-#segments(x0=quantile(y.bar,probs=c(.025,.975)),y0=0,y1=15000,col="red",lwd=2)
-segments(x0=.71,y0=-4000,y1=50000,col="blue",lwd=2)
-#segments(x0=.68,y0=-4000,y1=25000,col="green",lwd=2)
-#indmin <- max(which(temp.hist$breaks <= quantile(y.bar,probs=.025)))
-#indmax <- min(which(temp.hist$breaks >= quantile(y.bar,probs=.975)))
-#xx <- temp.hist$mids[indmin:indmax]
-#yy <- temp.hist$counts[indmin:indmax]
-#xx <- xx[yy > 0]
-#yy <- yy[yy > 0]
-#polygon(x=c(xx,rev(xx)),y=c(rep(0,length(yy)),rev(yy)),col=rgb(1,0,0,.45),border=NA)    
-#text(x=.7075,y=-1500,"Middle 95%",col="red")
-#segments(x0=.71,x1=.71+.036,y0=-3000,col="red",lwd=2)
-#text(x=.71 + .036/2,y=-5000,"Margin-of-Error",col="red")
-#legend("topleft",legend=c("Population Proportion","Sample Proportion"),col=c("blue","green"),lwd=2)
-
-plot(c(rep(.6,S/2),rep(.8,S/2)),1:S,type="n",main=expression(paste("Sampling Distribution of ",CI[.95])),xlab="",ylab="s")
-abline(v=.71,col="blue",lwd=2)
-for(s in 1:S){
-	p <- y.bar[s]
-	lb <- p - 2*sqrt(p*(1-p))/sqrt(625)
-	ub <- p + 2*sqrt(p*(1-p))/sqrt(625)
-	
-	if(lb <= .71 & ub >= .71){
-		segments(x0=lb,x1=ub,y0=s,col="blue")
-	}
-	if(lb > .71 | ub < .71){
-		segments(x0=lb,x1=ub,y0=s,col="red")
-	}
-	
-}
-
-dev.off()
-
-lbvec <- y.bar - 2*sqrt(y.bar*(1-y.bar))/sqrt(625)
-ubvec <- y.bar + 2*sqrt(y.bar*(1-y.bar))/sqrt(625)
-	
-mean(lbvec <=  .71 & ubvec >= .71)
 	
 ### cps stuff ###
 
@@ -230,6 +115,7 @@ cps <- read.csv("GitHub/qtm220/lectures/lec2/data/allstates_employment.csv")
 
 cpsLec2 <- subset(cps,state.code==6&age>24&age <36&education >8)
 dim(cpsLec2)
+head(cpsLec2)
 
 pdf("GitHub/qtm220/lectures/lec2/figs/CLhist.pdf")
 hist(CLlib,freq=FALSE,col="blue",xlab="% Support for Liberal Position on Civil Liberties Cases (CLlib)")
