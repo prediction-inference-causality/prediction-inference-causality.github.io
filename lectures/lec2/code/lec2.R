@@ -115,6 +115,7 @@ cps <- read.csv("GitHub/qtm220/lectures/lec2/data/allstates_employment.csv")
 
 cpsLec2 <- subset(cps,state.code==6&age>24&age <36&education >8)
 dim(cpsLec2)
+head(cpsLec2)
 
 pdf("GitHub/qtm220/lectures/lec2/figs/CLhist.pdf")
 hist(CLlib,freq=FALSE,col="blue",xlab="% Support for Liberal Position on Civil Liberties Cases (CLlib)")
