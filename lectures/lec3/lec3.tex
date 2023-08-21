@@ -263,9 +263,10 @@ $s$  & $Y_1$  & $Y_2$   & $\dots$  & $Y_{2258}$  & $\overline{Y}_{2258}$ \\ % & 
 \end{center}
 \end{table}
 
+Property \#1: {\it The sampling distribution of the sample mean is approximately normal when $n$ is large.}
 \begin{itemize}
-\item The central limit theorem says the sampling distribution for the sample mean will be normally distributed. 
-\item We know that $\overline{Y}_{2258} \sim N(?,?)$, but still don't know the mean or the variance of this distribution. 
+\item The approximate normality result comes from the central limit theorem (CLT). 
+\item We know that $\overline{Y}_{2258} \sim^{approx} N(?,?)$, but still don't know the mean or the variance of this distribution. 
 \end{itemize}
 }
 
@@ -461,7 +462,7 @@ $s$  & $Y_1$  & $Y_2$   & $\dots$  & $Y_{2258}$  & $\overline{Y}_{2258}$ \\ % & 
 
 What we know about the sampling distribution of $\overline{Y}_n$:
 \begin{enumerate}
-\item Approxiamtely normally distributed
+\item Approximately normally distributed
 \item Centered at $\mu$.
 \item Variance of $\frac{\sigma^2}{n}$
 \end{enumerate}
@@ -486,16 +487,168 @@ We still don't know:
 
 \begin{enumerate}
 \item Is \$135,406 close to the population mean $\mu$? \pause Yes! \pause
-\item Can say something about how close? \pause Let's use a confidence intervals
+\item Can say something about how close? \pause Let's use a confidence interval. \pause We will look at two methods: bootstrapping and plug-in. 
+\end{enumerate} 
+
+}
+
+
+
+\begin{frame}[fragile]
+\frametitle{Bootstrapped Sampling Distribution of a Sample Mean}
+
+We don't observe the population so we cannot construct the sampling distribution.\\
+\pause
+\vspace{.5cm}
+
+However, we can bootstrap the sampling distribution by taking repeated random samples \emph{with replacement} of size n from the sample of size n.
+\bigskip
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{r|rrrr|r}
+$i$ & 1 & 2  & $\dots$ & 2258 & $\bar{y}_{2258}$  \\
+$y_i$ & 37,006 & 108,811 & $\dots$ & 49,001 & 135,406 \\
+\end{tabular}
+\end{center}
+\end{table}
+\pause
+
+\bigskip 
+
+With the data stored in the vector $y$, each mean of the bootstrapped sampling distribution can be generated with
+\begin{verbatim}
+mean(sample(y, size=2258, replace=TRUE)) 
+\end{verbatim} 
+
+
+\end{frame}
+
+
+\begin{frame}[fragile]
+\frametitle{Bootstrapped CIs for a Population Mean}
+
+\footnotesize
+\begin{verbatim}
+B=10000
+y.bar = rep(NA,B)
+for(b in 1:B){y.bar[b]= mean(sample(y,size=n,replace=T))}
+hist(y.bar)
+\end{verbatim}
+
+\begin{figure}[ht] \centering
+        \scalebox{.27}{\includegraphics{figs/bootdist.pdf}}
+\end{figure}
+
+\begin{verbatim}
+> quantile(y.bar,probs=c(.025,.975)) ## bootstrapped CI
+    2.5%    97.5% 
+129783.2 141169.0 
+\end{verbatim} 
+
+\end{frame}
+
+\frame{
+\frametitle{Bootstrapped Sampling Distribution vs Sampling Distribution}
+
+\begin{enumerate}
+\item CLT says the sampling distribution is approximately normal.
+\item We see that the bootstrapped distribution is approximately normal.
+\item Remaining question is whether the bootstrapped CI has approximately the same size as the middle 95\% of the sampling distribution.
+\end{enumerate}
+
+\bigskip
+
+Let's table the remaining question for now while we look at another approach to CIs.
+
+}
+
+
+\frame{
+\frametitle{Plug-in CI}
+
+\begin{itemize}
+\item Another way to get a 95\% CI is to use the fact that the middle 95\% of the distribution lies approximately between $\mu - 1.96 \cdot \frac{\sigma}{\sqrt{n}}$ and $\mu + 1.96 \cdot \frac{\sigma}{\sqrt{n}}$. 
+\item If we denote the sample standard deviation with $s$, then we plug in sample values into the above statement: $\overline{y} - 1.96 \cdot \frac{s}{\sqrt{n}}$ and $\overline{y} + 1.96 \cdot \frac{s}{\sqrt{n}}$
+\item 129,720 and 141,091 (note how close these are to the bootsrapped CI)
+\end{itemize} \pause
+
+\bigskip
+\bigskip
+
+Why does this work?
+}
+
+\frame{
+The facts we've derived about the sampling distribution of the sample mean tell us that 
+\begin{align*}
+&P(\mu - 1.96 \cdot \frac{\sigma}{\sqrt{n}} \leq \overline Y \leq \mu + 1.96 \cdot \frac{\sigma}{\sqrt{n}}) \approx .95
+\end{align*}
+Some algebra (left as an exercise) shows that this implies 
+\begin{align*}
+&P(\overline Y - 1.96 \cdot \frac{\sigma}{\sqrt{n}} \leq \mu \leq \overline Y + 1.96 \cdot \frac{\sigma}{\sqrt{n}}) \approx .95
+\end{align*}
+
+\bigskip
+
+Remaining question is whether $\frac{\sigma}{\sqrt{n}} \approx \frac{s}{\sqrt{n}}$ (note how similar this is to the remaining bootstrapped CI question).
+
+}
+
+\frame{
+\frametitle{Partially Addressing Remaining Question}
+
+\begin{itemize}
+\item $\frac{\sigma}{\sqrt{n}}$ is called a standard error because it is the standard deviation for an estimator ($\overline Y$) of a parameter ($\mu$).
+\item $\frac{s}{\sqrt{n}}$ is called an estimated standard error. We will bootstrap this estimated standard error to get a sense of its uncertainty (note the scale of this uncertainty). 
+\end{itemize}
+
+\begin{figure}[ht] \centering
+        \scalebox{.3}{\includegraphics{figs/bootse.pdf}}
+\end{figure}
+
+}
+
+
+\frame{
+\frametitle{CI Wrap Up}
+
+We got the following 95\% CIs for the population income mean:
+\begin{itemize}
+\item Boostrap: \$129,783 to \$141,169
+\item Plug-in:  \$129,720 to \$141,091
+\end{itemize} \pause
+\bigskip
+\bigskip
+
+
+From the previous slide, we see the estimated standard error is very unlikely to be off by more than \$1,000, and therefore the bounds are very unlikely to be off by more than \$2,000. \pause
+
+\bigskip
+\bigskip
+
+We are at least 95\% confident that the true population mean is roughly between \$128,000 and \$143,000, despite observing only a tiny fraction of the population.
+
+
+}
+
+\frame{
+\frametitle{Two Questions}
+
+
+\begin{enumerate}
+\item Is \$135,406 close to the population mean $\mu$? \pause Yes! \pause
+\item Can say something about how close? \pause Yes! Likely within \$7,500 or so. 
 \end{enumerate} 
 
 }
 
 \frame{
+\frametitle{Summary}
 
 ...
-
 }
+
 
 \end{document}
 
