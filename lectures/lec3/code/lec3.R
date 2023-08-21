@@ -2,6 +2,7 @@
 
 library(foreign)
 library(ggplot2)
+library(boot)
 setwd("~/Documents") #different for each user
 	
 ### cps stuff ###
@@ -9,8 +10,27 @@ setwd("~/Documents") #different for each user
 cps <- read.csv("GitHub/qtm220/lectures/lec2/data/allstates_employment.csv")       
 
 cpsLec3 <- subset(cps,state.code==6&age>24&age <36&education >8)
-dim(cpsLec3)
+n = dim(cpsLec3)[1]
 head(cpsLec3)
+
+summary(cpsLec3$income)
+
+x <- boot(data=cpsLec3$income,statistic=mean,R=10,trim=0)
+B=1000
+theta <- rep(NA,B)
+for(b in 1:B){
+	theta[b]= mean(sample(cpsLec3$income,size=n,replace=T))	
+}
+hist(theta)
+
+B=1000
+theta <- rep(NA,B)
+for(b in 1:B){
+	theta[b]= sd(sample(cpsLec3$income,size=n,replace=T))	
+}
+hist(theta/sqrt(n))
+
+
 
 pdf("GitHub/qtm220/lectures/lec2/figs/CLhist.pdf")
 hist(CLlib,freq=FALSE,col="blue",xlab="% Support for Liberal Position on Civil Liberties Cases (CLlib)")
