@@ -6,6 +6,14 @@ setwd("~/Documents") #different for each user
 
 ### Turnout Stuff ###
 
+Generate Data
+N = 7000000
+x <- rbinom(n=N,size=625,prob=.3)
+y <- rep(0,625)
+y[x==0] <- rbinom(n=sum(1-x),size).67
+y[x==0] <- .71
+
+
 pdf("GitHub/qtm220/lectures/lec4/figs/samdist.pdf")
 S <-1000000
 y.bar <- rbinom(n=S,size=625,prob=.70)/625
