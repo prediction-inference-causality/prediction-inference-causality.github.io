@@ -29,7 +29,7 @@ editor: visual
 ```
 ## Sample
 
-Suppose that a week before the 2020 presidential election, you contacted a sample of $n=625$ potential Georgia voters, randomly selected (with replacement) from the population of $N = 7,233,584$ on the public voters register, to ask whether they planned to vote. \pause \vspace{.3cm}
+Suppose that a week before the 2020 presidential election, you contacted a sample of $n=625$ potential Georgia voters, randomly selected (with replacement) from the population of eligible voters $N = 7,233,584$ on the public voters register, to ask whether they planned to vote. \pause \vspace{.3cm}
 
 Suppose also that all potential voters can be contacted, will respond honestly to your questions, and will not change their minds about voting. \pause
 
@@ -49,6 +49,14 @@ Remember that the mean of a binary variable is a proportion.
 
 ## Sample Versus Population
 
+Our estimate of voter turnout from this sample is the proportion of individuals who said they would vote in the upcoming election (1s), which is the mean of $Y$ \pause
+
+\bigskip
+
+We have the opportunity to see whether our sample proportion was "right" when, one week later, the election occurs and we can see the true population proportion-- how many eligible voters actually turned out to vote.
+
+## Sample Versus Population
+
 ```{=tex}
 \begin{table}[h]
 \begin{center}
@@ -60,15 +68,15 @@ $y_i$ & 1 & 1 & 0 & 1 & $\dots$ & 0 & .68 \\
 \end{center}
 \end{table} \pause
 ```
-After election day, we found that in fact $4,999,960$ people, or roughly 70% of registered voters, turned out to vote.
+After election day, we found that in fact $4,999,960$ people, or roughly 70% of registered voters, turned out to vote. Each eligible voter has a unique voter ID number that we can use to index the population. For the purposes of this example, let the voter ID numbers be $[1,7233584]$
 
 ```{=tex}
 \begin{table}[h]
 \begin{center}
 \caption*{Population}\label{t:pop}
 \begin{tabular}{r|rrrrrrrrr|r}
-$j$ & 1 & 2 & 3 & 4 & $\dots$ & $\dots$     & $\dots$& $\dots$ & 7,233,584 & $\bar{y}_{7,233,584}$  \\
-$y_j$ & 0 & 1 & 0 & 1 & $\dots$& $\dots$  & $\dots$& $\dots$ & 1 & .70  \\
+$ID$ & 1 & 2 & 3 & 4 & $\dots$ & $\dots$     & $\dots$& $\dots$ & 7,233,584 & $\bar{y}_{7,233,584}$  \\
+$y_{ID}$ & 0 & 1 & 0 & 1 & $\dots$& $\dots$  & $\dots$& $\dots$ & 1 & .70  \\
 \end{tabular}
 \end{center}
 \end{table}
@@ -83,6 +91,18 @@ $y_j$ & 0 & 1 & 0 & 1 & $\dots$& $\dots$  & $\dots$& $\dots$ & 1 & .70  \\
 ```
 ## Sampling Distribution of $\overline{Y}_{625}$
 
+How did we draw our sample of 625 eligible voters? We randomly drew 625 voter IDs from $[1,7233584]$ with replacement \pause 
+
+```{r}
+library(usmap)
+
+plot_usmap(include = c("GA") )
+  
+```
+
+
+## Sampling Distribution of $\overline{Y}_{625}$
+
 ```{=tex}
 \begin{table}[h]
 \begin{center}
@@ -90,7 +110,7 @@ $y_j$ & 0 & 1 & 0 & 1 & $\dots$& $\dots$  & $\dots$& $\dots$ & 1 & .70  \\
 {\footnotesize
 \begin{tabular}{r|rr|rr|r|rr|r}
 $i$ & \multicolumn{2}{r|}{1} & \multicolumn{2}{r|}{2}   & $\dots$ & \multicolumn{2}{r|}{625} &    \\
-\visible<2->{$s$} & $J_1$ & $Y_1$ & $J_2$ & $Y_2$   & $\dots$ & $J_{625}$ & $Y_{625}$  & $\overline{Y}_{625}$  \\
+\visible<2->{$s$} & $ID_1$ & $Y_1$ & $ID_2$ & $Y_2$   & $\dots$ & $ID_{625}$ & $Y_{625}$  & $\overline{Y}_{625}$  \\
 \hline
 \visible<2->{1}  &  9562350& 1& 8763351 & 1   & $\dots$ &  1294801 & 0 & .68 \\
 \visible<2->{2} &  \visible<2->{5331704}& \visible<2->{0}& \visible<2->{4533839} & \visible<2->{1}   & \visible<2->{$\dots$} & \visible<2->{3342359} & \visible<2->{1} & \visible<2->{.70} \\
@@ -228,14 +248,14 @@ Resample the number of voters 1,000,000 times and store these 1,000,000 numbers 
  sumY_vec <- rbinom(1000000, size=625, prob=.70) 
 ```
 
-\pause  Divide all of these numbers by the sample size.
+\pause Divide all of these numbers by the sample size.
 
 ```{r}
 #| echo: true
 Ybar_vec <- sumY_vec/625
 ```
 
-\pause  Calculate coverage
+\pause Calculate coverage
 
 ```{r}
 #| echo: true
