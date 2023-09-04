@@ -75,10 +75,17 @@ dev.off()
 
 pdf("GitHub/qtm220/lectures/lec4/figs/bootdistvssamdistDiff.pdf")
 par(mfrow=c(2,1))
-hist(subsamMean,xlim=c(.60,.85),main="Sampling Distribution of Difference")
-hist(bootsubsamMean,xlim=c(.60,.85),main="Bootstrapped Sampling Distribution of Difference")
+hist(diffMean,xlim=c(-.10,.25),main="Sampling Distribution of Difference")
+hist(bootdiffsamMean,xlim=c(-.10,.25),main="Bootstrapped Sampling Distribution of Difference")
 dev.off()
 
-hist(bootMean)
 quantile(bootsubsamMean,prob =c(.025,.975))
 
+quantile(bootdiffsamMean,prob =c(.05,.95))
+quantile(bootdiffsamMean,prob =c(.025,.975))
+quantile(bootdiffsamMean,prob =c(.005,.995))
+quantile(bootdiffsamMean,prob =c(.0005,.9995))
+
+
+summary(lm(y~x,data=dfsam))
+sd(bootdiffsamMean)
