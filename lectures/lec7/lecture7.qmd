@@ -1,6 +1,6 @@
 ---
-title: "Working with Non-Binary Covariates"
-subtitle: "QTM 220 Lecture 5"
+title: "QTM 220 Lecture 7"
+subtitle: "Descriptive Statistics with Non-Binary Covariates"
 format: 
   clean-revealjs:
     height: 1000
@@ -40,30 +40,78 @@ library(scales)
 library(cpsR)
 library(mapdata)
 
+options(knitr.kable.NA = '')
 source('../../shared-code/plotting.R')
 theme_set(simplified.theme)
 set.seed(1)
 
 compact_number = label_number(accuracy=.1, scale_cut=cut_short_scale())
+ellipsis <- function(df, nhead=5L, ntail=2) {
+    rownames(df) = as.character(1:nrow(df))
+    stopifnot("data.frame" %in% class(df))
+    els <- rep(NA, ncol(df)) %>% 
+        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
+        data.frame(stringsAsFactors=FALSE) %>% 
+        tibble::as_tibble()
+    rownames(els) = "⋮"
+    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
+}
+
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
 ```
+
+```{r ggplot-themes}
+fontsize = 12
+textcolor = "#888888"
+
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+		    panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+		    axis.ticks.x = element_blank(),
+		    axis.ticks.y = element_blank(),
+		    axis.text.x  = element_text(colour = textcolor, size=fontsize),
+		    axis.text.y  = element_text(colour = textcolor, size=fontsize),
+		    axis.title.x  = element_text(colour = textcolor),
+		    axis.title.y  = element_text(colour = textcolor, angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+   	         axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+	         panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+
+
 
 ```{r get-data}
 #| cache: true
 #| 
 # for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
 census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+cps.sampling.ratio = 1/25 # Not true. 1/2500 households are surveyed. But for the sake of plotting, it's ok.
 
 california.state.code = 6
-years = 2022
-cps.data = map_dfr(years, function(year) {
-  get_asec(year=year, vars=c('pearnval', 'a_age', 'a_hga', 'gestfips', 'gtco', 'gtcbsasz'), key=census.api.key)
-})
+year = 2018
+cps.data = results=get_asec(year=year, vars=c('pearnval', 'a_age', 'a_hga', 'gestfips', 'gtco', 'gtcbsasz'), key=census.api.key)
 ```
 
 ```{r transform-data}
-#| cache: true
+#| cache: false
 #| 
-cps.sampling.ratio = 1/2500
 all.earnings = data.frame(state.code = cps.data$gestfips,
                           county.code = cps.data$gtco,
                           age=cps.data$a_age,
@@ -86,24 +134,41 @@ all.earnings = data.frame(state.code = cps.data$gestfips,
                                            43 ~ 16,  #  bachelors degree
                                            44 ~ 18,  #  masters degree
                                            45 ~ 20,  #  professional school degree
-                                           46 ~ 20), #  doctorate
-                        metro.size=case_match(cps.data$gtcbsasz, # cps reports a metro-size category, we map that to an approximate metro size
-                                           0~0,       # < 100k
-                                           2~1e5,     # 100-250k
-                                           3~2.5e5,   # 250-500k
-                                           4~5e5,     # 500k-1 mil
-                                           5~1e6,     # 1-2.5 mil
-                                           6~2.5e6,   # 2.5-5 mil     
-                                           7~5e6))    # >= 5 mil  
+                                           46 ~ 20)) #  doctorate
 
-in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
-earnings = all.earnings[all.earnings$state.code == california.state.code &
-                        all.earnings$age %>% in.interval(c(25,35)), ]
-
-earnings$degree = factor(earnings$education >= 16, 
+all.earnings$degree = factor(all.earnings$education >= 16, 
                      levels=c(FALSE, TRUE), 
                      labels=c('no 4-year degree','4-year degree')) 
+all.earnings$dichotomous.education = ifelse(all.earnings$education >= 16, 
+                     runif(nrow(all.earnings), min=16, max=20),
+                     runif(nrow(all.earnings), min=8, max=14))
+
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+earnings = filter(all.earnings, education >= 8 & 
+                                state.code == california.state.code & 
+                                age %>% in.interval(c(25,35)))
+Y = earnings$income
+X = earnings$education
 ```
+
+```{r get-county-info}
+```
+
+```{r get-county-info}
+# county info from https://en.wikipedia.org/wiki/List_of_counties_in_California
+# converted to csv using https://wikitable2csv.ggor.de
+
+to.number = function(s) { as.numeric(str_trim(gsub(",", "", s))) }
+ca_county_info = read.csv('california_county_info.csv') %>%
+  mutate(subregion = tolower(sub(' County', '', County))) %>%
+  mutate(pop = to.number(Population..2022.)) %>%
+  mutate(area = to.number(sub('sq.*', '', Area))) 
+
+earnings.county = left_join(earnings, ca_county_info[,c('FIPS.code', 'subregion')], by=c('county.code' = 'FIPS.code'))
+earnings$county = earnings.county$subregion
+earnings$county[is.na(earnings$county)]='unknown'
+```
+
 
 ```{r make-maps}
 #| cache: true
@@ -111,12 +176,7 @@ earnings$degree = factor(earnings$education >= 16,
 
 # To give our survey recipients a bit more reality, we'll give them fake locations on a map
 # And we'll make up a population of California residents that they're sampled from
-
 # maps are based on code from https://eriqande.github.io/rep-res-eeb-2017/map-making-in-R.html
-# additional county info from https://en.wikipedia.org/wiki/List_of_counties_in_California
-# converted to csv using https://wikitable2csv.ggor.de
-
-to.number = function(s) { as.numeric(str_trim(gsub(",", "", s))) }
 
 counties = map_data("county")
 ca_county = counties %>%
@@ -124,10 +184,7 @@ ca_county = counties %>%
 ca_county_centers = ca_county %>%
   group_by(subregion) %>%
   summarize(county.lat = mean(lat), county.long=mean(long))
-ca_county_info = read.csv('california_county_info.csv') %>%
-  mutate(subregion = tolower(sub(' County', '', County))) %>%
-  mutate(pop = to.number(Population..2022.)) %>%
-  mutate(area = to.number(sub('sq.*', '', Area))) 
+
 ca_county_more = left_join(ca_county_centers, ca_county_info, by="subregion")
 ca_all = left_join(ca_county, ca_county_more, by="subregion")
 
@@ -190,7 +247,27 @@ pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.populat
 sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
 ```
 
-## Summary
+```{r visualization-defaults}
+scale_y = function(limits=c(-.3e5, 3e5)) { 
+  scale_y_continuous(labels=label_dollar(), limits=limits)
+}
+
+years = 8:20
+limits=c(min(years)-.5, max(years)+.5)
+scale_x = function() { 
+  scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=limits)
+}
+
+dot.size = 2
+```
+
+
+```{r define-colors}
+twocolor.red   = 'rgb(248,118,109)'
+twocolor.green = 'rgb(0,191,196)'
+```
+
+## Today
 
 ::: {.hidden}
 $$
@@ -206,100 +283,71 @@ $$
 \newcommand{\with}{\ingreen{\text{degree}}}
 \newcommand{\without}{\inred{\text{no degree}}}
 
-\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\E}{E}degredegre
 \DeclareMathOperator{\Var}{Var}
 $$ 
 
-```{r define-colors}
-twocolor.red   = 'rgb(248,118,109)'
-twocolor.green = 'rgb(0,191,196)'
-```
 :::
 
-- Today, we'll work with data from the 2022 Current Population Survey.
-- We'll look at the relationship between income and education.
-- We've already compared people  [with]{.twocolor-green} and [without]{.twocolor-red} 4-year degrees.
-- That's a way of summarizing what we see in the data based on a *binary covariate*
-$$ 
-X_i = \begin{cases} 
-  \with & \text{ if } \ \text{person}_i \ \text{has a 4-year degree} \\
-  \without & \text{ otherwise }
-  \end{cases}
-$$
-- Today, we'll talk about summaries based on a *many-valued covariate*
-- We'll categorize people by the years of education they've had
+```{r scatter-plots}
 
-## The Sample
+earnings.jitter = ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
+                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+                   scale_x() + scale_y() + guides(color=FALSE)
+                    
+earnings.scatter = ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
+                              size=dot.size, alpha=.1) +
+               scale_x() + scale_y() + guides(color=FALSE) 
+```
 
-- We'll look at surveyed California residents between the ages of 25 and 35.
-- This sample includes `r nrow(earnings)` people. To fit our table on the page, we're showing a few chosen at random. 
+```{r}
+#| out-width: 1290px
+#| fig-asp: .32
+earnings.jitter
+```
 
-$$
-$$
+- We're going to look at the relationship between income and education.
+- We've done that before. When we did, we thought of education in dichotomous terms.
+  - We had some people with 4-year degrees --- the [green dots]{.twocolor-green}.
+  - We had some people without them --- the [red dots]{.twocolor-red}.
+- Today, we'll be a bit more granular. We'll think of education in terms of *years of schooling*.
+    - 8+  years  = finished middle school
+    - 12+ years = high school diploma
+    - 16+ years = 4-year college degree
 
+::: aside
+Ignore the gaps at 15 and 17 years for now. We'll come back to them.
+:::
+
+## Our Sample
+
+- As before, we'll work with data from the 2022 Current Population Survey.
+- We'll look at California residents age 25-35 with at least an 8th-grade education.
+- This sample includes `r nrow(earnings)` people. 
+  - To visualize it, I've marked each one on a map. 
+  - To display some of the information we have, I've made a table.
+- I've used color to emphasize the dichotomous view of education we've been using.
+  
 :::: columns
 
 ::: column
-```{r map-sample-no-color}
-#| fig-width: 5 
-sample.plot
+```{r map-sample}
+#| fig-width: 5
+#| out-height: 500px
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) + guides(color=FALSE)
 ```
 :::
 
 ::: column
 
 ```{r table-no-color}
-earnings.county = left_join(earnings, ca_county_info[,c('FIPS.code', 'subregion')], by=c('county.code' = 'FIPS.code'))
-earnings$county = earnings.county$subregion
-random.rows = sample(nrow(earnings), 12)
-
-style.table.no.color = function(tab) {
-  tab$income = sprintf('$%dk', round(tab$income / 1000))
-  rownames(tab) = NULL
-  kable(tab) %>%
-    kable_styling()
-}
-style.table.no.color( earnings[random.rows, c('income', 'education', 'age', 'county')] )
-```
-:::
-
-
-
-::::
-
-::: aside
-The locations shown on the map are made up. They're not the actual locations of the people in the sample. \
-The survey includes some location information for some people, but as you can see in the table, not for everyone.
-:::
-
-## Our Interpretation so Far
-
-- So far, we've been thinking of education in binary terms.
-- We've been comparing two subsamples: people [with]{.twocolor-green} and [without]{.twocolor-red} 4-year degrees.
-
-$$
-$$
-
-:::: columns
-
-::: column
-```{r map-sample-with-color}
-#| fig-width: 5 
-ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) + guides(color=FALSE)
-```
-:::
-
-::: column
-```{r table-with-color}
-style.table = function(tab) {
-  tab$income = sprintf('$%dk', round(tab$income / 1000))
-  rownames(tab) = NULL
-  kable(tab) %>%
-    kable_styling() %>%
-    row_spec(which(tab$education >= 16), background=twocolor.green) %>%
-    row_spec(which(tab$education < 16), background=twocolor.red) 
-}
-style.table( earnings[random.rows, c('income', 'education', 'age', 'county')] )
+tab = earnings[sample(nrow(earnings)), ]
+tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
+ellipsis.tab = tab[, c('income', 'education', 'age', 'county')] %>% ellipsis(nhead=8,ntail=2)
+ellipsis.tab %>%
+  kable %>% kable_styling() %>% 
+  row_spec(which(ellipsis.tab$education >= 16), background=twocolor.green) %>%
+  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
 ```
 :::
 
@@ -310,734 +358,342 @@ The locations shown on the map are made up. They're not the actual locations of 
 The survey includes some location information for some people, but as you can see in the table, not for everyone.
 :::
 
-
-## What we Lost
-
-
-:::: {.r-stack}
+## Visualization
 
 ```{r}
-dot.size = 2
-years = unique(earnings$education)
-```
-
-::: {.fragment .fade-out data-fragment-index="0"}
-We were throwing away a lot of information thinking of education as binary.
-```{r scatter-plot-degree}
 #| out-height: 600px
-ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), 
-                              size=dot.size, position=position_jitter(w=.3), alpha=.1) +
-                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
-                   guides(color=FALSE)
-```
-:::
-
-::: {.fragment .current-visible data-fragment-index="0"}
-Today, we'll categorize people by the **years of education** they've had. 
-```{r scatter-plot-years}
-#| out-height: 600px
-#| 
-earnings.jitter = ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
-                              size=dot.size, position=position_jitter(w=.3), alpha=.1) +
-                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
-                   scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=c(-1,21)) + 
-                   guides(color=FALSE) 
 earnings.jitter
 ```
-:::
 
-::: {.fragment .current-visible data-fragment-index="1"}
-By using the binary version, we were in effect **shuffling** the years of education within each group. 
-```{r scatter-plot-years-shuffled}
+- Our primary visualization will be a *scatter plot*. It shows a dot for each person in our sample. 
+- The person's income is on the y-axis and their education on the x-axis.
+- We add a bit of fuzz to the displayed x-coordinate to space the dots out.
+  - But not so much that it's not clear what the real value of $X$.
+  - This is called 'jittering'. Sometimes a plot like this is called a 'jitter plot'.
+- As before, we can use color to highlight the categories of people [with]{.twocolor-green} and [without]{.twocolor-red} 4-year degrees.
+
+## The Same Thing Without Fuzz
+
+```{r}
 #| out-height: 600px
-earnings.shuffle = earnings
-earnings.shuffle$education[earnings$education >= 16] = sample(earnings$education[earnings$education >= 16])
-earnings.shuffle$education[earnings$education <  16] = sample(earnings$education[earnings$education <  16])
-earnings.jitter.shuffled = ggplot(earnings.shuffle) + geom_point(aes(x=education, y=income, color=degree), 
-                              size=dot.size, position=position_jitter(w=.3), alpha=.1) +
-                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
-                   scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=c(-1,21)) + 
-                   guides(color=FALSE) 
-earnings.jitter.shuffled
+earnings.scatter
 ```
-:::
 
-::: {.fragment .current-visible data-fragment-index="2"}
-This is easier to see looking at summary statistics. Here's the mean income for each group in black.
-```{r scatter-plot-years-mean}
+## Summarization
+```{r}
 #| out-height: 600px
+
+binary.summaries = earnings %>% 
+          group_by(degree) %>% 
+          summarize(mean=mean(income), 
+                    sd=sd(income), 
+                    meanx=mean(education), 
+                    meanx.dichotomous=mean(dichotomous.education))
+
+earnings.jitter + geom_pointrange(aes(x=meanx, y=mean, ymin=mean-sd, ymax=mean+sd), data=binary.summaries)
+```
+
+- Looking at the dots alone, we can get rough answers to some simple questions.
+  - Which group tends to make more money---people [with]{.twocolor-green} or [without]{.twocolor-red} 4-year degrees?
+- But it's hard to be precise just eyeballing things. It helps to look at numerical summaries.
+- I've overlaid --- in black --- the mean income $\pm$ one standard deviation for each group.
+  - That's shown by the dot's position and its 'arms' on the y-axis.
+  - Its position on the x-axis shows the *mean years of schooling* within the group.
+
+## The Dichotomous Version
+
+```{r}
+#| out-height: 600px
+
+ggplot(earnings) + geom_point(aes(x=dichotomous.education, y=income, color=degree), 
+                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+                   scale_x() + scale_y() + guides(color=FALSE) + 
+                   geom_pointrange(aes(x=meanx.dichotomous, y=mean, ymin=mean-sd, ymax=mean+sd), data=binary.summaries)
+```
+
+- It's worth visualizing the information lost by dichotomizing education.
+- To do this, we can look at a similar plot without that information. This one.
+- In it, I've replaced the x-coordinates with random values that tell us nothing beyond group membership.
+- People [without]{.twocolor-red} 4-year degrees get random values uniformly distributed between 8 and 14. 
+    - That's the range of *years of schooling* in that group.
+- People [with]{.twocolor-green} 4-year degrees get random values between 16 and 20. Same deal.
+
+## Fine Comparisons
+
+```{r}
+#| out-height: 600px
+
+earnings$foreground = TRUE
+jitter.nocolor = function(earnings) { 
+  ggplot(earnings) + geom_point(aes(x=education, y=income, alpha=foreground), 
+                                size=dot.size, position=position_jitter(seed=0,w=.3), color='#F7766D') +
+                                scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.2)) + 
+                                guides(color=FALSE, alpha=FALSE)
+} 
+
 summaries = earnings %>% 
           group_by(education) %>% 
-          summarize(mean=mean(income), sd=sd(income))
-earnings.jitter + geom_point(aes(x=education, y=mean), size=dot.size, data=summaries)
+          summarize(mean=mean(income),
+                    sd=sd(income))
+                   
+jitter.nocolor(earnings) + geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries)
 ```
-:::
 
-::: {.fragment .current-visible data-fragment-index="3"}
-Here's the same thing, with the years of education shuffled within each group.
-```{r scatter-plot-years-mean-shuffled}
+- Let's think about what we can do with the additional information we have now.
+- One simple option is to work with the finest grouping we can.
+- We can, e.g., look at the income mean and standard deviation for people with 8,9,10, etc. years of schooling.
+- Or compare any pair of those groups. It's natural to look at groups that are in some sense adjacent.
+    - 18 vs. 16: the value of a masters' degree (only) vs. a 4-year one (only).
+    - 16 vs. 14: the value of a 4-year degree (only) vs. a 2-year degree (only).
+    - 14 vs. 12: the value of a 2-year degree (only) vs. a high school degree (only).
+
+## Fine Comparisons---Disadvantages
+
+```{r}
 #| out-height: 600px
-summaries.shuffle = earnings.shuffle %>% 
-          group_by(education) %>% 
-          summarize(mean=mean(income), sd=sd(income))
-earnings.jitter.shuffled + geom_point(aes(x=education, y=mean), data=summaries.shuffle, size=dot.size)
+jitter.nocolor(earnings) + geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries)
 ```
+
+- This is essentially the same as what we did when we dichotomized education.
+  - We just 'forget' the other groups. We don't look at them.
+  - That's great if we know exactly what we're interested in---and it's something like that.
+- But it's not so great if we're a bit less focused.
+  - That'd mean we might have to think about/report a lot of different numbers.
+  - It can get to be too much. We're not summarizing enough.
+
+## Coarsening
+
+```{r}
+#| out-height: 600px
+jitter.nocolor(earnings) + geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries)
+```
+
+- One remedy is to go back to working with coarser groupings. We can make up own.
+    - &gt;16: people with graduate degrees. 
+    - &le;12: people who haven't been to college --- or to be more precise, haven't completed a year of it.
+- And we can compare pairs of these coarsened groups.
+- **Activity.**  Put these into words and --- for a comparison of mean income --- mathematical notation and **R** code.
+    -  &gt;16 vs. 16 
+    -  14 vs. &le;12
+
+
+## A Coarsened Comparison: &gt;16 vs. 16
+
+```{r}
+#| out-height: 600px
+earnings$foreground = earnings$education >= 16 
+jitter.nocolor(earnings) + geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education >= 16,])
+```
+
+### In words
+
+::: fragment
+
+People with graduate degrees vs. people with 4-year degrees (only). 
 :::
 
-::::
+## A Coarsened Comparison: &gt;16 vs. 16
 
-## dfsd
+```{r}
+#| out-height: 600px
+jitter.nocolor(earnings) + geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education >= 16,])
+```
 
-:::: {.r-stack}
+### In math
 
-::: {.fragment .fade-out data-fragment-index="0"}
-### We haven't lost anything.
+::: fragment
 
-- You have a four year degree if, and only if, you have $12+4=6$ years of education.
-- Thinking visually, we can get the plot we had before by shuffling the red and green dots.
-- This means we can still see how much people with and without 4-year degrees tend to make.
-- But not shuffling lets us see some new stuff, too. 
-
-### What else is there to see?
-:::
-
-::: {.fragment .current-visible data-fragment-index="0"}
-
-### What do you see, in purely visual terms?
+- Option 1. A compact, readable version
 $$
+\frac{\sum_{i:X_i > 16} Y_i}{\sum_{i:X_i > 16} 1} - \frac{\sum_{i:X_i = 16} Y_i}{\sum_{i:X_i = 16} 1} 
 $$
 
-### What does it mean?
+- Option 2. A verbose version that's easier to use in probability calculations
 $$
+\frac{\sum_{i=1}^n \ind{18,20}(X_i) Y_i}{\sum_{i=1}^n \ind{18, 20}(X_i)} - \frac{\sum_{i=1}^n\ind{16}(X_i)Y_i}{\sum_{i=1}^n \ind{16}(X_i)} 
+\ \ \text{ where } \ \ 1_S(x) = \begin{cases} 1 & \text{ if } x \in S \\ 0 & \text{ otherwise} \end{cases}.
+\\
 $$
 
 :::
 
-::::
+## A Coarsened Comparison: &gt;16 vs. 16
 
-::: {.notes}
+```{r}
+#| out-height: 600px
+jitter.nocolor(earnings) + geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education >= 16,])
+```
 
-### One thing I see
-The centers of our subsamples are going up as we move to the right.
+### In code
 
-### Meaning
-Even among people with (or without) a 4-year degree, 
-people with more education tend to make more money.
+::: fragment
 
-:::
-
-
-## Pre-processing
-
+- Option 1. A compact, readable version
 ```{r}
 #| echo: true
-education=case_match(cps.data$a_hga,
-                          0  ~ 0,   # child
-                          31 ~ 0,   # < grade 1
-                          32 ~ 4,   #  grade 1-4
-                          33 ~ 6,   #  grade 5-6
-                          34 ~ 8,   #  grade 7-8 
-                          35 ~ 9,   #  grade 9
-                          36 ~ 10,  #  grade 10
-                          37 ~ 11,  #  grade 11
-                          38 ~ 11,  #  grade 12 no diploma
-                          39 ~ 12,  #  high school grad
-                          40 ~ 13,  #  some college
-                          41 ~ 14,  #  associate degree (vocational)
-                          42 ~ 14,  #  associate degree (academic)
-                          43 ~ 16,  #  bachelors degree
-                          44 ~ 18,  #  masters degree
-                          45 ~ 20,  #  professional school degree
-                          46 ~ 20)  #  doctorate
-```         
-
-- We've had to make a few things up in translation.
-  - There's no differentiation between a 1 or 2-year masters; we assume 2.
-  - We're assuming professional and doctoral degrees take 4 years; that's approximate.
-  - Nobody has 17 or 19 years in our plots; that's why.
-- That's part of data analysis. 
-- Ultimately, you'll want to be careful about quirks introduced by translation.
-  - But it's important to keep your job manageable. 
-  - It can help to ignore the quirks when you're getting started.
-
-
-## Subsamples 
-
-```{r}
-#| out-height: 250px
-years = unique(earnings$education)
-ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
-                              size=dot.size, position=position_jitter(w=.2), alpha=.2) +
-                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
-                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
-                   guides(color=FALSE)
-
+mean(Y[X > 16]) - mean(Y[X==16])
 ```
 
-
-:::: {.r-stack}
-
-::: {.fragment .fade-out data-fragment-index="0"}  
-- When we thought of education as binary, we only had two subsamples to talk about.
-  - People with 4-year degrees --- the [green dots]{.twocolor-green}.
-  - People without them --- the [red dots]{.twocolor-red}.
-- Now that we're taking a more granular view, we can talk about *many*.
-:::
-
-::: {.fragment .current-visible data-fragment-index="0"}
-- People with $x$ years of education for $x=10,11,\ldots$.
-     - This is the *finest* way to break down our sample in terms of $X$.
-- People with and without 4-year degrees, as before.
-     - This is a coarser breakdown. They're *aggregates*.
-     - To get these, we combine our finer subsamples.
-- People whose highest degree is graduate, 4-year,  2-year, high-school, or none.
-     - That's in between. It's a finer aggregate.
+- Option 2. A verbose version that's easier to combine with more abstract code
+```{r}
+#| echo: true
+groups = list(a = c(18,20), b=16)
+mean(Y[X %in% groups$a]) - mean(Y[X %in% groups$b]) 
+```
 
 :::
 
-::::
-
-
-## New Questions
-
-Taking this more granular view of education allows us to pose new questions.
-
-1. What's the typical difference in income between people with *exactly* 16 years of education
-   and *exactly* 12?
-    - This is a different question than the one we addressed in review, but it has a similar structure.
-    - We want a summary of income differences in two groups. Those can be subsamples or subpopulations.
-    - We can calculate and relate these summaries exactly like we did in review.
-2. What's the typical difference in income between people with 4-year degrees and people without them?
-    - That's exactly the question we talked about in review.
-    - We'll talk about how to calculate it a different way that'll generalize better to other questions.
-    - We can check our work. Obviously our answers should be exactly the same as we got earlier in the semester.
-3. How much change would we expect in a similar population in which people tend to get an additional year of education?
-    - This is a question unlike the ones we talked about earlier.
-    - We'll need to be a bit careful about what we mean.
-    - But once we've gotten there, we can base our calculations on ones we've done already.
-
-More for HW.
-
-## Q1
+## A Coarsened Comparison: 14 vs &le;12
 
 ```{r}
-#| out-height: 250px
-earnings$highest.degree = case_match(earnings$education,
-                            0:11 ~ 'none',
-                            12:13 ~ 'high school',
-                            14  ~   'associates',
-                            16  ~   'bachelors',
-                            18:20 ~ 'graduate')
-
-fine = earnings %>% group_by(education) %>% summarize(mean.income = mean(income))
-coarse = earnings %>% group_by(degree) %>% summarize(mean.income = mean(income), lb=min(education), ub=max(education)) 
-intermediate = earnings %>% group_by(highest.degree) %>% summarize(mean.income = mean(income), lb=min(education), ub=max(education))
-
-base.plot = ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
-                              size=dot.size, position=position_jitter(w=.2), alpha=.2) +
-                   scale_y_continuous(labels=label_dollar(), limits=c(0,3e5)) + 
-                   scale_x_continuous(breaks=years, labels=sprintf('%d years', years)) + 
-                   guides(color=FALSE)
-
-base.plot + geom_segment(aes(x=education-.2, xend=education+.2, y=mean.income, yend=mean.income), data=fine)
+#| out-height: 600px
+earnings$foreground = earnings$education <= 14
+jitter.nocolor(earnings) + geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 14,])
 ```
 
+### In words
 
+::: fragment
+People with 2-year degrees (only) vs. people who haven't completed a year of college.
+:::
 
-## Q2
+## A Coarsened Comparison: 14 vs &le;12
+
 ```{r}
-base.plot + geom_segment(aes(x=lb-.2, xend=ub+.2, y=mean.income, yend=mean.income), data=coarse) 
+#| out-height: 600px
+jitter.nocolor(earnings) + geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 14,])
 ```
 
-  - Means of Aggregates are Aggregates of Means
-  - Weighted Aggregates
-  - [do somethoing with fine picture combo]
-
-## Q3
-
-- some kind of picture showing jumps
-
-
-
-# Preparation for Inferential Analysis
-
-## Review of Calculation Techniques
-
-- All of our questions are comparisons, so the closest we've come is the comparison we did in the binary case.
-- We'll review what happens when we estimate the difference in population means by the difference in sample means.
-- In particular, we'll calculate an approximation that estimator's sampling distribution.
-  - We'll start by showing that it's unbiased.
-  - Then we'll calculate its variance.
-  - We'll wave our hands about normality.
-
-## Unbiasedness of subsample means
-- We'll start by showing that a subsample's mean is an unbiased estimate of the corresponding subpopulation mean.
-  - We'll think about the subsample and subpopulation with $X_i=x$ for some value $x$ 
-  - e.g. $X_i=\with$ for people with 4-year degrees.
-- That means its expectation *is* the subpopulation mean. 
-- We can think of our subsample mean as an estimate of the mean of the corresponding *finite subpopulation*.
-- But we'll focus on interpreting it as an estimate of the mean of the *infinite subpopulation* from which they're both drawn.
-$$
-\begin{aligned}
-\hat\mu(x) &= \frac{1}{N_x} \sum_{i:X_i=x} Y_i \quad \text{ for } \quad N_x = \sum_{i:X_i=x} 1  && \text{subsample mean} \\
-\mu(x) &= \E[Y_i \mid X_i=x] && \text{infinite subpopulation mean} \\
-\end{aligned}
-$$
-
-## Proof Prep: Notation and Speaking Conventions
-  
-  - We'll use capitals for random variables and lower case for nonrandom ones
-    - e.g. we'll use $X$ for the random variable and $x$ for a value it can take on.
-    - and  we'll say **big x** and **little x** to distinguish between the two.
-    - same deal for $Y$ and $y$, \ $Z$ and $z$, etc.
-  - When describing a random sample, we'll use $X_i$ for the $i$th person's value of $X$.
-    - and we'll say **big x i** if we need to be precise. 
-    - but we'll usually just say **big x** and assume you know what we mean.
-   - This gives us a two ways to pronounce $X_i = x$ 
-      - **big x i equals little x** is the precise one.
-      - **big x equals little x** is the usual one.
-   
-
-## Proof Prep: Thinking clearly about conditioning
-
-- It's important to distinguish between two things
-  1.  The *conditional expectation function* $\mu(x)=\E[Y \mid X=x]$.
-    - $\mu$ is a function; evaluated at $x$, it's a number. It's not random.
-    - It's the mean of the infinite subpopulation of people with $X=x$.
-    - This is the thing we're trying to estimate with $\hat\mu(x)$.
-  2.  The conditional expectation $\mu(X)=E[Y \mid X]$.
-    - $\mu(X)$ is the mean of a *random* infinite subpopulation of people.
-    - It's the conditional expectation function *evaluated at* the random variable $X$.
-    - This is the sort of thing that shows up when we use the law of iterated expectations.
-- Let's do an easy calculation to try to make this clear. 
-- We'll calculate the mean income in our population using the law of iterated expectations. 
-
-## Example: Conditioning
-  
-  - Let's think about a random person drawn from this population
-    - $Y$ is their income 
-    - $X$ is an indicator for having a four-year degree. 
-  - Suppose the subpopulation means are [100k]{.twocolor-green} for people with degrees 
-    and [50k]{.twocolor-red} for people without.
-  - And that 7/10 of our population has degrees.
-  
-  What is $\E(Y \mid X)$?
+### In math
 
 ::: fragment
 
-  - It's a random variable that is *either* 100k or 50k. A *random value* of the function $\mu$.
-    - It's [$\mu(\with)=100k$]{.twocolor-green} with probability $7/10$,   when $X=\with$. 
-    - And it's [$\mu(\without)=50k$]{.twocolor-red} with probability $3/10$, when $X=\without$.
+- Option 1. A compact, readable version
+$$
+\frac{\sum_{i:X_i = 14} Y_i}{\sum_{i:X_i = 14} 1} - \frac{\sum_{i:X_i \le 12} Y_i}{\sum_{i:X_i \le 12} 1} \\
+$$
+
+- Option 2. A verbose version that's easier to use in probability calculations 
+
+$$
+\frac{\sum_{i=1}^n \ind{14}(X_i) Y_i}{\sum_{i=1}^n \ind{14}(X_i)} - \frac{\sum_{i=1}^n\ind{[8 \ldots 12]}(X_i)Y_i}{\sum_{i=1}^n \ind_{[8 \ldots 12]}(X_i)} 
+\ \ \text{ where } \ \ 1_S(x) = \begin{cases} 1 & \text{ if } x \in S \\ 0 & \text{ otherwise} \end{cases}.
+$$
+
 :::
 
-What is $\E(Y)$?
+## A Coarsened Comparison: 14 vs &le;12
+
+```{r}
+#| out-height: 600px
+jitter.nocolor(earnings) + geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 14,])
+```
+
+### In code
 
 ::: fragment
 
-  - It's the mean of this random variable. A number.
-$$
-\begin{aligned} 
-E\qty{ E\qty( Y \mid X ) } 
-&= E(Y \mid X=\with)P(X=\with) + E(Y \mid X=\without)P(X=\without) \\
-&= 100k \cdot 7/10 + 50k \cdot 3/10 = 70k + 15k = 85k.
-\end{aligned}
-$$
+- Option 1. A compact, readable version
+```{r}
+#| echo: true
+mean(Y[X == 14]) - mean(Y[X<=12])
+```
+
+- Option 2. A verbose version that's easier to combine with more abstract code
+```{r}
+#| echo: true
+groups = list(a = c(14), b=8:12)
+mean(Y[X %in% groups$a]) - mean(Y[X %in% groups$b]) 
+```
 
 :::
 
-## Unbiasedness Proof
-### Step 1
+## Coarsening and Reporting
 
-- Rewrite so we're summing over the whole sample.
-- To do this, we use subsample indicators $1_x(X_i)$.
-- These are random variables that are 
-  - 1 if the person is in the subsample 
-  - 0 otherwise.
-$$
-\begin{aligned}
-\hat\mu(x) 
-&= \frac{1}{N_x} \sum_{i:X_i=x} Y_i               &&\text{ for } \quad N_x = \sum_{i:X_i=x} 1  \\
-&= \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ Y_i   &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) 
-\end{aligned}
-$$
+```{r}
+#| out-height: 600px
 
+group = factor(1:4, 
+               levels=1:4, 
+               labels=c('no college degree', '2-year degree', '4-year degree', 'graduate degree'))
 
-### Indicators
-:::: {.r-stack}
-
-::: {.fragment .fade-out data-fragment-index="0"}
-$$
-\ind{x}(X_i) = \begin{cases} 1 & \text{ if }  X_i = x \\
-                             0 & \text{ otherwise } \end{cases}
-$$
-
-:::
-
-::::
-
-## Unbiasedness Proof 
-### Step 2
-
-- Rewrite in terms of an expectation that's conditional on our covariates.
-- The law of iterated expectations tells us we can.
-$$
-\begin{aligned}
-\E \hat\mu(x) 
-&= \E\qty[\frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ Y_i] \quad &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) \\
-&= \E\qty[ \inblue{\E\qty{ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ Y_i  \mid X_1 \ldots X_n}} ] 
-\end{aligned}
-$$
-
-### The law of iterated expectations
-$$
-\E Y = \E\qty[ \E\qty{ Y \mid X  } ] 
-$$
-To calculate the mean of $Y$, we can 
-  - first average within subpopulations
-  - then across subpopulations.
-
-## Unbiasedness Proof
-### Step 3
-
-- Move the conditional expectation inward. It's linear, so we can.
-- We can go all the way in to $Y_i$. Everything else is a function of the covariates.
-$$
-\begin{aligned}
-\E \hat\mu(x) 
-&= \E\qty[ \inblue{\E \qty{ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ Y_i  \mid X_1 \ldots X_n}}  ]  &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) \\
-&= \E\qty[ \frac{1}{N_x} \inblue{\E\qty{ \sum_{i=1}^n \ind{x}(X_i)\ Y_i \mid X_1 \ldots X_n }} ]  \\
-&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \inblue{\E\qty{ \ind{x}(X_i)\ Y_i \mid X_1 \ldots X_n }} ]  \\
-&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\E\qty{ Y_i \mid X_1 \ldots X_n }} ]  
-\end{aligned}
-$$
-
-:::: columns
-::: column
-### Linearity of expectations
-$$ 
-\begin{aligned}
-\E\qty( a Y + b Z ) 
-&= \E\qty(aY) + \E\qty(bZ) \\
-&= a\E(Y) + b\E(Z)  
-\end{aligned}
-$$
-
-:::
-
-::: column
-
-### Linearity of *conditional* expectations
-$$ 
-\begin{aligned}
-\E\qty{ a(X) Y + b(X) Z \mid X } 
-&= \E\qty{a(X)Y \mid X} + \E\qty{ b(X)Z \mid X} \\
-&= a(X)\E\qty(Y \mid X) + b(X)\E\qty(Z \mid X)
-\end{aligned}
-$$
-
-:::
-
-::::
-
-::: notes
-
-  - Linearity tells us two things.
-    - To average a sum of two things, we can take two averages and sum.
-    - To average a constant times a random variable, we can multiply the random variable's average by the constant.
-    - In other words, we can *distribute* expectations and can pull constants out of them.
-  - Conditional linearity tells us the same thing, but with a twist.
-    - When we condition on $X$, we're working with subpopulations in which $X$ is constant.
-    - This means we can we can act as if functions of $X$ *are* constants.
-    - So we can pull them out of expectations that are conditional on $X$.
-    
-:::
-
-
-## Unbiasedness Proof
-### Step 4
-
-- Stop conditioning one person's outcome on *other people's covariates*. 
-- They're independent, so we can. And the result is familiar. 
-- We get each person's conditional mean outcome $\mu(X_i)$
-$$
-\begin{aligned}
-\E \hat\mu(x) 
-&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\E\qty{ Y_i \mid X_1 \ldots X_n }} ]  &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i)  \\
-&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\E\qty{ Y_i \mid X_i}} ] \\ 
-&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\mu(X_i)} ]  
-\end{aligned}
-$$
-
-### Irrelevance of independent conditioning variables
-$$ \E \qty( Y \mid X, X' ) = \E \qty( Y \mid X ) \quad \text{ when $X'$ is independent of $X,Y$ } $$
-If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the relationship between them.
-
-
-## Unbiasedness Proof
-### Step 5
-
-- It's the *random function value* $\mu(X_i)$.
-- We now replace with the fixed function value $\mu(x)$
-- We can because it's multiplied by an *indicator* that's nonzero only when $X_i=x$.
-$$
-\begin{aligned}
-\E \hat\mu(x) 
-&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\mu(X_i)} ]  &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i)  \\ 
-&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i)\ \inblue{\mu(x)} ]  
-\end{aligned}
-$$
-
-### The Indicator Trick
-$$
-\begin{aligned}
-\ind{x}(X_i)\ \mu(X_i) & \ \ = \ \ 
-\begin{cases} 
-\mu(X_i) & \text{ when } X_i=x \\
-0 &      \text{ otherwise}
-\end{cases} \\
-& \ \ = \ \ 
-\begin{cases}
-\mu(x)  & \ \ \text{ when } X_i=x \\
-0       & \ \ \text{ otherwise }
-\end{cases} 
-\ \ = \ \ \ind{x}(X_i) \ \mu(x)
-\end{aligned}
-$$
-
-
-
-## Unbiasedness Proof
-### Step 6
-
-- We conclude by pulling the constant $\mu(x)$ out of the expectation.
-- We can because expectations are linear.
-- What's left inside is $1/N_x$ times $N_x$, i.e., 1.
-
-$$
-\begin{aligned}
-\E \hat\mu(x) 
-&= \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \ \inblue{\mu(x)} ]   &&\text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) \\
-&= \inblue{\mu(x)} \ \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) ]  \\
-&= \inblue{\mu(x)} \ \E[1] = \inblue{\mu(x)}. 
-\end{aligned}
-$$
-
-### Linearity of Expectations
-$$ 
-\begin{aligned}
-\E\qty( a Y + b Z ) 
-&= \E\qty(aY) + \E\qty(bZ) \\
-&= a\E(Y) + b\E(Z)  
-\end{aligned}
-$$
-
-
-## Proof
-### Summary
-$$
-{\tiny
-\begin{aligned}
-\E \hat\mu(x) =& \E\qty{\frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i}  \\
-\underset{iterated}{=}& \E\qty[ \E\qty{ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ] \\
-\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \E\qty{ \sum_{i=1}^n \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ]  \\ 
-\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \E\qty{ \ind{x}(X_i) Y_i \mid X_1 \ldots X_n} ]  \\ 
-\underset{linearity}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \E\qty{ Y_i \mid X_1 \ldots X_n} ]  \\
-\underset{irrelevance}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \E\qty{Y_i \mid X_i} ] \\
-\underset{definition}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \mu(X_i) ]  \\
-\underset{indicator}{=}& \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) \mu(x) ] \\   
-\underset{linearity}{=}& \mu(x) \E\qty[ \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) ]   \\
-\underset{definition}{=}& \mu(x) \E\qty[ \frac{1}{N_x} N_{x}    ] = \mu(x)\E[ 1 ] = \mu(x)   
-\end{aligned}
+coarsen = function(x) { 
+  case_match(x,
+    8:13  ~ group[1],
+    14    ~ group[2],
+    16    ~ group[3],
+    18:20 ~ group[4])
 }
-$$
 
-## Remark: Indicator Notation
+coarsened.summaries = data.frame(coarsenedX=coarsen(X), Y=Y) %>% 
+  group_by(coarsenedX) %>% 
+  summarize(mean=mean(Y), sd=sd(Y))
 
-- In this proof we used an *indicator* that $X_i$ was equal to $x$.
-- This is a special case of a more general concept: *indicators* that $X_i$ is *in a set*.
-  - In this special case, our set $\{x\}$ contained one element: $x$.
-  - We've used another one, in which our set was an interval $[a \ldots b)$, when we talked about histograms.
-- We can think of these as *indicator functions* evaluated at the random variable $X_i$.
-$$
-\begin{aligned}
-1_{A}(X) &= \begin{cases} 1 & \text{ if } \ X \in A \\
-                             0 & \text{ otherwise } \end{cases} && \text{general case} \\
-\ind{x}(X) &= \begin{cases} 1 & \text{ if }\  X = x \\
-                             0 & \text{ otherwise } \end{cases} && \text{one-element case} \\
-1_{[a \ldots b)}(X) &= \begin{cases} 1 & \text{ if }\  a \le X < b \\
-                             0 & \text{ otherwise } \end{cases} && \text{interval case} 
-\end{aligned}
-$$
+ggplot() + geom_point(aes(x=coarsen(X), y=Y), 
+                      position=position_jitter(seed=0,w=.3), alpha=.1, color='#F7766D') +
+                      scale_y_continuous(labels=label_dollar(), limits=c(-30000,300000))  +
+           geom_pointrange(aes(x=coarsenedX, y=mean, ymin=mean-sd, ymax=mean+sd), 
+                           data=coarsened.summaries, color='black')
+```
 
+- We can also coarsen the data into some intermediate number of groups.
+  - We can report the set of group-specific summaries.
+  - Or visualize them in a plot like this one.
+- This is more information than a two-group comparison but perhaps little enough to be manageable.
 
+## Aggregating Comparisons
 
-## Remark: Indicator Expansion
+```{r}
+#| out-height: 600px
 
-- It's useful to generalize the *indicator trick* we've used in our proof.
-- We can expand a function of a random variable $X$ as a sum of 
-  - the value it takes at every distinct value of $X$
-  - times an indicator that $X$ takes on that value
-$$
-f(X) = f(a) \ \ind{a}(X) + f(b) \ \ind{b}(X) + f(c) \ \ind{c}(X) + \ldots \qfor a\neq b \neq c \ldots.
-$$
+earnings$foreground = earnings$education <= 12
+jitter.nocolor(earnings) + 
+  geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 12,]) +
+  geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
+  geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% c(8,12),], color='blue', linetype='dotted') 
+```
 
-- In our proof, we used this for the function $\mu$.
-- The subsample indicator $1_{x}(X_i)$ *picked out* one term in the expansion.
-$$ 
-\begin{aligned}
-\ind{x}(X_i) \mu(X_i) &= \inblue{\ind{x}(X_i)} \sum_{x'} \inblue{\ind{x'}(X_i)} \ \mu(x') \\
-                      &= \sum_{x'} \inblue{\ind{x}(X_i)\ind{x'}(X_i) }\ \mu(x') \\
-                      &= \sum_{x'} \mu(x') \inblue{\begin{cases} 1 & \text{ if } X_i=x' \text{ and } X_i=x \\
-                                                                 0 & \text{ otherwise } \end{cases}} \\
-                      &= \mu(x)  
-\end{aligned}
-$$
-
-
-::: notes
-It's easy to check this equivalence. 
-  - When $X=a$, the expansion's first indicator 'hits' and the others don't. 
-  - That means the expanded version is $f(a)$. That's right.
-  - It's the same for $b,c,\ldots$.
-:::
-
-
-# Below here is old
-
-##  Properties of Population Means: Conditioning
-
-### The law of iterated expectations
-$$
-\E\qty{ \E\qty( Y \mid X ) } \quad \text{ for any random variables $X, Y$} \\
-$$
-To calculate the mean of $Y$, we can average within subpopulations, then across subpopulations.
-
-### Irrelevance of independent conditioning variables
-$$ \E \qty( Y \mid X, X' ) = \E \qty( Y \mid X ) \quad \text{ when $X'$ is independent of $X,Y$ } $$
-If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the relationship between them.
-
-## Properties of Population Means: Linearity
-
-### The linearity of expectations
-$$ 
-\begin{aligned}
-\E\qty( a Y + b Z ) 
-&= \E\qty(aY) + \E\qty(bZ) \\
-&= a\E(Y) + b\E(Z)  \quad \text{ for random variables $Y, Z$ and numbers $a,b$ }
-\end{aligned}
-$$
-  There are two things going on here.
-
-  - To average a sum of two things, we can take two averages and sum.
-  - To average a constant times a random variable, we can multiply the random variable's average by the constant.
-  - In other words, we can *distribute* expectations and can pull constants out of them.
-
-### The linearity of *conditional* expectations
-$$ 
-\begin{aligned}
-\E\qty{ a(X) Y + b(X) Z \mid X } 
-&= \E\qty{a(X)Y \mid X} + \E\qty{ b(X)Z \mid X} \\
-&= a(X)\E\qty(Y \mid X) + b(X)\E\qty(Z \mid X)
-\end{aligned}
-$$
-   
-This is like linearity of expectations, but with a twist.
-
-   - When we condition on $X$, we're working with subpopulations in which $X$ is constant.
-   - This means we can we can act as if functions of $X$ *are* constants.
-   - So we can pull them out of expectations that are conditional on $X$.
-
-## Thinking clearly about conditioning
-
-- It's important to distinguish between two things
-  1.  The *conditional expectation function* $\mu(x)=\E[Y \mid X=x]$.
-    - $\mu$ is a function; evaluated at $x$, it's a number. It's not random.
-    - It's the mean of the infinite subpopulation of people with $X=x$.
-    - This is the thing we're trying to estimate with $\hat\mu(x)$.
-  2.  The conditional expectation $\mu(X)=E[Y \mid X]$.
-    - $\mu(X)$ is the mean of a *random* infinite subpopulation of people.
-    - It's the conditional expectation function *evaluated at* the random variable $X$.
-    - This is the sort of thing that shows up when we use the law of iterated expectations.
-- Let's do an easy calculation to try to make this clear. 
-- We'll calculate the mean income in our population using the law of iterated expectations. 
-
-## Example: Conditioning
+- Another option---rather than comparing aggregates---is aggregating comparisons.
+- For example, we can summarize the 'value' of each year of high school by the associated increment in mean income.
+  - Visually, that's the slope of the dashed black line leading up to it.
+- To reduce these to a single number, we can take the average of the increments.
+  - Visually, that's the slope of the *secant*---the dotted blue line. In a sense.
+- Why in a sense? Because there are two things we might mean by 'the average of the increments'.
   
-  - Let's think about a random person drawn from this population
-    - $Y$ is their income 
-    - $X$ is an indicator for having a four-year degree. 
-  - Suppose the subpopulation means are [100k]{.twocolor-green} for people with degrees 
-    and [50k]{.twocolor-red} for people without.
-  - And that 7/10 of our population has degrees.
-  
-  What is $\E(Y \mid X)$?
+## Different Ways of Aggregating
 
-::: fragment
+```{r}
+#| out-height: 600px
 
-  - It's a random variable that is *either* 100k or 50k. A *random value* of the function $\mu$.
-    - It's [$\mu(\with)=100k$]{.twocolor-green} with probability $7/10$,   when $X=\with$. 
-    - And it's [$\mu(\without)=50k$]{.twocolor-red} with probability $3/10$, when $X=\without$.
-:::
-
-What is $\E(Y)$?
-
-::: fragment
-
-  - It's the mean of this random variable. A number.
-$$
-\begin{aligned} 
-E\qty{ E\qty( Y \mid X ) } 
-&= E(Y \mid X=\with)P(X=\with) + E(Y \mid X=\without)P(X=\without) \\
-&= 100k \cdot 7/10 + 50k \cdot 3/10 = 70k + 15k = 85k.
-\end{aligned}
-$$
-
-:::
-
-
-Unbiasedness of the sample mean
-$$
-\begin{aligned}
-\text{Prove } \ \E \hat\mu(x) &= \mu(x) \qquad \text{ where } \\
-\hat\mu(x) &= \frac{1}{N_x} \sum_{i=1}^n \ind{x}(X_i) Y_i \quad \text{ for } \quad N_x = \sum_{i=1}^n \ind{x}(X_i) \\
-\mu(x) &= \E[Y_i \mid X_i=x] && 
-\end{aligned}
-$$
-
-
-### Hint: The Indicator Trick
-
-- Using the properties we've reviewed, we can write $\E \hat \mu(x)$ in terms of the random variable $\mu(X_i)$.
-  - That's a *random value* of the conditional expectation function $\mu$.
-  - We want an expression in terms of the value $\mu(x)$ it takes on when $X_i=x$. 
-- In this context, it seems like they should be the same. Everyone in our subsample has $X_i=x$.
-- To formalize this, we observe that $\mu(X_i)$ appears multiplied by the indicator $\ind{x}(X_i)$.
-- And when that indicator is nonzero, $\mu(X_i)$ and $\mu(x)$ coincide.
-$$
-\mu(X_i)\ind{x}(X_i) = 
-\begin{cases} 
-\mu(X_i) & \text{ when } X_i=x \\
-0 &      \text{ otherwise}
-\end{cases} 
-=
-\begin{cases}
-\mu(x)  & \text{ when } X_i=x \\
-0       & \text{ otherwise }
-\end{cases} 
-= \mu(x)\ind{x}(X_i)
-$$
+earnings$foreground = earnings$education <= 12
+jitter.nocolor(earnings) + 
+  geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 12,]) +
+  geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
+  geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% c(8,12),], color='blue', linetype='dotted') 
+```
 
 
 
+1. The average, over the four years of high school, of the increments. 
+    - That's the secant slope.
+2. The average, over individuals with &ge;1 year of high school, of the increments *affecting them* in their last year. 
+    - That's something different. For the majority of these people, their last year was their fourth.
+    - So that average is dominated by the increment from the third to fourth year. 
 
+**Question.** Does that mean it's bigger or smaller than the average over years?
 
-## Variance ...
+## The Bigger Aggregate Increment
 
+```{r}
+#| out-height: 600px
 
-# Q1
+earnings$foreground = earnings$education <= 12
+jitter.nocolor(earnings) + 
+  geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 12,]) +
+  geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
+  geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% c(8,12),], color='blue', linetype='dotted') 
+```
 
-# Q2
-
-# Q3
+Blah
 
 
