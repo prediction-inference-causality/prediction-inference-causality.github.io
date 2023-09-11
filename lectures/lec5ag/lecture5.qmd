@@ -1,0 +1,794 @@
+---
+title: "QTM 220: Lecture 5"
+subtitle: "Inference for Subpopulation Means and Differences"
+format: 
+  clean-revealjs:
+    height: 1000
+    width: 1290
+    theme: [default, "class.scss"]
+    smaller: true
+    slide-number: true
+    pdf-separate-fragments: true
+    fig-format: svg
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
+---
+
+
+```{r load-libraries}
+library(purrr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(ggplot2)
+library(htmltools)
+library(kableExtra)
+library(scales)
+library(cpsR)
+library(mapdata)
+
+options(knitr.kable.NA = '')
+
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+
+library(cpsR)
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+```
+
+```{r ggplot-themes}
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+		    panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+		    axis.ticks.x = element_blank(),
+		    axis.ticks.y = element_blank(),
+		    axis.text.x  = element_text(colour = "#aaaaaa"),
+		    axis.text.y  = element_text(colour = "#aaaaaa"),
+		    axis.title.x  = element_text(colour = "#aaaaaa"),
+		    axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+   	         axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+	         panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+```{r table-styling}
+ellipsis <- function(df, nhead=5L, ntail=2) {
+    rownames(df) = as.character(1:nrow(df))
+    stopifnot("data.frame" %in% class(df))
+    els <- rep(NA, ncol(df)) %>% 
+        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
+        data.frame(stringsAsFactors=FALSE) %>% 
+        tibble::as_tibble()
+    rownames(els) = "⋮"
+    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
+}
+```
+
+
+```{r get-california-data}
+#| cache: true
+
+california.state.code = 6
+cps.data = cpsR::get_asec(year=2022, vars=c('pearnval', 'gestfips', 'h_numper', 'htotval', 'a_age', 'a_hga','gereg', 'a_maritl', 'a_sex','peafever','a_wkstat','gtco'), key=census.api.key)
+```
+
+```{r process-california-data}
+all.earnings = data.frame(age=cps.data$a_age,
+                          state.code = cps.data$gestfips,
+						  county.code = cps.data$gtco,
+                          income=cps.data$htotval, 
+                          education=case_match(cps.data$a_hga,
+                                          0  ~ 0,   # child
+                                          31 ~ 0,   # < grade 1
+                                          32 ~ 4,   #  grade 1-4
+                                          33 ~ 6,   #  grade 5-6
+                                          34 ~ 8,   #  grade 7-8 
+                                          35 ~ 9,   #  grade 9
+                                          36 ~ 10,  #  grade 10
+                                          37 ~ 11,  #  grade 11
+                                          38 ~ 11,  #  grade 12 no diploma
+                                          39 ~ 12,  #  high school grad
+                                          40 ~ 13,  #  some college
+                                          41 ~ 14,  #  associate degree(vocational)
+                                          42 ~ 14,  #  associate degree (academic)
+                                          43 ~ 16,  #  bachelors degree
+                                          44 ~ 18,  #  masters degree
+                                          45 ~ 20,  #  professional school degree
+                                          46 ~ 20)) #  doctorate
+
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+all.earnings$employed<- ifelse(cps.data$a_wkstat >5, 0,ifelse(cps.data$a_wkstat<2,NA,1))
+all.earnings$degree = factor(all.earnings$education >= 16,
+                    levels=c(FALSE, TRUE), 
+                    labels=c('no 4-year degree','4-year degree')) 
+
+earnings = all.earnings[all.earnings$age %>% in.interval(c(25,35)) & 
+                        all.earnings$state.code == california.state.code &
+                        all.earnings$education > 8, ]
+
+rownames(earnings)=NULL
+earnings$person = 1:nrow(earnings)
+n = nrow(earnings)
+```
+
+
+
+```{r maps}
+#| cache: true
+
+## All of this is just to make maps showing the sample and population.
+## And this code will be used later, so some of what's written here isn't 
+## used in the lecture. I wouldn't read it unless you're interested in drawing maps in R.
+
+# county info from https://en.wikipedia.org/wiki/List_of_counties_in_California
+# converted to csv using https://wikitable2csv.ggor.de
+to.number = function(s) { as.numeric(str_trim(gsub(",", "", s))) }
+ca_county_info = read.csv('california_county_info.csv') %>%
+  mutate(subregion = tolower(sub(' County', '', County))) %>%
+  mutate(pop = to.number(Population..2022.)) %>%
+  mutate(area = to.number(sub('sq.*', '', Area))) 
+
+earnings.county = left_join(earnings, ca_county_info[,c('FIPS.code', 'subregion')], by=c('county.code' = 'FIPS.code'))
+earnings$county = earnings.county$subregion
+earnings$county[is.na(earnings$county)]='unknown'
+	
+# To give our survey recipients a bit more reality, we'll give them fake locations on a map
+# And we'll make up a population of California residents that they're sampled from
+# maps are based on code from https://eriqande.github.io/rep-res-eeb-2017/map-making-in-R.html
+
+cps.sampling.ratio = 1/2500
+counties = map_data("county")
+ca_county = counties %>%
+  filter(region == "california")
+ca_county_centers = ca_county %>%
+  group_by(subregion) %>%
+  summarize(county.lat = mean(lat), county.long=mean(long))
+
+ca_county_more = left_join(ca_county_centers, ca_county_info, by="subregion")
+ca_all = left_join(ca_county, ca_county_more, by="subregion")
+
+
+ca.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(fill='gray', color = "white", alpha=.4) +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+
+ca.pop.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(aes(fill = pop/area), color = "white") +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+
+## we'll make up a population as follows
+# 1. choose the number of people to be the number of people in our sample scaled up to account for the cps sampling ratio
+# 2. for each, sample a county with probability proportional to its finite.population
+# 3. for each, sample a latitude and longitude by taking a randomly weighted combination of the    
+#    county's vertices. As long as the county is convex, these points will be inside the county.
+# 4. we'll give them a degree too, chosen independently of all else from the empirical distribution on the sample
+npop = nrow(earnings) / cps.sampling.ratio
+
+# takes a list of subregions, possibly with duplicates
+# for each element, chooses random lat/long coordinates within the sample.subregion
+# by taking a random convex combination of the subregion's vertices
+sample.within.subregion = function(subregions) {
+  output = data.frame(subregion=subregions, lat=NA, long=NA)
+  for(subregion in unique(subregions)) { 
+      vertices = ca_county[ca_county$subregion==subregion, c('lat','long')]
+      U = sum(subregions==subregion)
+      V = nrow(vertices)
+      weights = abs(rt(U*V, 1))
+      dim(weights) = c(U,V)
+      weights = (1/rowSums(weights)) * weights
+      output[subregions==subregion, c('lat', 'long')] = 
+                 cbind(weights %*% vertices$lat, weights %*% vertices$long)
+    }
+    output
+}
+
+finite.population.subregion = sample(ca_county_more$subregion, size=npop, replace=TRUE, prob=ca_county_more$pop)
+finite.population = sample.within.subregion(finite.population.subregion)
+finite.population$degree = sample(earnings$degree, nrow(finite.population), replace=TRUE)
+finite.population$group=1 # for plotting
+
+display.population = sample_n(finite.population, min(100000, nrow(finite.population)))
+
+# and we'll force the degree-distribution in the sample to match our survey responses
+our.sample = sample_n(finite.population, nrow(earnings))
+our.sample$degree=earnings$degree
+
+pop.plot = ca.plot + geom_point(aes(x=long, y=lat), data=display.population, size=.02, alpha=.1) 
+sample.plot = ca.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
+pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.population, size=.01, alpha=.1)  
+sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
+```
+
+```{r visualization-defaults}
+scale_y = function(limits=c(-.3e5, 3e5)) { 
+  scale_y_continuous(labels=label_dollar(), limits=limits)
+}
+
+years = 8:20
+scale_x = function(limits=c(min(years)-.5, max(years)+.5)) { 
+  scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=limits)
+}
+
+dot.size = 2
+```
+
+## Review
+
+
+- Last time, we talked about what a random sample (with replacement) from a population tells us about subpopulation proportions.
+  - In particular, we looked at the rate of voting among Black and non-Black Georgia-registered voters in 2020. 
+- We saw that the sample analog---our subsample proportion---was likely to be close. 
+  - It was wess close, however, than the whole-sample proportion was to the whole-population proportion--- a result of the relatively small sample size.
+- We also saw that we could accurately predict how close to the subpopulation proportion we might be by using confidence intervals. 
+- And that we could do the same to relate *differences* in subsample proportions to differences in subpopulation proportions. 
+- To calibrate our confidence intervals, we used the *bootstrap sampling distribution* as an estimate of the sampling distribution.
+
+## Today
+
+- Today, we'll see what a random sample (with replacement) from a population tells us about subpopulation means and differences in them.
+- Returning to our CPS Income data example, we'll consider ...
+  - incomes among people [with 4-year degrees]{.twocolor-green} 
+  - income differences between people [with 4-year degrees]{.twocolor-green} and people [without them]{.twocolor-red}.
+- Our population will be the set of California residents 
+    - between the ages of 25 and 35
+    - with at least an 8th-grade education
+- It's an imperfect but reasonable approximation to think of our data as
+  a representative sample (with replacement) from this population.
+  
+
+:::: columns
+
+::: column
+```{r map-sample}
+#| fig-width: 5
+#| out-height: 500px
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) + guides(color=FALSE)
+```
+:::
+
+::: column
+
+```{r table}
+tab = earnings[sample(nrow(earnings)), ]
+tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
+ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=8,ntail=2)
+ellipsis.tab %>%
+  kable %>% kable_styling() %>% 
+  row_spec(which(ellipsis.tab$education >= 16), background=twocolor.green) %>%
+  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+```
+:::
+
+::::
+
+::: aside
+The locations shown on the map are made up. They're not the actual locations of the people in the sample. \
+The survey includes some location information for some people, but as you can see in the table, not for everyone.
+:::
+
+## Subsample and subpopulation means
+
+```{r}
+earnings.jitter = ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), 
+                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+                   scale_x() + scale_y() + guides(color=FALSE)
+
+summaries = earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
+earnings.jitter + geom_pointline(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries)
+```
+
+- A reasonable starting point for describing income in a subsample is its mean income.
+  - We'll think about the subsample with $X_i=x$ for some value $x$. 
+  - e.g. $X_i=1$ for people with 4-year degrees.
+
+$$ 
+\hat \mu(x) = \frac{1}{N_x}\sum_{i:X_i=x} Y_i \quad \text{ where } \quad N_x = \sum_{i:X_i=1} 1.
+$$
+
+- We can think of our subsample's mean as an estimate of the mean of the corresponding finite subpopulation.
+  - Because we're sampling with replacement, we can think of population means as *expectations*.
+$$ 
+\mu := \frac{1}{M}\sum_{j=1}^M y_j = \E[Y_i]  \quad \text{ when } \quad Y_i = y_1...y_M \quad \text{ each with probability } \quad \frac{1}{M}.
+$$
+
+  - Similarly, we can think of subpopulation means as *conditional expectations*.
+
+$$ 
+\begin{aligned}
+\mu(x) &:= \frac{1}{M_x}\sum_{j:x_j = x }^n y_j = \E[Y_i \mid X_i = x]  \quad 
+&& \text{ when } \quad P(Y_i \mid X_i=x) = \frac{1}{M_x} \quad \text{ for } M_x = \sum_{j:x_j = x }^n 1 \\
+\text{and therefore} 
+&&\text{ when } P\qty{(X_i,Y_i) = (x_1,y_1)} \ldots (x_M, y_M) \quad \text{ each with probability } \quad \frac{1}{M} \\
+\end{aligned}
+$$
+
+- This phenomenon, that we can think of a subsample as a draw from the corresponding subpopulation, 
+  is illustrated by a procedure called *rejection sampling*.
+
+
+## Rejection Sampling in Dice Rolls
+
+- Suppose we want to know the mean dice roll *among dice rolls that are even*.
+::: {.incremental}
+- What's the probability, given that we roll even, that we roll a $2$? Or a $4$? Or a $6$?
+- It's 1/3. How do we know this?
+- Symmetry.
+  - There's no difference in the frequency with which we roll $2$, $4$, and $6$.
+  - So there shouldn't be a difference in the frequency of them even rolls.
+:::
+
+## Rejection Sampling in Survey Context
+
+```{r}
+ellipsis.tab %>%
+  kable %>% kable_styling() %>% 
+  row_spec(which(ellipsis.tab$education >= 16), background=twocolor.green) %>%
+  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+```
+
+- Suppose we want to know the mean income *among people with 4-year degrees*.
+- When we sample with replacement, we are  in effect just rolling a bigger die.
+- As a result, the frequency with which we roll any one person's number --- among any subpopulation --- is the same for all people.
+
+$$
+P(J=j ) = 1/M for all j \in 1 \ldots M 
+\implies 
+P(J=j \mid J \in \{j_1, \ldots, j_{M_x}\}) = \begin{cases} \frac{1}{M_x} & \text{ if } j \in \{j_1, \ldots, j_{M_x}\} \\ 0 & \text{ otherwise } \end{cases}
+$$
+
+```{r}
+ellipsis.tab %>%
+  kable %>% kable_styling() %>% 
+  row_spec(which(ellipsis.tab$education >= 16), background=twocolor.green) %>%
+  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+```
+
+## Plan
+
+- We'll ultimately be talking about point and interval estimates of subpopulation means $\mu(x)$.
+- And using our sampling assumptions, we've seen that we can think of these as *conditional expectations*.
+  - In particular, as the *conditional expectation* $\E[Y_i \mid X_i=x]$ ...
+  - when $(X_i,Y_i)$ takes on the values $(x_1,y_1) \ldots (x_M, y_M)$ each with probability $1/M$.
+- So we'll start by reviewing some properties of conditional expectations.
+
+# Review of Probability
+
+## Properties of Expectations: Conditioning
+
+### The law of iterated expectations
+$$
+E \{ E( Y \mid X ) \} \quad \text{ for any random variables $X, Y$} 
+$$
+
+To calculate the mean of $Y$, we can average within subpopulations, then across subpopulations.
+
+### Irrelevance of independent conditioning variables
+$$ E( Y \mid X, X' ) = E( Y \mid X ) \quad \text{ when $X'$ is independent of $X,Y$ } $$
+
+If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the relationship between them.
+
+## Properties of Expectations: Linearity
+
+The linearity of expectations
+$$ 
+\begin{aligned}
+E ( a Y + b Z ) 
+&= E (aY) + E (bZ) \\
+&= aE(Y) + bE(Z)  \\
+& \text{ for random variables $Y, Z$ and numbers $a,b$ }
+\end{aligned}
+$$
+
+  - There are two things going on here.
+    - To average a sum of two things, we can take two averages and sum.
+    - To average a constant times a random variable, we can multiply the random variable's average by the constant.
+  - In other words, we can *distribute* expectations and can pull constants out of them.
+  
+## The linearity of **conditional** expectations
+
+$$ 
+\begin{aligned}
+E\{ a(X) Y + b(X) Z \mid X \} 
+&= E\{a(X)Y \mid X\} + E\{ b(X)Z \mid X\} \\
+&= a(X)E(Y \mid X) + b(X)E(Z \mid X)
+\end{aligned}
+$$
+
+- This is like linearity of expectations, but with a twist.
+   - When we condition on $X$, we're working with subpopulations in which $X$ is constant.
+   - This means we can act as if functions of $X$ \textbf{are} constants.
+   - So we can pull them out of expectations that are conditional on $X$.
+   
+## It's important to distinguish between two things
+
+
+  1.  The **conditional expectation function** $\mu(x)=E[Y \mid X=x]$.\
+    - $\mu$ is a function; evaluated at $x$, it's a number. It's not random.
+    - It's the mean of the infinite subpopulation of people with $X=x$.
+   
+  2.  The conditional expectation $\mu(X)=E[Y \mid X]$.
+    - $\mu(X)$ is the mean of a **random subpopulation** of people.
+    - It's the conditional expectation function **evaluated at** the random variable $X$.
+    - This is the sort of thing that shows up when we use the law of iterated expectations.
+
+- Let's do an easy calculation to try to make this clear. 
+- We'll calculate the mean income in our population using the law of iterated expectations. 
+
+## Example: Conditioning
+ - Let's think about a random person drawn from this population
+    - $Y$ is their income 
+    - $X$ is an indicator for having a four-year degree. 
+  - Suppose the subpopulation means are 100k for people with degrees
+    and 50k for people without.
+  - And that 7/10 of our population has degrees.
+  
+\ \ 
+
+- What is $E(Y \mid X)$? 
+
+::: fragment
+
+  - $E(Y \mid X)$ is a random variable that is **either** 100k or 50k
+    - It's 100k with probability $7/10$,   when $X=1$. 
+    - And it's 50k with probability $3/10$, when $X=0$.
+
+::: 
+
+## Example: Conditioning
+
+- What is $E(Y)$? 
+
+::: fragment
+
+- It's the expectation of this random variable---a number.
+
+$$
+\begin{aligned} 
+E\{ E( Y \mid X ) \} \\
+&= E(Y|X=1)P(X=1) + E(Y|X=0)P(X=0) \\
+&= 100k \cdot 7/10 + 50k \cdot 3/10 = 70k + 15k = 85k.
+\end{aligned}
+$$
+
+:::
+
+## Properties of Population Variances: Conditioning
+
+## The law of total variance
+$$
+V[Y] = E\{V( Y \mid X ) \} + V\{E( Y \mid X ) \}  \text{ for RVs $X, Y$} 
+$$
+
+\ \ 
+Let's prove it.
+
+::: fragment
+
+$$
+\begin{aligned}
+V[Y] &= E\{ Y^2 \} -  E\{ Y \}^2\\
+&= E\{E( Y^2 \mid X) \} -  E\{E( Y \mid X)\}^2\\
+&= E\{V( Y \mid X) + E( Y \mid X)^2 \} -  E\{E( Y \mid X)\}^2\\
+&= E\{V( Y \mid X)\} + [ E\{E( Y \mid X)^2 \} -  E\{E( Y \mid X)\}^2]\\
+&= E\{V( Y \mid X)\} + V\{E( Y \mid X)\}
+\end{aligned}
+$$
+
+:::
+
+# Estimating Subpopulation Means for Income in California
+
+- Unlike last class's turnout example, we will never know the true subpopulation income means.
+- But we can express them as conditional means. 
+
+$$
+\begin{aligned}
+\mu(1) &= \E[Y_i \mid X_i=1] && \text{is the mean income of people in our population with a 4-year degree} \\
+\mu(0) &= \E[Y_i \mid X_i=0] && \text{is the mean income of people in our population without one}
+\end{aligned}
+$$
+
+- We will also never know the subpopulation income standard deviations.
+
+$$
+\begin{aligned}
+\sigma(1) &= \sqrt{\Var[Y_i \mid X_i=1]}
+\sigma(0) &= \sqrt{\Var[Y_i \mid X_i=0]}
+\end{aligned}
+$$
+
+- All this this is part of the larger story that we'll never know our data's sampling distribution.
+  - We'd have to survey every California resident to know it. That's too much work.
+- But we still want to know things about it---in particular those subpopulation means.
+- We'll use our sample to estimate them.
+
+## Sampling Distribution for 4-yr degree Mean Income
+
+\footnotesize
+
+Let the variable $X$ take the value 1 if four-year degree and 0 if no four-year degree
+\begin{center}
+\begin{tabular}{r|r|r|r|r|r|r}
+$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{r|}{625} &  &  \\
+\visible<1->{$s$} & $Y_1,X_1$  & $Y_2,X_2$   & $\dots$  & $Y_{2246},X_{2246}$  & $\overline{Y}_{2246}$ &  $\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}} $\\
+\hline
+\visible<1->{1}  & 37,006,0 & 108,811,1   & $\dots$  & 49,001,0 & 129,514 & 173,671 \\
+\visible<1->{2} & \visible<1->{?,?} & \visible<1->{?,?}   & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+\visible<1->{3} & \visible<1->{?,?}& \visible<1->{?,?}  & \visible<1->{$\dots$} & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\1-
+\visible<1->{4} &  \visible<1->{?,?}& \visible<1->{?,?} & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+\visible<1->{5}  & \visible<1->{?,?} & \visible<1->{?,?}  & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+\visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} &  \visible<1->{$\vdots$}&  \visible<1->{$\vdots$} \\ 
+\visible<1->{1 mil} & \visible<1->{?,?} & \visible<1->{?,?}& \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+ \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ 
+\hline
+\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$N(\mu,\frac{\sigma^2}{n})$} & \visible<1->{\textcolor{red}{?}}\\
+\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\mu$} & \visible<1->{\textcolor{red}{?}}\\
+\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\frac{\sigma^2}{n}$} & \visible<1->{\textcolor{red}{?}} \\
+\end{tabular}
+\end{center}
+\footnotesize
+
+
+- Although we can't observe the population or the sampling distribution, we can mathematically derive certain facts about the sampling distribution. 
+- We will focus on the three red question marks.
+
+
+## 
+
+Property \#1: \textit{ The sampling distribution of the subsample mean is approximately normal when $\sum_{i=1}^{2246}X_{i}$ is large.}
+
+- The approximate normality result comes from a central limit theorem (CLT). 
+- We know that $\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}  \sim^{approx} N(?,?)$, but still don't know the mean or the variance of this distribution. 
+
+
+## 
+Property \#2: \textit{ The subsample mean is unbiased for the subpopulation mean.}
+
+\vspace{0.2in}
+
+Part 1 of Proof (condition on $X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}$):
+\begin{align*}
+E[&\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}] \\
+&=\frac{1}{\sum_{i=1}^{2246}x_{i}}E[\sum_{i=1}^{2246}Y_{i}X_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]  \\
+&=\frac{1}{\sum_{i=1}^{2246}x_{i}} \sum_{i=1}^{2246} E[Y_{i}X_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]  \\
+&=\frac{1}{\sum_{i=1}^{2246}x_{i}} \sum_{i=1}^{2246} x_i E[Y_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}] 
+\end{align*}
+
+
+## 
+Property \#2: \textit{The subsample mean is unbiased for the subpopulation mean.} 
+
+Part 2 of Proof (condition on $X_1=x_1, X_2=x_2,...,X_{2246}=x_{2246}$):
+\begin{align*}
+\frac{1}{\sum_{i=1}^{2246}x_{i}}& \sum_{i=1}^{2246} x_i E[Y_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]  \\
+&= \frac{1}{\sum_{i=1}^{2246}x_{i}} \sum_{i=1}^{2246} x_i E[Y_{i}| X_i=x_i]  \\
+&= \frac{1}{\sum_{i=1}^{2246}x_{i}} \sum_{i=1}^{2246} x_i[x_i\mu_1 + (1-x_i)\mu_0] \\
+&=\frac{1}{\sum_{i=1}^{2246}x_{i}} \sum_{i=1}^{2246} x_i \mu_1\\
+& =\frac{1}{\sum_{i=1}^{2246}x_{i}} \mu_1 \sum_{i=1}^{2246} x_i = \mu_1.
+\end{align*}
+
+## 
+Property \#2: \textit{The subsample mean is unbiased for the subpopulation mean.} 
+
+\vspace{0.2in}
+
+Part 3 of Proof:
+\begin{align*}
+E[&\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}] \\
+&=E_{\bold{X}}[E[\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}] ]\\
+&=E_{\bold{X}}[\mu_1]\\
+&=\mu_1
+\end{align*}
+
+##
+
+Property \#3: The \textit{sampling variance} of the subsample mean,
+
+\vspace{0.2in}
+
+Part 1 of Proof:
+\begin{align*}
+V[&\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}] \\
+&= E_{\bold{X}}[V[ \frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246} ] ]\\
+&+ V_{\bold{X}}[E[\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246} ] ] \\
+&= E_{\bold{X}}[V[ \frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246} ] ]\\
+&+ V_{\bold{X}}[\mu_1 ]\\
+\end{align*}
+
+## 
+
+Property \#3: The \textit{sampling variance} of the subsample mean,
+
+\vspace{0.2in}
+
+Part 2 of Proof:
+\footnotesize
+\begin{align*}
+E_{\bold{X}}[&V[ \frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246} ] ]\\
+&= E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 V[\sum_{i=1}^{2246}Y_{i}X_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}] ]\\
+&=E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} V[Y_{i}X_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]]  \\
+&=E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} x_i^2 V[Y_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]] 
+\end{align*}
+
+##
+Property \#3: The \textit{sampling variance} of the subsample mean,
+
+\vspace{0.2in}
+
+Part 3 of Proof:
+\begin{align*}
+E_{\bold{X}}[&(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} x_i^2 V[Y_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]] \\
+&= E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} x_i^2 V[Y_{i}| X_i=x_i]] \\
+&= E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} x_i^2 (x_i \sigma^2_1 + (1-x_i)\sigma^2_0)] \\
+&= E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} x_i^2 \sigma^2_1] \\
+&= \sigma^2_1 E_{\bold{X}}[\frac{\sum_{i=1}^{2246} x_i}{(\sum_{i=1}^{2246}x_{i})^2} ] = \sigma^2_1 E_{\bold{X}}[\frac{1}{\sum_{i=1}^{2246}x_{i}}]
+\end{align*}
+
+## Sampling Distribution for 4-yr degree Mean Income
+
+\footnotesize
+
+Let the variable $X$ take the value 1 if 4yr degree and 0 if not.
+\begin{center}
+\begin{tabular}{r|r|r|r|r|r|r}
+$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{r|}{625} &  &  \\
+\visible<1->{$s$} & $Y_1,X_1$  & $\dots$   & $\dots$  & $Y_{2246},X_{2246}$  & $\overline{Y}_{2246}$ &  $\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}} $\\
+\hline
+\visible<1->{1}  & 37,006,0 & \dots   & $\dots$  & 49,001,0 & 135,406 & 173,671 \\
+\visible<1->{2} & \visible<1->{?,?} & \visible<1->{\dots}   & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+\visible<1->{3} & \visible<1->{?,?}& \visible<1->{\dots}  & \visible<1->{$\dots$} & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+\visible<1->{4} &  \visible<1->{?,?}& \visible<1->{\dots} & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+\visible<1->{5}  & \visible<1->{?,?} & \visible<1->{\dots}  & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+\visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} &  \visible<1->{$\vdots$}&  \visible<1->{$\vdots$} \\ 
+\visible<1->{1 mil} & \visible<1->{?,?} & \visible<1->{\dots}& \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+ \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ 
+\hline
+\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$N(\mu,\frac{\sigma^2}{n})$} & \visible<1->{\textcolor{red}{$N(\mu_1, \sigma^2_1 E(\frac{1}{\sum_{i=1}^{2246}X_{i}}))$}}\\
+\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\mu$} & \visible<1->{\textcolor{red}{$\mu_1$}}\\
+\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\frac{\sigma^2}{n}$} & \visible<1->{\textcolor{red}{$\sigma^2_1 E(\frac{1}{\sum_{i=1}^{2246}X_{i}}))$}} \\
+\end{tabular}
+\end{center}
+\footnotesize
+
+
+- We still don't know $\mu_1$, $\sigma^2_1$, or $E(\frac{1}{\sum_{i=1}^{2246}X_{i}}))$, so we have to bootstrap or estimate them.
+
+
+## Simulating the Bootstrapped Sampling Distribution
+
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{r|rrrr|rr}
+$i$ & 1 & 2  & $\dots$ & 2,246 & $\bar{y}_{2246}$ & $\bar{y}_1 = \frac{\sum_{i=1}^{2246}y_{i}x_{i}}{\sum_{i=1}^{2246}x_{i}}$ \\
+\hline
+$y_i$ & 36,006 & 108,811  & $\dots$ & 49,001 & 129,514 & 173,671 \\
+$x_i$ & 0 & 1  & $\dots$ & 0 & &\\
+\end{tabular}
+\end{center}
+\end{table} 
+
+Starting with the sample (first row of sampling distribution), each row of the bootstrapped sampling distribution is generated as the following:
+
+```{r}
+#| echo: true
+#bootind = sample(1:2246,size=2246,replace=T)
+#dfboot = earnings[bootind,]
+#bootsubsamMean[b] = mean(dfboot$y[dfboot$x== 1])
+```
+
+##
+```{r}
+B = 10000
+bootsubsamMean = rep(NA,B)
+bootdiffsamMean = rep(NA,B)
+for( b in 1:B ){
+bootind = sample(1:2246,size=2246,replace=T)
+dfboot = earnings[bootind,]
+bootsubsamMean[b] = mean(dfboot$income[dfboot$degree== "4-year degree"])
+bootdiffsamMean[b] = mean(dfboot$income[dfboot$degree== "4-year degree"]) - mean(dfboot$income[dfboot$degree== "no 4-year degree"])
+}
+```
+
+```{r}
+#| echo: true
+#B = 10000
+#bootsubsamMean = rep(NA,B)
+#for( b in 1:B ){
+#bootind = sample(1:2246,size=2246,replace=T)
+#dfboot = dfsam[bootind,]
+#bootsubsamMean[b] = mean(dfboot$y[dfboot$x==1])
+#}
+```
+
+## 
+```{r}
+hist(bootsubsamMean,main="Bootstrapped Sampling Distribution of Subsample Mean")
+```
+
+## Normal Approximation CI 
+
+Estimates
+
+- $\mu_1$: $\bar y_1 = \frac{\sum_{i=1}^{2246}y_{i}x_{i}}{\sum_{i=1}^{2246}x_{i}}$
+- $\sigma^2_1$: $\frac{\sum_{i=1}^{2246}(y_{i}-\bar{y}_1)^2x_{i}}{\sum_{i=1}^{2246}x_{i}-1}$
+- $E(\frac{1}{\sum_{i=1}^{2246}X_{i}})$: $\frac{1}{\sum_{i=1}^{2246}x_{i}}$
+
+\bigskip
+\bigskip
+
+95\% CI:\
+$\bar y_1 \pm 1.96 \cdot \sqrt{\frac{1}{\sum_{i=1}^{2246}x_{i}} \cdot \frac{\sum_{i=1}^{2246}(y_{i}-\bar{y}_1)^2x_{i}}{\sum_{i=1}^{2246}x_{i}-1}}$
+
+## 95\% CIs 
+
+- bootstrapping: [\$165,520, \$182,219]
+- approximation:  [\$165411, \$181930]
+
+
+## Sampling Distribution for Difference in Mean Income
+
+
+\tiny
+
+Let the variable $X$ take the value 1 if 4yr degree and 0 if not
+\begin{center}
+\begin{tabular}{r|r|r|r|r|r|l}
+$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{l|}{625} &  &  \\
+\visible<1->{$s$} & $Y_1,X_1$  & $\dots$   & $\dots$  & $Y_{2246},X_{2246}$ &  $\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}$  &  $\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}} - \frac{\sum_{i=1}^{2246}Y_{i}(1-X_{i})}{\sum_{i=1}^{2246}(1-X_{i})}$\\
+\hline
+\visible<1->{1}  & 37,006,0 & \dots   & $\dots$  & 49,001,0 & 173,671  & 76,583\\
+\visible<1->{2} & \visible<1->{?,?} & \visible<1->{\dots}   & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+\visible<1->{3} & \visible<1->{?,?}& \visible<1->{\dots}  & \visible<1->{$\dots$} & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+\visible<1->{4} &  \visible<1->{?,?}& \visible<1->{\dots} & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+\visible<1->{5}  & \visible<1->{?,?} & \visible<1->{\dots}  & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+\visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} &  \visible<1->{$\vdots$}&  \visible<1->{$\vdots$} \\ 
+\visible<1->{1 mil} & \visible<1->{?,?} & \visible<1->{\dots}& \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
+ \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ 
+\hline
+\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$N(\mu,\frac{\sigma^2}{n})$} & \visible<1->{\textcolor{red}{$N(\cdot, \cdot)$}}\\
+\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\mu$} & \visible<1->{\textcolor{red}{$\mu_1-\mu_0$}}\\
+\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\frac{\sigma^2}{n}$} & \visible<1->{\textcolor{red}{$\sigma^2_1 E(\frac{1}{\sum_{i=1}^{2246}X_{i}}) + \sigma_0^2 E(\frac{1}{\sum_{i=1}^{2246}(1-X_{i})}) $}} \\
+\end{tabular}
+\end{center}
+\footnotesize
+
+
+- We still don't know $\mu_1$, $\mu_0$, $\sigma^2_1$, $\sigma^2_0$, $E(\frac{1}{\sum_{i=1}^{2246}x_{i}}))$, or $E(\frac{1}{\sum_{i=1}^{2246}(1-x_{i})}))$, so we have to bootstrap or estimate them.
+
+
+`
