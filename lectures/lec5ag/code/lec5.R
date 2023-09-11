@@ -21,14 +21,19 @@ bootsubsamMean[b] = mean(dfboot$income[dfboot$degree== "4-year degree"])
 bootdiffsamMean[b] = mean(dfboot$income[dfboot$degree== "4-year degree"]) - mean(dfboot$income[dfboot$degree== "no 4-year degree"])
 }
 
-pdf("GitHub/qtm220/lectures/lec4/figs/bootdistSub.pdf")
+pdf("GitHub/qtm220/lectures/lec5ag/figs/bootdistSub.pdf")
 hist(bootsubsamMean,main="Bootstrapped Sampling Distribution of Subsample Mean")
 dev.off()
 
-pdf("GitHub/qtm220/lectures/lec4/figs/bootdistDiff.pdf")
+quantile(bootsubsamMean,prob=c(.025,.975))
+mean(earnings$income[earnings$degree=="4-year degree"]) + c(-1,1)*1.96*sqrt(var(earnings$income[earnings$degree=="4-year degree"])/951)
+
+pdf("GitHub/qtm220/lectures/lec5ag/figs/bootdistDiff.pdf")
 hist(bootdiffsamMean,main="Bootstrapped Sampling Distribution of Difference")
 dev.off()
 
+quantile(bootdiffsamMean,prob=c(.025,.975))
+mean(earnings$income[earnings$degree=="4-year degree"])- mean(earnings$income[earnings$degree=="no 4-year degree"]) + c(-1,1)*1.96*sqrt(var(earnings$income[earnings$degree=="4-year degree"])/951 + var(earnings$income[earnings$degree=="4-year degree"])/1295)
 
 
 
