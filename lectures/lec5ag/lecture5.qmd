@@ -248,6 +248,17 @@ dot.size = 2
 
 ## Review
 
+::: {.hidden}
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\V}{V}
+\DeclareMathOperator{\Var}{\V}
+\newcommand{\inred}[1]{\textcolor{red}{#1}}
+\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
+$$ 
+
+:::
+
 
 - Last time, we talked about what a random sample (with replacement) from a population tells us about subpopulation proportions.
   - In particular, we looked at the rate of voting among Black and non-Black Georgia-registered voters in 2020. 
@@ -259,15 +270,15 @@ dot.size = 2
 
 ## Today
 
-- Today, we'll see what a random sample (with replacement) from a population tells us about subpopulation means and differences in them.
+- We'll see what a random sample from a population tells us about subpopulation means and differences in them.
 - Returning to our CPS Income data example, we'll consider ...
   - incomes among people [with 4-year degrees]{.twocolor-green} 
   - income differences between people [with 4-year degrees]{.twocolor-green} and people [without them]{.twocolor-red}.
 - Our population will be the set of California residents 
     - between the ages of 25 and 35
     - with at least an 8th-grade education
-- It's an imperfect but reasonable approximation to think of our data as
-  a representative sample (with replacement) from this population.
+- It's a reasonable approximation to treat our data as
+  a representative sample (with replacement) from it.
   
 
 :::: columns
@@ -275,7 +286,7 @@ dot.size = 2
 ::: column
 ```{r map-sample}
 #| fig-width: 5
-#| out-height: 500px
+#| out-height: 400px
 ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) + guides(color=FALSE)
 ```
 :::
@@ -285,10 +296,10 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1,
 ```{r table}
 tab = earnings[sample(nrow(earnings)), ]
 tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=8,ntail=2)
+ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=6,ntail=2)
 ellipsis.tab %>%
   kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16), background=twocolor.green) %>%
+  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
   row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
 ```
 :::
@@ -303,12 +314,12 @@ The survey includes some location information for some people, but as you can se
 ## Subsample and subpopulation means
 
 ```{r}
-earnings.jitter = ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), 
-                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
-                   scale_x() + scale_y() + guides(color=FALSE)
-
-summaries = earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
-earnings.jitter + geom_pointline(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries)
+#earnings.jitter = ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), 
+#                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+#                   scale_x() + scale_y() + guides(color=FALSE)
+#
+#summaries = earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
+#earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries)
 ```
 
 - A reasonable starting point for describing income in a subsample is its mean income.
@@ -319,39 +330,47 @@ $$
 \hat \mu(x) = \frac{1}{N_x}\sum_{i:X_i=x} Y_i \quad \text{ where } \quad N_x = \sum_{i:X_i=1} 1.
 $$
 
-- We can think of our subsample's mean as an estimate of the mean of the corresponding finite subpopulation.
-  - Because we're sampling with replacement, we can think of population means as *expectations*.
-$$ 
-\mu := \frac{1}{M}\sum_{j=1}^M y_j = \E[Y_i]  \quad \text{ when } \quad Y_i = y_1...y_M \quad \text{ each with probability } \quad \frac{1}{M}.
+- We can think of it  as an estimate of the mean of the corresponding subpopulation.
+$$
+\mu(x) = \frac{1}{m_x}\sum_{j:x_j = x } y_j \quad \text{ where } \quad m_x = \sum_{j:x_j=x} 1.
 $$
 
-  - Similarly, we can think of subpopulation means as *conditional expectations*.
+## Population Means and Expectations
+
+- Because we're sampling uniformly at random, we can think of population means as *expectations*. 
+    
+$$ 
+\mu := \frac{1}{m}\sum_{j=1}^m y_j = \E[Y_i]  \quad \text{ when } \quad Y_i = y_1...y_m \quad \text{ each with probability } \quad \frac{1}{m}.
+$$
+
+- Similarly, we can think of subpopulation means as *conditional expectations*. 
 
 $$ 
 \begin{aligned}
-\mu(x) &:= \frac{1}{M_x}\sum_{j:x_j = x }^n y_j = \E[Y_i \mid X_i = x]  \quad 
-&& \text{ when } \quad P(Y_i \mid X_i=x) = \frac{1}{M_x} \quad \text{ for } M_x = \sum_{j:x_j = x }^n 1 \\
-\text{and therefore} 
-&&\text{ when } P\qty{(X_i,Y_i) = (x_1,y_1)} \ldots (x_M, y_M) \quad \text{ each with probability } \quad \frac{1}{M} \\
+\mu(x) 
+&:= \frac{1}{M_x}\sum_{j:x_j = x } y_j = \E[Y_i \mid X_i = x]  \  
+\quad \text{ when } \quad P(Y_i \mid X_i=x) = \frac{1}{m_x} \quad \text{ for } m_x = \sum_{j:x_j = x } 1 \\ 
+&\text{and therefore when } \quad (X_i,Y_i) = (x_1,y_1) \ldots (x_m, y_m) \quad \text{ each with probability } \quad \frac{1}{m} 
 \end{aligned}
 $$
 
-- This phenomenon, that we can think of a subsample as a draw from the corresponding subpopulation, 
-  is illustrated by a procedure called *rejection sampling*.
+- Let's think about this idea that a subsample behaves like a draw from the corresponding subpopulation.
 
 
-## Rejection Sampling in Dice Rolls
+## Conditioning in Dice Rolls 
+
+::: {.incremental}
 
 - Suppose we want to know the mean dice roll *among dice rolls that are even*.
-::: {.incremental}
 - What's the probability, given that we roll even, that we roll a $2$? Or a $4$? Or a $6$?
 - It's 1/3. How do we know this?
 - Symmetry.
   - There's no difference in the frequency with which we roll $2$, $4$, and $6$.
   - So there shouldn't be a difference in the frequency of them even rolls.
+
 :::
 
-## Rejection Sampling in Survey Context
+## Conditioning in Survey Context
 
 ```{r}
 ellipsis.tab %>%
@@ -359,23 +378,23 @@ ellipsis.tab %>%
   row_spec(which(ellipsis.tab$education >= 16), background=twocolor.green) %>%
   row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
 ```
+
+\ \
 
 - Suppose we want to know the mean income *among people with 4-year degrees*.
 - When we sample with replacement, we are  in effect just rolling a bigger die.
-- As a result, the frequency with which we roll any one person's number --- among any subpopulation --- is the same for all people.
+- As a result, the frequency with which we roll any one person's number
+  - counted as a fraction among any subpopulation they're in
+  - is the same for all people in it.
 
 $$
-P(J=j ) = 1/M for all j \in 1 \ldots M 
-\implies 
-P(J=j \mid J \in \{j_1, \ldots, j_{M_x}\}) = \begin{cases} \frac{1}{M_x} & \text{ if } j \in \{j_1, \ldots, j_{M_x}\} \\ 0 & \text{ otherwise } \end{cases}
+\begin{aligned}
+&P(J=j ) = 1/m \quad \text{ for all j } \quad \in 1 \ldots m \\
+&\implies 
+P(J=j \mid J \in \{j_1, \ldots, j_{m_x}\}) = \begin{cases} \frac{1}{m_x} & \text{ if } j \in \{j_1, \ldots, j_{m_x}\} \\ 0 & \text{ otherwise } \end{cases}
+\end{aligned}
 $$
 
-```{r}
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16), background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
-```
 
 ## Plan
 
@@ -436,14 +455,14 @@ $$
 ## It's important to distinguish between two things
 
 
-  1.  The **conditional expectation function** $\mu(x)=E[Y \mid X=x]$.\
-    - $\mu$ is a function; evaluated at $x$, it's a number. It's not random.
-    - It's the mean of the infinite subpopulation of people with $X=x$.
+  1.  The **conditional expectation function** $\mu(x)=E[Y \mid X=x]$.
+      - $\mu$ is a function; evaluated at $x$, it's a number. It's not random.
+      - It's the mean of the subpopulation of people with $X=x$.
    
   2.  The conditional expectation $\mu(X)=E[Y \mid X]$.
-    - $\mu(X)$ is the mean of a **random subpopulation** of people.
-    - It's the conditional expectation function **evaluated at** the random variable $X$.
-    - This is the sort of thing that shows up when we use the law of iterated expectations.
+      - $\mu(X)$ is the mean of a **random subpopulation** of people.
+      - It's the conditional expectation function **evaluated at** the random variable $X$.
+      - This is the sort of thing that shows up when we use the law of iterated expectations.
 
 - Let's do an easy calculation to try to make this clear. 
 - We'll calculate the mean income in our population using the law of iterated expectations. 
@@ -510,7 +529,7 @@ $$
 
 :::
 
-# Estimating Subpopulation Means for Income in California
+## Estimating Subpopulation Means for Income in California
 
 - Unlike last class's turnout example, we will never know the true subpopulation income means.
 - But we can express them as conditional means. 
@@ -526,7 +545,7 @@ $$
 
 $$
 \begin{aligned}
-\sigma(1) &= \sqrt{\Var[Y_i \mid X_i=1]}
+\sigma(1) &= \sqrt{\Var[Y_i \mid X_i=1]} \\
 \sigma(0) &= \sqrt{\Var[Y_i \mid X_i=0]}
 \end{aligned}
 $$
@@ -536,259 +555,255 @@ $$
 - But we still want to know things about it---in particular those subpopulation means.
 - We'll use our sample to estimate them.
 
-## Sampling Distribution for 4-yr degree Mean Income
-
-\footnotesize
-
-Let the variable $X$ take the value 1 if four-year degree and 0 if no four-year degree
-\begin{center}
-\begin{tabular}{r|r|r|r|r|r|r}
-$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{r|}{625} &  &  \\
-\visible<1->{$s$} & $Y_1,X_1$  & $Y_2,X_2$   & $\dots$  & $Y_{2246},X_{2246}$  & $\overline{Y}_{2246}$ &  $\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}} $\\
-\hline
-\visible<1->{1}  & 37,006,0 & 108,811,1   & $\dots$  & 49,001,0 & 129,514 & 173,671 \\
-\visible<1->{2} & \visible<1->{?,?} & \visible<1->{?,?}   & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
-\visible<1->{3} & \visible<1->{?,?}& \visible<1->{?,?}  & \visible<1->{$\dots$} & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\1-
-\visible<1->{4} &  \visible<1->{?,?}& \visible<1->{?,?} & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
-\visible<1->{5}  & \visible<1->{?,?} & \visible<1->{?,?}  & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
-\visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} &  \visible<1->{$\vdots$}&  \visible<1->{$\vdots$} \\ 
-\visible<1->{1 mil} & \visible<1->{?,?} & \visible<1->{?,?}& \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
- \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ 
-\hline
-\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$N(\mu,\frac{\sigma^2}{n})$} & \visible<1->{\textcolor{red}{?}}\\
-\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\mu$} & \visible<1->{\textcolor{red}{?}}\\
-\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\frac{\sigma^2}{n}$} & \visible<1->{\textcolor{red}{?}} \\
-\end{tabular}
-\end{center}
-\footnotesize
-
-
-- Although we can't observe the population or the sampling distribution, we can mathematically derive certain facts about the sampling distribution. 
-- We will focus on the three red question marks.
-
-
-## 
-
-Property \#1: \textit{ The sampling distribution of the subsample mean is approximately normal when $\sum_{i=1}^{2246}X_{i}$ is large.}
-
-- The approximate normality result comes from a central limit theorem (CLT). 
-- We know that $\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}  \sim^{approx} N(?,?)$, but still don't know the mean or the variance of this distribution. 
-
-
-## 
-Property \#2: \textit{ The subsample mean is unbiased for the subpopulation mean.}
-
-\vspace{0.2in}
-
-Part 1 of Proof (condition on $X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}$):
-\begin{align*}
-E[&\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}] \\
-&=\frac{1}{\sum_{i=1}^{2246}x_{i}}E[\sum_{i=1}^{2246}Y_{i}X_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]  \\
-&=\frac{1}{\sum_{i=1}^{2246}x_{i}} \sum_{i=1}^{2246} E[Y_{i}X_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]  \\
-&=\frac{1}{\sum_{i=1}^{2246}x_{i}} \sum_{i=1}^{2246} x_i E[Y_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}] 
-\end{align*}
-
-
-## 
-Property \#2: \textit{The subsample mean is unbiased for the subpopulation mean.} 
-
-Part 2 of Proof (condition on $X_1=x_1, X_2=x_2,...,X_{2246}=x_{2246}$):
-\begin{align*}
-\frac{1}{\sum_{i=1}^{2246}x_{i}}& \sum_{i=1}^{2246} x_i E[Y_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]  \\
-&= \frac{1}{\sum_{i=1}^{2246}x_{i}} \sum_{i=1}^{2246} x_i E[Y_{i}| X_i=x_i]  \\
-&= \frac{1}{\sum_{i=1}^{2246}x_{i}} \sum_{i=1}^{2246} x_i[x_i\mu_1 + (1-x_i)\mu_0] \\
-&=\frac{1}{\sum_{i=1}^{2246}x_{i}} \sum_{i=1}^{2246} x_i \mu_1\\
-& =\frac{1}{\sum_{i=1}^{2246}x_{i}} \mu_1 \sum_{i=1}^{2246} x_i = \mu_1.
-\end{align*}
-
-## 
-Property \#2: \textit{The subsample mean is unbiased for the subpopulation mean.} 
-
-\vspace{0.2in}
-
-Part 3 of Proof:
-\begin{align*}
-E[&\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}] \\
-&=E_{\bold{X}}[E[\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}] ]\\
-&=E_{\bold{X}}[\mu_1]\\
-&=\mu_1
-\end{align*}
-
-##
-
-Property \#3: The \textit{sampling variance} of the subsample mean,
-
-\vspace{0.2in}
-
-Part 1 of Proof:
-\begin{align*}
-V[&\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}] \\
-&= E_{\bold{X}}[V[ \frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246} ] ]\\
-&+ V_{\bold{X}}[E[\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246} ] ] \\
-&= E_{\bold{X}}[V[ \frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246} ] ]\\
-&+ V_{\bold{X}}[\mu_1 ]\\
-\end{align*}
-
-## 
-
-Property \#3: The \textit{sampling variance} of the subsample mean,
-
-\vspace{0.2in}
-
-Part 2 of Proof:
-\footnotesize
-\begin{align*}
-E_{\bold{X}}[&V[ \frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246} ] ]\\
-&= E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 V[\sum_{i=1}^{2246}Y_{i}X_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}] ]\\
-&=E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} V[Y_{i}X_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]]  \\
-&=E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} x_i^2 V[Y_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]] 
-\end{align*}
-
-##
-Property \#3: The \textit{sampling variance} of the subsample mean,
-
-\vspace{0.2in}
-
-Part 3 of Proof:
-\begin{align*}
-E_{\bold{X}}[&(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} x_i^2 V[Y_{i}| X_1=x_1, X_2=x_2,..., X_{2246}=x_{2246}]] \\
-&= E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} x_i^2 V[Y_{i}| X_i=x_i]] \\
-&= E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} x_i^2 (x_i \sigma^2_1 + (1-x_i)\sigma^2_0)] \\
-&= E_{\bold{X}}[(\frac{1}{\sum_{i=1}^{2246}x_{i}})^2 \sum_{i=1}^{2246} x_i^2 \sigma^2_1] \\
-&= \sigma^2_1 E_{\bold{X}}[\frac{\sum_{i=1}^{2246} x_i}{(\sum_{i=1}^{2246}x_{i})^2} ] = \sigma^2_1 E_{\bold{X}}[\frac{1}{\sum_{i=1}^{2246}x_{i}}]
-\end{align*}
-
-## Sampling Distribution for 4-yr degree Mean Income
-
-\footnotesize
-
-Let the variable $X$ take the value 1 if 4yr degree and 0 if not.
-\begin{center}
-\begin{tabular}{r|r|r|r|r|r|r}
-$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{r|}{625} &  &  \\
-\visible<1->{$s$} & $Y_1,X_1$  & $\dots$   & $\dots$  & $Y_{2246},X_{2246}$  & $\overline{Y}_{2246}$ &  $\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}} $\\
-\hline
-\visible<1->{1}  & 37,006,0 & \dots   & $\dots$  & 49,001,0 & 135,406 & 173,671 \\
-\visible<1->{2} & \visible<1->{?,?} & \visible<1->{\dots}   & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
-\visible<1->{3} & \visible<1->{?,?}& \visible<1->{\dots}  & \visible<1->{$\dots$} & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
-\visible<1->{4} &  \visible<1->{?,?}& \visible<1->{\dots} & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
-\visible<1->{5}  & \visible<1->{?,?} & \visible<1->{\dots}  & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
-\visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} &  \visible<1->{$\vdots$}&  \visible<1->{$\vdots$} \\ 
-\visible<1->{1 mil} & \visible<1->{?,?} & \visible<1->{\dots}& \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
- \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ 
-\hline
-\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$N(\mu,\frac{\sigma^2}{n})$} & \visible<1->{\textcolor{red}{$N(\mu_1, \sigma^2_1 E(\frac{1}{\sum_{i=1}^{2246}X_{i}}))$}}\\
-\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\mu$} & \visible<1->{\textcolor{red}{$\mu_1$}}\\
-\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\frac{\sigma^2}{n}$} & \visible<1->{\textcolor{red}{$\sigma^2_1 E(\frac{1}{\sum_{i=1}^{2246}X_{i}}))$}} \\
-\end{tabular}
-\end{center}
-\footnotesize
-
-
-- We still don't know $\mu_1$, $\sigma^2_1$, or $E(\frac{1}{\sum_{i=1}^{2246}X_{i}}))$, so we have to bootstrap or estimate them.
-
-
-## Simulating the Bootstrapped Sampling Distribution
-
-
-\begin{table}[h]
-\begin{center}
-\begin{tabular}{r|rrrr|rr}
-$i$ & 1 & 2  & $\dots$ & 2,246 & $\bar{y}_{2246}$ & $\bar{y}_1 = \frac{\sum_{i=1}^{2246}y_{i}x_{i}}{\sum_{i=1}^{2246}x_{i}}$ \\
-\hline
-$y_i$ & 36,006 & 108,811  & $\dots$ & 49,001 & 129,514 & 173,671 \\
-$x_i$ & 0 & 1  & $\dots$ & 0 & &\\
-\end{tabular}
-\end{center}
-\end{table} 
-
-Starting with the sample (first row of sampling distribution), each row of the bootstrapped sampling distribution is generated as the following:
+## A Table of Imaginary Replications
 
 ```{r}
-#| echo: true
-#bootind = sample(1:2246,size=2246,replace=T)
-#dfboot = earnings[bootind,]
-#bootsubsamMean[b] = mean(dfboot$y[dfboot$x== 1])
+X = earnings$degree == '4-year degree'
+Y = earnings$income
+J = sample(n*2500, n, replace=TRUE)
 ```
 
-##
-```{r}
-B = 10000
-bootsubsamMean = rep(NA,B)
-bootdiffsamMean = rep(NA,B)
-for( b in 1:B ){
-bootind = sample(1:2246,size=2246,replace=T)
-dfboot = earnings[bootind,]
-bootsubsamMean[b] = mean(dfboot$income[dfboot$degree== "4-year degree"])
-bootdiffsamMean[b] = mean(dfboot$income[dfboot$degree== "4-year degree"]) - mean(dfboot$income[dfboot$degree== "no 4-year degree"])
+$$
+\small{
+\begin{array}{r|rrr|rrr|r|rrr|rrr}
+\text{recipient} &  1 & & & 2 & & & \dots & `r n` & & & & & & \\
+\text{survey}    & J_1 & X_1 & Y_1 & J_2 & X_2 & Y_2   & \dots & J_{`r n`} & X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  & \overline{XY} \\
+\hline
+\color{black}   1   
+    & \color{black}   `r J[1]`                   & \color{black}  `r X[1]`      & \color{black} `r Y[1]` 
+    & \color{black}   `r J[2]`                   & \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
+                                                 & \color{black}   \dots
+    & \color{black}   ?                          & \color{black}   ?     & \color{black} ?       
+    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(X*Y))` \\
+\color{magenta}   2   
+    & \color{magenta}   ?  & \color{magenta}     & \color{magenta}  ? 
+    & \color{magenta}   ?                        & \color{magenta}  ?      & \color{magenta} ?      
+                                                 & \color{magenta}   \dots 
+    & \color{magenta}   ?                        & \color{magenta}   ?     & \color{magenta} ?       
+    & \color{magenta}   ??                       & \color{magenta} ??      & \color{magenta} ?? \\
+\color{cyan}    3   
+    & \color{cyan}      ?		         & \color{cyan}   ?        & \color{cyan}  ? 
+    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?      
+                                                 & \color{cyan}    \dots 
+    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?       
+    & \color{cyan}      ??  			 & \color{cyan}   ??       & \color{cyan}    ?? \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{gray}    1M   
+    & \color{gray}      ?		         & \color{gray}   ?        & \color{gray}  ? 
+    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?      
+                                                 & \color{gray}    \dots 
+    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?       
+    & \color{gray}      ??  			 & \color{gray}   ??       & \color{gray}    ?? \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
 }
-```
+$$
 
-```{r}
-#| echo: true
-#B = 10000
-#bootsubsamMean = rep(NA,B)
-#for( b in 1:B ){
-#bootind = sample(1:2246,size=2246,replace=T)
-#dfboot = dfsam[bootind,]
-#bootsubsamMean[b] = mean(dfboot$y[dfboot$x==1])
-#}
-```
+- This is a table like the one we used to show our sampling distribution as in last lecture.
+  - The first row shows our actual sample---the outcomes from our survey.
+  - Last class, we were able to add additional rows for 'our friends polls'.
+  - We used our (post-election) knowledge of the population to fake these polls.
+- This time, this is really all we've got. We'll never see the population.
+- But when we talk about the probability that $X_i$,$Y_i$, $\bar Y$, etc takes on a value, 
+  we're talking about how often it takes on the value in those never-to-be-seen rows.
+- It's impossible to *know* these probabilities, but we can *reason about* their implications.
 
-## 
-```{r}
-hist(bootsubsamMean,main="Bootstrapped Sampling Distribution of Subsample Mean")
-```
+
+## A Table of Imaginary Replications
+
+$$
+\small{
+\begin{array}{r|rrr|rrr|r|rrr|rrr}
+\text{recipient} &  1 & & & 2 & & & \dots & `r n` & & & & & & \\
+\text{survey}    & J_1 & X_1 & Y_1 & J_2 & X_2 & Y_2   & \dots & J_{`r n`} & X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  & \overline{XY} \\
+\hline
+\color{black}   1   
+    & \color{black}   `r J[1]`                   & \color{black}  `r X[1]`      & \color{black} `r Y[1]` 
+    & \color{black}   `r J[2]`                   & \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
+                                                 & \color{black}   \dots
+    & \color{black}   ?                          & \color{black}   ?     & \color{black} ?       
+    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(X*Y))` \\
+\color{magenta}   2   
+    & \color{magenta}   ?  & \color{magenta}     & \color{magenta}  ? 
+    & \color{magenta}   ?                        & \color{magenta}  ?      & \color{magenta} ?      
+                                                 & \color{magenta}   \dots 
+    & \color{magenta}   ?                        & \color{magenta}   ?     & \color{magenta} ?       
+    & \color{magenta}   ??                       & \color{magenta} ??      & \color{magenta} ?? \\
+\color{cyan}    3   
+    & \color{cyan}      ?		         & \color{cyan}   ?        & \color{cyan}  ? 
+    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?      
+                                                 & \color{cyan}    \dots 
+    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?       
+    & \color{cyan}      ??  			 & \color{cyan}   ??       & \color{cyan}    ?? \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{gray}    1M   
+    & \color{gray}      ?		         & \color{gray}   ?        & \color{gray}  ? 
+    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?      
+                                                 & \color{gray}    \dots 
+    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?       
+    & \color{gray}      ??  			 & \color{gray}   ??       & \color{gray}    ?? \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
+$$
+
+
+- What we're interested in is the mean income of people with 4-year degrees.
+
+$$ 
+\mu(1) = \E[ Y_i \mid X_i=1] 
+$$
+
+- We'll use the corresponding sample mean as a point estimate. 
+- How, using the data in our table, can we calculate that?
+
+::: fragment
+
+$$
+\hat\mu(1) 
+= \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} 
+= \frac{\sum_{i=1}^n X_i Y_i}{\sum_{i=1}^n X_i}
+= \frac{\frac{1}{n}\sum_{i=1}^n X_i Y_i}{\frac{1}{n}\sum_{i=1}^n X_i}
+= \frac{\overline{XY}}{\overline{X}}
+$$
+
+:::
+
+## The Sampling Distribution of $\hat\mu(1)$
+
+
+- To calibrate an interval estimate, we'll need to estimate the sampling distribution of our point estimate.
+- Because it's a mean, it's reasonable to assume that it's approximately normal. 
+     - For now, just go with it. 
+     - We'll formalize this after Exam 1.
+
+$$ f_{\hat\mu_1}(\cdot) \approx N(?, ?) $$
+
+- To use this knowledge, we'll need to know --- or estimate ---the *mean* and *variance* of this normal.
+- That is, we'll need to find the mean and variance of our point estimate. Let's do it.
+
+## The Expectation of the Subsample Mean
+
+**Claim.** The subsample mean is unbiased for the subpopulation mean.
+$$ \E[\hat\mu(1)] = \mu(1) $$
+
+**Sketch.**
+
+  - Use the Law of Iterated Expectations, conditioning on $X_1 \ldots X_n$.
+  - Then the linearity of conditional expectations to push the conditional expectation into the sum.
+  - Then irrelevance of independent conditioning variables to write things in terms of the *random variable* $\mu(X_i)$  
+  - Then a trick. What's $X_i \mu(X_i)$? How is it related to $\mu(1)$?
+
+::: fragment
+
+$$
+\small{
+\begin{aligned}
+&\E\qty[ E\qty{\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} \mid X_1 \ldots X_n}] \\
+&=E\qty[\frac{\sum_{i=1}^{n} X_i \E\qty{ X_{i} \mid X_1 \ldots X_n}}{\sum_{i=1}^{n}X_{i}}] \\
+&=E\qty[\frac{\sum_{i=1}^{n}X_i\E\qty{ Y_{i} \mid X_i}}{\sum_{i=1}^{n}X_{i}}] \\
+&=E\qty[\frac{\sum_{i=1}^{n}X_i \mu(X_i)}{\sum_{i=1}^{n}X_{i}}] \\
+&=E\qty[\frac{\sum_{i=1}^{n}X_i\mu(1)}{\sum_{i=1}^{n}X_{i}}] \\
+&=\mu(1) \times E\qty[\frac{\sum_{i=1}^{n}X_i}{\sum_{i=1}^{n}X_{i}}] = \mu(1) 
+\end{aligned}
+}
+$$
+
+:::
+
+## The Variance of the Subsample Mean
+
+**Claim.** The variance of our point estimate is the **expected value** of the subpopulation variance divided by the number of people in the subsample.
+$$ \Var[\hat\mu(1)] = \E\qty[ \frac{\sigma^2(1)}{N_1} ] \quad \text{ for } \quad N_1 = \sum_{i=1}^n X_i $$
+
+- This is like what we saw in the unconditional case in Lecture 3, with a twist.
+- The number of people in the subsample is random, so instead of $1/n$, we have $\E[ 1/N_1 ]$.
+- Let's prove it.
+
+## Proof, Part 1
+
+- Use the Law of Total Variance, conditioning on $X_1 \ldots X_n$.
+- We can show that one of the resulting terms is zero.
+
+::: fragment
+$$
+\small{
+\begin{aligned}
+\Var\qty[ \hat \mu(1) ] &= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + \Var\qty[ \E{\hat \mu(1) \mid X_1 \ldots X_n} ] \\
+&= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + \Var[\mu(1)] \\
+&= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + 0
+\end{aligned}
+}
+$$
+
+:::
+
+## Proof, Part 2
+
+- We substitute in definitions and simplify.
+- We'll end having do a FOIL-like expansion of a square.
+
+::: fragment
+$$
+\small{
+\begin{aligned}
+\Var\qty[ \hat \mu(1) ] 
+&= \E\qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] \\
+&= \E\qty[ \E\qty{  \qty(\hat \mu(1)-\mu(1))^2 \mid X_1 \ldots X_n }] \\
+&= \E\qty[ \E\qty{  \qty(\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} - \mu(1))^2 \mid X_1 \ldots X_n }] \\
+&= \E\qty[ \E\qty{  \qty(\frac{\sum_{i=1}^{n}X_i \qty{Y_{i}-\mu(1)}}{\sum_{i=1}^{n}X_{i}})^2 \mid X_1 \ldots X_n }] \\
+&= \E\qty[ \frac{\E\qty{ \qty(\sum_{i=1}^{n}X_i \qty{Y_{i}-\mu(1)})^2 \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}]
+\end{aligned}
+}
+$$
+
+:::
+
+## Proof, Part 3
+
+- We do our FOIL-like expansion of a square.
+$$
+\qty(\sum_i Z_i)^2 = \sum_i \sum_j Z_i Z_j
+$$
+
+- And we observe that the cross terms ($i \neq j$) have conditional mean are zero.
+
+$$
+\small{
+\begin{aligned}
+\Var\qty[ \hat \mu(1) ] 
+&= \E\qty[ \frac{\E\qty{ \qty(\sum_{i=1}^{n}X_i \qty{Y_{i}-\mu(1)})^2 \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
+&= \E\qty[ \frac{\E\qty{ \sum_{i=1}^{n}\sum_{j=1}^n X_i X_j \qty{Y_{i}-\mu(1)}\qty(Y_j - \mu(1)) \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
+&= \E\qty[ \frac{\sum_{i=1}^{n}\sum_{j=1}^n X_i X_j \E{ \qty{Y_{i}-\mu(1)}\qty(Y_j - \mu(1)) \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
+&= \E\qty[ \frac{\sum_{i=1}^{n} X_i^2 \E{ \qty{Y_{i}-\mu(1)}^2  \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
+&= \E\qty[ \frac{\sum_{i=1}^{n} X_i^2 \E{ \qty{Y_{i}-\mu(1)}^2  \mid X_i}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
+&= \E\qty[ \frac{\sum_{i=1}^{n} X_i^2 \sigma^2(1) }{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
+&= \sigma^2(1) \times \E\qty[ \frac{\sum_{i=1}^{n}  X_i^2 }{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
+&= \sigma^2(1) \times \E\qty[ \frac{1}{N_1} ]
+\end{aligned}
+}
+$$
+
 
 ## Normal Approximation CI 
 
-Estimates
+- We've now worked out an approximation to the sampling distribution of our point estimate.
+$$ \hat \mu(1) \sim N\qty(\mu(1), \ \E \frac{\sigma^2(1)}{N_1}) $$
 
-- $\mu_1$: $\bar y_1 = \frac{\sum_{i=1}^{2246}y_{i}x_{i}}{\sum_{i=1}^{2246}x_{i}}$
-- $\sigma^2_1$: $\frac{\sum_{i=1}^{2246}(y_{i}-\bar{y}_1)^2x_{i}}{\sum_{i=1}^{2246}x_{i}-1}$
-- $E(\frac{1}{\sum_{i=1}^{2246}X_{i}})$: $\frac{1}{\sum_{i=1}^{2246}x_{i}}$
+- And we know that the middle 95% of this distribution lies in this interval.
 
-\bigskip
-\bigskip
+$$ \hat \mu(1) \in \qty[ \mu(1) - 1.96 \sqrt{\E \frac{\sigma^2(1)}{N_1}}, \ldots \mu(1) + 1.96 \sqrt{\E \frac{\sigma^2(1)}{N_1}} ] $$
 
-95\% CI:\
-$\bar y_1 \pm 1.96 \cdot \sqrt{\frac{1}{\sum_{i=1}^{2246}x_{i}} \cdot \frac{\sum_{i=1}^{2246}(y_{i}-\bar{y}_1)^2x_{i}}{\sum_{i=1}^{2246}x_{i}-1}}$
+- Solving for $\mu(1)$, we get a 95% confidence interval for the subpopulation mean.
 
-## 95\% CIs 
+$$ \hat \mu(1) \pm 1.96 \sqrt{\E \frac{\sigma^2(1)}{N_1}} $$
 
-- bootstrapping: [\$165,520, \$182,219]
-- approximation:  [\$165411, \$181930]
+- To use this, all we've got to do is estimate $\E \frac{\sigma^2(1)}{N_1}$. 
+  - We can plug in the variance $\hat\sigma^2(1)$ of $Y_i$ in the *subsample* with $X_i=1$.
+  - And we can plug in the number of people in that subsample, $N_1 = \sum_{i=1}^n X_i$.
+- The result, in this case, is this interval.
+$$
+[\$165411 \ \ldots \ \$181930]
+$$
 
-
-## Sampling Distribution for Difference in Mean Income
-
-
-\tiny
-
-Let the variable $X$ take the value 1 if 4yr degree and 0 if not
-\begin{center}
-\begin{tabular}{r|r|r|r|r|r|l}
-$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{l|}{625} &  &  \\
-\visible<1->{$s$} & $Y_1,X_1$  & $\dots$   & $\dots$  & $Y_{2246},X_{2246}$ &  $\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}}$  &  $\frac{\sum_{i=1}^{2246}Y_{i}X_{i}}{\sum_{i=1}^{2246}X_{i}} - \frac{\sum_{i=1}^{2246}Y_{i}(1-X_{i})}{\sum_{i=1}^{2246}(1-X_{i})}$\\
-\hline
-\visible<1->{1}  & 37,006,0 & \dots   & $\dots$  & 49,001,0 & 173,671  & 76,583\\
-\visible<1->{2} & \visible<1->{?,?} & \visible<1->{\dots}   & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
-\visible<1->{3} & \visible<1->{?,?}& \visible<1->{\dots}  & \visible<1->{$\dots$} & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
-\visible<1->{4} &  \visible<1->{?,?}& \visible<1->{\dots} & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
-\visible<1->{5}  & \visible<1->{?,?} & \visible<1->{\dots}  & \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
-\visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} &  \visible<1->{$\vdots$}&  \visible<1->{$\vdots$} \\ 
-\visible<1->{1 mil} & \visible<1->{?,?} & \visible<1->{\dots}& \visible<1->{$\dots$}  & \visible<1->{?,?} & \visible<1->{?,?} & \visible<1->{?,?} \\
- \visible<1->{$\vdots$}   & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ 
-\hline
-\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$N(\mu,\frac{\sigma^2}{n})$} & \visible<1->{\textcolor{red}{$N(\cdot, \cdot)$}}\\
-\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\mu$} & \visible<1->{\textcolor{red}{$\mu_1-\mu_0$}}\\
-\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{}} & \multicolumn{1}{r|}{\visible<1->{\dots}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{}} & \visible<1->{$\frac{\sigma^2}{n}$} & \visible<1->{\textcolor{red}{$\sigma^2_1 E(\frac{1}{\sum_{i=1}^{2246}X_{i}}) + \sigma_0^2 E(\frac{1}{\sum_{i=1}^{2246}(1-X_{i})}) $}} \\
-\end{tabular}
-\end{center}
-\footnotesize
-
-
-- We still don't know $\mu_1$, $\mu_0$, $\sigma^2_1$, $\sigma^2_0$, $E(\frac{1}{\sum_{i=1}^{2246}x_{i}}))$, or $E(\frac{1}{\sum_{i=1}^{2246}(1-x_{i})}))$, so we have to bootstrap or estimate them.
-
-
-`
+- What is its coverage?
