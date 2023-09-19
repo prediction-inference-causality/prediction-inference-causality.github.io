@@ -1,0 +1,828 @@
+---
+title: "QTM 220: Lecture 7"
+subtitle: "Inference for Differences in Subpopulation Means"
+format: 
+  clean-revealjs:
+    height: 1000
+    width: 1290
+    theme: [default, "class.scss"]
+    smaller: true
+    slide-number: true
+    pdf-separate-fragments: true
+    fig-format: svg
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
+---
+
+
+```{r load-libraries}
+library(purrr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(ggplot2)
+library(htmltools)
+library(kableExtra)
+library(scales)
+library(cpsR)
+library(mapdata)
+library(usmap)
+
+options(knitr.kable.NA = '')
+
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+
+library(cpsR)
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+```
+
+```{r ggplot-themes}
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+        panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = "#aaaaaa"),
+        axis.text.y  = element_text(colour = "#aaaaaa"),
+        axis.title.x  = element_text(colour = "#aaaaaa"),
+        axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+              axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+```{r table-styling}
+ellipsis <- function(df, nhead=5L, ntail=2) {
+    rownames(df) = as.character(1:nrow(df))
+    stopifnot("data.frame" %in% class(df))
+    els <- rep(NA, ncol(df)) %>% 
+        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
+        data.frame(stringsAsFactors=FALSE) %>% 
+        tibble::as_tibble()
+    rownames(els) = "⋮"
+    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
+}
+```
+
+
+```{r get-california-data}
+#| cache: true
+cps.sampling.ratio = 1/2500
+plotting.cps.sampling.ratio=1/25
+california.state.code = 6
+cps.data = cpsR::get_asec(year=2022, vars=c('pearnval', 'gestfips', 'h_numper', 'htotval', 'a_age', 'a_hga','gereg', 'a_maritl', 'a_sex','peafever','a_wkstat','gtco'), key=census.api.key)
+```
+
+```{r process-california-data}
+all.earnings = data.frame(age=cps.data$a_age,
+                          state.code = cps.data$gestfips,
+              county.code = cps.data$gtco,
+                          income=cps.data$htotval, 
+                          education=case_match(cps.data$a_hga,
+                                          0  ~ 0,   # child
+                                          31 ~ 0,   # < grade 1
+                                          32 ~ 4,   #  grade 1-4
+                                          33 ~ 6,   #  grade 5-6
+                                          34 ~ 8,   #  grade 7-8 
+                                          35 ~ 9,   #  grade 9
+                                          36 ~ 10,  #  grade 10
+                                          37 ~ 11,  #  grade 11
+                                          38 ~ 11,  #  grade 12 no diploma
+                                          39 ~ 12,  #  high school grad
+                                          40 ~ 13,  #  some college
+                                          41 ~ 14,  #  associate degree(vocational)
+                                          42 ~ 14,  #  associate degree (academic)
+                                          43 ~ 16,  #  bachelors degree
+                                          44 ~ 18,  #  masters degree
+                                          45 ~ 20,  #  professional school degree
+                                          46 ~ 20)) #  doctorate
+
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+all.earnings$employed<- ifelse(cps.data$a_wkstat >5, 0,ifelse(cps.data$a_wkstat<2,NA,1))
+all.earnings$degree = factor(all.earnings$education >= 16,
+                    levels=c(FALSE, TRUE), 
+                    labels=c('no 4-year degree','4-year degree')) 
+
+earnings = all.earnings[all.earnings$age %>% in.interval(c(25,35)) & 
+                        all.earnings$state.code == california.state.code &
+                        all.earnings$education > 8, ]
+
+rownames(earnings)=NULL
+earnings$person = 1:nrow(earnings)
+n = nrow(earnings)
+```
+
+
+```{r visualization-defaults}
+scale_y = function(limits=c(0, 4e5)) { 
+  scale_y_continuous(labels=label_dollar(), limits=limits)
+}
+
+dot.size = 2
+```
+
+## Last Time
+
+::: {.hidden}
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\V}{V}
+\DeclareMathOperator{\Var}{\V}
+\newcommand{\inred}[1]{\textcolor{red}{#1}}
+\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
+$$ 
+
+:::
+
+
+## Review
+
+- We've talked about estimating subpopulation means after sampling with replacement.
+    - Mostly  *representative sampling*: choosing each person in our population with equal probability.
+    - Briefly *non-representative sampling*: choosing people with different probabilities
+      - e.g. polling Black voters with a higher probability than non-Black voters to better estimate Black turnout.
+- We've done this in two contexts
+    - Georgia Turnout Data, where ...
+        - outcomes were binary (voted / did not vote)
+        - our subpopulations of interest were Black and non-Black registered voters
+    - California Income Data, where ...
+        - outcomes were non-binary (dollars) 
+        - our subpopulations of interest were residents with and without 4-year degrees.
+- We talked briefly about *differences* in subpopulation means in the first context
+- But we didn't do the whole story.
+    - We never calculated the variance.
+    - And we speculated about, but didn't dig into, the impact of nonrepresentative sampling.
+
+## Today
+
+- All we're going to talk about are differences in subpopulation means. And we'll fill in all these gaps.
+- Using Georgia voting data
+    - We'll look into the implications of non-representative sampling.
+    - We'll take two approaches.
+        - An empirical approach, using our (post-election) knowledge of the population
+        - A theoretical approach, using a variance calculation building on the one we did last class.
+- Using California income data
+    - We'll use our variance calculation to produce an interval estimate.
+    - And we'll think about what it's telling us about the value of a 4-year degree.
+- New time, we'll repeat this income thing using new, but essentially similar data 
+    - We'll try dig into our thinking about the meaning *behind* this difference
+
+
+## Outline
+
+1. We're going to start with the empirical approach to understanding the Georgia voting data
+    - Think of it as a warm-up. It'll be a bit more familiar than the rest.
+    - But it'll also give us an opportunity to look more closely at non-representative sampling.
+    - And it'll position us to check our theoretical claims against we've seen empirically.
+2. We're going to work out the theory. 
+    - In particular, we'll calculate the variance of a difference in sample means.
+    - Then we'll calibrate some interval estimates using a *normal approximation* to its sampling distribution.
+    - We'll check coverage in the voting data; beyond that, we'll just have to believe in it.
+3. We're going to think about the substantive meaning of our income difference estimates.
+
+
+# Turnout Differences
+
+```{r population-and-sample}
+#| echo: false 
+our.seed = 220
+set.seed(our.seed)
+N = 7233584
+n = 625
+
+b0 = floor(.7*N)
+b1 = ceiling(.3*N)
+y0 = rbinom(n=b0,size=1,prob=.68)
+y1 = rbinom(n=b1,size=1,prob=.74)
+dfpop = data.frame(y=c(y0,y1), x=c(rep(0,b0),rep(1,b1)))
+dfpop = dfpop[sample(1:N),] # shuffle the rows
+x = dfpop$x
+y = dfpop$y
+
+
+# Generate Sample Data for us (J1) and three friends (J2,J3,JM)
+J1 = sample(1:N,size=n,replace=T)
+J2 = sample(1:N,size=n,replace=T)
+J3 = sample(1:N,size=n,replace=T)
+JM = sample(1:N,size=n,replace=T)
+
+J = J1
+dfsam = dfpop[J,]
+Y = dfsam$y
+X = dfsam$x
+
+# Generate Sampling Distribution
+S = 10000
+subsamMean = rep(NA,S)
+diffMean = rep(NA,S)
+for( s in 1:S ){
+	ind = sample(1:N,size=625,replace=T)
+	dfind = dfpop[ind,]
+	subsamMean[s] = mean(dfind$y[dfind$x==1])
+	diffMean[s] = mean(dfind$y[dfind$x==1])-mean(dfind$y[dfind$x==0])	
+}
+
+B = 10000
+bootsubsamMean = rep(NA,B)
+bootdiffsamMean = rep(NA,B)
+for( b in 1:B ){
+bootind = sample(1:625,size=625,replace=T)
+dfboot = dfsam[bootind,]
+bootsubsamMean[b] = mean(dfboot$y[dfboot$x==1])
+bootdiffsamMean[b] = mean(dfboot$y[dfboot$x==1]) - mean(dfboot$y[dfboot$x==0])
+}
+```
+
+
+```{r mapping}
+# Create fake locations for the people in our population
+# by taking random convex combinations of state vertices
+set.seed(0)
+ga.shape = us_map(include = c("GA"))
+
+# To keep all this from being overwhelming, we'll have 10000 fake locations
+# The jth person is at the (j %% M + 1)st location
+M = 10000 
+V = nrow(ga.shape)
+weights = abs(rt(M*V,1))
+dim(weights) = c(M,V)
+weights = (1/rowSums(weights)) * weights
+locations = data.frame(x=weights %*% ga.shape$x, y=weights %*% ga.shape$y, 
+                       black=factor(x[1:M], levels=c(0,1), labels=c('non-Black', 'Black')), 
+                       black.numeric = x[1:M])
+
+ga = ggplot() + geom_polygon(data=ga.shape, aes(x = x, y = y), fill="white", color="black") + coord_fixed() + blank.theme
+```
+
+## Sampling Scheme
+
+- We'll be talking about a poll using (possibly non-representative) sampling with replacement.
+- We can think of this approach as two-step process.
+    1. We flip a weighted coin to decide whether to call a [Black]{.twocolor-green} or [non-Black voter]{.twocolor-red}.
+    2. We choose a voter uniformly at random from the group we've selected.
+- If we weight our coin just right, we get a representative sample.
+    - i.e., a sample in which each person in our population has equal probability of selection
+  
+
+```{r}
+#| out-height: 250px
+#| layout-ncol: 2
+#| layout-nrow: 2
+
+set.seed(our.seed)
+Jnr = sample(N, n, replace=TRUE, prob=ifelse(x==1, 1/(2*sum(x)), 1/(2*sum(1-x))))
+Xnr = x[Jnr]
+sample.locations = locations[Jnr %% M + 1, ]
+sample.locations$label = 1:nrow(sample.locations)
+sample.locations$black = factor(x[Jnr], levels=c(0,1), labels=c('non-Black', 'Black'))
+sample.locations$black.numeric = x[Jnr]
+
+ga + geom_text(aes(x = x, y = y, color=black, label=label, alpha=black.numeric), data=sample.locations[1:10,]) + 
+    scale_alpha(range=.5*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black, alpha=black.numeric), size=.1, data=locations) + 
+    scale_alpha(range=.2*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+
+ga + geom_text(aes(x = x, y = y, color=black, label=label, alpha=1-black.numeric), data=sample.locations[1:10,]) +
+    scale_alpha(range=.5*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black, alpha=1-black.numeric), size=.1, data=locations) +
+    scale_alpha(range=.2*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+```
+
+
+## The One-Step Sampling Interpretation
+
+- We don't *have to* think of this as a two-step process.
+- To get the probability we select a person in our population, we just multiply out our coin and dice probabilities.
+- We can think this as a single roll of a (potentially weighted) die.
+
+### Representative Sampling
+$$
+P(J_i=j) = 
+\begin{cases}
+   \frac{m_{Black}}{m} \ \ \ \ \ \times \frac{1}{m_{Black}} \ \ \ \ \ =\ \frac{1}{m} & \text{if the $j$th voter in our population is Black ($x_j=1$) } \\
+    \frac{m-m_{Black}}{m} \times \frac{1}{m-m_{Black}} \ = \ \frac{1}{m} & \text{otherwise}
+\end{cases}
+$$
+
+### 50%-Black Sampling
+
+$$
+P(J_i=j) = 
+\begin{cases}
+   \frac{1}{2} \times \frac{1}{m_{Black}} \ \ \ \ \ =\ \frac{1}{2m_{Black}} & \text{if the $j$th voter in our population is Black ($x_j=1$) } \\
+   \frac{1}{2} \times \frac{1}{m-m_{Black}} \ = \ \frac{1}{2(m-m_{Black})} & \text{otherwise}
+\end{cases}
+$$
+
+
+## Non-Representative Polls
+
+- Let's take a look at the sample means we'll be comparing.
+- As a class, we chose some sampling rates to look at---we'll see what each looks like.
+- Do you see a problem with any of these sampling rates?
+
+```{r}
+#| out-height: 600px
+#| layout-ncol: 2
+#| layout-row: 2
+#| fig-asp: .5
+#| fig-subcap: 
+#|  - "30% Black"
+#|  - "50% Black"
+#|  - "80% Black"
+#|  - "100% Black" 
+
+
+twocolor.green = '#00BFC4'
+
+sample.proportional = function(n, p, x) { 
+    flip = rbinom(n,1,p)
+    ifelse(flip, sample(which(x), replace=TRUE), sample(which(!x), replace=TRUE))
+}
+
+dfpop$x.factor = factor(dfpop$x, levels=c(0,1), labels=c('non-Black', 'Black'))
+plot.prop = function(p) { 
+  dfsamp = dfpop[sample.proportional(n,p,dfpop$x==1), ]
+  summaries =  dfsamp %>% group_by(x) %>% summarize(mean=mean(y), sd=sd(y)) 
+  p = if(p < 1) { 
+    ggplot() + geom_point(aes(x=x, y=y, color=x.factor), alpha=.4, size=dot.size, 
+                          position=position_jitter(w=.2, h=.05), data=dfsamp)
+  } else {
+    ggplot() + geom_point(aes(x=x, y=y), color=twocolor.green, alpha=.4, size=dot.size, 
+                          position=position_jitter(w=.2, h=.05), data=dfsamp)
+  }
+  p+geom_pointrange(aes(x=x, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) + guides(color=FALSE) + xlim(c(-.5,1.5))
+}
+plot.prop(.3)
+plot.prop(.5)
+plot.prop(.8)
+plot.prop(1)
+```
+
+
+## The Sampling Distribution Table and Turnout Difference
+
+```{r}
+J1 = sample.proportional(n, .5, dfpop$x==1)
+J2 = sample.proportional(n, .5, dfpop$x==1)
+J3 = sample.proportional(n, .5, dfpop$x==1)
+JM = sample.proportional(n, .5, dfpop$x==1)
+```
+
+$$
+\small{
+\begin{array}{r|rrr|rrr|r|rrr|rrr}
+\text{call} &  1 & & & 2 & & & \dots & `r n` & & & & & & \\
+\text{pollster} & J_1 & X_1 & Y_1 & J_2 & X_2 & Y_2   & \dots & J_{`r n`} & X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  & \overline{XY} \\
+\hline
+\color{black}   1   
+    & \color{black}   `r J=J1; Y=y[J]; X=x[J]; J[1]`    & \color{black}  `r X[1]`      & \color{black} `r Y[1]` 
+    & \color{black}   `r J[2]`                          & \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
+                                                        & \color{black}   \dots 
+    & \color{black}   `r J[n]`                          & \color{black}   `r X[n]`     & \color{black} `r Y[n]`       
+    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(X*Y))` \\
+\color{magenta}   2   
+    & \color{magenta}   `r J=J2; Y=y[J]; X=x[J]; J[1]`  & \color{magenta}  `r X[1]`      & \color{magenta} `r Y[1]` 
+    & \color{magenta}   `r J[2]`                        & \color{magenta}  `r X[2]`      & \color{magenta} `r Y[2]`      
+                                                        & \color{magenta}   \dots 
+    & \color{magenta}   `r J[n]`                        & \color{magenta}   `r X[n]`     & \color{magenta} `r Y[n]`       
+    & \color{magenta}   `r approx(mean(X))` & \color{magenta} `r approx(mean(Y))` &  \color{magenta} `r approx(mean(X*Y))` \\
+\color{cyan}    3   
+    & \color{cyan}    `r J=J3; Y=y[J]; X=x[J]; J[1]`    & \color{cyan}   `r X[1]`      & \color{cyan}  `r Y[1]` 
+    & \color{cyan}    `r J[2]`                          & \color{cyan}   `r X[2]`      & \color{cyan}  `r Y[2]`      
+                                                        & \color{cyan}    \dots 
+    & \color{cyan}    `r J[n]`                          & \color{cyan}    `r X[n]`     & \color{cyan}  `r Y[n]`       
+    & \color{cyan}    `r approx(mean(X))`   & \color{cyan}  `r approx(mean(Y))`   &  \color{cyan}    `r approx(mean(X*Y))` \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{gray}    1M   
+    & \color{gray}    `r J=JM; Y=y[J]; X=x[J]; J[1]`    & \color{gray}   `r X[1]`      & \color{gray}  `r Y[1]` 
+    & \color{gray}    `r J[2]`                          & \color{gray}   `r X[2]`      & \color{gray}  `r Y[2]`      
+                                                        & \color{gray}    \dots 
+    & \color{gray}    `r J[n]`                          & \color{gray}    `r X[n]`     & \color{gray}  `r Y[n]`       
+    & \color{gray}    `r approx(mean(X))`   & \color{gray}  `r approx(mean(Y))`   &  \color{gray}    `r approx(mean(X*Y))` \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
+$$
+
+- From any one sample (row), we can calculate the difference in sample turnout rates as follows.
+
+$$ 
+\begin{aligned}
+\text{Black Turnout} &= \frac{\sum_{i=1}^{n} X_i Y_i}{\sum_{i=1}^{n} X_i} = \frac{n\overline{XY}}{n\overline{X}} = \frac{\overline{XY}}{\overline{X}} \\
+\text{Non-Black Turnout} 
+&= \frac{\sum_{i=1}^{n} (1-X_i) Y_i}{\sum_{i=1}^{n} (1-X_i)} 
+= \frac{\sum_{i=1}^{n} Y_i- \sum_{i=1}^{n} X_i Y_i}{\sum_{i=1}^{n} 1 - \sum_{i=1}^{n} X_i} =
+\frac{n\overline{Y} - n\overline{XY}}{n - n\overline{X}} = 
+\frac{\overline{Y}-\overline{XY}}{1-\overline{X}} \\
+\text{Difference} &=  \frac{\overline{XY}}{\overline{X}} - \frac{\overline{Y}-\overline{XY}}{1-\overline{X}} 
+\end{aligned}
+$$
+
+- Using multiple samples, we can draw the sampling distribution of this quantity.
+
+## Simulating the Sampling Distribution of Black Turnout: 30% Black
+
+```{r}
+width = function(samples, alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( mean(samples) - w/2 <= samples & samples <= mean(samples) + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
+}
+
+plot.samples = function(samples) { 
+	ggplot() + geom_histogram(aes(x=samples, y=after_stat(density)), binwidth=.01, alpha=.2) +
+           geom_vline(aes(xintercept=mean(samples)), color="blue") +
+           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*width(samples, alpha=.33)/2), color="blue", linetype='dashed') +
+           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*width(samples, alpha=.05)/2), color="blue", linetype='dotted') +
+           geom_vline(aes(xintercept=mean(y[x==1])-mean(y[x==0])), color='green', size=3, alpha=.7) +
+           scale_x_continuous(breaks=seq(-.2,.2, by=.05), limits=c(-.2, .2)) +
+           scale_y_continuous(breaks=seq(0,30,  by=10), limits=c(0, 30))
+}
+```
+
+```{r}
+#| cache: true
+ps = c(.3,.5,.8)
+samples = lapply(ps, function(p) { 
+  set.seed(111)
+  replicate(100, {
+      J = sample.proportional(n,p,x==1)
+      X = x[J]
+      Y = y[J]
+      mean(X*Y)/mean(X) - mean(Y*(1-X))/(1-mean(X))
+  })
+})
+```
+
+```{r}
+#| out-height: 400px
+#| 
+plot.samples(samples[[1]])
+```
+
+- There are a few features we may want to highlight.
+  - The *mean of the sampling distribution* is the solid blue line.
+  - The middle 2/3 of the sampling distribution lies between the dashed blue lines.
+  - The middle 95\% of the sampling distribution lies between the dotted blue lines. 
+- I've also drawn the *subpopulation difference* as a wide green line.
+  - We see that it appears as a kind of highlight on the solid blue line. 
+  - It's in exactly the same place. Why?
+
+
+## Simulating the Sampling Distribution of Black Turnout: 50% Black
+
+
+```{r}
+#| out-height: 400px
+plot.samples(samples[[2]])
+```
+
+- There are a few features we may want to highlight.
+  - The *mean of the sampling distribution* is the solid blue line.
+  - The middle 2/3 of the sampling distribution lies between the dashed blue lines.
+  - The middle 95\% of the sampling distribution lies between the dotted blue lines. 
+- I've also drawn the *subpopulation difference* as a wide green line.
+  - We see that it appears as a kind of highlight on the solid blue line. 
+  - It's in exactly the same place. Why? 
+
+
+## Simulating the Sampling Distribution of Black Turnout: 80% Black
+
+
+```{r}
+#| out-height: 400px
+plot.samples(samples[[3]]) 
+```
+
+- There are a few features we may want to highlight.
+  - The *mean of the sampling distribution* is the solid blue line.
+  - The middle 2/3 of the sampling distribution lies between the dashed blue lines.
+  - The middle 95\% of the sampling distribution lies between the dotted blue lines. 
+- I've also drawn the *subpopulation difference* as a wide green line.
+  - We see that it appears as a kind of highlight on the solid blue line. 
+  - It's in exactly the same place. Why?
+
+
+## Unbiasedness
+
+
+## Which do you like best?
+
+
+## The Boostrap Sampling Distribution: 50%
+
+```{r}
+J = sample.proportional(n, .5, x==1)
+Y = y[J]
+X = x[J]
+turnout.dif.bootstrap.samples = replicate(1000, {
+  Jb = sample(1:n,size=n,replace=TRUE)
+  Xb = X[Jb]
+  Yb = Y[Jb]
+  mean(Xb*Yb)/mean(Xb) - mean(Yb*(1-Xb))/(1-mean(Xb))
+})
+bootstrap.w = width(turnout.dif.bootstrap.samples, alpha=.05)
+```
+
+
+```{r}
+#| fig-nrow: 2
+#| fig-asp: .5
+#| out-height: 300px
+#| fig-subcap: 
+#|   - "Sampling Distribution"
+#|   - "Centered Bootstrap Sampling Distribution"
+plot.samples(turnout.dif.bootstrap.samples - mean(turnout.dif.bootstrap.samples) + mean(samples[[2]]))
+plot.samples(samples[[2]])
+```
+
+
+## Bootstrap-Calibrated Interval Estimates
+
+
+```{r}
+#| cache: true
+S = 100
+intervals = array(dim=c(S, 2))
+normal.intervals = array(dim=c(S,2))
+
+p = .5
+for(ss in 1:S) {
+  J = sample.proportional(n,p,x==1)
+  Xs = x[J]
+  Ys = y[J]
+  
+  bootstrap.samples = replicate(1000, {
+    Jb = sample(1:n,size=n,replace=TRUE)
+    Xb = Xs[Jb]
+    Yb = Ys[Jb]
+    mean(Xb*Yb)/mean(Xb) - mean(Yb*(1-Xb))/(1-mean(Xb))
+  })
+
+  w = width(bootstrap.samples, alpha=.05)
+  estimated.dif.s = mean(Xs*Ys)/mean(Xs) - mean(Ys*(1-Xs))/(1-mean(Xs))
+  intervals[ss,] = c(estimated.dif.s - w/2, estimated.dif.s + w/2)
+
+  sehat.dif = sqrt( var(Ys[Xs==1])/sum(Xs==1) + var(Ys[Xs==0])/sum(Xs==0) )
+  normal.intervals[ss,] = c(estimated.dif.s - 1.96*sehat.dif, estimated.dif.s + 1.96*sehat.dif)
+}
+pop.dif = mean(x*y)/mean(x) - mean((1-x)*y)/mean(1-x)
+coverage = mean( intervals[,1] <= pop.dif & pop.dif <= intervals[,2] )
+normal.coverage = mean( normal.intervals[,1] <= pop.dif & pop.dif <= normal.intervals[,2] )
+mean.width = mean( intervals[,2] - intervals[,1] )
+normal.mean.width = mean( normal.intervals[,2] - normal.intervals[,1] )
+```
+
+
+```{r}
+#| out-height: 400px
+K = 99
+turnout.dif.samples = samples[[2]]
+estimated.dif = mean(X*Y)/mean(X) - mean(Y*(1-X))/(1-mean(X))
+interval.plot = plot.samples(turnout.dif.samples) + geom_pointrange(aes(y=10, x=estimated.dif, xmin=estimated.dif-bootstrap.w/2, xmax=estimated.dif + bootstrap.w/2))
+interval.plot + geom_pointrange(aes(y=20*(1:K)/K, xmin=intervals[1:K,1], xmax=intervals[1:K,2], x=(intervals[1:K,1]+intervals[1:K,2])/2), alpha=.1, color='purple')
+```
+
+- `r S*coverage`/`r S`  intervals (`r percent(coverage)`) cover the true difference in turnout.
+  - Pretty close to the intended 95% coverage rate.
+- Their mean width is 2 x `r approx(mean.width/2)`.
+  - Remember: we use this phrasing because widths are twice the distance from point-estimate to endpoint.
+
+
+## Can We Get Similar Results via Normal Approximation?
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+
+
+se = 1
+breaks = seq(-4*se, 4*se, 2*se) 
+signs  = case_when(
+  breaks < 0 ~ '-', 
+  breaks == 0 ~ '',
+  breaks > 0 ~ '+')
+offsets = case_when(
+  breaks != 0 ~ sprintf('%dσ', breaks),
+  breaks == 0 ~ '')
+labels.abstract = sprintf('μ %s %s',     signs, offsets)
+
+x=seq(-4,4,by=.01)
+sampling.dist.plot = ggplot() + geom_area(aes(x=x,y=dnorm(x)), alpha=.1, color='black', fill='green') + 
+       geom_vline(aes(xintercept=qnorm(c(.16,.84))), linetype='dashed', color='blue') +
+       geom_vline(aes(xintercept=qnorm(c(.025,.975))), linetype='dotted', color='blue') +
+       scale_x_continuous(breaks=seq(-4,4,by=2), labels=labels.abstract) 
+
+sampling.dist.plot
+```
+
+- Let's try calibrating intervals using a *normal approximation* to the sampling distribution.
+- To do this, we're going to need an estimate of the sampling distribution's variance.
+- From there, it's easy. 
+    - For a normal, 95% of samples are within $1.96$ standard deviations of the mean.
+    - So we can just make our arms $1.96$ *standard errors* wide
+    - Recall *standard error* is shorthand for the standard deviation of an estimator's sampling distribution.
+- This variance calculation will be today's heavy lifting.
+- But, leaning on what we did last time, it won't be that hard.
+
+
+## Variance Calculation: Step 1
+
+- Our first step will be exactly like last time.
+- We'll use the law of total variance to break the variance of our estimator into two parts.
+- And we'll observe that the $\Var\E[\ldots]$ term is zero.
+  - The conditional mean of our estimator is a constant.
+  - In particular, it's the constant we're estimating.
+
+$$
+\small{
+\begin{aligned}
+\Var\qty[ \hat \mu(1) - \hat \mu(0) ] &= \E \qty[ \Var\qty{ \hat \mu(1) - \hat\mu(0) \mid X_1 \ldots X_n }] + \Var\qty[ \E{\hat \mu(1) - \hat\mu(0) \mid X_1 \ldots X_n} ] \\
+&= \E \qty[ \Var\qty{ \hat \mu(1) - \hat \mu(0) \mid X_1 \ldots X_n }] + \Var[\mu(1)-\mu(0)] \\
+&= \E \qty[ \Var\qty{ \hat \mu(1) - \hat \mu(0) \mid X_1 \ldots X_n }] + 0 \\
+\end{aligned}
+}
+$$
+
+## Variance Calculation: Step 2
+
+- Now we'll have top deal with the remaining term.
+- After substituting in definitions, associating, and expanding, we'll have three terms.
+- One is familiar from last time; one is analogous; and one is new.
+
+$$\small{
+\begin{aligned}
+\Var\qty[ \hat \mu(1) - \hat \mu(0) ] 
+&= \E \qty[ \E\qty[\qty{ \hat\mu(1) - \hat\mu(0)  - \qty[\mu(1) - \mu(0)] }^2  \mid X_1 \ldots X_n]] \\
+&= \E \qty[ \E\qty[\qty{ \qty[\hat\mu(1) -\mu(1)] - \qty[\hat\mu(0) - \mu(0)] }^2 \mid X_1 \ldots X_n]]  \\
+&= \E \qty[ \E\qty[\qty{\hat\mu(1) -\mu(1)}^2 - 2 \qty{\hat\mu(1) -\mu(1)}\qty{\hat\mu(0) - \mu(0)} +  \qty{\hat\mu(0) - \mu(0)}^2  \mid X_1 \ldots X_n]] \\
+&= \E \qty[ \E\qty[\qty{\hat\mu(1) -\mu(1)}^2 \mid X_1 \ldots X_n]]  \\
+&- 2 \E\qty[ \E\qty{\hat\mu(1) -\mu(1)}\qty{\hat\mu(0) - \mu(0)} \mid X_1 \ldots  X_n] \\
+&+ \E \qty[ \E\qty[\qty{\hat\mu(0) - \mu(0)}^2  \mid X_1 \ldots X_n]] \\
+\end{aligned}
+}
+$$
+
+## Variance Calculation: Step 3
+
+$$\small{
+\begin{aligned}
+\Var\qty[ \hat \mu(1) - \hat \mu(0) ] 
+&= \E \qty[ \E\qty[\qty{\hat\mu(1) -\mu(1)}^2 \mid X_1 \ldots X_n]] && \qty( =\E\qty[\frac{\sigma^2(1)}{N_1}] )  \\
+&- 2 \E\qty[ \textcolor{blue}{\E\qty[\qty{\hat\mu(1) -\mu(1)}\qty{\hat\mu(0) - \mu(0)} \mid X_1 \ldots  X_n]}]  && (=?)\\
+&+ \E \qty[ \E\qty[\qty{\hat\mu(0) - \mu(0)}^2  \mid X_1 \ldots X_n]] && \qty( =\E\qty[\frac{\sigma^2(0)}{N_0}] )  \\
+\end{aligned}
+}
+$$
+
+- We know the first term from last time. And the last term is analogous.
+- What we have to deal with is the new term in the middle. And it's zero.
+
+$$\small{
+\begin{aligned}
+\textcolor{blue}{\E\qty[\qty{\hat\mu(1) -\mu(1)}\qty{\hat\mu(0) - \mu(0)} \mid X_1 \ldots  X_n]} 
+&=\E\qty[\sum_i \frac{X_i \qty{ Y_i - \mu(1) }}{\sum_i X_i} \cdot \sum_j \frac{(1-X_j)\qty{Y_j - \mu(X_j)}}{\sum_j X_j}  \mid X_1 \ldots X_n] \\
+&=\frac{ \sum_i\sum_j \E\qty[ X_i \qty{ Y_i - \mu(1) } (1-X_j) \qty{ Y_j - \mu(0) } \mid X_1 \ldots X_n] }{ \sum_i X_i \cdot \sum_j 1-X_j }  \\
+&= 0.
+\end{aligned}
+}
+$$
+
+- The terms in this sum are zero if $i=j$.
+- And they're products of *independent mean-zero random variables* otherwise.
+$$
+\small{
+\begin{aligned}
+Z_i^1 &= X_i \qty{ Y_i - \mu(1)}       &= X_i \qty{ Y_i - \mu(X_i) } \\
+Z_i^0 &= (1-X_i) \qty{ Y_i - \mu(0) }  &= (1-X_i)\qty{ Y_i - \mu(X_i) }
+\end{aligned}
+}
+$$
+
+## Conclusion
+
+```{r}
+
+muhat.dif = mean(Y[X==1]) - mean(Y[X==1])
+sehat.dif = sqrt( var(Y[X==1])/sum(X==1) + var(Y[X==0])/sum(X==0) )
+
+
+plot.samples(samples[[2]]) + geom_area(aes(x=x,y=dnorm(x, muhat.dif, sehat.dif)), alpha=.1, color='black', fill='green') + 
+       geom_vline(aes(xintercept=qnorm(c(.16,.84),   muhat.dif, sehat.dif)), linetype='dashed', color='purple') +
+       geom_vline(aes(xintercept=qnorm(c(.025,.975), muhat.dif, sehat.dif)), linetype='dotted', color='purple') 
+```
+
+
+
+- The *variance* of our difference in sample means is the *sum* of the variances of our individual sample means.
+
+$$ 
+\text{se}^2 = \Var\qty[ \hat\mu(1) - \hat \mu(0) ] = \sigma^2(1) \times \E \qty[ \frac{1}{N_1}] + \sigma^2(0) \times \E\qty[\frac{1}{N_0} ] = \Var\qty[\hat\mu(1)] + \Var\qty[\hat\mu(1)]
+$$
+
+- We can estimate it by plugging in ...
+  - sample variance for population variances 
+  - $1/N_1$ and $1/N_0$ for their expectations
+- The result is a pretty good estimate of the sampling distribution.
+- Why did we get the *lowest* variance by using a 50% sampling ratio, so $N_1\approx N_0 \approx n/2$?
+
+## A Comparison of Interval Estimates
+
+```{r}
+#| out-height: 400px
+K = 20
+estimated.dif = mean(X*Y)/mean(X) - mean(Y*(1-X))/(1-mean(X))
+interval.plot = plot.samples(turnout.dif.samples) + 
+    geom_pointrange(aes(y=10, x=estimated.dif, xmin=estimated.dif-bootstrap.w/2, xmax=estimated.dif + bootstrap.w/2)) +
+    geom_pointrange(aes(y=12, x=estimated.dif, xmin=estimated.dif - 1.96*sehat.dif,  xmax=estimated.dif + 1.96*sehat.dif), color='green')
+
+interval.plot + geom_pointrange(aes(y=20*(1:K)/K, xmin=intervals[1:K,1], xmax=intervals[1:K,2], x=(intervals[1:K,1]+intervals[1:K,2])/2), alpha=.3, color='purple') +
+                geom_pointrange(aes(y=(20*(1:K)+10)/K, xmin=normal.intervals[1:K,1], xmax=normal.intervals[1:K,2], x=(normal.intervals[1:K,1]+normal.intervals[1:K,2])/2), alpha=.3, color='orange') 
+```
+
+- Here we're showing 20 friends' polls with intervals calibrated two ways.
+  - using the Bootstrap estimate of the sampling distribution
+  - using the Normal Approximation-based estimate of the sampling distribition
+
+
+## Income Data
+
+```{r}
+X = earnings$degree=='4-year degree'
+Y = earnings$income
+muhat.dif = mean(Y[X==1]) - mean(Y[X==0])
+sehat.dif = sqrt( var(Y[X==1])/sum(X==1) + var(Y[X==0])/sum(X==0) )
+x = seq(muhat.dif-4*sehat.dif, muhat.dif+4*sehat.dif, by=.01*sehat.dif)
+
+ggplot() + geom_area(aes(x=x,y=dnorm(x, muhat.dif, sehat.dif)), alpha=.1, color='black', fill='green') + 
+       geom_vline(aes(xintercept=qnorm(c(.16,.84),   muhat.dif, sehat.dif)), linetype='dashed', color='purple') +
+       geom_vline(aes(xintercept=qnorm(c(.025,.975), muhat.dif, sehat.dif)), linetype='dotted', color='purple') +
+       geom_pointrange(aes(y=10, x=muhat.dif, xmin = muhat.dif-1.96*sehat.dif, xmax=muhat.dif+1.96*sehat.dif))
+```
+
+
+- We can do *exactly* the same thing for the CPS Income Data
+- Except there are no 'friends' polls' 
+- No sampling distribution to compare to.
+- It all just is what it is.
+
+## Here's what we've got
+
+```{r}
+scale_y = function(limits=c(0, 4e5)) { 
+  scale_y_continuous(labels=label_dollar(), limits=limits)
+}
+earnings.jitter = ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), 
+                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+                   scale_y() + guides(color=FALSE)
+
+summaries = earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
+earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) + scale_y()
+```
+
+$$
+\begin{aligned}
+\hat\mu(1)-\hat\mu(0) 
+&= `r muhat.dif` \\
+CI  &= \hat\mu(1)-\hat\mu(0) \pm 1.96 \times `r sehat.dif` = \qty[ `r approx(muhat.dif-1.96*sehat.dif)` \quad \ldots \quad `r approx(muhat.dif-1.96*sehat.dif)` ]
+\end{aligned}
+$$
+
+### How do we interpret this?
+
+
