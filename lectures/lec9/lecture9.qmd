@@ -1,5 +1,5 @@
 ---
-title: "QTM 220 Lecture 7"
+title: "QTM 220 Lecture 9"
 subtitle: "Descriptive Statistics with Non-Binary Covariates"
 format: 
   clean-revealjs:
@@ -316,6 +316,9 @@ earnings.jitter
     - 8+  years  = finished middle school
     - 12+ years = high school diploma
     - 16+ years = 4-year college degree
+- You may notice the numbers are a bit smaller than the incomes we've been looking at.
+  - That's because previously, we were looking at household income. Now we're looking at individual income. 
+  - It's roughly half the size. Many households have 2 incomes, so that makes sense.
 
 ::: aside
 Ignore the gaps at 15 and 17 years for now. We'll come back to them.
@@ -1019,24 +1022,26 @@ ggplot(weights) + geom_point(aes(x=x, y=w, color=type)) +
 ## The Impact of Variation in Slope
 
 ```{r}
-#| out-height: 500px
+#| out-height: 400px
 
 earnings2 = earnings
 earnings2$income[earnings2$education==10] = earnings2$income[earnings2$education==10]*3 
-summaries2 = earnings2 %>% group_by(education) %>% summarize(mean=mean(income), sd=sd(income), mean.X = mean(education))
 
-aggregate.comparison.plot.2 = jitter.nocolor(earnings2) + 
-  geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries2[summaries2$education <= 12,]) +
-  geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education %in% c(8,12),], color='blue', alpha=.4) +
-  geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education<=12,], color='black', linetype='dashed') +
-  scale_y(c(0, .7e5))
+plot.aggregate.comparison = function(earnings2) {
+  summaries2 = earnings2 %>% group_by(education) %>% summarize(mean=mean(income), sd=sd(income), mean.X = mean(education))
+  aggregate.comparison.plot= jitter.nocolor(earnings2) + 
+    geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries2[summaries2$education <= 12,]) +
+    #geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education %in% c(8,12),], color='blue', alpha=.4) +
+    geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education<=12,], color='black', linetype='dashed') +
+    scale_y(c(0, .7e5))
 
-model = lm(income ~ education, data=earnings2[earnings2$education <= 12,])
-lm.predictions = data.frame(education=seq(8,12,by=.01))
-lm.predictions$muhat = predict(model, newdata=lm.predictions)
-
-aggregate.comparison.plot.2 + scale_x(c(8,12)) + scale_y(c(0, .7e5)) +
-    geom_line(aes(x=education, y=muhat), data=lm.predictions, color='red', alpha=.4)
+  model = lm(income ~ education, data=earnings2[earnings2$education <= 12,])
+  lm.predictions = data.frame(education=seq(8,12,by=.01))
+  lm.predictions$muhat = predict(model, newdata=lm.predictions)
+  aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5)) +
+      geom_line(aes(x=education, y=muhat), data=lm.predictions, color='red', alpha=.4)
+}
+plot.aggregate.comparison(earnings2)
 ```
 
 - While our three summaries estimates are based on very different comparisons, we got similar answers.
@@ -1045,7 +1050,111 @@ aggregate.comparison.plot.2 + scale_x(c(8,12)) + scale_y(c(0, .7e5)) +
 - If that weren't the case, it'd be a very different story. It'd look more like this.
 - In short, sometimes the choice of summary --- among qualitatively similar ones --- matters a lot. 
 - Sometimes it doesn't. But that's not something you should bet much on.
-- We'll talk more about choosing the right summary next week.
+- We'll talk more about choosing the right summary in the coming weeks.
+- For now, let's dig into this phenomenon. We'll look at data corresponding to a few stories about what's useful.
+
+
+## Three Stories About High School {.smaller}
+
+```{r}
+
+mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
+epsilon = rnorm(nrow(earnings)) * .1*sd(earnings$income[earnings$education %in% 8:12])
+
+earnings1 = earnings
+earnings1$income = mu[ifelse(earnings$education==12, 12, 8)] + epsilon
+
+earnings2 = earnings
+earnings2$income = mu[ifelse(earnings$education >= 10, 12, 8)] + epsilon
+
+mu3 = NA+mu
+mu3[8]=mu[8]
+mu3[9]=mu[10]
+mu3[10]=(mu[11]+mu[12])/2
+mu3[11]=mu[12]
+mu3[12]=mu[12]
+earnings3 = earnings
+earnings3$income = mu3[earnings$education] + epsilon
+
+
+over.people = function(earnings) {
+  hsed = earnings$education[earnings$education %in% 9:12]
+  mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
+  mean(mu[hsed] - mu[hsed-1])
+}
+over.years = function(earnings) {
+  mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
+  mean(mu[9:12] - mu[8:11])
+}
+lsq.slope = function(earnings) { 
+  model = lm(income ~ education, data=earnings[earnings$education <= 12,])
+  coef(model)[2]
+}
+```
+
+:::: columns
+
+::: column
+
+  1. All that matters is the diploma.
+  2. All that matters is 10th grade algebra.
+  3. They teach the most important stuff first. 
+:::
+
+::: column
+
+:::: r-stack
+
+::: {.fragment .fade-out data-fragment-index="0"} 
+
+$$
+\small{
+\begin{array}{r|rrr}
+\text{Story} & 1 & 2 & 3 \\
+\hline
+\text{Least Squares Slope}  & \qquad  &  \qquad & \qquad   \\
+\text{Average over People}  & \qquad  &  \qquad & \qquad   \\
+\text{Average over Years}   & \qquad  &  \qquad & \qquad   \\
+\end{array}
+}
+$$
+
+:::
+::: {.fragment .current-visible data-fragment-index="0"} 
+
+$$
+\small{
+\begin{array}{r|rrr}
+\text{Story} & 1 & 2 & 3 \\
+\hline
+\text{Least Squares Slope}  & `r approx(lsq.slope(earnings1))`   &  `r approx(lsq.slope(earnings2))` & `r approx(lsq.slope(earnings3))`  \\
+\text{Average over People}  & `r approx(over.people(earnings1))` &  `r approx(over.people(earnings2))` & `r approx(over.people(earnings3))`  \\
+\text{Average over Years}   & `r approx(over.years(earnings1))`  &  `r approx(over.years(earnings2))` & `r approx(over.years(earnings3))`  \\
+\end{array}
+}
+$$
+
+:::
+::::
+:::
+::::
+
+### Which is Which?
+
+```{r}
+#| layout-ncol: 3
+#| out-height: 400px
+#| fig-asp: 1
+#| fig-subcap:
+#|  - Story A
+#|  - Story B
+#|  - Story C 
+
+plot.aggregate.comparison(earnings2)
+plot.aggregate.comparison(earnings1)
+plot.aggregate.comparison(earnings3)
+```
+
 
 ## Summary
 ```{r}
