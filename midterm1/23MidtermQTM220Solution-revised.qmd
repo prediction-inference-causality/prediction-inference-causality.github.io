@@ -1,0 +1,403 @@
+---
+title: "Exam 1 (Sept 21/25)"
+subtitle: "QTM 220"
+execute:
+  echo: false
+  warning: false
+format: 
+  pdf:
+    include-in-header: 
+      text: |
+        \usepackage{amsmath}
+        \usepackage{setspace}
+        \onehalfspacing
+        \usepackage{amssymb}
+        \usepackage{physics}
+        \usepackage{color}
+        \usepackage{fullpage}
+        \usepackage{graphicx}
+        \usepackage{cancel}
+        \usepackage{physics}
+        \usepackage{fullpage}
+        \DeclareMathOperator{\E}{E}
+        \DeclareMathOperator{\Var}{V}
+        \DeclareMathOperator{\bias}{bias}
+        \newenvironment{answer}{\ \\ \color{white}}{\color{black}}
+        % replace 'red' with 'white' above  to hide solutions (in printout)
+---
+
+```{r setup} 
+library(ggplot2)
+library(tidyverse)
+library(magrittr)
+if (knitr::is_latex_output())
+  knitr::opts_chunk$set(dev = "cairo_pdf")
+```
+
+\section*{Instructions}
+Do Problem 1, either 2a or 2b, 3, and 4. No additional points will be awarded for doing both 2a and 2b; do whichever you prefer.
+If you do both, and it is not clear to us which one you want graded, we will grade Problem 2a.
+
+
+\section*{Problem 1}
+Suppose we have a sample $Y_1 \ldots Y_n$ stored on an \textbf{R} vector $Y$ of length $n$.
+We run this code.
+
+```{r}
+set.seed(123)
+n = 1000
+Y = rnorm(n)
+```
+
+```{r}
+#| echo: true
+B=10000
+Y.bar = rep(NA,B)
+for(b in 1:B) {
+  Y.bar[b]= mean(sample(Y,size=n,replace=TRUE))
+}
+```
+
+```{r}
+#| out-height: 6in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the vector Y's elements
+#|  -  Histogram of the Y.bar's elements
+ggplot() + geom_histogram(aes(x=Y,     y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(Y)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(Y)+c(-1,1)*sd(Y)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(Y), xmin=mean(Y)-1.96*sd(Y), xmax=mean(Y)+1.96*sd(Y), y=.15)) + theme_bw() + xlab('') + ylab('')
+ggplot() + geom_histogram(aes(x=Y.bar, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(Y.bar)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(Y.bar)+c(-1,1)*sd(Y.bar)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(Y.bar), xmin=mean(Y.bar)-1.96*sd(Y)/sqrt(n), xmax=mean(Y.bar)+1.96*sd(Y)/sqrt(n), y=5)) + theme_bw() + xlab('') + ylab('')
+```
+
+\subsection*{Part a}
+What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket
+if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mean(Y)
+```
+
+\begin{answer}
+The sample mean. It's indicated by the solid vertical line on the left histogram.
+\vspace{.5in}
+\end{answer}
+
+
+\subsection*{Part b}
+What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(Y)
+```
+
+\begin{answer}
+The sample standard deviation. It's the distance between the solid vertical and either dashed vertical line on the left histogram.
+\vspace{.5in}
+\end{answer}
+
+\subsection*{Part c}
+What does this code calculate? State it in words and mark it with an 'c', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(Y.bar)
+```
+
+\begin{answer}
+The bootstrap sampling distribution's standard deviation. 
+It's the distance between the solid vertical and either dashed vertical line on the left histogram.
+\vspace{.5in}
+\end{answer}
+
+\subsection*{Part d}
+What does this code calculate? State it in words and mark it with an 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mean(Y) - 1.96* sd(Y)/sqrt(n)
+mean(Y) + 1.96* sd(Y)/sqrt(n)
+```
+
+\begin{answer}
+A 95\% confidence interval --- based on normal approximation --- for the mean of the population our sample $Y_1 \ldots Y_n$ is drawn from. This is indicated by the horizontal segment (with a dot in the middle) on the right histogram.
+\vspace{.5in}
+\end{answer}
+
+\subsection*{Part e}
+How could you calculate roughly the same thing as in part d using 'sd(Y.bar)' and not 'sd(Y)'?
+
+\begin{answer}
+
+We can use the standard deviation of the bootstrap sampling distribution, rather than 'sd(Y)/sqrt(n)', as our estimate of standard error.
+
+\begin{verbatim}
+mean(Y) - 1.96 * sd(Y.bar)
+mean(Y) + 1.96 * sd(Y.bar)
+\end{verbatim}
+
+\vspace{.5in}
+\end{answer}
+
+
+\newpage
+\section*{Problem 2a}
+In 2015, Berkeley implemented a penny-per-ounce tax on soda. Advocates claimed the tax would reduce the rate of diabetes in the city's population. Now we want to check this claim---in a sense. What we want to know is the 
+difference between the rate of diabetes among residents of Berkeley --- one city in the San Francisco Bay Area --- to the rate among residents of the Bay Area as a whole. 
+
+What we can use to do this is a sample, drawn with replacement, from the population of Bay Area Residents. To be precise, suppose the Bay Area has $m$ residents, each with an id $j \in 1 \ldots m$. Our population is $(x_1,y_1) \ldots (x_m, y_m)$ 
+where 
+$$
+\begin{aligned}
+x_j &= \begin{cases} 1 & \ \text{ if Bay Area resident $j$ lives in Berkeley} \\  0 & \ \text{ otherwise} \end{cases} \\
+y_j &= \begin{cases} 1 & \ \text{ if Bay Area resident $j$ has diabetes} \\ 0 & \ \text{ otherwise} \end{cases}
+\end{aligned}
+$$
+We have a sample $(X_1, Y_1) \ldots (X_n, Y_n)$ drawn with replacement from this population.
+
+
+\subsection*{Part a}
+Express your estimand --- the population summary you want to estimate--- in terms of $(x_1, y_1) \ldots (x_m,y_m)$.
+
+\begin{answer}
+$$
+\frac{\sum_{j=1}^m x_j y_j}{\sum_{j=1}^m x_j} - \frac{\sum_{j=1}^m y_j}{m}
+$$
+\vspace{1in}
+\end{answer}
+
+\subsection*{Part b} 
+Express that estimand, using conditional and unconditional expectations, in terms of a single pair of random variables $(X_i,Y_i)$ drawn from this population.
+
+\begin{answer}
+$$ \E[Y_i \mid X_i=1] - \E[Y_i] $$
+
+\vspace{1in}
+\end{answer}
+
+\subsection*{Part c} 
+In terms of $\overline{X}=\frac1n\sum_{i=1}^n X_i$, $\overline{Y}=\frac1n\sum_{i=1}^n Y_i$, and $\overline{XY}=\frac1n\sum_{i=1}^n X_i Y_i$, state an \emph{unbiased point estimate}.
+
+\begin{answer}
+$$
+\frac{\sum_{i=1}^n X_i Y_i}{\sum_{i=1}^n X_i} - \frac{\sum_{i=1}^n Y_i}{n} = \overline{XY}/\overline{X} - \overline{Y}
+$$
+\vspace{1in}
+
+\end{answer}
+
+
+\newpage
+\section*{Problem 2b}
+
+Suppose we have a bivariate sample $(X_1,Y_1) \ldots (X_n,Y_n)$ stored in a pair of length-n vectors $X$ and $Y$. 
+And that $X_1 \ldots X_n$ are binary, i.e., either 0 or 1.
+
+```{r}
+#| out-height: 6in
+
+set.seed(123)
+
+n = 40
+X = rbinom(n,1,1/3)
+Y = rnorm(n) + X
+x = seq(-2,2,by=.01)
+regression_line=lm(Y~X)
+summaries=data.frame(X=X,Y=Y) %>% group_by(X) %>% summarize(mean=mean(Y), sd=sd(Y))
+
+ggplot() + geom_point(aes(x=X, y=Y), alpha=.3, size=4, position=position_jitter(w=.1,h=0)) + 
+           geom_pointrange(aes(x=X,y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) +
+           scale_x_continuous(breaks=c(0,1), limits=c(-.1,1.1)) + 
+           geom_line(aes(x=x,y=predict(regression_line, newdata=data.frame(X=x))), linetype='dashed', alpha=.5) + 
+           xlab('') + ylab('') + theme_bw()
+
+```
+
+
+
+
+\subsection*{Part a}
+What does the following code produce? State it in words and mark it with an 'a' on the plot above.
+```{r}
+#| echo: true
+mean(Y[X==0])
+```
+
+\begin{answer}
+The mean of the subsample with $X_i=0$. It's the black dot (in the center of the vertical line segment) on the left side of the plot.
+\vspace{1in}
+\end{answer}
+
+\subsection*{Part b}
+Consider the least-squares regression line, $\hat b_0 + \hat b_1 x$ where 
+$$ 
+\hat b_0,\hat b_1 = \operatorname*{argmin}_{a,b} \sum_{i=1}^n \qty( b_0 + b_1 X_i - Y_i )^2.
+$$
+
+We can get the coefficients $\hat b_0$ and $\hat b_1$ by running the following \textbf{R} code.
+\textbf{R} gives $\hat b_0$ the label '(Intercept)' and $\hat b_1$ the label 'X'.
+
+```{r}
+#| eval: true
+#| echo: true 
+ 
+regression_line = lm(Y~X)
+coefficients(regression_line)
+```
+
+Mark this line with a 'b' on the plot above. And explain why $\hat b_0$ is the same thing as your answer to the last question.
+
+\begin{answer}
+It's the dashed gray line. $\hat b_0$ is the same thing we got last time because, when $X$ is binary, the least squares line goes through the two sample means. And at $x=0$, the height of the line is $y=\hat b_0 + \hat b_1 \times 0 = \hat b_0$.
+\end{answer}
+
+\subsection*{Part c}
+What does the following code produce? State it in words and mark it with a 'c', and an arrow or bracket if necessary for clarity, on the plot above.
+```{r}
+#| eval: true
+#| echo: true 
+ 
+mean(Y[X==1]) - mean(Y[X==0])
+```
+
+\begin{answer}
+It's the difference in sample means. On the plot, that's the difference in height between the black dot on the right and the one on the left.
+\vspace{1in}
+\end{answer}
+
+\subsection*{Part d}
+Let's revisit the least squares regression line introduced in part (b). Explain why the slope $\hat b_1$ is equal to the number we see in part (c).
+
+\begin{answer}
+We know that the slope $\hat b_1$ is equal to the \emph{difference in heights} of the line at $x=1$ and $x=0$.
+$$
+\hat b_1 = \frac{ (\hat b_0 + \hat b_1 \times 1) - (\hat b_0 + \hat b_1 \times 0) }{ 1 - 0}
+$$
+
+And because the least squares regression line goes through the two subsample means, this is the difference in subsample means.
+\vspace{2in}
+\end{answer}
+
+\newpage
+\section*{Problem 3}
+
+ Suppose you have a sample $Y_1, Y_2, \ldots, Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma$. 
+ 
+ 
+ Consider the following estimator for $\mu$: $\tilde{Y} = \frac{1}{n-2} \sum_{i=1}^n Y_i$.
+
+ \subsection*{Part a} 
+ What is $E[\tilde{Y}]$?
+
+\begin{answer}
+ \begin{align*}
+ E\qty[\tilde{Y}] &= E\qty[ \frac{1}{n-2} \sum_{i=1}^n Y_i] \\
+ &= \frac{1}{n-2} E\qty[ \sum_{i=1}^n Y_i]\\
+ &= \frac{1}{n-2} \qty(\sum_{i=1}^n E[Y_i])\\
+ &=\frac{1}{n-2} \qty(\sum_{i=1}^n \mu )\\
+ &=\frac{1}{n-2} n\mu \\
+ &= \frac{n}{n-2}\mu
+ \end{align*}
+\vspace{2in}
+\end{answer}
+
+\subsection*{Part b} 
+What is the bias of $E[\tilde{Y}]$ for $\mu$?
+
+\begin{answer}
+ \begin{align*}
+ E[\tilde{Y} - \mu] &= \frac{n}{n-2}\mu - \mu \\
+ &= \qty(\frac{n}{n-2} - 1)\mu \\
+ &= \qty(\frac{n}{n-2} - \frac{n-2}{n-2})\mu \\
+ &= \frac{2}{n-2}\mu
+  \\\end{align*}
+\vspace{2in}
+ \end{answer}
+
+ \subsection*{Part c}
+ Showing your work, calculate $Var[\tilde{Y}]$.
+
+\begin{answer}
+ \begin{align*}
+ V[\tilde{Y}] &= V[ \frac{1}{n-2} \displaystyle \sum_{i=1}^n Y_i] \\
+ &= \frac{1}{(n-2)^2} V[ \sum_{i=1}^n Y_i]\\
+ &= \frac{1}{(n-2)^2} \qty(\sum_{i=1}^n V[Y_i])\\
+ &=\frac{1}{(n-2)^2} \qty(\sum_{i=1}^n \sigma^2 )\\
+ &=\frac{1}{(n-2)^2} n\sigma^2 \\
+ &= \frac{n\sigma^2}{(n-2)^2}
+\vspace{2in}
+\end{align*}
+\end{answer}
+
+\subsection*{Part d}
+The plot below shows the sampling distributions of three estimators at three sample sizes. 
+The vertical line indicates the mean of the sampling distribution. Which of these estimators is
+$\tilde{Y}$? Is it a, b, or c?
+
+```{r}
+#| echo: false
+#| out-width: 6.5in 
+#| fig-asp: 1
+set.seed(1234)
+mu=4
+sigma = 1
+
+error = 2*rnorm(100000)
+bias = list(a=function(n) 0, b=function(n) 2*mu/(n-2), c=function(n) 2*mu/(40-2))
+se = function(n) { sqrt(n*sigma^2 / (n-2)^2) }
+
+plotdata = expand_grid(estimator=names(bias), n=c(10,20,40)) %>%
+  pmap(function(estimator, n) {
+    thebias = bias[[estimator]](n)
+    data.frame(estimator=estimator, n=n, muhat=thebias + error * se(n))
+    }) %>% bind_rows() 
+summaries = plotdata %>% group_by(n, estimator) %>% summarize(mean=mean(muhat))
+
+breaks = seq(-4, 4, by=2)/2 
+signs  = case_when(
+  breaks < 0 ~ '-', 
+  breaks == 0 ~ '',
+  breaks > 0 ~ '+')
+offsets = case_when(
+  breaks != 0 ~ sprintf('%d', abs(breaks)),
+  breaks == 0 ~ '')
+labels.abstract = sprintf('μ %s %s', signs, offsets)
+
+ggplot(plotdata) + geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100, alpha=.4) + 
+                   geom_vline(aes(xintercept=mean), data=summaries) + 
+                   scale_x_continuous(breaks=breaks, labels=labels.abstract, limits=range(breaks)) + 
+                   facet_grid(n ~ estimator, labeller=labeller(n=label_both, estimator=label_both)) + 
+                   theme_bw() + theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1)) + 
+                   xlab('') + ylab('')
+```
+
+\begin{answer}
+It's b. $a$ is unbiased and $c$'s bias doesn't decrease with $n$.
+\vspace{1in}
+\end{answer}
+
+\newpage
+\section*{Problem 4}
+
+Suppose a friend has polled 100 of Georgia's registered voters
+about their intention to vote in the 2024 election. The interval
+estimate they report for turnout is [.59,.61]. 
+Could this interval estimate have 95\% coverage?
+Explain your answer. \emph{Hint. If $Y$ is a binary random variable
+that takes on the value 1 with probability $p$ (and 0 with probability $1-p$), $\Var[Y]=p(1-p)$.}
+
+
+\begin{answer}
+No. The standard error of the mean of $100$ binary random variables
+ $Y_i$ with $\E Y_i=p$ is $\sqrt{p(1-p)/100}$. Because we know that $p\approx 6/10$, this is roughly $(6/10)(4/10)/100=\sqrt{24}/100 \approx 5/100$. 
+ As a result, a 95\% confidence interval should have a width of roughly
+ $2 \times 1.96 \times 5/100 \approx 20/100=.2$. The width of their interval is 
+ $1/10$ of this.
+\vspace{2in}
+ \end{answer}
