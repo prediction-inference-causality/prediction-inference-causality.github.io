@@ -1,0 +1,825 @@
+---
+title: "QTM 220 Lecture 10"
+subtitle: "Inferential Statistics with Non-Binary Covariates"
+format: 
+  clean-revealjs:
+    height: 1000
+    width: 1290
+    theme: [default, "class.scss"]
+    smaller: true
+    slide-number: true
+    pdf-separate-fragments: true
+    fig-format: svg
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
+---
+
+```{r load-libraries}
+library(purrr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(ggplot2)
+library(htmltools)
+library(kableExtra)
+library(scales)
+library(cpsR)
+library(mapdata)
+
+options(knitr.kable.NA = '')
+
+compact_number = label_number(accuracy=.1, scale_cut=cut_short_scale())
+ellipsis <- function(df, nhead=5L, ntail=2) {
+    rownames(df) = as.character(1:nrow(df))
+    stopifnot("data.frame" %in% class(df))
+    els <- rep(NA, ncol(df)) %>% 
+        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
+        data.frame(stringsAsFactors=FALSE) %>% 
+        tibble::as_tibble()
+    rownames(els) = "⋮"
+    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
+}
+
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+```
+
+```{r ggplot-themes}
+fontsize = 12
+textcolor = "#888888"
+
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+        panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = textcolor, size=fontsize),
+        axis.text.y  = element_text(colour = textcolor, size=fontsize),
+        axis.title.x  = element_text(colour = textcolor),
+        axis.title.y  = element_text(colour = textcolor, angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+              axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+
+
+
+```{r get-data}
+#| cache: true
+#| 
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+cps.sampling.ratio = 1/25 # Not true. 1/2500 households are surveyed. But for the sake of plotting, it's ok.
+
+california.state.code = 6
+year = 2020
+cps.data = results=get_asec(year=year, vars=c('pearnval', 'a_age', 'a_hga', 'gestfips', 'gtco', 'gtcbsasz'), key=census.api.key)
+```
+
+```{r transform-data}
+#| cache: false
+#| 
+all.earnings = data.frame(state.code = cps.data$gestfips,
+                          county.code = cps.data$gtco,
+                          age=cps.data$a_age,
+                          income=cps.data$pearnval,
+                          education.code=cps.data$a_hga,
+                          education=case_match(cps.data$a_hga,
+                                           0  ~ 0,   # child
+                                           31 ~ 0,   # < grade 1
+                                           32 ~ 4,   #  grade 1-4
+                                           33 ~ 6,   #  grade 5-6
+                                           34 ~ 8,   #  grade 7-8 
+                                           35 ~ 9,   #  grade 9
+                                           36 ~ 10,  #  grade 10
+                                           37 ~ 11,  #  grade 11
+                                           38 ~ 11,  #  grade 12 no diploma
+                                           39 ~ 12,  #  high school grad
+                                           40 ~ 13,  #  some college
+                                           41 ~ 14,  #  associate degree (vocational)
+                                           42 ~ 14,  #  associate degree (academic)
+                                           43 ~ 16,  #  bachelors degree
+                                           44 ~ 18,  #  masters degree
+                                           45 ~ 20,  #  professional school degree
+                                           46 ~ 20)) #  doctorate
+
+all.earnings$degree = factor(all.earnings$education >= 16, 
+                     levels=c(FALSE, TRUE), 
+                     labels=c('no 4-year degree','4-year degree')) 
+
+coarsen = function(x, group, seed=0) {
+  current.seed = .Random.seed
+  set.seed(seed)
+  x.coarsened = rep(NA, length(x))
+  for(gg in unique(group)) {
+    x.coarsened[group==gg] = runif(sum(group==gg), min(x[group==gg]), max(x[group==gg]))
+  }
+  set.seed(current.seed)
+  x.coarsened
+} 
+
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+earnings = filter(all.earnings, education >= 8 & 
+                                state.code == california.state.code & 
+                                age %>% in.interval(c(25,35)))
+Y = earnings$income
+X = earnings$education
+```
+
+
+```{r get-county-info}
+# county info from https://en.wikipedia.org/wiki/List_of_counties_in_California
+# converted to csv using https://wikitable2csv.ggor.de
+
+to.number = function(s) { as.numeric(str_trim(gsub(",", "", s))) }
+ca_county_info = read.csv('california_county_info.csv') %>%
+  mutate(subregion = tolower(sub(' County', '', County))) %>%
+  mutate(pop = to.number(Population..2022.)) %>%
+  mutate(area = to.number(sub('sq.*', '', Area))) 
+
+earnings.county = left_join(earnings, ca_county_info[,c('FIPS.code', 'subregion')], by=c('county.code' = 'FIPS.code'))
+earnings$county = earnings.county$subregion
+earnings$county[is.na(earnings$county)]='unknown'
+```
+
+
+```{r make-maps}
+#| cache: true
+#| 
+
+# To give our survey recipients a bit more reality, we'll give them fake locations on a map
+# And we'll make up a population of California residents that they're sampled from
+# maps are based on code from https://eriqande.github.io/rep-res-eeb-2017/map-making-in-R.html
+
+counties = map_data("county")
+ca_county = counties %>%
+  filter(region == "california")
+ca_county_centers = ca_county %>%
+  group_by(subregion) %>%
+  summarize(county.lat = mean(lat), county.long=mean(long))
+
+ca_county_more = left_join(ca_county_centers, ca_county_info, by="subregion")
+ca_all = left_join(ca_county, ca_county_more, by="subregion")
+
+
+ca.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(fill='gray', color = "white", alpha=.4) +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+
+ca.pop.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(aes(fill = pop/area), color = "white") +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+
+## we'll make up a population as follows
+# 1. choose the number of people to be the number of people in our sample scaled up to account for the cps sampling ratio
+# 2. for each, sample a county with probability proportional to its finite.population
+# 3. for each, sample a latitude and longitude by taking a randomly weighted combination of the    
+#    county's vertices. As long as the county is convex, these points will be inside the county.
+# 4. we'll give them a degree too, chosen independently of all else from the empirical distribution on the sample
+n = nrow(earnings) / cps.sampling.ratio
+
+# takes a list of subregions, possibly with duplicates
+# for each element, chooses random lat/long coordinates within the sample.subregion
+# by taking a random convex combination of the subregion's vertices
+sample.within.subregion = function(subregions) {
+  output = data.frame(subregion=subregions, lat=NA, long=NA)
+  for(subregion in unique(subregions)) { 
+      vertices = ca_county[ca_county$subregion==subregion, c('lat','long')]
+      U = sum(subregions==subregion)
+      V = nrow(vertices)
+      weights = abs(rt(U*V, 1))
+      dim(weights) = c(U,V)
+      weights = (1/rowSums(weights)) * weights
+      output[subregions==subregion, c('lat', 'long')] = 
+                 cbind(weights %*% vertices$lat, weights %*% vertices$long)
+    }
+    output
+}
+
+finite.population.subregion = sample(ca_county_more$subregion, size=n, replace=TRUE, prob=ca_county_more$pop)
+finite.population = sample.within.subregion(finite.population.subregion)
+finite.population$degree = sample(earnings$degree, nrow(finite.population), replace=TRUE)
+finite.population$group=1 # for plotting
+
+display.population = sample_n(finite.population, min(100000, nrow(finite.population)))
+```
+
+
+```{r make-sample}
+# and we'll force the degree-distribution in the sample to match our survey responses
+our.sample = sample_n(finite.population, nrow(earnings))
+our.sample$degree=earnings$degree
+
+pop.plot = ca.plot + geom_point(aes(x=long, y=lat), data=display.population, size=.02, alpha=.1) 
+sample.plot = ca.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
+pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.population, size=.01, alpha=.1)  
+sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
+```
+
+```{r visualization-defaults}
+scale_y = function(limits=c(-.3e5, 3e5)) { 
+  scale_y_continuous(labels=label_dollar(), limits=limits)
+}
+
+years = 8:20
+scale_x = function(limits=c(min(years)-.5, max(years)+.5)) { 
+  scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=limits)
+}
+
+dot.size = 2
+```
+
+
+```{r define-colors}
+twocolor.red   = 'rgb(248,118,109)'
+twocolor.green = 'rgb(0,191,196)'
+```
+
+## Last Time
+
+::: {.hidden}
+$$
+% color defs aren't making it into MathJax
+%\definecolor{twocolor-red}{RGB}{248, 118, 109}   % red   used by ggplot in plots w/ 2 colors 
+%\definecolor{twocolor-green}{RGB}{0, 191, 196}   % green used by ggplot in plots w/ 2 colors
+% so create commands for using those colors instead
+\newcommand{\inred}[1]{\textcolor[RGB]{248,118,109}{#1}}
+\newcommand{\ingreen}[1]{\textcolor[RGB]{0,191,196}{#1}}
+\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
+
+\newcommand{\ind}[1]{1_{\{#1\}}}
+\newcommand{\with}{\ingreen{\text{degree}}}
+\newcommand{\without}{\inred{\text{no degree}}}
+
+\DeclareMathOperator{\E}{E}degredegre
+\DeclareMathOperator{\Var}{Var}
+$$ 
+
+:::
+
+```{r scatter-plots}
+
+earnings.jitter = ggplot(earnings) + geom_point(aes(x=education, y=income), color='#F7766D',
+                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+                   scale_x() + scale_y() + guides(color=FALSE)
+
+summaries = earnings %>% 
+          group_by(education) %>% 
+          summarize(mean=mean(income),
+                    sd=sd(income))
+                    
+```
+
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+earnings.jitter
+```
+
+- We talked summaries of the relationship between income and education *in a sample*.
+- We talked about a number of types of summaries. 
+- What you'd use depends on what you're interested in.
+- Let's step through them again.
+
+
+## Fine Comparisons
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+      
+earnings.jitter + geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries)
+```
+
+- One simple option is to look at groups where the covariate takes on a single value. 
+- e.g. at the income mean and standard deviation for people with 8,9,10, etc. years of schooling.
+
+$$
+\begin{aligned}
+\hat \mu(x) &= \frac{1}{N_x}\ \sum_{i:X_i=x} Y_i \qfor N_x = \sum_{i:X_i=x} 1 \\
+\hat \sigma(x) &= \sqrt{ \frac{1}{N_x}\sum_{i:X_i=x} \qty{Y_i - \hat \mu(x)}^2 }
+\end{aligned}
+$$
+
+## Fine Comparisons
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+      
+earnings.jitter + geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries)
+```
+
+- Or compare any pair of those groups. It's natural to look at groups that are in some sense adjacent.
+    - $\hat\mu(18) - \hat\mu(16)$: the average value of a masters' degree (only) vs. a 4-year one (only).
+    - $\hat\mu(16) - \hat\mu(14)$: the value of a 4-year degree (only) vs. a 2-year degree (only).
+    - $\hat\mu(14) - \hat\mu(12)$: the value of a 2-year degree (only) vs. a high school degree (only).
+- Sometimes we're interested in exactly one of these things and this is what you want.
+- But it's not so great if we're a bit less focused.
+  - That'd mean we might have to look at and report a lot of different numbers.
+  - It can get to be too much. We're not summarizing enough.
+
+
+## Coarsening
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+groups = factor(1:4, 
+               levels=1:4, 
+               labels=c('no college degree', '2-year degree', '4-year degree', 'graduate degree'))
+
+group = function(x) { 
+  case_match(x,
+    8:13  ~ groups[1],
+    14    ~ groups[2],
+    16    ~ groups[3],
+    18:20 ~ groups[4])
+}
+
+
+coarsened.summaries = data.frame(X=X, Y=Y, G=group(X)) %>% 
+  group_by(G) %>% 
+  summarize(mean=mean(Y), sd=sd(Y), mean.X = mean(coarsen(X, G)))
+
+
+ggplot() + geom_point(aes(x=coarsen(X,group(X)), y=Y), color='#F7766D', position=position_jitter(w=.3, seed=0), alpha=.3) +
+           geom_pointrange(aes(x=mean.X, y=mean, ymin=mean-sd, ymax=mean+sd), data=coarsened.summaries) + scale_x() + scale_y()
+```
+
+- One remedy is to work with coarser *aggregate groups*, i.e. groups where the covariate takes on several values.
+- Here, for example, is a breakdown in 4 groups.
+    - &lt; 14 years: no college degree. $X_i \in \{ 8 \ldots 13\}$.
+    - =14 years: 2-year degree.         $X_i \in \{14\}$.         
+    - =16 years: 4-year degree.         $X_i \in \{ 16 \}$ 
+    - &gt; 16 years: graduate degree.   $X_i \in \{ 18 \ldots 20 \}$.
+
+## Coarsening
+  
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+ggplot() + geom_point(aes(x=coarsen(X,group(X)), y=Y), color='#F7766D', position=position_jitter(w=.3, seed=0), alpha=.3) +
+           geom_pointrange(aes(x=mean.X, y=mean, ymin=mean-sd, ymax=mean+sd), data=coarsened.summaries) + scale_x() + scale_y()
+```
+
+
+- We can express the means within these groups as *weighted averages* of the fine-group means.
+$$ 
+\begin{aligned}
+\hat \mu(\{8...13\})    
+&= \frac{\sum_{i : X_i \in \{8 \ldots 13\}} Y_i}{\sum_{i : X_i \in \{8 \ldots 13\}} 1} 
+= \frac{\sum_{x \in \{8 \ldots 13\}}\ \sum_{i : X_i = x} Y_i}{\sum_{x \in \{8 \ldots 13\}}\ \sum_{i : X_i = x} 1} \\
+&= \frac{\sum_{x \in \{8 \ldots 13\}}\  N_x \ \hat \mu(x)}{\sum_{x \in \{8 \ldots 13\}} N_x} 
+= \sum_{x \in \{8 \ldots 13\}} P_x \hat \mu(x) \quad \text{ for } \quad P_x = \frac{N_x}{\sum_{x \in \{8 \ldots 13\}} N_x}
+\end{aligned}
+$$
+- The weights $P_x$ are the *proportions* of people in each fine group.
+
+## Coarsening
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+ggplot() + geom_point(aes(x=coarsen(X,group(X)), y=Y), color='#F7766D', position=position_jitter(w=.3, seed=0), alpha=.3) +
+           geom_pointrange(aes(x=mean.X, y=mean, ymin=mean-sd, ymax=mean+sd), data=coarsened.summaries) + scale_x() + scale_y()
+```
+
+
+- Again, sometimes we're interested in exactly one of these things and this is what you want.
+- But it's also a bit less overwhelming to think about/report all of it than what we had without coarsening.
+
+
+## Aggregating Comparisons
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+earnings.jitter.hs = ggplot(earnings) + geom_point(aes(x=education, y=income, alpha=education <= 12), color='#F7766D',
+                              size=dot.size, position=position_jitter(seed=0,w=.3)) +
+                   scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.05,.3)) + guides(color=FALSE, alpha=FALSE)
+
+aggregate.comparison.plot = earnings.jitter.hs +
+  geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 12,]) +
+  geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
+  scale_y(c(0, .7e5))
+
+aggregate.comparison.plot
+```
+
+- Another option---rather than comparing aggregates---is aggregating comparisons.
+- We can summarize the 'value' of each year of high school by the associated increment in mean income.
+- Visually, that's the slope of the dashed black line leading up to it.
+- To reduce these to a single number, we can *aggregate* these increments. 
+- There are a few ways to do that.
+  
+
+## Aggregating Comparisons {.smaller}
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+aggregate.comparison.plot
+```
+
+
+1. We can average over the four years of high school 
+    $$
+    \small{
+    \frac14 \sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) } = \hat \mu(12) - \hat\mu(8)
+    }
+    $$
+2. Or average over the people with &ge;1 year of high school.
+    $$
+    \small{
+    \frac{1}{N_{\{9\ldots 12\}}}\sum_{i:X_i \in 9 \ldots 12} \qty{ \hat\mu(X_i) - \hat\mu(X_i-1) } 
+    = P_{12}\hat\mu(12) + \qty(P_{11} - P_{12}) \hat\mu(11)  + \qty(P_{10} - P_{11})\hat\mu(10)  + \qty(P_{9} - P_{10}) \hat\mu(9) - P_9 \hat\mu(8)
+    }
+    $$
+3. Or we can *fit a line* to these people we're comparing---those with 8-12 years of education---and take its slope.
+    $$
+    \small{
+    \frac{\sum_{i : X_i \in 8 \ldots 12} (X_i - \bar X) Y_i}{\sum_{i : X_i \in 8 \ldots 12} (X_i - \bar X)^2} 
+    = \sum_{x \in 8 \ldots 12} w (x) \ \hat\mu(x)  \qfor 
+    \bar X = \frac{1}{N_{\{8 \ldots 12\}}} \sum_{i: X_i \in \{8 \ldots 12\}} X_i \qand
+    w(x) = \frac{N_x (x-\bar X)}{\sum_{i:X_i \in 8 \ldots 12} (X_i-\bar X)^2} 
+    }
+    $$
+
+
+## These Can Be Very Different
+
+```{r}
+
+mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
+epsilon = rnorm(nrow(earnings)) * .1*sd(earnings$income[earnings$education %in% 8:12])
+
+earnings1 = earnings
+earnings1$income = mu[ifelse(earnings$education==12, 12, 8)] + epsilon
+
+earnings2 = earnings
+earnings2$income = mu[ifelse(earnings$education >= 10, 12, 8)] + epsilon
+
+mu3 = NA+mu
+mu3[8]=mu[8]
+mu3[9]=mu[10]
+mu3[10]=(mu[11]+mu[12])/2
+mu3[11]=mu[12]
+mu3[12]=mu[12]
+earnings3 = earnings
+earnings3$income = mu3[earnings$education] + epsilon
+
+
+over.people = function(earnings) {
+  hsed = earnings$education[earnings$education %in% 9:12]
+  mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
+  mean(mu[hsed] - mu[hsed-1])
+}
+over.years = function(earnings) {
+  mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
+  mean(mu[9:12] - mu[8:11])
+}
+lsq.slope = function(earnings) { 
+  model = lm(income ~ education, data=earnings[earnings$education <= 12,])
+  coef(model)[2]
+}
+
+plot.aggregate.comparison = function(earnings2) {
+  summaries2 = earnings2 %>% group_by(education) %>% summarize(mean=mean(income), sd=sd(income), mean.X = mean(education))
+  aggregate.comparison.plot= ggplot(earnings2) + geom_point(aes(x=education, y=income), color='#F7766D', alpha=.3,
+                              size=dot.size, position=position_jitter(seed=0,w=.3)) +
+    geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries2[summaries2$education <= 12,]) +
+    geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education<=12,], color='black', linetype='dashed') 
+
+  model = lm(income ~ education, data=earnings2[earnings2$education <= 12,])
+  lm.predictions = data.frame(education=seq(8,12,by=.01))
+  lm.predictions$muhat = predict(model, newdata=lm.predictions)
+  aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5)) +
+      geom_line(aes(x=education, y=muhat), data=lm.predictions, color='red', alpha=.4)
+}
+
+```
+
+
+:::: columns
+
+::: column
+
+  1. All that matters is the diploma.
+  2. All that matters is 10th grade algebra.
+  3. They teach the most important stuff first. 
+:::
+
+::: column
+
+
+$$
+\small{
+\begin{array}{r|rrr}
+\text{Story} & 1 & 2 & 3 \\
+\hline
+\text{Least Squares Slope}  & `r approx(lsq.slope(earnings1))`   &  `r approx(lsq.slope(earnings2))` & `r approx(lsq.slope(earnings3))`  \\
+\text{Average over People}  & `r approx(over.people(earnings1))` &  `r approx(over.people(earnings2))` & `r approx(over.people(earnings3))`  \\
+\text{Average over Years}   & `r approx(over.years(earnings1))`  &  `r approx(over.years(earnings2))` & `r approx(over.years(earnings3))`  \\
+\end{array}
+}
+$$
+
+:::
+::::
+
+```{r}
+#| layout-ncol: 3
+#| out-height: 400px
+#| fig-asp: 1
+#| fig-subcap:
+#|  - Story 1
+#|  - Story 2
+#|  - Story 3 
+
+plot.aggregate.comparison(earnings1)
+plot.aggregate.comparison(earnings2)
+plot.aggregate.comparison(earnings3)
+```
+
+
+## What All These Things Have in Common
+
+
+- Each of these summaries is a *linear combination* of the subsamples means. Except the standard deviations $\hat\sigma(x)$.
+$$
+\text{summary} = \sum_x \hat \alpha_x \hat\mu(x) 
+$$
+
+- In some cases, the weights $\hat\alpha_x$ don't depend on the covariates.
+  - $\hat \mu(18) - \hat\mu(16)$
+  - $\frac14 \sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) } = \frac{\hat\mu(12) - \hat\mu(8)}{4}$ 
+- In others, they do.
+  - $\hat \mu(14) - \hat\mu(\{8...12\}) = \hat\mu(14) - \sum_{x=8}^{12} P_x \hat\mu(x) \qfor P_x = \frac{N_x}{\sum_{x \in \{8 \ldots 12\}} N_x}$
+  - $\frac{1}{N_{\{9\ldots 12\}}}\sum_{i:X_i \in 9 \ldots 12} \qty{ \hat\mu(X_i) - \hat\mu(X_i-1) } = P_{12}\hat\mu(12) + \qty(P_{11} - P_{12}) \hat\mu(11)  + \ldots$
+  - $\frac{\sum_{i : X_i \in 8 \ldots 12} (X_i - \bar X) Y_i}{\sum_{i : X_i \in 8 \ldots 12} (X_i - \bar X)^2} = \sum_{x \in 8 \ldots 12} w (x) \ \hat\mu(x) \qfor w(x) = \frac{N_x (x-\bar X)}{\sum_{i:X_i \in 8 \ldots 12} (X_i-\bar X)^2}$
+- But we'll see that this'll allow us to talk about statistical inference in a unified way.
+
+
+## Today
+
+```{r}
+#| out-height: 700px
+#| fig-ncol: 2
+sample.plot
+pop.plot
+```
+
+
+- We'll talk about *statistical inference* based on these sample summaries.
+- That is, we'll talk about what they tell us about the population our sample was drawn from.
+- As before, we'll work with data from the 2022 Current Population Survey.
+- We'll look at California residents age 25-35 with at least an 8th-grade education.
+  - This sample includes `r nrow(earnings)` people. 
+  - We'll think of them as having been sampled with replacement from a population.
+  - That is, from the population of all California residents meeting these criteria.
+  - That's an approximation---the CPS is a complex survey---but it's not too bad.
+
+
+## What We're Estimating
+
+- We've talked about a lot of sample summaries. And we can summarize the entire population in the same ways.
+- It's natural to think of the sample summaries as *estimates* of the population summaries.
+
+:::: columns
+
+::: column
+### Sample
+$$
+\begin{array}{ccccccc}
+X_1 & Y_1 & X_2 & Y_2 &  \ldots & X_n & Y_n \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+$$
+:::
+::: column
+### Population
+$$
+\begin{array}{ccccccc}
+x_1 & y_1 & x_2 & y_2 &  \ldots & x_m & y_m \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+$$
+:::
+::::
+
+::: fragment
+$$
+\small{
+\begin{aligned}
+&\hat \mu(x) = \frac{1}{N_x}\ \sum_{i:X_i=x} Y_i \qfor N_x = \sum_{i:X_i=x} 1 && \text{ estimates } \quad \mu(x) = \frac{1}{m_x}\ \sum_{j:x_j=x} y_j \qfor m_x = \sum_{j:x_j=x} 1 \\
+&\frac{\sum_{i:X_i \in 8 \ldots 12} Y_i}{\sum_{i:X_i \in 8 \ldots 12} 1} && \text{ estimates } \quad \frac{\sum_{j:x_j \in 8 \ldots 12} y_j}{\sum_{j:x_j \in 8 \ldots 12} 1} \\
+&\frac{1}{4}\sum_{x=9}^{12} \qty{ \hat \mu(x) - \hat\mu(x-1) }                       && \text{ estimates } \quad \frac{1}{4}\sum_{x=9}^{12} \qty{ \mu(x) - \mu(x-1) }   \\
+&\frac{\sum_{i:X_i \in 9 \ldots 12} \qty{ \hat\mu(X_i) - \hat\mu(X_i-1) }}{\sum_{i:X_i \in 9 \ldots 12} 1} && \text{ estimates }  \quad  \frac{\sum_{j:x_j \in 9 \ldots 12} \qty{ \mu(x_j) - \mu(x_j-1) }}{\sum_{j:x_j \in 9 \ldots 12} 1} \\ 
+&\frac{\sum_{i : X_i \in 8 \ldots 12} (X_i - \bar X) Y_i}{\sum_{i : X_i \in 8 \ldots 12} (X_i - \bar X)^2} && \text{ estimates } \quad \frac{\sum_{j : x_j \in 8 \ldots 12} (x_j - \bar x) y_j}{\sum_{j : x_j \in 8 \ldots 12} (x_j - \bar x)^2}
+\end{aligned}
+}
+$$
+:::
+
+
+## Are We Successful?
+
+- Let's characterize the *error* of our estimates.
+- That is, let's characterize how far off they are from the population summaries.
+- We'll calculate their bias and variance.
+
+
+# Bias
+
+## Fine-Group Subsample Means are Unbiased
+
+- This is the same proof we did last time, but with fancier notation.
+- We'll show something stronger than unbiasedness: unbiasedness *conditional on the covariates*.
+
+::: fragment
+$$
+\begin{aligned}
+\E\qty[\hat\mu(x) \mid X_1 \ldots X_n] 
+&= \E\qty[\frac{\sum_{i:X_i=x} Y_i}{\sum_{i:X_i=x} 1} \mid X_1 \ldots X_n]  && \\
+&= \E\qty[\frac{\sum_{i=1}^n 1_x(X_i) Y_i}{\sum_{i=1}^n 1_x(X_i)} \mid X_1 \ldots X_n] && \qfor 1_x(X) = \begin{cases} 1 & \text{ if } x = X  \\ 0 & \text{ otherwise} \end{cases} \\
+&= \frac{\sum_{i=1}^n 1_x(X_i) \E[ Y_i \mid X_1 \ldots X_n]}{\sum_{i=1}^n 1_x(X_i)} && \text{ by linearity of conditional expectations } \\
+&= \frac{\sum_{i=1}^n 1_x(X_i) \E[ Y_i \mid X_i]}{\sum_{i=1}^n 1_x(X_i)}          && \text{  by irrelevance of independent conditioning variables } \\
+&= \frac{\sum_{i=1}^n 1_x(X_i) \mu(X_i)}{\sum_{i=1}^n 1_x(X_i)}                     && \text{  is a matter of notation } \\
+&= \frac{\sum_{i=1}^n 1_x(X_i) \mu(x)}{\sum_{i=1}^n 1_x(X_i)}                       && \text{ by the \emph{indicator trick} } 1_x(X_i)\mu(X_i) = 1_x(X_i)\mu(x) \\
+&= \mu(x) \frac{\sum_{i=1}^n 1_x(X_i)}{\sum_{i=1}^n 1_x(X_i)} = \mu(x) 
+\end{aligned}
+$$
+:::
+
+Why does this imply (unconditional) unbiasedness?
+
+::: fragment
+
+The law of iterated expectations.
+
+$$ \E[\hat\mu(x)]  = \E\qty[ \E\qty[\hat\mu(x) \mid X_1 \ldots X_n]  ] = \E\qty[ \mu(x) ] = \mu(x) $$
+
+:::
+
+
+## Linear Combinations **With Non-Random Coefficients** are Unbiased
+
+$$ \E\qty[\sum_x \hat\alpha_x \hat\mu(x)] = \sum_x \alpha_x \mu(x) \quad \text{if} \hat\alpha_x = \alpha_x $$
+
+- Examples
+  - $\hat \mu(18) - \hat\mu(16)$ is unbiased for $\mu(18) - \mu(16)$.
+  - $\frac14 \sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) }$ is unbiased for $\frac14 \sum_{x=9}^{12} \qty{ \mu(x) - \mu(x-1) }$.
+- Why?
+
+
+::: {.fragment}
+
+Linearity of Expectations and unbiasedness of the subsample means.
+
+$$
+\E\qty[\sum_x \alpha_x \hat\mu(x)] = \sum_x \alpha_x \E\qty[\hat\mu(x)] = \sum_x \alpha_x \mu(x)
+$$
+
+:::
+
+## Linear Combinations **With Random Coefficients** are Unbiased ...
+
+- ... if the sample coefficients $\hat\alpha(x)$ depend only on the covariates $X_1 \ldots X_n$ ...
+- and are unbiased estimators of the population coeffients $\alpha_x$.
+
+$$ \E\qty[\sum_x \hat\alpha_x \hat\mu(x)] = \sum_x \alpha_x \mu(x) \quad \text{if} \E[\hat\alpha_x] = \alpha_x $$
+
+- Examples
+  - Proportions $P_x$ are unbiased for the population proportions $p_x$.
+  - Differences in Proportions $P_x - P_{x-1}$ are unbiased for the population differences $p_x - p_{x-1}$.
+- And consequently 
+  - Aggregate-group subsample means are unbiased.
+  - And so is our averaged-over-people value of a year of high school.
+- The proof is *almost* the same as before. 
+  - But now we use linearity of *conditional expectations*.
+  - And *conditional unbiasedness* of the subsample means.
+
+
+::: {.fragment}
+$$
+\begin{aligned}
+\E\qty[\sum_x \alpha_x \hat\mu(x)]   
+&= \E\qty[ \E\qty{ \sum_x \alpha_x \hat\mu(x) \mid X_1 \ldots X_n } ] && \text{via law of iterated expectations} \\
+&= \E\qty[ \sum_x \alpha_x \E\qty{ \hat\mu(x) \mid X_1 \ldots X_n } ] && \text{via linearity of conditional expectations} \\
+&= \E\qty[ \sum_x \alpha_x \mu(x) ]                                   && \text{via conditional unbiasedness of the subsample means} \\
+&= \sum_x \E[\hat\alpha_x] \mu(x) = \sum_x \alpha_x \mu(x)            && \text{via linearity of expectations}  
+\end{aligned} 
+$$
+:::
+
+
+## Summary
+
+- We've seen that our population summaries have natural unbiased estimators: the corresponding summaries of the sample.
+  - With the possible exception of the least-squares slope, which we haven't talked about. We'll get to that later in the semester.
+- That means that our ability to estimate those population summaries comes down to the *variance* of those sample summaries.
+- That's what we'll talk about next.
+
+
+# Variance
+
+## Variance Calculation Step 1: Using the Law of Total Variance
+
+
+- Let's talk about the variance of a linear combination of the sample means.
+- We'll use the law of total variance to break the variance of our estimator into two parts.
+- When the coefficients in our combination are non-random, one of these --- the $\Var\E[\ldots]$ part --- is zero.
+  - This happens because the conditional expectation of our subsample means are constants
+  - We've seen a special case of this earlier, when discussing differences of subsample means.
+- More generally, we'll have to deal with both terms.
+
+$$
+\begin{aligned}
+\Var\qty[ \sum_x \hat\alpha_x \hat \mu(x) ] 
+&= \E\qty[ \Var\qty{ \sum_x \hat\alpha_x \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \E{\sum_x \hat\alpha_x \hat \mu(x) \mid X_1 \ldots X_n} ] \\
+&= \E\qty[ \Var\qty{ \sum_x \hat\alpha_x \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \sum_x \hat \alpha_x \E{ \hat \mu(x) \mid X_1 \ldots X_n} ] \\
+&= \E\qty[ \Var\qty{ \sum_x \hat\alpha_x \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \sum_x \hat \alpha_x \mu(x) ] \\
+\end{aligned}
+$$
+
+
+## Variance Calculation Step 2: The $\E[\Var[\ldot]]$ Term.
+
+- What we get for the $\E[\Var[\ldots]]$ part is familiar.
+  - We *sum* the conditional variances of the individual terms, then take the expectation of the result.
+  - This is what we did when we calculated the variance of the difference of subsample means.
+
+$$\small{
+\begin{aligned}
+\E\qty[ \Var\qty{ \sum_x \hat\alpha_x \hat \mu(x) \mid X_1 \ldots X_n }] 
+&=\E\qty[ \E\qty{ \qty(\sum_x \hat\alpha_x \hat\mu(x) - \E[\sum_x \hat\alpha_x \hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
+&=\E\qty[ \E\qty{ \qty(\sum_x \hat\alpha_x \hat\mu(x) - \hat\alpha_x \E\qty[\hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
+&=\E\qty[ \E\qty{ \qty(\sum_x \hat\alpha_x \qty{\hat\mu(x) - \E[\hat\mu(x) \mid X_1 \ldots X_n]})^2 \mid X_1 \ldots X_n }] \\
+&=\E\qty[ \E\qty{ \sum_x\sum_x' \hat\alpha_x \hat\alpha x' \qty{\hat\mu(x) - \E[\hat\mu(x) \mid X_1 \ldots X_n]}  \qty{\hat\mu(x) - \E[\hat\mu(x) \mid X_1 \ldots X_n]} \mid X_1 \ldots X_n }] \\ 
+&=\E\qty[ \sum_x\sum_x' \hat\alpha_x \hat\alpha x' \E\qty{\qty{\hat\mu(x) - \E[\hat\mu(x) \mid X_1 \ldots X_n]}  \qty{\hat\mu(x) - \E[\hat\mu(x) \mid X_1 \ldots X_n]} \mid X_1 \ldots X_n }] \\ 
+&=\E\qty[ \sum_x\sum_x' \hat\alpha_x \hat\alpha x' \begin{cases} \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n} = \frac{\sigma^2(x)}{N_x} & \text{ if } x=x' \\ 0 & \text{ otherwise} \end{cases} ] \\
+&=\E\qty[ \sum_x \hat \alpha_x^2 \frac{\sigma^2(x)}{N_x} ] = \sum_x \sigma^2(x) \times \E\qty[ \frac{\hat\alpha_x^2}{N_x} ] \\
+\end{aligned}
+}
+$$
+
+## Variance Calculation Step 3: The $\Var[\E[\ldot]]$ Term.
+
+
+## Summary
+
+$$
+\Var[ \sum_x \alpha_x \hat\mu(x) ] = \sum_x \sigma^2(x) \times \E\qty[ \frac{\hat\alpha_x^2}{N_x} ] +  \Var\qty[ \sum_x \hat \alpha_x \mu(x) ]
+$$
+
+
+# Implications
+
+## Some things are *easier to estimate* than others.
+
+TODO: A picture of corresponding interval estimates
+
+- Compare variance of the average over years vs average over population things.
+
+
