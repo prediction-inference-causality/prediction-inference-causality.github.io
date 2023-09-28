@@ -59,7 +59,7 @@ approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=c
 ```
 
 ```{r ggplot-themes}
-fontsize = 12
+fontsize = 16
 textcolor = "#888888"
 
 class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
@@ -205,12 +205,14 @@ ca.pop.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) +
       theme_void()
 
 ## we'll make up a population as follows
-# 1. choose the number of people to be the number of people in our sample scaled up to account for the cps sampling ratio
+# 1. choose the number of people to be the number of people in our sample scaled up to account for the cps sampling ratio 1/2500
+#    Because this would wind up being computationally and visually problematic, we'll scale up by 25 instead of 2500;
+#    each population dot in the population stands for 100 people in the population.
 # 2. for each, sample a county with probability proportional to its finite.population
 # 3. for each, sample a latitude and longitude by taking a randomly weighted combination of the    
 #    county's vertices. As long as the county is convex, these points will be inside the county.
 # 4. we'll give them a degree too, chosen independently of all else from the empirical distribution on the sample
-n = nrow(earnings) / cps.sampling.ratio
+m = nrow(earnings) * 25 
 
 # takes a list of subregions, possibly with duplicates
 # for each element, chooses random lat/long coordinates within the sample.subregion
@@ -230,12 +232,12 @@ sample.within.subregion = function(subregions) {
     output
 }
 
-finite.population.subregion = sample(ca_county_more$subregion, size=n, replace=TRUE, prob=ca_county_more$pop)
+finite.population.subregion = sample(ca_county_more$subregion, size=m, replace=TRUE, prob=ca_county_more$pop)
 finite.population = sample.within.subregion(finite.population.subregion)
 finite.population$degree = sample(earnings$degree, nrow(finite.population), replace=TRUE)
 finite.population$group=1 # for plotting
 
-display.population = sample_n(finite.population, min(100000, nrow(finite.population)))
+display.population = finite.population
 ```
 
 
@@ -479,10 +481,12 @@ earnings.jitter = ggplot(earnings) + geom_point(aes(x=education, y=income), colo
 
 
 # make a fake population by sampling with replacement from the sample then adding fuzz to incomes
-earnings.pop = earnings[sample(1:nrow(earnings), 10000, replace=TRUE),]
+# the actual sampled proportion in CPS is about 1/2500, so by doing 25x more dots,
+# we're letting each dot  stand in for 100 people in the population
+earnings.pop = earnings[sample(1:nrow(earnings), nrow(earnings)*25, replace=TRUE),]
 earnings.pop$income = earnings.pop$income + rnorm(nrow(earnings.pop), sd=5000)
 earnings.jitter.pop = ggplot(earnings.pop) + geom_point(aes(x=education, y=income), color='#F7766D',
-                              size=dot.size/10, position=position_jitter(seed=0,w=.3), alpha=.02) +
+                              size=dot.size/10, position=position_jitter(seed=0,w=.3), alpha=.05) +
                    scale_x() + scale_y() + guides(color=FALSE)
 
 earnings.jitter
