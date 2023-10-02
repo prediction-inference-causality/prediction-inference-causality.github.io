@@ -1,6 +1,6 @@
 ---
-title: "QTM 220 Lecture 8"
-subtitle: "Inferential Statistics with Non-Binary Covariates"
+title: "QTM 220 Lecture 10"
+subtitle: "Inferential Statistics with Non-Binary Covariates: Part 1"
 format: 
   clean-revealjs:
     height: 1000
@@ -542,47 +542,247 @@ $$
 
 ## What We Want To Know
 
+```{r}
+#| cache: true
+
+average.over.people = function(summaries) {
+  muhat = function(x) { summaries$mean[summaries$education==x] }
+  P = function(x) { summaries$N[summaries$education==x] / sum(summaries$N) }
+  alphahat = function(x) { if (x==12) { P(12) } else if (x==8) { -P(9) } else { P(x) - P(x+1) } }  
+  sapply(8:12, function(x) { alphahat(x) * muhat(x) }) %>% sum
+}
+run.boot = function(earnings, B=1000) { purrr::map(1:B, function(i) {
+  earnings.boot = earnings[sample(1:nrow(earnings), replace=TRUE),]
+  summaries = earnings.boot[earnings.boot$education <= 12, ] %>% group_by(education) %>% summarize(mean=mean(income), N=length(income))
+  model = lm(income ~ education, data=earnings.boot[earnings.boot$education <= 12,])
+  data.frame(people=average.over.people(summaries), 
+             years=(summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4,
+             line = coef(model)[2])
+}) %>% bind_rows()
+}
+boots = run.boot(earnings)
+summaries = earnings[earnings$education <= 12, ] %>% group_by(education) %>% summarize(mean=mean(income), N=length(income))
+years.estimate = (summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4
+```
+
+```{r}
+#| layout-ncol: 2
+#| out-height: 300px
+#| fig-asp: .3 
+#| fig-subcap:
+#|  - Interval Estimate for the Average over Years
+#|  - Interval Estimate for the Average over People 
+
+width = function(samples, center=mean(samples), alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( center - w/2 <= samples & samples <= center + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-center))))$root
+}
+
+distribution.plot = function(boot.samples, point.estimate, w=width(boot.samples), interval.replications=0, point.replications=0) { 
+  drange = c(0, dnorm(0, mean=0, sd=sd(boot.samples)))
+  p = ggplot(data.frame(samples=boot.samples)) + 
+    geom_histogram(aes(x=samples, y=after_stat(density)), alpha=.3, bins=50)  +
+    geom_pointrange(aes(y=dnorm(2*sd(samples), mean=0, sd=sd(samples)), 
+      x=point.estimate, xmin=point.estimate - w/2, xmax=point.estimate + w/2)) + 
+      geom_vline(xintercept=mean(boot.samples), color='blue') + 
+      geom_vline(xintercept=quantile(boot.samples, c(.025,.975)), color='blue', linetype='dotted') 
+  if(interval.replications > 0) { 
+    K = interval.replications
+    p = p + geom_pointrange(aes(y=y, x=x, xmin=xmin, xmax=xmax), 
+          data=data.frame(y=seq(min(drange), max(drange), length.out=K), 
+                  x=boot.samples[1:K], xmin=boot.samples[1:K] - w/2, xmax=boot.samples[1:K] + w/2), color='purple', alpha=.2)
+  }
+  if(point.replications > 0) { 
+    K = point.replications
+    p = p + geom_point(aes(y=y, x=x), 
+          data=data.frame(y=seq(min(drange), max(drange), length.out=K), 
+                  x=boot.samples[1:K], xmin=boot.samples[1:K] - w/2, xmax=boot.samples[1:K] + w/2), color='purple', alpha=.2)
+  }
+  p
+}
+
+
+distribution.plot(boots$years, years.estimate) + xlim(-5000,10000)
+distribution.plot(boots$people, average.over.people(summaries)) + xlim(-5000,10000)
+```
 
 1. How accurate our estimates tend to be. 
 2. How to characterize their accuracy, e.g. with a confidence interval. 
+ 
+\ \
+
+- We do this exactly the same way we've done it before. 
+  1. We estimate the sampling distribution of our estimator.
+  2. We draw arms, legs, and a head on it.
+
+::: fragment
+  - That was what Github Copilot --- GPT4 --- suggested after I typed 'We'll draw arms'.
+  - I didn't want to  keep that one to myself.
+:::
+
+## What We Want To Know
+```{r}
+#| layout-ncol: 2
+#| out-height: 300px
+#| fig-asp: .3 
+#| fig-subcap:
+#|  - Interval Estimate for the Average over Years
+#|  - Interval Estimate for the Average over People 
+
+distribution.plot(boots$years, years.estimate) + xlim(-5000,10000)
+distribution.plot(boots$people, average.over.people(summaries)) + xlim(-5000,10000)
+```
+
+
+1. How accurate our estimates tend to be. 
+2. How to characterize their accuracy, e.g. with a confidence interval. 
+ 
+\ \
+
+- We do this exactly the same way we've done it before. 
+  1. We estimate the sampling distribution of our estimator.
+  2. We draw arms on our point estimate wide enough to give it 95% coverage.
+- And we see something interesting. 
+- Our estimate of the average over years is much more precise. 
+  - Its arms are much shorter.
+
+
+## Review: How Interval Estimation Works.
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+
+distribution.plot(boots$years, years.estimate, interval.replications=100) + xlim(-2000,8000)
+```
+
+- These arms should be wide enough hat ...
+  - They'd cover 95% of draws from the sampling distribution
+  - if drawn from the sampling distribution's mean.
+- If the mean's arms reach the point estimate, then the point estimate's arms reach the mean.
+
+## We'll Talk About Two Ways of Estimating the Sampling Distribution
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+
+x = seq(min(boots$years), max(boots$years), length.out=1000)
+distribution.plot(boots$years, years.estimate) + 
+    geom_area(aes(x=x, y=dnorm(x, mean=mean(boots$years), sd=sd(boots$years))), color='purple', fill='purple', alpha=.08) +
+    geom_vline(aes(xintercept=mean(boots$years)), color='purple', linetype='solid') +
+    geom_vline(aes(xintercept=xi), data=data.frame(xi=qnorm(c(.025,.975), mean=mean(boots$years), sd=sd(boots$years))), color='purple', linetype='dotted') +
+    xlim(-2000,8000)
+```
+
+
+- The bootstrap.
+  - This is easy if you have a computer. 
+  - There's a procedure---you just do it.  
+
+- Normal approximation
+  - This is, in a way, harder.
+    - You have to work out formulas for the estimator's mean and variance.
+    - Then estimate the stuff in them, e.g. subpopulation variances.
+  - We'll do it because having formula will give us a better sense of what's going on. 
+    - It'll tell us why one of our population summaries is easier to estimate than the other.
+    - i.e., why we get a narrower interval around the corresponding sample summary.
+
+
+## The Bootstrap Approach
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+distribution.plot(boots$years, years.estimate, point.replications=1000) + xlim(-2000,8000) 
+```
+
+- Calculate your summary of the sample. That's your point estimate of the population summary.
+- To estimate its sampling distribution ...
+  - Draw $B$ samples with replacement from the sample.
+  - Calculate your summary in each of these $B$ *bootstrap samples*.
+  - Histogramming these gives you an estimate of the sampling distribution.
+- Use it to calculate a 95% interval around your point estimate.
+  - The 'arms' of the interval should be wide enough to extend ...
+  - from your estimate to cover 95% of your bootstrap samples.
+
+:::: columns
+
+::: column
+### Bootstrap Sample
 
 $$
+\small{
+\begin{array}{ccccccc}
+X_1^* & Y_1^* & X_2^* & Y_2^* &  \ldots & X_n^* & Y_n^* \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
 $$
 
-- We'll do this exactly the same way we've done it before.
-- We'll ... with a STANDARD ERROR.
-  - Bootstrap estimate
-  - Normal Approximation
+:::
 
-## Later---bootstrap estimate of bias...
+::: column
 
-## Using The Bootstrap Estimate
-- We'll start with the bootstrap ...
+### Sample
+$$
+\small{
+\begin{array}{ccccccc}
+X_1 & Y_1 & X_2 & Y_2 &  \ldots & X_n & Y_n \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
+$$
 
-##
+:::
+::::
 
-  - We'll use the boo
-  - We'll show that our estimates are *unbiased*.
+## The Normal Approximation Approach
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+point.estimate = years.estimate
+w = 2*1.96*sd(boots$years) 
+ggplot() + 
+    geom_area(aes(x=x, y=dnorm(x, mean=mean(boots$years), sd=sd(boots$years))), color='purple', fill='purple', alpha=.08) +
+    geom_vline(aes(xintercept=mean(boots$years)), color='purple', linetype='solid') +
+    geom_vline(aes(xintercept=xi), data=data.frame(xi=qnorm(c(.025,.975), mean=mean(boots$years), sd=sd(boots$years))), color='purple', linetype='dotted') +
+    geom_pointrange(aes(y=dnorm(2*sd(boots$years), mean=0, sd=sd(boots$years)), x=point.estimate, xmin=point.estimate - w/2, xmax=point.estimate + w/2)) + 
+    xlim(-2000,8000)
+```
+
+1. We'll show that our estimator is unbiased
+
 $$ 
 \E[\hat\theta] = \theta
 $$
 
 - This implies our sampling distribution is *in the right place*.
 
-- We'll calculate --- and then estimate --- their *standard errors*.
+2. We'll calculate --- and then estimate --- their *standard errors*.
 $$
 \hat \sigma_{\hat\theta} \approx \sqrt{ \Var[\hat\theta] }
 $$
 
-  - And we'll use normal approximation to construct *confidence intervals*.
+3.  And we'll use normal approximation to construct *confidence intervals*.
 $$
 \theta \in \qty[ \hat \theta - 1.96\hat\sigma_{\hat\theta}, \ \hat \theta + 1.96\hat\sigma_{\hat\theta}] 
 $$
-- All that's new is that we'll be doing it for linear combinations of the subsample means.
-  - Today, we'll do the the simple rcase: combinations with non-random coefficients.
-  - Next time, we'll generalize to combinations with random coefficients.
 
-  ##
+
+## What's New
+
+- Not that much. This is just like what we did earlier in the semester. 
+- What's new is that we'll be doing it for linear combinations of the subsample means.
+- This means we'll need new unbiasedness proofs and variance calculations.
+  - Today, we'll do the the simpler case: linear combinations with non-random coefficients.
+  - Next time, we'll generalize to linear combinations with random coefficients.
+
 
 # Inference for Linear Combinations of Subsample Means: Non-Random Coefficients
 
@@ -645,6 +845,9 @@ $$ \E\qty[\sum_x \alpha(x) \hat\mu(x)] =  \sum_x \alpha(x) \E\qty[ \hat\mu(x)] =
 - We'll see that one of these parts --- the $\Var\E[\ldots]$ part --- is zero.
   - This happens because the conditional expectation of our subsample means are constants
   - We saw this before when we discussed differences of subsample means. 
+- What we'll get for the remaining $\E[\Var[\ldots]]$ part is familiar.
+  - We *sum* the conditional variances of the individual terms, then take the expectation of the result.
+  - This is what we did when we calculated the variance of the difference of subsample means.
 
 $$
 \small{
@@ -653,17 +856,13 @@ $$
 &= \E\qty[ \Var\qty{ \sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \E\qty{\sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n} ] \\
 &= \E\qty[ \Var\qty{ \sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \sum_x  \alpha(x) \E\qty{ \hat \mu(x) \mid X_1 \ldots X_n} ] \\
 &= \E\qty[ \Var\qty{ \sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \sum_x \alpha(x) \mu(x) ] \\
-&= \E\qty[ \Var\qty{ \sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + 0
+&= \textcolor{blue}{ \sum_x \sigma^2(x) \alpha^2(x) \times \E\qty[ \frac{1}{N_x} ]} + 0
 \end{aligned}
 }
 $$
 
-- What we'll get for the remaining $\E[\Var[\ldots]]$ part is familiar.
 
 ## Variance Calculation Step 2: $\E[\Var[\ldots]]$ 
-
-- We *sum* the conditional variances of the individual terms, then take the expectation of the result.
-- This is what we did when we calculated the variance of the difference of subsample means.
 
 $$\small{
 \begin{aligned}
@@ -672,13 +871,40 @@ $$\small{
 &=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) \hat\mu(x) - \E\qty[\sum_x \alpha(x) \hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
 &=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) \hat\mu(x) - \alpha(x) \E\qty[\hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
 &=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) \qty{\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n]})^2 \mid X_1 \ldots X_n }] \\
-&=\E\qty[ \E\qty{ \sum_x\sum_x' \alpha(x) \alpha(x') \qty{\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n]}  \qty{\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n]} \mid X_1 \ldots X_n }] \\ 
-&=\E\qty[ \sum_x\sum_x' \alpha(x) \alpha(x') \E\qty{\qty{\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n]}  \qty{\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n]} \mid X_1 \ldots X_n }] \\ 
+&=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) Z_x)^2  \mid X_1 \ldots X_n }] \quad \text{ for } \quad  Z_x=\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n] \quad \text{ with } \quad \E[Z_x^2 \mid X_1 \ldots X_n] = \Var[\hat\mu(x) \mid X_1 \ldots X_n] \\
+&=\E\qty[ \E\qty{ \sum_x\sum_x' \alpha(x) \alpha(x') Z_x Z_{x'} \mid X_1 \ldots X_n }] \\ 
+&=\E\qty[ \sum_x\sum_x' \alpha(x) \alpha(x') \E\qty{ Z_x Z_{x'} \mid X_1 \ldots X_n}] \\ 
 &=\E\qty[ \sum_x\sum_x' \alpha(x) \alpha(x') \begin{cases} \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n} = \frac{\sigma^2(x)}{N_x} & \text{ if } x=x' \\ 0 & \text{ otherwise} \end{cases} ] \\
 &=\E\qty[ \sum_x \alpha(x)^2 \frac{\sigma^2(x)}{N_x} ] = \sum_x \sigma^2(x) \alpha^2(x) \times \E\qty[ \frac{1}{N_x} ] \\
 \end{aligned}
 }
 $$
+
+## Variance Estimation
+
+$$
+\Var[\sum_x \alpha(x) \hat \mu(x)] = \sum_x \sigma^2(x) \alpha^2(x) \times \E\qty[ \frac{1}{N_x} ] \quad \text{ where } \quad \sigma^2(x) = \Var[Y_i \mid X_i=x]
+$$
+
+- This has two quantities we don't know.
+  - The subpopulation variances $\sigma^2(x)$.
+  - The expected inverse subsample size $1 / N_x$.
+- But we can estimate both easily.
+  - The subsample variances are good esimates of the subpopulation variances
+$$
+\sigma^2(x) \approx \hat\sigma^2(x) := \frac{1}{N_x} \sum_{i:X_i=x} \qty{Y_i - \hat\mu(x)}^2
+$$
+
+  - The inverse subsample size is a good estimate of its expectation.
+
+$$ 1/N_x \approx \E[1/N_x] $$
+
+- Plugging them in gives us an estimate of our summary's variance.
+
+$$
+\hat\sigma_{\hat\theta}^2 = \sum_x \hat\sigma^2(x) \alpha^2(x) \times \frac{1}{N_x}
+$$
+
 
 
 ## Summary
@@ -712,10 +938,10 @@ $$
 - By imprecise, we mean a large standard error and a wide confidence interval.
 
 
-## Application
+## Application {.smaller}
 
 ```{r}
-#| out-height: 200px
+#| out-height: 150px
 #| fig-asp: .2
 
 summaries = earnings %>% group_by(education) %>% 
@@ -743,11 +969,8 @@ $$
 }
 $$
 
-- TODO: THIS IS OUR STANDARD ERROR
-- THIS IS OUR ESTIMATE OF ITS STANDARD ERROR (using estimates of the subpopulation standard deviations)
-- THIS IS THE RESULTING INTERVAL
-- This is our estimate of its standard error and the resulting interval.
-- 
+- This is our estimate of its standard error, i.e., the square root of our estimate of its variance.
+
 $$
 \small{
 \hat\sigma_{\hat\theta}^2 
@@ -757,444 +980,11 @@ $$
 }
 $$
 
+## This is the resulting interval.
+
 $$
 \small{
 \qty[ \hat \theta - 1.96\hat\sigma_{\hat\theta}, \ \hat \theta + 1.96\hat\sigma_{\hat\theta}] = \qty[`r approx(estimate - 1.96*se)` , `r approx(estimate + 1.96*se)`]
 }
 $$
 
-
-# Inference for Linear Combinations of Subsample Means: Random Coefficients
-
-
-
-## Unbiasedness
-
-- Consider the case where the coefficients in our linear combination are random---where they depend on covariates.
-- Our estimator is unbiased *if the sample coefficients are unbiased estimates of the population coefficients*.
-  - Sample proportions $P_x$ are unbiased for the population proportions $p_x$.
-  - Differences in Proportions $P_x - P_{x-1}$ are unbiased for the population differences $p_x - p_{x-1}$.
-  - That's enough to handle our example and many other cases.
-- The proof is almost the same it is with non-random coefficients.
-  - But now we use linearity of *conditional expectations*.
-  - And *conditional unbiasedness* of the subsample means.
-
-
-::: {.fragment}
-$$
-\small{
-\begin{aligned}
-&\E\qty[\sum_x \hat\alpha(x) \hat\mu(x)]  \\ 
-&= \E\qty[ \E\qty{ \sum_x \hat\alpha(x) \hat\mu(x) \mid X_1 \ldots X_n } ] && \text{via law of iterated expectations} \\
-&= \E\qty[ \sum_x \hat\alpha(x) \E\qty{ \hat\mu(x) \mid X_1 \ldots X_n } ] && \text{via linearity of conditional expectations} \\
-&= \E\qty[ \sum_x \hat\alpha(x) \mu(x) ]                                   && \text{via conditional unbiasedness of the subsample means} \\
-&= \sum_x \E[\hat\alpha(x)] \mu(x) = \sum_x \alpha(x) \mu(x)               && \text{via linearity of expectations and unbiasedness of coefficients}  
-\end{aligned} 
-}
-$$
-:::
-
-
-## Variance Calculation Step 1: Total Variance
-
-
-- As before, we'll use the law of total variance to break the variance of our estimator into two parts.
-- But now, due to the randomness of the coefficients, neither part will be zero. 
-- We'll have to deal with deal with both parts.
-  - The one we're used to --- the $\E\Var[\ldots]$ part --- will be the almost the same as before.
-  - The other one --- the $\Var\E[\ldots]$ part --- will be new.
-
-$$
-\small{
-\begin{aligned}
-&\Var\qty[ \sum_x \hat\alpha(x) \hat \mu(x) ] \\
-&= \E\qty[ \Var\qty{ \sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \E{\sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n} ] \\
-&= \E\qty[ \Var\qty{ \sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \sum_x \hat \alpha_x \E{ \hat \mu(x) \mid X_1 \ldots X_n} ] \\
-&= \E\qty[ \Var\qty{ \sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \sum_x \hat \alpha_x \mu(x) ] \\
-\end{aligned}
-}
-$$
-
-
-## Variance Calculation Step 2: The $\E[\Var[\ldots]]$ Part.
-
-- What we get for this part is *almost* the same as with non-random coefficients.
-- Now that the coefficients are random, their squares go inside the expectation with the inverse-sample-size $1/N_x$.
-- That's all that changes. The calculation is essentially the same, too. It's below, but we'll skip it.
-
-$$\small{
-\begin{aligned}
-&\E\qty[ \Var\qty{ \sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] \\ 
-&=\E\qty[ \E\qty{ \qty(\sum_x \hat\alpha(x) \hat\mu(x) - \E[\sum_x \hat\alpha(x) \hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
-&=\E\qty[ \E\qty{ \qty(\sum_x \hat\alpha(x) \hat\mu(x) - \hat\alpha(x) \E\qty[\hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
-&=\E\qty[ \E\qty{ \qty(\sum_x \hat\alpha(x) \qty{\hat\mu(x) - \E[\hat\mu(x) \mid X_1 \ldots X_n]})^2 \mid X_1 \ldots X_n }] \\
-&=\E\qty[ \E\qty{ \sum_x\sum_x' \hat\alpha(x) \hat\alpha x' \qty{\hat\mu(x) - \E[\hat\mu(x) \mid X_1 \ldots X_n]}  \qty{\hat\mu(x) - \E[\hat\mu(x) \mid X_1 \ldots X_n]} \mid X_1 \ldots X_n }] \\ 
-&=\E\qty[ \sum_x\sum_x' \hat\alpha(x) \hat\alpha(x') \E\qty{\qty{\hat\mu(x) - \E[\hat\mu(x) \mid X_1 \ldots X_n]}  \qty{\hat\mu(x) - \E[\hat\mu(x) \mid X_1 \ldots X_n]} \mid X_1 \ldots X_n }] \\ 
-&=\E\qty[ \sum_x\sum_x' \hat\alpha(x) \hat\alpha(x') \begin{cases} \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n} = \frac{\sigma^2(x)}{N_x} & \text{ if } x=x' \\ 0 & \text{ otherwise} \end{cases} ] \\
-&=\E\qty[ \sum_x \hat \alpha^2(x) \frac{\sigma^2(x)}{N_x} ] = \sum_x \sigma^2(x) \times \E\qty[ \frac{\hat\alpha(x)^2}{N_x} ] \\
-\end{aligned}
-}
-$$
-
-## A Pause to Consider the Implications {.smaller}
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .25
-
-N = function(x) { sum(earnings$education==x) }
-P = function(x) { sum(earnings$education==x) / sum(earnings$education <= 12) }
-alpha = function(x) { if (x==12) { P(12) } else if (x==8) { -P(9) } else { P(x) - P(x+1) } }
-se.people.EV = sqrt(sum(sapply(8:12, function(x) { alpha(x)^2 * summaries$sd[summaries$education==x]^2 / sum(earnings$education==x) })))
-se.people.EV.terms = sqrt(sapply(8:12, function(x) { alpha(x)^2 * summaries$sd[summaries$education==x]^2 / sum(earnings$education==x) }))
-```
-
-$$
-\Var\qty[\sum_x \hat\alpha(x) \hat\mu(x)] \ge \E\qty[ \Var\qty{ \sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] = \sum_x \sigma^2(x) \times \E\qty[ \frac{\hat\alpha(x)^2}{N_x} ]
-$$
-
-- Let's think about what this means for our two examples.
-$$
-\small{
-\begin{aligned}
-\hat\theta_{\text{years}}  &= \frac14\sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1)} = \sum_x \alpha(x) \hat \mu(x)  \qfor \alpha(x) = \begin{cases} \frac14 & \text{ if } x = 12 \\ -\frac14 & \text{ if } x= 8 \\ 0 & \text{ otherwise} \end{cases} \\
-\hat\theta_{\text{people}} &= \sum_{x=9}^{12} P_x \qty{ \hat\mu(x) - \hat\mu(x-1)} = \sum_x \hat \alpha(x) \hat \mu(x) \qfor
-\hat\alpha(x) = \begin{cases}
-  P_{12} & \text{ if } x = 12 \\
-  P_{x} - P_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
-  -P_9 & \text{ if } x = 8 
-\end{cases}
-\end{aligned}
-}
-$$
-
-- We've seen that our estimate of the average-over-years summary of the value of a year of high school has large variance.
-- The problem was that it paired a relatively large weight--$\alpha(x)=-1/4$---with a very small sample size $N_8=`r sum(earnings$education==8)`$.
-- The average-over-people sumary does better in that respect. It puts much less weight on means of very small subsamples. 
-$$ \small{
-\begin{array}{c|ccccc}
-x & 8 & 9 & 10 & 11 & 12 \\
-N_x & `r N(8)` & `r N(9)` & `r N(10)` & `r N(11)` & `r N(12)` \\
-\hat\alpha(x) & `r approx(alpha(8))` & `r approx(alpha(9))` & `r approx(alpha(10))` & `r approx(alpha(11))` & `r approx(alpha(12))` \\
-\end{array}
-}
-$$
-
-## Instead ...
-$$ \small{
-\begin{array}{c|ccccc}
-x & 8 & 9 & 10 & 11 & 12 \\
-N_x & `r N(8)` & `r N(9)` & `r N(10)` & `r N(11)` & `r N(12)` \\
-\hat\alpha(x) & `r approx(alpha(8))` & `r approx(alpha(9))` & `r approx(alpha(10))` & `r approx(alpha(11))` & `r approx(alpha(12))` \\
-\end{array}
-}
-$$
-
-- Much of its variance comes from putting *much more* weight on the mean of a small, but less small, sample: the one with $x=11$.
-- This variance term, $\sigma^2(11) \times \E[\frac{\hat\alpha(11)^2}{N_{11}}] \approx \sigma^2(11) \times `r round(alpha(11)^2/N(11),3)`$,
-  is bigger than the term $\sigma^2(8) \times (1/4)^2/N_8 \approx \sigma^2(8) \times `r round((1/16)/N(8),3)`$ we worried about before.
-- Even based on this *part* of the variance, we can see that this summary will have a bigger variance than the average-over-years one.
-- This part of the former's variance is $`r approx(se.people.EV)`^2$ vs. the latter's whole variance $`r approx(se)`^2$. Let's get a sense of the other part.
-
-
-## Variance Calculation Step 3: The $\Var[\E[\ldots]]$ Part.
-
-- Now we'll calculate the new part --- the $\Var[\E[\ldots]]$ part. Roughly speaking.
-- This **additional variance** is what we pay for using *estimates* of the population coefficients $\alpha(x)$.
-- We're going to use a formula for the variance of a linear combination of random variables that you may have seen before.
-$$
-\Var\qty[\sum_x a_x Z_x] = \sum_x \sum_x' a_x a_x' \Cov(Z_x,\ Z_y) \qfor \Cov(Z_x,\ Z_y) = \E\qty[ \qty{Z_x - \E[Z_x]} \qty{Z_y - \E[Z_y]} ]
-$$
-- It's easy enough to prove, but we'll skip that. Here's what it tells us.
-$$
-\Var\qty[ \E{\sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n} ] 
-= \Var\qty[ \sum_x \mu(x) \hat \alpha(x)  ] \\
-= \sum_x \sum_x' \mu(x) \mu(x') \Cov\qty[\hat\alpha(x),\ \hat\alpha(x')] 
-$$
-- Calculating this is do-able but pretty involved. We'll skip the details.
-
-## Not Details
-
-$$
-\Var\qty[ \E{\sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n} ] 
-= \Var\qty[ \sum_x \mu(x) \hat \alpha(x)  ] \\
-= \sum_x \sum_x' \mu(x) \mu(x') \Cov\qty[\hat\alpha(x),\ \hat\alpha(x')] 
-$$
-
-- We'll just do enough to get a handle on the size of this additional variance is. 
-- We'll do this by calculating one of these covariance factors---we'll do $\hat\alpha(9)$ and itself.
-$$
-\Cov(\hat\alpha(9), \alpha(9)) = \Cov(P_9-P_{10},\ P_{9}-P_{10}) = \Var(P_9) - 2\Cov(P_9,\ P_{10}) + \Var(P_{10}).
-$$
-- In short, it --- and presumably the other terms --- can't be much bigger than the variance of the individual sample proportions $P_{x}$.
-- And those are roughly $p_x (1-p_x) / \sum_x N_x$, i.e., the variance of an average of Bernoulli random variables with probability $p_x$.
-  - What's important is that *the denominator here is the sum of the sample sizes*. 
-  - It's never small like the denominators in the other term can be.
-  - As a result, this additional variance term is *often much smaller* than the other one.
-- We'll see this in our average-over-people example.
-
-## Application
-
-
-```{r}
-#| out-height: 250px
-#| layout-ncol: 2
-#| fig-asp: .4
-#| fig-subcap: 
-#|  - Our High School Data
-#|  - Bootstrap sampling distributions for the average-over-people (red) and average-over-years (blue) summaries.
-
-average.over.people = function(summaries) {
-  muhat = function(x) { summaries$mean[summaries$education==x] }
-  P = function(x) { summaries$N[summaries$education==x] / sum(summaries$N) }
-  alphahat = function(x) { if (x==12) { P(12) } else if (x==8) { -P(9) } else { P(x) - P(x+1) } }  
-  sapply(8:12, function(x) { alphahat(x) * muhat(x) }) %>% sum
-}
-
-B=1000
-boot = purrr::map(1:B, function(i) {
-  earnings.boot = earnings[sample(1:nrow(earnings), replace=TRUE),]
-  summaries = earnings.boot[earnings.boot$education <= 12, ] %>% group_by(education) %>% summarize(mean=mean(income), N=length(income))
-  data.frame(people=average.over.people(summaries), years=(summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4)
-}) %>% bind_rows()
-
-summaries = earnings[earnings$education <= 12, ] %>% group_by(education) %>% summarize(mean=mean(income), N=length(income))
-aggregate.comparison.plot + xlim(7.7,12.5)
-ggplot(boot) + geom_histogram(aes(x=people,y=after_stat(density)), fill='red', alpha=.3, bins=100) + 
-               geom_histogram(aes(x=years,y=after_stat(density)), fill='blue', alpha=.3, bins=100) 
-```
-
-- Now that we've made sense of the variance of the average-over-people summary in the sample, let's use it.
-- We'll construct an interval estimate for value of a year of high school in our population. 
-- Since we haven't done the variance calculation completely, we'll use the bootstrap to estimate the standard error.
-- What we get is `r approx(sd(boot$people))`, very close to the standard error `r approx(se.people.EV)`
-  we calculated for the 'old' $\E\Var[\ldots]$ part of the variance.
-- And roughly twice as big as the standard error `r approx(se)` we calculated for the average-over-years summary.
-$$
-\begin{array}{l|l}
-\text{Summary} & \text{Point Estimate} & \text{95\% Confidence Interval} \\
-\theta_{\text{people}} & `r approx(estimate)` 
-&  \qty[`r approx(estimate-1.96*se)`, \ `r approx(estimate+1.96*se)`] \\
-\theta_{\text{years}}  & `r approx(average.over.people(summaries))` 
-& \qty[`r approx(average.over.people(summaries)-1.96*sd(boot$people))`, \ `r approx(average.over.people(summaries)+1.96*sd(boot$people))`]
-\end{array}
-$$
-
-```{r}
-
-```
-
-## This is Dissatisfying
-
-$$
-\begin{array}{l|ll}
-\text{Summary} & \text{Point Estimate} & \text{95\% Confidence Interval} \\
-\theta_{\text{years}} & `r approx(estimate)` 
-&  \qty[`r approx(estimate-1.96*se)`, \ `r approx(estimate+1.96*se)`] \\
-\theta_{\text{people}}  & `r approx(average.over.people(summaries))` 
-& \qty[`r approx(average.over.people(summaries)-1.96*sd(boot$people))`, \ `r approx(average.over.people(summaries)+1.96*sd(boot$people))`]
-\end{array}
-$$
-
-- No matter how we average, we don't have a very precise estimate of the 'value of a year of high school.'
-- It's clear that the essential problem is that we're heavily weighting the mean of some very small subsample.
-- Can we do better? Perhaps by estimating the subpopulation mean *without simply using the subsample mean*?
-- Let's see what happens when we *fit a line* to the data we've been working with and use that instead. 
-- This lets us use that larger sample, not just the subsample with $X_i=x$, to estimate the subpopulation mean $\mu(x)$.
-$$ 
-\small{
-\hat \mu(x) = \hat b_1 x + \hat b_0 \qfor \hat b = \operatorname*{argmin}_{b} \sum_{i:X_i \in 8 \ldots 12}^n (b_1 X_i + b_0 - Y_i)^2 
-\qqtext{ instead of } \hat \mu(x) = \operatorname*{argmin}_{m} \sum_{i:X_i=x} (m - Y_i)^2  
-}
-$$
-
-## Estimating Subpopulation Means with a Fitted Line
-
-```{r}
-model = lm(income ~ education, data=earnings[earnings$education <= 12,])
-muhat.line = function(x) { predict(model, newdata=data.frame(education=x)) }
-x = seq(8,12,by=.01)
-
-earnings.jitter.hs = ggplot(earnings) + geom_point(aes(x=education, y=income, alpha=education <= 12), color='#F7766D',
-                              size=dot.size, position=position_jitter(seed=0,w=.3)) +
-                   scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.3)) + guides(color=FALSE, alpha=FALSE)
-summaries = earnings %>% group_by(education) %>% summarize(mean=mean(income), sd=sd(income), N=length(income))
-earnings.jitter.hs +
-  geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 12,]) +
-  geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
-  geom_point(aes(x=x,y=y), data=data.frame(x=8:12, y=muhat.line(8:12)), color='magenta') + 
-  geom_line(aes(x=x, y=y), data=data.frame(x=x, y=muhat.line(x)), color='magenta', linetype='dashed') + xlim(7.7,12.5) + scale_y(c(0, .7e5)) 
-```
-
-- Here's our line. You may remember that, when our covariate is binary, the least squares line will go through the subsample means.
-- That's not true more generally. It can't be---that'd require our subsample means to actually be on a line. They aren't.
-- So our new estimates of the subpopulation means, $\hat\mu(x)$, differ from the subsample means.
-- **Q**. What happens when we estimate our population summaries?
-
-::: fragment
-
-- **A**. They're the same---they're both the slope of the estimated line.
-- Last class, we talked about that as *a different summary*. And it is.
-- Using a model like this to estimate subpopulation means---one that can't really fit the data---is a way of *diguising* a different summary as the one we're interested in. 
-
-$$
-\begin{aligned}
-\hat\theta_{\text{years}}  &= \frac{\hat\mu(12) - \hat \mu(8)}{4} = \frac{\qty(\hat b_1 \times 12 + \hat b_0) - \qty(\hat b_1 \times 8 + \hat b_0)}{4} = 
-\frac{\hat b_1 \times (12-8)}{4} = \hat b_1 \\
-
-\hat\theta_{\text{people}} &= 
-\sum_{x \in 9 \ldots 12} P_x \qty{\hat\mu(x) - \hat \mu(x-1)} = \sum_{x \in 9 \ldots 12} P_x \qty{\qty(\hat b_1 \times x + \hat b_0) - \qty(\hat b_1 \times (x-1) + \hat b_0)} = 
-\sum_{x \in 9 \ldots 12} P_x \hat b_1 = \hat b_1
-\end{aligned}
-$$
-
-:::
-
-## Result
-
-```{r}
-B=1000
-boot.line = purrr::map(1:B, function(i) {
-  earnings.boot = earnings[sample(1:nrow(earnings), replace=TRUE),]
-  model = lm(income ~ education, data=earnings.boot[earnings.boot$education <= 12,])
-  data.frame(line=coef(model)[2])
-}) %>% bind_rows()
-boots = bind_cols(boot[1:B,], boot.line)
-```
-$$
-\begin{array}{l|ll}
-\text{Summary} & \text{Point Estimate} & \text{95\% Confidence Interval} \\
-\theta_{\text{years}} & `r approx(estimate)` 
-&  \qty[`r approx(estimate-1.96*se)`, \ `r approx(estimate+1.96*se)`] \\
-\theta_{\text{people}}  & `r approx(average.over.people(summaries))` 
-& \qty[`r approx(average.over.people(summaries)-1.96*sd(boot$people))`, \ `r approx(average.over.people(summaries)+1.96*sd(boot$people))`] \\
-\theta_{\text{slope}}  & `r approx(coef(model)[2])` 
-& \qty[`r approx(coef(model)[2]-1.96*sd(boots$line))`, \ `r approx(coef(model)[2]+1.96*sd(boots$line))`]
-\end{array}
-$$
-
-- In this instance, it's not a disaster---the point estimate is about the same as the other two.
-- But it's not a huge win either---the standard error is more or less the same as the average-over-years summary's.
- 
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-#| fig-cap: Bootstrap sampling distributions for the average-over-people (red), average-over-years (blue), and least squares slope (magenta) summaries.
-ggplot(boots) + geom_histogram(aes(x=people,y=after_stat(density)), fill='red', alpha=.3, bins=100) + 
-                geom_histogram(aes(x=years,y=after_stat(density)), fill='blue', alpha=.3, bins=100) +
-                geom_histogram(aes(x=line,y=after_stat(density)), fill='magenta', alpha=.3, bins=100) 
-```
-
-## That Was Lucky {.smaller}
-
-- Remember that last class, we looked at fake data in which these three summaries were very different.
-- That can happen. And if you're pretending the least-squares slope is one of the other summaries, you'll be very wrong.
-- What's worse is, you won't know it. Your confidence interval won't be wide enough to cover the summary you're interested in.
-- That's because your slope-masquerading-as-something-else estimator is *biased* for the summary you're interested in.
-- And our confidence intervals don't account for that. 
-
-$$
-$$
-
-- Let's take a look at the three intervals we get using our fake data from last class. 
-- We're not lucky in any of these cases.
-
-## When We're Not Lucky
-
-```{r}
-mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
-epsilon = rnorm(nrow(earnings)) * .1*sd(earnings$income[earnings$education %in% 8:12])
-
-earnings1 = earnings
-earnings1$income = mu[ifelse(earnings$education==12, 12, 8)] + epsilon
-
-earnings2 = earnings
-earnings2$income = mu[ifelse(earnings$education >= 10, 12, 8)] + epsilon
-
-mu3 = NA+mu
-mu3[8]=mu[8]
-mu3[9]=mu[10]
-mu3[10]=(mu[11]+mu[12])/2
-mu3[11]=mu[12]
-mu3[12]=mu[12]
-earnings3 = earnings
-earnings3$income = mu3[earnings$education] + epsilon
-```
-
-```{r}
-run.boot = function(earnings, B=1000) { purrr::map(1:B, function(i) {
-  earnings.boot = earnings[sample(1:nrow(earnings), replace=TRUE),]
-  summaries = earnings.boot[earnings.boot$education <= 12, ] %>% group_by(education) %>% summarize(mean=mean(income), N=length(income))
-  model = lm(income ~ education, data=earnings.boot[earnings.boot$education <= 12,])
-  data.frame(people=average.over.people(summaries), 
-             years=(summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4,
-             line = coef(model)[2])
-}) %>% bind_rows()
-}
-```
-
-- Story 1. All that matters is the diploma.
-
-```{r}
-boots=run.boot(earnings1)
-```
-
-$$
-\small{
-\begin{array}{l|ll}
-\text{Summary} & \text{Point Estimate} & \text{95\% Confidence Interval} \\
-\theta_{\text{years}} & `r approx(mean(boots$years))` 
-&  \qty[`r approx(mean(boots$years) - 1.96*sd(boots$years))`, \ `r approx(mean(boots$years) + 1.96*sd(boots$years))`] \\
-\theta_{\text{people}} & `r approx(mean(boots$people))` 
-&  \qty[`r approx(mean(boots$people) - 1.96*sd(boots$people))`, \ `r approx(mean(boots$people) + 1.96*sd(boots$people))`] \\
-\theta_{\text{line}} & `r approx(mean(boots$line))` 
-&  \qty[`r approx(mean(boots$line) - 1.96*sd(boots$line))`, \ `r approx(mean(boots$line) + 1.96*sd(boots$line))`] \\
-\end{array}
-}
-$$
-
-- Story 2. All that matters is 10th grade algebra.
-```{r}
-boots=run.boot(earnings2)
-```
-
-$$
-\small{
-\begin{array}{l|ll}
-\text{Summary} & \text{Point Estimate} & \text{95\% Confidence Interval} \\
-\theta_{\text{years}} & `r approx(mean(boots$years))` 
-&  \qty[`r approx(mean(boots$years) - 1.96*sd(boots$years))`, \ `r approx(mean(boots$years) + 1.96*sd(boots$years))`] \\
-\theta_{\text{people}} & `r approx(mean(boots$people))` 
-&  \qty[`r approx(mean(boots$people) - 1.96*sd(boots$people))`, \ `r approx(mean(boots$people) + 1.96*sd(boots$people))`] \\
-\theta_{\text{line}} & `r approx(mean(boots$line))` 
-&  \qty[`r approx(mean(boots$line) - 1.96*sd(boots$line))`, \ `r approx(mean(boots$line) + 1.96*sd(boots$line))`] \\
-\end{array}
-}
-$$
-
-- Story 3. They teach the most important stuff first. 
-```{r}
-boots=run.boot(earnings3)
-```
-
-$$
-\small{
-\begin{array}{l|ll}
-\text{Summary} & \text{Point Estimate} & \text{95\% Confidence Interval} \\
-\theta_{\text{years}} & `r approx(mean(boots$years))` 
-&  \qty[`r approx(mean(boots$years) - 1.96*sd(boots$years))`, \ `r approx(mean(boots$years) + 1.96*sd(boots$years))`] \\
-\theta_{\text{people}} & `r approx(mean(boots$people))` 
-&  \qty[`r approx(mean(boots$people) - 1.96*sd(boots$people))`, \ `r approx(mean(boots$people) + 1.96*sd(boots$people))`] \\
-\theta_{\text{line}} & `r approx(mean(boots$line))` 
-&  \qty[`r approx(mean(boots$line) - 1.96*sd(boots$line))`, \ `r approx(mean(boots$line) + 1.96*sd(boots$line))`] \\
-\end{array}
-}
-$$
-
-## Next Class
-
-- We'll talk about the implications of bias for confidence intervals. Something very interesting happens. 
-- We'll see that using problematic models like our line can be ok in small samples, but not at all ok in large ones.
-- That's part of what why fitting lines is such a big part of statistics education. It's anachronistic.
-- Before we had computers, we had small samples. And using lines this way was --- sometimes --- justifiable.
-- Now we, by and large, have large samples. And using lines this way is --- almost always --- not.
