@@ -422,7 +422,11 @@ $$
 
 $$
 \small{
-\frac14\sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1)} = \sum_x \alpha(x) \hat \mu(x)  \qfor \alpha(x) = \begin{cases} \frac14 & \text{ if } x = 12 \\ -\frac14 & \text{ if } x = 8 \\ 0 & \text{ otherwise} \end{cases}
+\frac14\sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1)} = \sum_x \alpha(x) \hat \mu(x)  \qfor \alpha(x) 
+= \begin{cases} 
+\hphantom{-}\frac14 & \text{ if } x = 12 \\ 
+          -\frac14  & \text{ if } x = 8 \\ 
+          0 & \text{ otherwise} \end{cases}
 }
 $$
 
@@ -561,7 +565,8 @@ run.boot = function(earnings, B=1000) { purrr::map(1:B, function(i) {
 }) %>% bind_rows()
 }
 boots = run.boot(earnings)
-summaries = earnings[earnings$education <= 12, ] %>% group_by(education) %>% summarize(mean=mean(income), N=length(income))
+summaries = earnings[earnings$education <= 12, ] %>% group_by(education) %>% 
+  summarize(mean=mean(income), N=length(income), sd=sd(income))
 years.estimate = (summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4
 ```
 
@@ -609,34 +614,6 @@ distribution.plot = function(boot.samples, point.estimate, w=width(boot.samples)
 distribution.plot(boots$years, years.estimate) + xlim(-5000,10000)
 distribution.plot(boots$people, average.over.people(summaries)) + xlim(-5000,10000)
 ```
-
-1. How accurate our estimates tend to be. 
-2. How to characterize their accuracy, e.g. with a confidence interval. 
- 
-\ \
-
-- We do this exactly the same way we've done it before. 
-  1. We estimate the sampling distribution of our estimator.
-  2. We draw arms, legs, and a head on it.
-
-::: fragment
-  - That was what Github Copilot --- GPT4 --- suggested after I typed 'We'll draw arms'.
-  - I didn't want to  keep that one to myself.
-:::
-
-## What We Want To Know
-```{r}
-#| layout-ncol: 2
-#| out-height: 300px
-#| fig-asp: .3 
-#| fig-subcap:
-#|  - Interval Estimate for the Average over Years
-#|  - Interval Estimate for the Average over People 
-
-distribution.plot(boots$years, years.estimate) + xlim(-5000,10000)
-distribution.plot(boots$people, average.over.people(summaries)) + xlim(-5000,10000)
-```
-
 
 1. How accurate our estimates tend to be. 
 2. How to characterize their accuracy, e.g. with a confidence interval. 
@@ -756,13 +733,12 @@ ggplot() +
     xlim(-2000,8000)
 ```
 
-1. We'll show that our estimator is unbiased
+1. We'll show that our estimator is unbiased. This implies our sampling distribution is *in the right place*.
 
 $$ 
 \E[\hat\theta] = \theta
 $$
 
-- This implies our sampling distribution is *in the right place*.
 
 2. We'll calculate --- and then estimate --- their *standard errors*.
 $$
@@ -856,13 +832,14 @@ $$
 &= \E\qty[ \Var\qty{ \sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \E\qty{\sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n} ] \\
 &= \E\qty[ \Var\qty{ \sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \sum_x  \alpha(x) \E\qty{ \hat \mu(x) \mid X_1 \ldots X_n} ] \\
 &= \E\qty[ \Var\qty{ \sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \sum_x \alpha(x) \mu(x) ] \\
-&= \textcolor{blue}{ \sum_x \sigma^2(x) \alpha^2(x) \times \E\qty[ \frac{1}{N_x} ]} + 0
+&= \textcolor{blue}{\sum_x \alpha(x)^2 \E\qty[ \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n}]} + 0 \\
+&=\textcolor{blue}{ \sum_x  \alpha^2(x) \sigma^2(x) \times \E\qty[ \frac{1}{N_x} ]} 
 \end{aligned}
 }
 $$
 
 
-## Variance Calculation Step 2: $\E[\Var[\ldots]]$ 
+## Variance Calculation Step 2a: $\E[\Var[\ldots]]$ 
 
 $$\small{
 \begin{aligned}
@@ -871,14 +848,64 @@ $$\small{
 &=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) \hat\mu(x) - \E\qty[\sum_x \alpha(x) \hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
 &=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) \hat\mu(x) - \alpha(x) \E\qty[\hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
 &=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) \qty{\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n]})^2 \mid X_1 \ldots X_n }] \\
-&=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) Z_x)^2  \mid X_1 \ldots X_n }] \quad \text{ for } \quad  Z_x=\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n] \quad \text{ with } \quad \E[Z_x^2 \mid X_1 \ldots X_n] = \Var[\hat\mu(x) \mid X_1 \ldots X_n] \\
-&=\E\qty[ \E\qty{ \sum_x\sum_x' \alpha(x) \alpha(x') Z_x Z_{x'} \mid X_1 \ldots X_n }] \\ 
-&=\E\qty[ \sum_x\sum_x' \alpha(x) \alpha(x') \E\qty{ Z_x Z_{x'} \mid X_1 \ldots X_n}] \\ 
-&=\E\qty[ \sum_x\sum_x' \alpha(x) \alpha(x') \begin{cases} \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n} = \frac{\sigma^2(x)}{N_x} & \text{ if } x=x' \\ 0 & \text{ otherwise} \end{cases} ] \\
-&=\E\qty[ \sum_x \alpha(x)^2 \frac{\sigma^2(x)}{N_x} ] = \sum_x \sigma^2(x) \alpha^2(x) \times \E\qty[ \frac{1}{N_x} ] \\
+&=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) Z_x)^2  \mid X_1 \ldots X_n }] \quad \text{ for } \quad  Z_x=\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n] 
 \end{aligned}
 }
 $$
+
+- Here $Z_x$ is a *conditionally centered* version of our subsample mean $\hat\mu(x)$.
+  - The *conditional variance* of $\hat\mu(x)$ is the conditional expectation of its square $Z_x^2$
+  - And the conditional expectation of *products* $Z_x Z_{x'}$ for different subsamples is zero.
+
+$$
+\begin{aligned} 
+\E[Z_x^2 \mid X_1 \ldots X_n] &= \Var[\hat\mu(x) \mid X_1 \ldots X_n] \\
+\E[Z_x Z_{x'} \mid X_1 \ldots X_n] &= 0 \quad \text{ for } \quad x \neq x'
+\end{aligned}
+$$
+
+## Variance Calculation Step 2b: $\E[\Var[\ldots]]$ and FOIL
+- To make progress from here, we have to square out our sum. We get one term for each combination of $x$s.
+
+$$
+\small{
+\qty(\sum_x \alpha_x Z_x)^2 = \sum_x\sum_{x'} \alpha_x Z_x \ \alpha_{x'} Z_{x'} 
+}
+$$
+
+- Making this substitution, we can boil things down to something we've calculated before.
+
+$$\small{
+\begin{aligned}
+&\Var\qty[ \sum_x \alpha(x) \hat \mu(x) ] \\ 
+&=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) Z_x)^2  \mid X_1 \ldots X_n }] \quad && \text{ for } \quad  Z_x=\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n] \\
+&=\E\qty[ \E\qty{ \sum_x\sum_{x'} \alpha(x) \alpha(x') Z_x Z_{x'} \mid X_1 \ldots X_n }] \\ 
+&=\E\qty[ \sum_x\sum_{x'} \alpha(x) \alpha(x') \E\qty{ Z_x Z_{x'} \mid X_1 \ldots X_n}] \\ 
+&=\E\qty[ \sum_x\sum_{x'} \alpha(x) \alpha(x') \begin{cases} \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n} & \text{ if } x=x' \\ 0 & \text{ otherwise} \end{cases} ] \\
+&=\E\qty[ \sum_x \alpha(x)^2 \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n}] \\
+&= \sum_x \alpha(x)^2 \E\qty[\Var\qty{\hat\mu(x) \mid X_1 \ldots X_n}]
+\end{aligned}
+}
+$$
+
+## Concluding our Variance Calculation 
+
+```{r}
+#| layout-ncol: 2
+#| out-height: 300px
+#| fig-asp: .3
+earnings.jitter
+earnings.jitter.pop
+```
+
+$$ 
+\begin{aligned}
+\Var\qty[ \sum_x \alpha(x) \hat \mu(x) ] 
+&=  \sum_x \alpha(x)^2 \E\qty[\Var\qty{\hat\mu(x) \mid X_1 \ldots X_n}] \\
+&= \sum_x \alpha(x)^2 \sigma^2(x) \times \E\qty[ \frac{1}{N_x} ]
+\end{aligned}
+$$
+
 
 ## Variance Estimation
 
@@ -902,10 +929,51 @@ $$ 1/N_x \approx \E[1/N_x] $$
 - Plugging them in gives us an estimate of our summary's variance.
 
 $$
-\hat\sigma_{\hat\theta}^2 = \sum_x \hat\sigma^2(x) \alpha^2(x) \times \frac{1}{N_x}
+\hat\sigma_{\hat\theta}^2 = \sum_x \alpha^2(x) \ \hat\sigma^2(x)  \times \frac{1}{N_x}
 $$
 
+## Our Estimated Variance
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+earnings.jitter
+```
 
+```{r}
+sigmahat = function(x) { sd(earnings$income[earnings$education==x]) }
+alpha    = function(x) { case_match(x, 
+  12 ~  1/4,
+  8  ~ -1/4,
+  .default = 0) 
+}
+N        = function(x) { sum(earnings$education==x) }
+```
+
+$$
+\hat\sigma_{\hat\theta}^2 = \sum_x  \frac{\alpha^2(x) \ \hat\sigma^2(x)}{N_x}
+$$
+
+where
+
+$$
+\begin{array}{l|lll} x & 8 & 9 & 10 & 11 & 12 & 13 & \ldots & 20 \\ \hline
+\alpha^2(x)    & `r approx(alpha(8)^2)` & `r approx(alpha(9)^2)` & `r approx(alpha(10)^2)` &
+`r approx(alpha(11)^2)` & `r approx(alpha(12)^2)` & `r approx(alpha(13)^2)` &
+\ldots & `r approx(alpha(20)^2)` \\
+\hat\sigma^2(x) &    
+`r approx(sigmahat(8)^2,1)` & `r approx(sigmahat(9)^2,1)` & `r approx(sigmahat(10)^2,1)` &
+`r approx(sigmahat(11)^2,1)` & `r approx(sigmahat(12)^2,1)` & `r approx(sigmahat(13)^2,1)` &
+\ldots & `r approx(sigmahat(20)^2,1)` \\
+N_x  & 
+`r N(8)` & `r N(9)` & `r N(10)` & 
+`r N(11)` & `r N(12)` & `r N(13)` &
+ \ldots & `r N(20)` \\
+\frac{\alpha^2(x) \ \hat\sigma^2(x)}{N_x} &
+`r approx(sigmahat(8)^2 * alpha(8)^2 / N(8))` & `r approx(sigmahat(9)^2 * alpha(9)^2 / N(9))` & `r approx(sigmahat(10)^2 * alpha(10)^2 / N(10))` &
+`r approx(sigmahat(11)^2 * alpha(11)^2 / N(11))` & `r approx(sigmahat(12)^2 * alpha(12)^2 / N(12))` & `r approx(sigmahat(13)^2 * alpha(13)^2 / N(13))` &
+\ldots & `r approx(sigmahat(20)^2 * alpha(20)^2 / N(20))` \\
+\end{array}
+$$
 
 ## Summary
 
@@ -981,10 +1049,43 @@ $$
 $$
 
 ## This is the resulting interval.
+```{r}
+#| layout-ncol: 2
+#| out-height: 300px
+#| fig-asp: .3 
+#| fig-subcap:
+#|  - Interval Estimate for the Average over Years
+#|  - Interval Estimate for the Average over People 
+
+summaries = earnings[earnings$education <= 12, ] %>% group_by(education) %>% 
+  summarize(mean=mean(income), N=length(income), sd=sd(income))
+years.estimate = (summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4
+
+distribution.plot(boots$years, years.estimate) + xlim(-5000,10000)
+distribution.plot(boots$people, average.over.people(summaries)) + xlim(-5000,10000)
+```
 
 $$
 \small{
 \qty[ \hat \theta - 1.96\hat\sigma_{\hat\theta}, \ \hat \theta + 1.96\hat\sigma_{\hat\theta}] = \qty[`r approx(estimate - 1.96*se)` , `r approx(estimate + 1.96*se)`]
 }
 $$
+
+- This is for the average over years---the plot on the left.
+- At the moment, we don't know why it's narrower than the interval for the average over people.
+- That's because we haven't yet work out how to get a normal approximation for its distribution.
+- It's a linear combinations with coefficients that *depend on the covariate*. We'll do that next time.
+
+$$
+\small{
+\text{ average over people} = \sum_{x=9}^{12} P_x \qty{ \hat\mu(x) - \hat\mu(x-1)} = \sum_x \hat \alpha(x) \hat \mu(x) \qfor
+\hat\alpha(x) = \begin{cases}
+  P_{12} & \text{ if } x = 12 \\
+  P_{x} - P_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
+  -P_9 & \text{ if } x = 8 
+\end{cases}
+}
+$$
+
+
 
