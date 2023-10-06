@@ -1,0 +1,1091 @@
+---
+title: "QTM 220 Lecture 8"
+subtitle: "Inferential Statistics with Non-Binary Covariates: Part 1"
+format: 
+  clean-revealjs:
+    height: 1000
+    width: 1290
+    theme: [default, "class.scss"]
+    smaller: true
+    slide-number: true
+    pdf-separate-fragments: true
+    fig-format: svg
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
+---
+
+```{r load-libraries}
+library(purrr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(ggplot2)
+library(htmltools)
+library(kableExtra)
+library(scales)
+library(cpsR)
+library(mapdata)
+
+options(knitr.kable.NA = '')
+
+compact_number = label_number(accuracy=.1, scale_cut=cut_short_scale())
+ellipsis <- function(df, nhead=5L, ntail=2) {
+    rownames(df) = as.character(1:nrow(df))
+    stopifnot("data.frame" %in% class(df))
+    els <- rep(NA, ncol(df)) %>% 
+        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
+        data.frame(stringsAsFactors=FALSE) %>% 
+        tibble::as_tibble()
+    rownames(els) = "⋮"
+    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
+}
+
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+```
+
+```{r ggplot-themes}
+fontsize = 16
+textcolor = "#888888"
+
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+        panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = textcolor, size=fontsize),
+        axis.text.y  = element_text(colour = textcolor, size=fontsize),
+        axis.title.x  = element_text(colour = textcolor),
+        axis.title.y  = element_text(colour = textcolor, angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+              axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+
+
+
+```{r get-data}
+#| cache: true
+#| 
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+cps.sampling.ratio = 1/25 # Not true. 1/2500 households are surveyed. But for the sake of plotting, it's ok.
+
+california.state.code = 6
+year = 2020
+cps.data = results=get_asec(year=year, vars=c('pearnval', 'a_age', 'a_hga', 'gestfips', 'gtco', 'gtcbsasz'), key=census.api.key)
+```
+
+```{r transform-data}
+#| cache: false
+#| 
+all.earnings = data.frame(state.code = cps.data$gestfips,
+                          county.code = cps.data$gtco,
+                          age=cps.data$a_age,
+                          income=cps.data$pearnval,
+                          education.code=cps.data$a_hga,
+                          education=case_match(cps.data$a_hga,
+                                           0  ~ 0,   # child
+                                           31 ~ 0,   # < grade 1
+                                           32 ~ 4,   #  grade 1-4
+                                           33 ~ 6,   #  grade 5-6
+                                           34 ~ 8,   #  grade 7-8 
+                                           35 ~ 9,   #  grade 9
+                                           36 ~ 10,  #  grade 10
+                                           37 ~ 11,  #  grade 11
+                                           38 ~ 11,  #  grade 12 no diploma
+                                           39 ~ 12,  #  high school grad
+                                           40 ~ 13,  #  some college
+                                           41 ~ 14,  #  associate degree (vocational)
+                                           42 ~ 14,  #  associate degree (academic)
+                                           43 ~ 16,  #  bachelors degree
+                                           44 ~ 18,  #  masters degree
+                                           45 ~ 20,  #  professional school degree
+                                           46 ~ 20)) #  doctorate
+
+all.earnings$degree = factor(all.earnings$education >= 16, 
+                     levels=c(FALSE, TRUE), 
+                     labels=c('no 4-year degree','4-year degree')) 
+
+coarsen = function(x, group, seed=0) {
+  current.seed = .Random.seed
+  set.seed(seed)
+  x.coarsened = rep(NA, length(x))
+  for(gg in unique(group)) {
+    x.coarsened[group==gg] = runif(sum(group==gg), min(x[group==gg]), max(x[group==gg]))
+  }
+  set.seed(current.seed)
+  x.coarsened
+} 
+
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+earnings = filter(all.earnings, education >= 8 & 
+                                state.code == california.state.code & 
+                                age %>% in.interval(c(25,35)))
+Y = earnings$income
+X = earnings$education
+```
+
+
+```{r get-county-info}
+# county info from https://en.wikipedia.org/wiki/List_of_counties_in_California
+# converted to csv using https://wikitable2csv.ggor.de
+
+to.number = function(s) { as.numeric(str_trim(gsub(",", "", s))) }
+ca_county_info = read.csv('california_county_info.csv') %>%
+  mutate(subregion = tolower(sub(' County', '', County))) %>%
+  mutate(pop = to.number(Population..2022.)) %>%
+  mutate(area = to.number(sub('sq.*', '', Area))) 
+
+earnings.county = left_join(earnings, ca_county_info[,c('FIPS.code', 'subregion')], by=c('county.code' = 'FIPS.code'))
+earnings$county = earnings.county$subregion
+earnings$county[is.na(earnings$county)]='unknown'
+```
+
+
+```{r make-maps}
+#| cache: true
+#| 
+
+# To give our survey recipients a bit more reality, we'll give them fake locations on a map
+# And we'll make up a population of California residents that they're sampled from
+# maps are based on code from https://eriqande.github.io/rep-res-eeb-2017/map-making-in-R.html
+
+counties = map_data("county")
+ca_county = counties %>%
+  filter(region == "california")
+ca_county_centers = ca_county %>%
+  group_by(subregion) %>%
+  summarize(county.lat = mean(lat), county.long=mean(long))
+
+ca_county_more = left_join(ca_county_centers, ca_county_info, by="subregion")
+ca_all = left_join(ca_county, ca_county_more, by="subregion")
+
+
+ca.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(fill='gray', color = "white", alpha=.4) +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+
+ca.pop.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(aes(fill = pop/area), color = "white") +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+
+## we'll make up a population as follows
+# 1. choose the number of people to be the number of people in our sample scaled up to account for the cps sampling ratio 1/2500
+#    Because this would wind up being computationally and visually problematic, we'll scale up by 25 instead of 2500;
+#    each population dot in the population stands for 100 people in the population.
+# 2. for each, sample a county with probability proportional to its finite.population
+# 3. for each, sample a latitude and longitude by taking a randomly weighted combination of the    
+#    county's vertices. As long as the county is convex, these points will be inside the county.
+# 4. we'll give them a degree too, chosen independently of all else from the empirical distribution on the sample
+m = nrow(earnings) * 25 
+
+# takes a list of subregions, possibly with duplicates
+# for each element, chooses random lat/long coordinates within the sample.subregion
+# by taking a random convex combination of the subregion's vertices
+sample.within.subregion = function(subregions) {
+  output = data.frame(subregion=subregions, lat=NA, long=NA)
+  for(subregion in unique(subregions)) { 
+      vertices = ca_county[ca_county$subregion==subregion, c('lat','long')]
+      U = sum(subregions==subregion)
+      V = nrow(vertices)
+      weights = abs(rt(U*V, 1))
+      dim(weights) = c(U,V)
+      weights = (1/rowSums(weights)) * weights
+      output[subregions==subregion, c('lat', 'long')] = 
+                 cbind(weights %*% vertices$lat, weights %*% vertices$long)
+    }
+    output
+}
+
+finite.population.subregion = sample(ca_county_more$subregion, size=m, replace=TRUE, prob=ca_county_more$pop)
+finite.population = sample.within.subregion(finite.population.subregion)
+finite.population$degree = sample(earnings$degree, nrow(finite.population), replace=TRUE)
+finite.population$group=1 # for plotting
+
+display.population = finite.population
+```
+
+
+```{r make-sample}
+# and we'll force the degree-distribution in the sample to match our survey responses
+our.sample = sample_n(finite.population, nrow(earnings))
+our.sample$degree=earnings$degree
+
+pop.plot = ca.plot + geom_point(aes(x=long, y=lat), data=display.population, size=.02, alpha=.1) 
+sample.plot = ca.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
+pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.population, size=.01, alpha=.1)  
+sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
+```
+
+```{r visualization-defaults}
+scale_y = function(limits=c(-.3e5, 3e5)) { 
+  scale_y_continuous(labels=label_dollar(), limits=limits)
+}
+
+years = 8:20
+scale_x = function(limits=c(min(years)-.5, max(years)+.5)) { 
+  scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=limits)
+}
+
+dot.size = 2
+```
+
+
+```{r define-colors}
+twocolor.red   = 'rgb(248,118,109)'
+twocolor.green = 'rgb(0,191,196)'
+```
+
+## Last Time
+
+::: {.hidden}
+$$
+% color defs aren't making it into MathJax
+%\definecolor{twocolor-red}{RGB}{248, 118, 109}   % red   used by ggplot in plots w/ 2 colors 
+%\definecolor{twocolor-green}{RGB}{0, 191, 196}   % green used by ggplot in plots w/ 2 colors
+% so create commands for using those colors instead
+\newcommand{\inred}[1]{\textcolor[RGB]{248,118,109}{#1}}
+\newcommand{\ingreen}[1]{\textcolor[RGB]{0,191,196}{#1}}
+\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
+
+\newcommand{\ind}[1]{1_{\{#1\}}}
+\newcommand{\with}{\ingreen{\text{degree}}}
+\newcommand{\without}{\inred{\text{no degree}}}
+
+\DeclareMathOperator{\E}{E}degredegre
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+$$ 
+
+:::
+
+```{r scatter-plots}
+
+earnings.jitter = ggplot(earnings) + geom_point(aes(x=education, y=income), color='#F7766D',
+                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+                   scale_x() + scale_y() + guides(color=FALSE)
+
+summaries = earnings %>% 
+          group_by(education) %>% 
+          summarize(mean=mean(income),
+                    sd=sd(income))
+                    
+```
+
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+earnings.jitter
+```
+
+- We talked summaries of the relationship between income and education *in a sample*.
+- We talked about a number of types of summaries. 
+- What you'd use depends on what you're interested in.
+
+
+## Three Types
+
+```{r}
+#| layout-ncol: 3
+#| out-height: 400px
+#| fig-asp: 1
+#| fig-subcap:
+#|  - A Fine Group Comparison $$\hat\mu(16) - \hat\mu(12)$$
+#|  - An Aggregate Group Comparison $$\hat\mu(16) - \hat\mu(\le 12)$$
+#|  - An Aggregated Comparison $$\frac{1}{4}\sum_{x= 9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) } $$
+
+
+
+ggplot(earnings) + geom_point(aes(x=education, y=income, alpha=education %in% c(16,12), color=education > 12), 
+                                  size=dot.size, position=position_jitter(seed=0,w=.3)) + 
+                   geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education %in% c(16,12), ]) +
+                   scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.3)) + guides(color=FALSE, alpha=FALSE) 
+
+coarsened.summaries = earnings[earnings$education %in% c(16,8:12),] %>% 
+  group_by(education <= 12) %>% 
+  summarize(mean=mean(income),
+            sd=sd(income),
+            mean.X = mean(education))
+
+ggplot(earnings) + geom_point(aes(x=education, y=income, alpha=education %in% c(16,8:12), color=education > 12), 
+                                  size=dot.size, position=position_jitter(seed=0,w=.3)) + 
+                   geom_pointrange(aes(x=mean.X, y=mean, ymin=mean-sd, ymax=mean+sd), data=coarsened.summaries) +
+                   scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.3)) + guides(color=FALSE, alpha=FALSE) 
+
+earnings.jitter.hs = ggplot(earnings) + geom_point(aes(x=education, y=income, alpha=education <= 12), color='#F7766D',
+                              size=dot.size, position=position_jitter(seed=0,w=.3)) +
+                   scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.3)) + guides(color=FALSE, alpha=FALSE)
+
+aggregate.comparison.plot = earnings.jitter.hs +
+  geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 12,]) +
+  geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
+  scale_y(c(0, .7e5))
+
+aggregate.comparison.plot
+```
+
+
+
+## Today
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .3
+
+education.to.summary.row = rep(NA, max(summaries$education))
+education.to.summary.row[summaries$education] = 1:nrow(summaries)
+muhat = function(x) { 
+  summaries$mean[education.to.summary.row[x]]
+}
+increments = muhat(9:12)-muhat(8:11)
+average.increment = mean(increments)
+
+hs.subsample = earnings$education[earnings$education %in% 9:12]
+sample.average.increment = mean(muhat(hs.subsample) - muhat(hs.subsample-1))
+sai.data = data.frame(education=c(8,12), mean=c(muhat(12)-sample.average.increment*4, muhat(12)))
+
+aggregate.comparison.plot + xlim(c(7.5,12.5))
+```
+
+
+- We'll talk about *statistical inference* based on these sample summaries.
+- That is, we'll talk about what they tell us about the population our sample was drawn from.
+- To keep us focused, we'll talk mostly about two different *aggregated comparisons*.
+  - Both are summaries of the value of a year of high school. 
+  - They're different averages of the year-on-year increments in mean income.
+
+
+## Today
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .3
+aggregate.comparison.plot + xlim(c(7.5,12.5))
+```
+
+1. The average, over the four years of high school, of the increments.
+$$
+\frac{1}{4}\sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) } = \frac{\hat\mu(12) - \hat\mu(8)}{4}
+$$
+
+2. The average, over people with &ge;1 year of high school, of the increments *affecting them* in their last year. 
+$$
+\frac{\sum_{i:X_i \in 9 \ldots 12} \qty{ \hat\mu(X_i) - \hat\mu(X_i-1) }}{\sum_{i:X_i \in 9 \ldots 12} 1} 
+=  \sum_{x \in 9 \ldots 12} P_x \ \qty{ \hat\mu(x) - \hat\mu(x-1) } \quad \text{ for } \quad P_x = \frac{N_x}{\sum_{x \in 9 \ldots 12}N_x}.
+$$
+
+
+
+
+## Why This is Enough
+
+- These aren't the only summaries we might be interested in. We talked about many more last time. 
+- And we saw that all were linear combinations --- coefficient weighted sums --- of the subsample means.
+- Some, like the average over years, involved coefficients that didn't depend on the covariates.
+
+$$
+\small{
+\frac14\sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1)} = \sum_x \alpha(x) \hat \mu(x)  \qfor \alpha(x) 
+= \begin{cases} 
+\hphantom{-}\frac14 & \text{ if } x = 12 \\ 
+          -\frac14  & \text{ if } x = 8 \\ 
+          0 & \text{ otherwise} \end{cases}
+}
+$$
+
+- Others, like the average over people with &ge;1 year of high school, involved coefficients that did.
+
+$$
+\small{
+\sum_{x=9}^{12} P_x \qty{ \hat\mu(x) - \hat\mu(x-1)} = \sum_x \hat \alpha(x) \hat \mu(x) \qfor
+\hat\alpha(x) = \begin{cases}
+  P_{12} & \text{ if } x = 12 \\
+  P_{x} - P_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
+  -P_9 & \text{ if } x = 8 
+\end{cases}
+}
+$$
+
+- We'll tackle these two general cases, using our two examples as illustrations.
+
+
+# What We're Doing
+
+## Our Data
+
+```{r}
+#| out-height: 700px
+#| fig-ncol: 2
+sample.plot
+pop.plot
+```
+
+
+
+- As before, we'll work with data from the 2022 Current Population Survey.
+- We'll look at California residents age 25-35 with at least an 8th-grade education.
+  - This sample includes `r nrow(earnings)` people. 
+  - We'll think of them as having been sampled with replacement from a population.
+  - That is, from the population of all California residents meeting these criteria.
+  - That's an approximation---the CPS is a complex survey---but it's not too bad.
+
+::: aside
+As discussed earlier in the course, these locations are fictitious. The maps are just an illustration of the relationship between sample and population.
+:::
+
+## What We're Estimating {.smaller}
+
+```{r}
+#| out-height: 250px
+#| layout-ncol: 2
+#| cache: true
+
+
+earnings.jitter = ggplot(earnings) + geom_point(aes(x=education, y=income), color='#F7766D',
+                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+                   scale_x() + scale_y() + guides(color=FALSE)
+
+
+# make a fake population by sampling with replacement from the sample then adding fuzz to incomes
+# the actual sampled proportion in CPS is about 1/2500, so by doing 25x more dots,
+# we're letting each dot  stand in for 100 people in the population
+earnings.pop = earnings[sample(1:nrow(earnings), nrow(earnings)*25, replace=TRUE),]
+earnings.pop$income = earnings.pop$income + rnorm(nrow(earnings.pop), sd=5000)
+earnings.jitter.pop = ggplot(earnings.pop) + geom_point(aes(x=education, y=income), color='#F7766D',
+                              size=dot.size/10, position=position_jitter(seed=0,w=.3), alpha=.05) +
+                   scale_x() + scale_y() + guides(color=FALSE)
+
+earnings.jitter
+earnings.jitter.pop
+```
+
+
+:::: columns
+
+::: column
+### Sample
+$$
+\small{
+\begin{array}{ccccccc}
+X_1 & Y_1 & X_2 & Y_2 &  \ldots & X_n & Y_n \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
+$$
+
+:::
+::: column
+### Population
+$$
+\small{
+\begin{array}{ccccccc}
+x_1 & y_1 & x_2 & y_2 &  \ldots & x_m & y_m \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
+$$
+
+:::
+::::
+
+- Qualitatively, the sample and the population are the same kind of thing. 
+- They're both collections of people with incomes and education levels. 
+- That means we can summarize them in the same ways.  
+- It's natural to think of sample summaries as *estimates* of the corresponding population summaries.
+
+$$
+\small{
+\begin{aligned}
+&\hat \mu(x) = \frac{1}{N_x}\ \sum_{i:X_i=x} Y_i \qfor N_x = \sum_{i:X_i=x} 1 
+&& \text{ estimates } \quad \mu(x) = \frac{1}{m_x}\ \sum_{j:x_j=x} y_j \qfor m_x = \sum_{j:x_j=x} 1 \\
+&\frac{1}{4}\sum_{x=9}^{12} \qty{ \hat \mu(x) - \hat\mu(x-1) }                       
+&& \text{ estimates } \quad \frac{1}{4}\sum_{x=9}^{12} \qty{ \mu(x) - \mu(x-1) }   \\
+&\sum_{x=9}^{12} P_x \qty{ \hat \mu(x) - \hat\mu(x-1) } \qfor P_x = \frac{N_x}{\sum_{x=9}^{12} N_x}                       
+&& \text{ estimates } \quad \sum_{x=9}^{12} p_x \qty{ \mu(x) - \mu(x-1) }   \qfor p_x = \frac{m_x}{\sum_{x=9}^{12} m_x} \\
+\end{aligned}
+}
+$$
+
+
+## What We Want To Know
+
+```{r}
+#| cache: true
+
+average.over.people = function(summaries) {
+  muhat = function(x) { summaries$mean[summaries$education==x] }
+  P = function(x) { summaries$N[summaries$education==x] / sum(summaries$N) }
+  alphahat = function(x) { if (x==12) { P(12) } else if (x==8) { -P(9) } else { P(x) - P(x+1) } }  
+  sapply(8:12, function(x) { alphahat(x) * muhat(x) }) %>% sum
+}
+run.boot = function(earnings, B=1000) { purrr::map(1:B, function(i) {
+  earnings.boot = earnings[sample(1:nrow(earnings), replace=TRUE),]
+  summaries = earnings.boot[earnings.boot$education <= 12, ] %>% group_by(education) %>% summarize(mean=mean(income), N=length(income))
+  model = lm(income ~ education, data=earnings.boot[earnings.boot$education <= 12,])
+  data.frame(people=average.over.people(summaries), 
+             years=(summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4,
+             line = coef(model)[2])
+}) %>% bind_rows()
+}
+boots = run.boot(earnings)
+summaries = earnings[earnings$education <= 12, ] %>% group_by(education) %>% 
+  summarize(mean=mean(income), N=length(income), sd=sd(income))
+years.estimate = (summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4
+```
+
+```{r}
+#| layout-ncol: 2
+#| out-height: 300px
+#| fig-asp: .3 
+#| fig-subcap:
+#|  - Interval Estimate for the Average over Years
+#|  - Interval Estimate for the Average over People 
+
+width = function(samples, center=mean(samples), alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( center - w/2 <= samples & samples <= center + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-center))))$root
+}
+
+distribution.plot = function(boot.samples, point.estimate, w=width(boot.samples), interval.replications=0, point.replications=0) { 
+  drange = c(0, dnorm(0, mean=0, sd=sd(boot.samples)))
+  p = ggplot(data.frame(samples=boot.samples)) + 
+    geom_histogram(aes(x=samples, y=after_stat(density)), alpha=.3, bins=50)  +
+    geom_pointrange(aes(y=dnorm(2*sd(samples), mean=0, sd=sd(samples)), 
+      x=point.estimate, xmin=point.estimate - w/2, xmax=point.estimate + w/2)) + 
+      geom_vline(xintercept=mean(boot.samples), color='blue') + 
+      geom_vline(xintercept=quantile(boot.samples, c(.025,.975)), color='blue', linetype='dotted') 
+  if(interval.replications > 0) { 
+    K = interval.replications
+    p = p + geom_pointrange(aes(y=y, x=x, xmin=xmin, xmax=xmax), 
+          data=data.frame(y=seq(min(drange), max(drange), length.out=K), 
+                  x=boot.samples[1:K], xmin=boot.samples[1:K] - w/2, xmax=boot.samples[1:K] + w/2), color='purple', alpha=.2)
+  }
+  if(point.replications > 0) { 
+    K = point.replications
+    p = p + geom_point(aes(y=y, x=x), 
+          data=data.frame(y=seq(min(drange), max(drange), length.out=K), 
+                  x=boot.samples[1:K], xmin=boot.samples[1:K] - w/2, xmax=boot.samples[1:K] + w/2), color='purple', alpha=.2)
+  }
+  p
+}
+
+
+distribution.plot(boots$years, years.estimate) + xlim(-5000,10000)
+distribution.plot(boots$people, average.over.people(summaries)) + xlim(-5000,10000)
+```
+
+1. How accurate our estimates tend to be. 
+2. How to characterize their accuracy, e.g. with a confidence interval. 
+ 
+\ \
+
+- We do this exactly the same way we've done it before. 
+  1. We estimate the sampling distribution of our estimator.
+  2. We draw arms on our point estimate wide enough to give it 95% coverage.
+- And we see something interesting. 
+- Our estimate of the average over years is much more precise. 
+  - Its arms are much shorter.
+
+
+## Review: How Interval Estimation Works.
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+
+distribution.plot(boots$years, years.estimate, interval.replications=100) + xlim(-2000,8000)
+```
+
+- These arms should be wide enough hat ...
+  - They'd cover 95% of draws from the sampling distribution
+  - if drawn from the sampling distribution's mean.
+- If the mean's arms reach the point estimate, then the point estimate's arms reach the mean.
+
+## We'll Talk About Two Ways of Estimating the Sampling Distribution
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+
+x = seq(min(boots$years), max(boots$years), length.out=1000)
+distribution.plot(boots$years, years.estimate) + 
+    geom_area(aes(x=x, y=dnorm(x, mean=mean(boots$years), sd=sd(boots$years))), color='purple', fill='purple', alpha=.08) +
+    geom_vline(aes(xintercept=mean(boots$years)), color='purple', linetype='solid') +
+    geom_vline(aes(xintercept=xi), data=data.frame(xi=qnorm(c(.025,.975), mean=mean(boots$years), sd=sd(boots$years))), color='purple', linetype='dotted') +
+    xlim(-2000,8000)
+```
+
+
+- The bootstrap.
+  - This is easy if you have a computer. 
+  - There's a procedure---you just do it.  
+
+- Normal approximation
+  - This is, in a way, harder.
+    - You have to work out formulas for the estimator's mean and variance.
+    - Then estimate the stuff in them, e.g. subpopulation variances.
+  - We'll do it because having formula will give us a better sense of what's going on. 
+    - It'll tell us why one of our population summaries is easier to estimate than the other.
+    - i.e., why we get a narrower interval around the corresponding sample summary.
+
+
+## The Bootstrap Approach
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+distribution.plot(boots$years, years.estimate, point.replications=1000) + xlim(-2000,8000) 
+```
+
+- Calculate your summary of the sample. That's your point estimate of the population summary.
+- To estimate its sampling distribution ...
+  - Draw $B$ samples with replacement from the sample.
+  - Calculate your summary in each of these $B$ *bootstrap samples*.
+  - Histogramming these gives you an estimate of the sampling distribution.
+- Use it to calculate a 95% interval around your point estimate.
+  - The 'arms' of the interval should be wide enough to extend ...
+  - from your estimate to cover 95% of your bootstrap samples.
+
+:::: columns
+
+::: column
+### Bootstrap Sample
+
+$$
+\small{
+\begin{array}{ccccccc}
+X_1^* & Y_1^* & X_2^* & Y_2^* &  \ldots & X_n^* & Y_n^* \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
+$$
+
+:::
+
+::: column
+
+### Sample
+$$
+\small{
+\begin{array}{ccccccc}
+X_1 & Y_1 & X_2 & Y_2 &  \ldots & X_n & Y_n \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
+$$
+
+:::
+::::
+
+## The Normal Approximation Approach
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+point.estimate = years.estimate
+w = 2*1.96*sd(boots$years) 
+ggplot() + 
+    geom_area(aes(x=x, y=dnorm(x, mean=mean(boots$years), sd=sd(boots$years))), color='purple', fill='purple', alpha=.08) +
+    geom_vline(aes(xintercept=mean(boots$years)), color='purple', linetype='solid') +
+    geom_vline(aes(xintercept=xi), data=data.frame(xi=qnorm(c(.025,.975), mean=mean(boots$years), sd=sd(boots$years))), color='purple', linetype='dotted') +
+    geom_pointrange(aes(y=dnorm(2*sd(boots$years), mean=0, sd=sd(boots$years)), x=point.estimate, xmin=point.estimate - w/2, xmax=point.estimate + w/2)) + 
+    xlim(-2000,8000)
+```
+
+1. We'll show that our estimator is unbiased. This implies our sampling distribution is *in the right place*.
+
+$$ 
+\E[\hat\theta] = \theta
+$$
+
+
+2. We'll calculate --- and then estimate --- their *standard errors*.
+$$
+\hat \sigma_{\hat\theta} \approx \sqrt{ \Var[\hat\theta] }
+$$
+
+3.  And we'll use normal approximation to construct *confidence intervals*.
+$$
+\theta \in \qty[ \hat \theta - 1.96\hat\sigma_{\hat\theta}, \ \hat \theta + 1.96\hat\sigma_{\hat\theta}] 
+$$
+
+
+## What's New
+
+- Not that much. This is just like what we did earlier in the semester. 
+- What's new is that we'll be doing it for linear combinations of the subsample means.
+- This means we'll need new unbiasedness proofs and variance calculations.
+  - Today, we'll do the the simpler case: linear combinations with non-random coefficients.
+  - Next time, we'll generalize to linear combinations with random coefficients.
+
+
+# Inference for Linear Combinations of Subsample Means: Non-Random Coefficients
+
+## Unbiasedness Step 1: Subsample Means
+
+- We'll start with something we've essentially shown before --- that $\hat\mu(x)$ is an unbiased estimator of $\mu(x)$. 
+  - $\E[\hat\mu(x)] = \mu(x)$
+- We'll show something stronger than that. We'll show that it's *covariate-conditional mean* is $\mu(x)$.
+  - $\E[\hat\mu(x) \mid X_1 \ldots X_n] = \mu(x)$
+- Unbiasedness follows from this by the law of iterated expectations.
+  - $\E[\hat\mu(x)] = \E[\E[\hat\mu(x) \mid X_1 \ldots X_n]] = \E[\mu(x)] = \mu(x)$
+
+
+::: fragment
+$$
+\small{
+\begin{aligned}
+&\E\qty{ \E\qty[\hat\mu(x) \mid X_1 \ldots X_n]} \\
+&= \E\qty{\E\qty[\frac{\sum_{i:X_i=x} Y_i}{\sum_{i:X_i=x} 1} \mid X_1 \ldots X_n] } && \\
+&= \E\qty{\E\qty[\frac{\sum_{i=1}^n 1_x(X_i) Y_i}{\sum_{i=1}^n 1_x(X_i)} \mid X_1 \ldots X_n]} && \qfor 1_x(X) = \begin{cases} 1 & \text{ if } x = X  \\ 0 & \text{ otherwise} \end{cases} \\
+&= \E\qty{\frac{\sum_{i=1}^n 1_x(X_i) \E[ Y_i \mid X_1 \ldots X_n]}{\sum_{i=1}^n 1_x(X_i)}} && \text{ by linearity of conditional expectations } \\
+&= \E\qty{\frac{\sum_{i=1}^n 1_x(X_i) \E[ Y_i \mid X_i]}{\sum_{i=1}^n 1_x(X_i)}}          && \text{  by irrelevance of independent conditioning variables } \\
+&= \E\qty{\frac{\sum_{i=1}^n 1_x(X_i) \mu(X_i)}{\sum_{i=1}^n 1_x(X_i)} }                     && \text{  is a matter of notation } \\
+&= \E\qty{\frac{\sum_{i=1}^n 1_x(X_i) \mu(x)}{\sum_{i=1}^n 1_x(X_i)} }                      && \text{ by the \emph{indicator trick} } 1_x(X_i)\mu(X_i) = 1_x(X_i)\mu(x) \\
+&= \E\qty{\mu(x) \frac{\sum_{i=1}^n 1_x(X_i)}{\sum_{i=1}^n 1_x(X_i)}} = \E\qty{ \mu(x)} =\mu(x)
+\end{aligned}
+}
+$$
+:::
+
+
+## Unbiasedness Step 2: Linear Combinations 
+
+$$ \E\qty[\sum_x \alpha(x) \hat\mu(x)] = \sum_x \alpha(x) \mu(x) $$
+
+- Examples
+$$
+\small{
+\begin{aligned}
+&\hat \mu(18) - \hat\mu(16) && \qqtext{ is unbiased for } \mu(18) - \mu(16) \\
+&\frac14 \sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) } &&\qqtext{ is unbiased for } \frac14 \sum_{x=9}^{12} \qty{ \mu(x) - \mu(x-1) }
+\end{aligned}
+}
+$$
+
+- Why is this true?
+
+::: fragment
+- Expectation is linear and subsample means are unbiased.
+
+$$ \E\qty[\sum_x \alpha(x) \hat\mu(x)] =  \sum_x \alpha(x) \E\qty[ \hat\mu(x)] = \sum_x \alpha(x) \mu(x) $$
+
+:::
+
+## Variance Calculation Step 1: Total Variance
+
+
+- Let's talk about the variance of a linear combination of the sample means.
+- We'll use the law of total variance to break the variance of our estimator into two parts.
+- We'll see that one of these parts --- the $\Var\E[\ldots]$ part --- is zero.
+  - This happens because the conditional expectation of our subsample means are constants
+  - We saw this before when we discussed differences of subsample means. 
+- What we'll get for the remaining $\E[\Var[\ldots]]$ part is familiar.
+  - We *sum* the conditional variances of the individual terms, then take the expectation of the result.
+  - This is what we did when we calculated the variance of the difference of subsample means.
+
+$$
+\small{
+\begin{aligned}
+&\Var\qty[ \sum_x \alpha(x) \hat \mu(x) ] \\
+&= \E\qty[ \Var\qty{ \sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \E\qty{\sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n} ] \\
+&= \E\qty[ \Var\qty{ \sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \sum_x  \alpha(x) \E\qty{ \hat \mu(x) \mid X_1 \ldots X_n} ] \\
+&= \E\qty[ \Var\qty{ \sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] + \Var\qty[ \sum_x \alpha(x) \mu(x) ] \\
+&= \textcolor{blue}{\sum_x \alpha(x)^2 \E\qty[ \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n}]} + 0 \\
+&=\textcolor{blue}{ \sum_x  \alpha^2(x) \sigma^2(x) \times \E\qty[ \frac{1}{N_x} ]} 
+\end{aligned}
+}
+$$
+
+
+## Variance Calculation Step 2a: $\E[\Var[\ldots]]$ 
+
+$$\small{
+\begin{aligned}
+&\Var\qty[ \sum_x \alpha(x) \hat \mu(x) ] \\ 
+&=\E\qty[ \Var\qty{ \sum_x \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] \\
+&=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) \hat\mu(x) - \E\qty[\sum_x \alpha(x) \hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
+&=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) \hat\mu(x) - \alpha(x) \E\qty[\hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
+&=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) \qty{\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n]})^2 \mid X_1 \ldots X_n }] \\
+&=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) Z_x)^2  \mid X_1 \ldots X_n }] \quad \text{ for } \quad  Z_x=\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n] 
+\end{aligned}
+}
+$$
+
+- Here $Z_x$ is a *conditionally centered* version of our subsample mean $\hat\mu(x)$.
+  - The *conditional variance* of $\hat\mu(x)$ is the conditional expectation of its square $Z_x^2$
+  - And the conditional expectation of *products* $Z_x Z_{x'}$ for different subsamples is zero.
+
+$$
+\begin{aligned} 
+\E[Z_x^2 \mid X_1 \ldots X_n] &= \Var[\hat\mu(x) \mid X_1 \ldots X_n] \\
+\E[Z_x Z_{x'} \mid X_1 \ldots X_n] &= 0 \quad \text{ for } \quad x \neq x'
+\end{aligned}
+$$
+
+## Variance Calculation Step 2b: $\E[\Var[\ldots]]$ and FOIL
+- To make progress from here, we have to square out our sum. We get one term for each combination of $x$s.
+
+$$
+\small{
+\qty(\sum_x \alpha_x Z_x)^2 = \sum_x\sum_{x'} \alpha_x Z_x \ \alpha_{x'} Z_{x'} 
+}
+$$
+
+- Making this substitution, we can boil things down to something we've calculated before.
+
+$$\small{
+\begin{aligned}
+&\Var\qty[ \sum_x \alpha(x) \hat \mu(x) ] \\ 
+&=\E\qty[ \E\qty{ \qty(\sum_x \alpha(x) Z_x)^2  \mid X_1 \ldots X_n }] \quad && \text{ for } \quad  Z_x=\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n] \\
+&=\E\qty[ \E\qty{ \sum_x\sum_{x'} \alpha(x) \alpha(x') Z_x Z_{x'} \mid X_1 \ldots X_n }] \\ 
+&=\E\qty[ \sum_x\sum_{x'} \alpha(x) \alpha(x') \E\qty{ Z_x Z_{x'} \mid X_1 \ldots X_n}] \\ 
+&=\E\qty[ \sum_x\sum_{x'} \alpha(x) \alpha(x') \begin{cases} \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n} & \text{ if } x=x' \\ 0 & \text{ otherwise} \end{cases} ] \\
+&=\E\qty[ \sum_x \alpha(x)^2 \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n}] \\
+&= \sum_x \alpha(x)^2 \E\qty[\Var\qty{\hat\mu(x) \mid X_1 \ldots X_n}]
+\end{aligned}
+}
+$$
+
+## Concluding our Variance Calculation 
+
+```{r}
+#| layout-ncol: 2
+#| out-height: 300px
+#| fig-asp: .3
+earnings.jitter
+earnings.jitter.pop
+```
+
+$$ 
+\begin{aligned}
+\Var\qty[ \sum_x \alpha(x) \hat \mu(x) ] 
+&=  \sum_x \alpha(x)^2 \E\qty[\Var\qty{\hat\mu(x) \mid X_1 \ldots X_n}] \\
+&= \sum_x \alpha(x)^2 \sigma^2(x) \times \E\qty[ \frac{1}{N_x} ]
+\end{aligned}
+$$
+
+
+## Variance Estimation
+
+$$
+\Var[\sum_x \alpha(x) \hat \mu(x)] = \sum_x \sigma^2(x) \alpha^2(x) \times \E\qty[ \frac{1}{N_x} ] \quad \text{ where } \quad \sigma^2(x) = \Var[Y_i \mid X_i=x]
+$$
+
+- This has two quantities we don't know.
+  - The subpopulation variances $\sigma^2(x)$.
+  - The expected inverse subsample size $1 / N_x$.
+- But we can estimate both easily.
+  - The subsample variances are good esimates of the subpopulation variances
+$$
+\sigma^2(x) \approx \hat\sigma^2(x) := \frac{1}{N_x} \sum_{i:X_i=x} \qty{Y_i - \hat\mu(x)}^2
+$$
+
+  - The inverse subsample size is a good estimate of its expectation.
+
+$$ 1/N_x \approx \E[1/N_x] $$
+
+- Plugging them in gives us an estimate of our summary's variance.
+
+$$
+\hat\sigma_{\hat\theta}^2 = \sum_x \alpha^2(x) \ \hat\sigma^2(x)  \times \frac{1}{N_x}
+$$
+
+## Our Estimated Variance
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+earnings.jitter
+```
+
+```{r}
+sigmahat = function(x) { sd(earnings$income[earnings$education==x]) }
+alpha    = function(x) { case_match(x, 
+  12 ~  1/4,
+  8  ~ -1/4,
+  .default = 0) 
+}
+N        = function(x) { sum(earnings$education==x) }
+```
+
+$$
+\hat\sigma_{\hat\theta}^2 = \sum_x  \frac{\alpha^2(x) \ \hat\sigma^2(x)}{N_x}
+$$
+
+where
+
+$$
+\begin{array}{l|lll} x & 8 & 9 & 10 & 11 & 12 & 13 & \ldots & 20 \\ \hline
+\alpha^2(x)    & `r approx(alpha(8)^2)` & `r approx(alpha(9)^2)` & `r approx(alpha(10)^2)` &
+`r approx(alpha(11)^2)` & `r approx(alpha(12)^2)` & `r approx(alpha(13)^2)` &
+\ldots & `r approx(alpha(20)^2)` \\
+\hat\sigma^2(x) &    
+`r approx(sigmahat(8)^2,1)` & `r approx(sigmahat(9)^2,1)` & `r approx(sigmahat(10)^2,1)` &
+`r approx(sigmahat(11)^2,1)` & `r approx(sigmahat(12)^2,1)` & `r approx(sigmahat(13)^2,1)` &
+\ldots & `r approx(sigmahat(20)^2,1)` \\
+N_x  & 
+`r N(8)` & `r N(9)` & `r N(10)` & 
+`r N(11)` & `r N(12)` & `r N(13)` &
+ \ldots & `r N(20)` \\
+\frac{\alpha^2(x) \ \hat\sigma^2(x)}{N_x} &
+`r approx(sigmahat(8)^2 * alpha(8)^2 / N(8))` & `r approx(sigmahat(9)^2 * alpha(9)^2 / N(9))` & `r approx(sigmahat(10)^2 * alpha(10)^2 / N(10))` &
+`r approx(sigmahat(11)^2 * alpha(11)^2 / N(11))` & `r approx(sigmahat(12)^2 * alpha(12)^2 / N(12))` & `r approx(sigmahat(13)^2 * alpha(13)^2 / N(13))` &
+\ldots & `r approx(sigmahat(20)^2 * alpha(20)^2 / N(20))` \\
+\end{array}
+$$
+
+## Summary
+
+- If what we're estimating is a linear combination of the *subpopulation means*, with non-random coefficients
+$$ 
+\small{
+\theta = \sum_x \alpha(x) \mu(x)
+}
+$$
+- Then the same linear combination of *subsample means* is unbiased.
+$$
+\small{
+\hat \theta = \sum_x \alpha(x) \hat\mu(x) \quad \text{ satisfies } \E[\hat\theta] = \theta
+}
+$$
+- Its variance is determined by the variance in the subpopulation, the coefficients, and the subsample sizes. And we can estimate it.
+$$
+\small{
+\Var[ \hat\theta ] = \sum_x \sigma^2(x) \alpha^2(x) \times \E\qty[ \frac{1}{N_x} ] \approx  \sum_x \hat\sigma^2(x)\alpha^2(x) \times \frac{1}{N_x}  =: \hat\sigma_{\hat\theta}^2
+}
+$$
+- We can use this to construct a confidence interval based on normal approximation.
+$$
+\small{
+\theta \in \qty[ \hat \theta - 1.96\hat\sigma_{\hat\theta}, \ \hat \theta + 1.96\hat\sigma_{\hat\theta}] \quad \text{ with probability } \approx .95 \qfor \hat\sigma_{\hat\theta}^2 = \sum_x \hat\sigma^2(x)\alpha^2(x) \times \frac{1}{N_x}  
+}
+$$
+
+- Fundamentally, we're going to get an imprecise estimate *if a small subsample has a large weight*. 
+- By imprecise, we mean a large standard error and a wide confidence interval.
+
+
+## Application {.smaller}
+
+```{r}
+#| out-height: 150px
+#| fig-asp: .2
+
+summaries = earnings %>% group_by(education) %>% 
+          summarize(mean=mean(income), sd=sd(income))
+estimate = (summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4
+se = sqrt( summaries$sd[summaries$education==12]^2 / (16 * sum(earnings$education==12)) + summaries$sd[summaries$education==8]^2 / (16 * sum(earnings$education==8)) )
+
+blueline = data.frame(x=c(8,12), y=c(summaries$mean[summaries$education==8], summaries$mean[summaries$education==12]))
+aggregate.comparison.plot + geom_line(aes(x=x, y=y), data=blueline, color='blue', alpha=.4) + xlim(7.7,12.5)
+```
+
+- Let's use this to estimate the value of a year of high school in our population.
+- The one we've addressed is the average, over the four years of high school, of the increments.
+$$
+\small{
+\theta = \sum_{x=9}^{12} \frac14 \qty{ \mu(x) - \mu(x-1) } = \frac14 \qty{ \mu(12) - \mu(8) }
+}
+$$
+
+- That's the slope of the secant---blue line---in an analogous plot for the population.
+- We're estimating it by the slope of the secant in the plot of our sample above.
+$$
+\small{
+\hat\theta = \sum_{x=9}^{12} \frac14 \qty{ \hat\mu(x) - \hat\mu(x-1) } = \frac14 \qty{ \hat\mu(12) - \hat\mu(8) } = `r approx(estimate)`
+}
+$$
+
+- This is our estimate of its standard error, i.e., the square root of our estimate of its variance.
+
+$$
+\small{
+\hat\sigma_{\hat\theta}^2 
+= \frac{\hat\sigma^2(12) \times \qty(\frac{1}{4})^2}{ N_{12} } + \frac{\hat\sigma^2(8) \times \qty(\frac{1}{4})^2}{ N_{8} } 
+= \frac{`r approx(summaries$sd[summaries$education==12])`^2}{16 \times `r sum(earnings$education==12)`} 
++ \frac{`r approx(summaries$sd[summaries$education==8])`^2}{16 \times `r sum(earnings$education==8)`} = `r approx(se^2)` \approx `r approx(se)`^2 
+}
+$$
+
+## This is the resulting interval.
+```{r}
+#| layout-ncol: 2
+#| out-height: 300px
+#| fig-asp: .3 
+#| fig-subcap:
+#|  - Interval Estimate for the Average over Years
+#|  - Interval Estimate for the Average over People 
+
+summaries = earnings[earnings$education <= 12, ] %>% group_by(education) %>% 
+  summarize(mean=mean(income), N=length(income), sd=sd(income))
+years.estimate = (summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4
+
+distribution.plot(boots$years, years.estimate) + xlim(-5000,10000)
+distribution.plot(boots$people, average.over.people(summaries)) + xlim(-5000,10000)
+```
+
+$$
+\small{
+\qty[ \hat \theta - 1.96\hat\sigma_{\hat\theta}, \ \hat \theta + 1.96\hat\sigma_{\hat\theta}] = \qty[`r approx(estimate - 1.96*se)` , `r approx(estimate + 1.96*se)`]
+}
+$$
+
+- This is for the average over years---the plot on the left.
+- At the moment, we don't know why it's narrower than the interval for the average over people.
+- That's because we haven't yet work out how to get a normal approximation for its distribution.
+- It's a linear combinations with coefficients that *depend on the covariate*. We'll do that next time.
+
+$$
+\small{
+\text{ average over people} = \sum_{x=9}^{12} P_x \qty{ \hat\mu(x) - \hat\mu(x-1)} = \sum_x \hat \alpha(x) \hat \mu(x) \qfor
+\hat\alpha(x) = \begin{cases}
+  P_{12} & \text{ if } x = 12 \\
+  P_{x} - P_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
+  -P_9 & \text{ if } x = 8 
+\end{cases}
+}
+$$
+
+
+
