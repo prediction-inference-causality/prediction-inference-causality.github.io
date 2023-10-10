@@ -103,486 +103,405 @@ $$
 - We're going to talk about causal inference with a multivalued treatment.
 - Our context will be a randomized experiment with three treatments.
 - A large employer is experimenting with a new benefit for their employees: subsized gym memberships.
-- They're randomizing employees they hire this year to three plans.
-  - Plan 1: No gym membership. It costs them $\0/month.
+- They're randomly selecting employees to participate in a trial program.
+- Then randomizing these participants into three plans.
+  - Plan 1: No gym membership. It costs them \$0/month.
   - Plan 2: A gym membership that covers entry but not classes. It costs \$50/month.
   - Plan 3: A gym membership that covers entry but and classes. It costs \$100/month.
-- What they're interested in is how often employees go to the gym when provided these plans. 
-- This idea is that they'll be able to use this information to decide what plan to offer everyone next year.
+- And surveying them to see how often they go to the gym, e.g. in days/month.
+- They'll be able to use this information to decide what plan to offer everyone next year.
 
-## Potential Outcomes and Treatment Effects 
+## How We Think
 
-- Potential Outcomes
-  - There are three levels of treatment. We'll write them in terms of what the employer pays: $D_i=0,50,100$.
-  - As a result, each employee has three potential outcomes: $Y_i(0)$, $Y_i(50)$, and $Y_i(100)$.
-- Individual-Level Treatment Effect
-  - There are two natural individual-level treatment effects to think about.
-  - The effect of a \$50 gym membership vs none:  $\tau_i(50)  = Y_i(50) - Y_i(0)$
-  - The effect of a \$100 gym membership vs \$50:  $\tau_i(100) = Y_i(100) - Y_i(50)$
-- Observed Outcomes
-  - We only observe one of these potential outcomes: $Y_i = Y_i(D_i)$
-  - That's not enough to tell use about the value of any one of these effects.
-- Randomization
-  - The employer assigns its new employees to these three plans randomly, each with probability $1/3$.
-  - As a result of this randomization, the distribution of potential outcomes is the same in each group.
-
-## Causal Inference on the Population Level
-
-- What we're really interested in is not the effects of these memberships on the people in our sample.
-- We're thinking long-term---we're interested in the effects of these memberships on the people we *might* hire in the future.
-- That's the population of interest. We're interested in a population-level causal effect.
-
-:::: columns
-::: column
-### Sample
-
-:::
-::: column
-### Population
-
-
-:::
-::::
-
-
-
-- What we've just described is a sa
-
-## A Table
+- We'll think about this using potential outcomes.
+- We imagine, for each employee, that there's a number of times they'd go to the gym given each plan.
+  - $y_j(0)$: The number of days/month they'd go to the gym if they had no membership.
+  - $y_j(50)$: The number of days/month they'd go to the gym if they had a \$50 membership.
+  - $y_j(100)$: The number of days/month they'd go to the gym if they had a \$100 membership.
+- And we'll think about the effect of each plan on each employee.
+  - $\tau_j(50)  = y_j(50)  - y_j(0)$: The effect of a \$50 gym membership vs none.
+  - $\tau_j(100) = y_j(100) - y_j(50)$: The effect of a \$100 gym membership vs \$50.
 
 $$
-\begin{array}{ccc|ccc}
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i \\
-\hline
-1 & 1 & 70 & 70 & \alert{?} & \alert{?} \\
-2 & 1 & 80 & 80 & \alert{?} & \alert{?} \\
-3 & 0 & 60 & \alert{?} & 60 & \alert{?} \\
-4 & 0 & 70 & \alert{?} & 70 & \alert{?} \\
-5 & 0 & 70 & \alert{?}& 70 & \alert{?} \\
-6 & 0 & 80 & \alert{?} & 80 & \alert{?} \\
-\end{array}
-$$
-
-
-- Suppose we're administering ADHD patients at a clinic. 
-    - Two are being treated with stimulants ($D=1$) 
-    - Four are not ($D=0$). 
-- We're interested in the treatment's effect on resting heart rate ($Y$).
-- And we can't, of course, observe the counterfactual outcomes.
-  - $Y_i(1)$ when $D_i=0$
-  - $Y_i(0)$ when $D_i=1$
-- This is what we see.
-
-## Going Forward: From Potential Outcomes to Observed Outcomes
-
-$$
-\begin{array}{ccc|ccc}
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i \\
-\hline
-1 & ? & ?\  & \alert{70} & \alert{70} & \alert{0} \\
-2 & ? & ?\  & \alert{80} & \alert{70} & \alert{10} \\
-3 & ? & ?\  & \alert{70} & \alert{60} & \alert{10} \\
-4 & ? & ?\  & \alert{80} & \alert{70} & \alert{10} \\
-5 & ? & ?\  & \alert{70} & \alert{70} & \alert{0} \\
-6 & ? & ?\  & \alert{80} & \alert{80} & \alert{0} \\
-\end{array}
-$$
-
-- Let's think of our study as it unfolds over time.
-- At the beginning, nobody's been assigned a treatment.
-- But---as an idea---the potential outcomes already exist.
-- And, as a result, so do the individual-level treatment effects.
-- And all this stuff---the stuff to the right of the vertical bar---has nothing to do with treatment.
-
-## Going Forward: From Potential Outcomes to Observed Outcomes
-
-$$
-\begin{array}{ccc|ccc}
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i \\
-\hline
-1 1 ? & ?\  & \alert{70} & \alert{70} & \alert{0} \\
-2 1 ? & ?\  & \alert{80} & \alert{70} & \alert{10} \\
-3 0 ? & ?\  & \alert{70} & \alert{60} & \alert{10} \\
-4 0 ? & ?\  & \alert{80} & \alert{70} & \alert{10} \\
-5 0 ? & ?\  & \alert{70} & \alert{70} & \alert{0} \\
-6 0 ? & ?\  & \alert{80} & \alert{80} & \alert{0} \\
-\end{array}
-$$
-
-- Next, we assign treatment.
-- Outcomes "haven't happened yet", so they're not in our table, but we know what they will be.
-- Let's fill them in. The assigned treatment $D_i$ tells us *which* potential outcome we observe.
-
-## Going Forward: From Potential Outcomes to Observed Outcomes
-
-$$
-\begin{array}{ccc|ccc}
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i \\
-\hline
-1 & 1 & 70 & 70         & \alert{70} & \alert{0} \\
-2 & 1 & 80 & 80         & \alert{70} & \alert{10} \\
-3 & 0 & 60 & \alert{70} & 60 & \alert{10} \\
-4 & 0 & 70 & \alert{80} & 70 & \alert{10} \\
-5 & 0 & 70 & \alert{70} & 70 & \alert{0} \\
-6 & 0 & 80 & \alert{80} & 80 & \alert{0} \\
-\end{array}
-$$
-
-- Finally, we observe the outcomes.
-- This reveals what *some* of the potential outcomes are. But not all of them.
-- And it revals *none* of the individual-level treatment effects.
-
-## Going Backward: From Observed Outcomes to Potential Outcomes
-
-$$
-\begin{array}{ccc|ccc}
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i \\
-\hline
-1 & 1 & 70 & 70 & \alert{70} & \alert{0} \\
-2 & 1 & 80 & 80 & \alert{70} & \alert{10} \\
-3 & 0 & 60 & \alert{70} & 60 & \alert{10} \\
-4 & 0 & 70 & \alert{80} & 70 & \alert{10} \\
-5 & 0 & 70 & \alert{70} & 70 & \alert{0} \\
-6 & 0 & 80 & \alert{80} & 80 & \alert{0} \\
-\end{array}
-$$
-
-- Now let's try to go backwards. In general, this is impossible.
-- But let's suppose that the treatment was **randomized**. Then we can get part-way there.
-- It means we can think of the treated and subsamples as being drawn from our population by a two-stage process.
-  - First, we draw a random sample of people.
-  - Then, for each, we flip a coin to decide whether it's in the subsample.
-- This is **the same process** for both the treated and control groups.
-- As a result, people in those two subsamples have the same distribution ...
-  - if we ignore the stuff downstream of treatment assignment.
-  - i.e. if we only look at what's to the right of the vertical bar.
-
-## Going Backward: From Observed Outcomes to Potential Outcomes
-
-$$
-\begin{array}{ccc|ccc}
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i \\
-\hline
-1 & 1 & 70 & 70 & \alert{70} & \alert{0} \\
-2 & 1 & 80 & 80 & \alert{70} & \alert{10} \\
-3 & 0 & 60 & \alert{70} & 60 & \alert{10} \\
-4 & 0 & 70 & \alert{80} & 70 & \alert{10} \\
-5 & 0 & 70 & \alert{70} & 70 & \alert{0} \\
-6 & 0 & 80 & \alert{80} & 80 & \alert{0} \\
-\end{array}
-$$
-
-- In particular, it tells us that conditioning on treatment **does not affect** the potential outcome means.
-
-$$ 
-\begin{aligned}
-\E[Y_i(1)|D_i=1] &= \E[\alert{Y_i(1)|D_i=0}] = \E[Y_i(1)] \\
-\E[\alert{Y_i(0)|D_i=1}] &= \E[Y_i(0)|D_i=0] = \E[Y_i(0)] \\
-\end{aligned}
-$$
-
-- And, because one of these potential outcomes is observed within each group, this has a very useful implication.
-- The expectations of our potential outcomes coincide with *conditional* expectations **of observed outcomes**.
-$$ 
-\begin{aligned}
-\E[Y_i\cancel{(1)}|D_i=1] &= \E[\alert{Y_i(1)|D_i=0}] = \E[Y_i(1)] \\
-\E[\alert{Y_i(0)|D_i=1}] &= \E[Y_i\cancel{(0)}|D_i=0] = \E[Y_i(0)] \\
-\end{aligned}
-$$
-
-
-## Implications for Causal Inference
-
-:::: columns
-::: column
-
-- Randomization tells us that an real-world thing and a conceptual thing match
-  - Real-world: within-group expectations 
-  - Conceptual: counterfactual expectations
-- Let's see what this tells us about our table.
-:::
-::: column
-
-$$
-\begin{aligned}
-\E[Y_i(1)] &=\E[Y_i|D_i=1] \\
-\E[Y_i(0)] &=\E[Y_i|D_i=0]
-\end{aligned}
-$$
-:::
-::::
-
-\ \
-
-### Let's see what this tells us about our table.
-
-:::: columns
-::: column
-$$
-\begin{array}{ccc|ccc}
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i \\
-\hline
-1 & 1 & 70 & 70 & \alert{70} & \alert{0} \\
-2 & 1 & 80 & 80 & \alert{70} & \alert{10} \\
-3 & 0 & 60 & \alert{70} & 60 & \alert{10} \\
-4 & 0 & 70 & \alert{80} & 70 & \alert{10} \\
-5 & 0 & 70 & \alert{70} & 70 & \alert{0} \\
-6 & 0 & 80 & \alert{80} & 80 & \alert{0} \\
-\end{array}
-$$
-:::
-::: {.column .incremental} 
-
-What is the average of ...
-
-- $Y_i(1)$?
-  - $\frac{70 + 80 +\alert{70} + \alert{80} +\alert{70} + \alert{80}}{6}  = 75$
-- $Y_i(1)$ among people with $D=1$?
-  - $\frac{70 + 80 }{2}  = 75$
-- $Y_i$ among people with $D=1$?
-  - $\frac{70 + 80 }{2}  = 75$
-:::
-::::
-
-
-
-## Implications for Causal Inference
-
-:::: columns
-::: column
-
-- Randomization tells us that an real-world thing and a conceptual thing match
-  - Real-world: within-group expectations 
-  - Conceptual: counterfactual expectations
-:::
-::: column
-
-$$
-\begin{aligned}
-\E[Y_i(1)] &=\E[Y_i|D_i=1] \\
-\E[Y_i(0)] &=\E[Y_i|D_i=0]
-\end{aligned}
-$$
-:::
-::::
-
-\ \
-
-### Let's see what this tells us about our table.
-
-:::: columns
-::: column
-$$
-\begin{array}{ccc|ccc}
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i \\
-\hline
-1 & 1 & 70 & 70 & \alert{70} & \alert{0} \\
-2 & 1 & 80 & 80 & \alert{70} & \alert{10} \\
-3 & 0 & 60 & \alert{70} & 60 & \alert{10} \\
-4 & 0 & 70 & \alert{80} & 70 & \alert{10} \\
-5 & 0 & 70 & \alert{70} & 70 & \alert{0} \\
-6 & 0 & 80 & \alert{80} & 80 & \alert{0} \\
-\end{array}
-$$
-:::
-::: {.column .incremental} 
-
-What is the average of ...
-
--  $Y_i(0)$?
-  - $\frac{\alert{70} +\alert{70} +60+ 70 +70 + 80}{6}  = 70$
-- $Y_i(0)$ among people with $D=0$?
-   - $\frac{60+ 70 +70 + 80}{4}  = 70$
-- $Y_i$ among people with $D=0$?
-  - $\frac{60+ 70 +70 + 80}{4}  = 70$
-:::
-::::
-
-## This is All Too Perfect
-
-- This fake data is a little contrived.
-- We're seeing stuff balance out perfectly in sample. It won't. 
-- But we know that the difference between sample and population means is small in large samples.
-  - In particular, it's proportional to $1/\sqrt{n}$
-- So what we're seeing with our contrived data is close to what we'd really see.
-
-## The ATE 
-
-- It's the Difference in Average Potential Outcomes
-
-$$
-\begin{array}{ccc|ccc}
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i \\
-\hline
-1 & 1 & 70 & 70 & \alert{70} & \alert{0} \\
-2 & 1 & 80 & 80 & \alert{70} & \alert{10} \\
-3 & 0 & 60 & \alert{70} & 60 & \alert{10} \\
-4 & 0 & 70 & \alert{80} & 70 & \alert{10} \\
-5 & 0 & 70 & \alert{70} & 70 & \alert{0} \\
-6 & 0 & 80 & \alert{80} & 80 & \alert{0} \\
-\end{array}
-$$
-
-- What is the average $Y_i(1)$?
-- 
-$$
-\frac{70 + 80 +\alert{70} + \alert{80} +\alert{70} + \alert{80}}{6}  = 75
-$$
-
-- What is the average $Y_i(0)$?
-$$
-\frac{\alert{70} +\alert{70} +60+ 70 +70 + 80}{6}  = 70
-$$
-
-- What is the average $\tau_i = Y_i(1) - Y_i(0)$?
-$$
-75-70 = \frac{\alert{0} + \alert{10} + \alert{10}+  \alert{10} +\alert{0} +\alert{0}}{6}  = 5
-$$
-
-
-
-## Implications for Linear Regression
-
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-
-eval$X = 0 + (eval$degree=='treated')
-earnings.jitter = ggplot(eval) + geom_point(aes(x=X, y=income, color=degree), 
-                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
-                   scale_y(limits=c(-.5e4,4e4)) + guides(color=FALSE)
-earnings.summaries = eval %>% group_by(X) %>% summarize(mean=mean(income), sd=sd(income), meanX = mean(X))
-
-earnings.jitter + geom_pointrange(aes(x=X, y=mean, ymin=mean-sd, ymax=mean+sd), data=earnings.summaries) + 
-                  geom_line(aes(x=meanX, y=mean), linetype='dashed', data=earnings.summaries) 
-```
-$$
-\hat a, \hat b = \operatorname*{argmin}_{a,b} \sum_{i=1}^n \qty{ aX_i + b - Y_i }^2
-$$
-
-- The slope $\hat b$ is just the difference in subsample means. As discussed in Lecture 1.
-- So it's our difference-in-means estimate of the ATE. Nothing going on here.
-- I just wanted to make the connection because people sometimes phrase it this way.
-
-
-
-## Descriptive vs Causal and Sample vs Pop {.smaller}
-
-:::: columns
-::: column
-$$
-\tiny{
-\begin{array}{ccc|ccc}
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i \\
-\hline
-\text{Sample} & \text{Descriptive} & \text{Statistics} & \text{Sample} & \text{Causal} & \text{Inference} \\
-\hline
-1 & 1 & 70 & 70 & ? & ? \\
-2 & 1 & 80 & 80 & ? & ? \\
-3 & 0 & 60 & ? & 60 & ? \\
-4 & 0 & 70 & ? & 70 & ? \\
-5 & 0 & 70 & ? & 70 & ? \\
-6 & 0 & 80 & ? & 80 & ? \\
-\hline
-\text{Population} & \text{Descriptive} & \text{Inference} & \text{Population} & \text{Causal} & \text{Inference} \\
-\hline
-7 & ? & ? & ? & ? & ? \\
-8 & ? & ? & ? & ? & ? \\
+\small{
+\begin{array}{c|ccc|cc}
+j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
+1 & 5  & 10 & 10 & 5 & 0 \\
+\color{blue}2 & 10 & 10 & 10 & 0 & 0 \\
 \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{green}327 & 0 & 0  &  20 & 0 & 20 \\
 \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}358 & 15 & 18 & 20 & 3 & 2 \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+m & 10 & 10 & 5  & 0 & -5 \\
+\end{array}
+}
+$$
+
+## What We Want To Know
+
+- What we want to know is the population-level average treatment effect.
+  - i.e. the effect of offering these plans to every employee.
+
+$$
+\begin{aligned}
+\tau(50)  &= \frac{1}{m} \sum_{j=1}^m \tau_j(50)  \\
+\tau(100) &= \frac{1}{m} \sum_{j=1}^m \tau_j(100)
+\end{aligned}
+$$
+
+- What's hard about this?
+  - *Sampling*. We only observe information about a fraction of these people.
+  - *Missing Data*. For that fraction, we only observe one of the potential outcomes.
+
+Gray out missing potential outcomes, too. No colors.
+$$
+\small{
+\begin{array}{c|ccc|cc}
+j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
+\color{gray}1 & 5  & 10 & 10 & 5 & 0 \\
+\color{blue}2 & 10 & 10 & 10 & 0 & 0 \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{green}327 & 0 & 0  &  20 & 0 & 20 \\
+\color{gray}\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{gray}358 & 15 & 18 & 20 & 3 & 2 \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{gray}m & \color{gray}10 & \color{gray}10 & \color{gray}5  & \color{gray}0 & \color{gray}-5 \\
+\end{array}
+}
+$$
+
+## Sampling
+
+$$
+\small{
+\begin{array}{c|ccc|cc}
+j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
+1 & 5  & 10 & 10 & 5 & 0 \\
+\color{blue}2 & 10 & 10 & 10 & 0 & 0 \\
+\vdots & \vdots  & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}327 & 4 & 8 & 16 & 3 & 2 \\
+\vdots & \vdots  & \vdots & \vdots & \vdots & \vdots \\
+\color{green}358 & 0 & 0  &  20 & 0 & 20 \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+m & 10 & 10 & 5  & 0 & -5 \\
 \end{array}
 }
 $$
 :::
 ::: column
 
-- This table lays out 4 things we can work at.
- - Top Left: Describing the Sample
- - Bottom Left: Describing the Population
- - Top Right: Causal Inference about the Sample
- - Top Left: Causal Inference about the Population
-- All we ever have is the sample.
-- So we need to work out what it tells us about the rest.
-- Obviously that involves assumptions.
-  - Downward: Random Sampling
-  - Rightward: Randomization of Treatment
-- In class, we'll talk about everything but the top-right.
+$$
+\small{
+\begin{array}{c|cc|ccc|cc}
+i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
+\color{blue}1   &  & & 10 & 10 & 10 & 0 & 0 \\
+\color{green}2  &  & & 0  & 0  &  20 & 0 & 20 \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}n & &  & 15 & 18 & 20 & 3 & 2 \\
+\end{array}
+}
+$$
+
 :::
 ::::
 
-## What does the ATE tell us about Individual Effects?
+- We don't want to trouble all of our employees with a survey, so we sample a subset of them.
+- Each employee in our sample is drawn, with replacement, from our population of employees---all $m$ of them.
+- That means each row of our *sample table* is a random row from our *population table*.
+  - I've colored them so we can track them from population into the sample.
 
-Let's play CausalDoku! 
+## Missing Data
 
-- Randomization implies that the *probability distribution* of both potential outcomes is the same in both groups
-- Let's take this to an extreme.
-  - We'll pretend it implies the *observed distribution* (i.e. the set of values) is the same
-  - All we get to to fiddle with is *who* we give each value to
-- Let's make this a puzzle.
-  - The empty $Y_i(1)$ cells for $i=4,5,6$ must be filled with a 4 a 3 and a 2 (in some order)...
-  - And the empty $Y_i(0)$ cells for $i = 1,2,3$ must be filled with a 3 and a 2 and a 1 (in some order).
+- We assign a treatment to each sampled employee.
+  - That tells us which potential outcome we observe.
+  - It's the one corresponding to the treatment that actually happens: $Y_i=Y_i(D_i)$.
 
 $$
-\begin{array}{ccc||c|c|c}
-% Treatment & Outcome  & Outcome if Treated  & Outcome if Control  & Causal Effect  \\
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i=Y_i(1)-Y_i(0) \\
-\hline
-\hline
-1&1 & 4 & 4 & &  \\
-\hline
-2&1 & 3 & 3 & & \\
-\hline
-3&1 & 2 & 2 & & \\
-\hline
-\hline
-4&0 & 3 &   & 3 & \\
-\hline
-5&0 & 2 &   & 2 & \\
-\hline
-6& 0 & 1 &   & 1 & \\
-\hline
-\hline
+\small{
+\begin{array}{c|cc|ccc|cc}
+i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
+\color{blue}1   &  & & 10 & 10 & 10 & 0 & 0 \\
+\color{green}2  &  & & 0  & 0  &  20 & 0 & 20 \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}n & &  & 15 & 18 & 20 & 3 & 2 \\
+\end{array}
+}
+$$
+
+## This is What We're Left With
+
+- How do we recover we need?
+
+[ Two column table ]
+
+- If we had all the potential outcomes, we could approximate the population-level average treatment effect by a sample average.
+$$
+\frac{1}{m} \sum_j y_j(50) - y_j(0) \approx \frac{1}{n} \sum_i Y_i(50) - Y_i(0)
+$$
+
+- This works because of the law of large numbers. Sample averages approximate population averages.
+- But we don't have all the potential outcomes. We only have one of them for each person.
+- One thing we can do is average the outcomes we do have. Does this work?
+
+$$
+\begin{aligned}
+\frac{1}{n} \sum_i Y_i(50) &\overset{?}{\approx} \frac{1}{N_{50}} \sum_{i:D_i=50}Y_i(50) = \frac{1}{N_{50}} \sum_{i:D_i=50}Y_i \\
+\frac{1}{n} \sum_i Y_i(0)  &\overset{?}{\approx} \frac{1}{N_{0}} \sum_{i:D_i=0}Y_i(0)    = \frac{1}{N_{0}} \sum_{i:D_i=0}Y_i
+\end{aligned}
+$$
+
+- This works because of randomization. The coin-flip that determines treatment *has nothing to do with the potential outcomes*. Or anything else.
+- So we are, in effect, just sampling again when we choose the rows with $D_i=50$ and $D_i=0$. This time, from the sample.
+
+[ Table split into two tables ]
+
+## Formal Identification
+
+- All this is getting at the idea that we can write the population-level average treatment effect 
+  in terms of means of the observed outcome in subpopulations.
+$$
+\begin{aligned}
+\frac{1}{m}\sum_j y_j(50) - y_j(0) 
+&= \E[Y_i(50) - Y_i(0)] \\
+&= \E[Y_i(50) \mid D_i=50] -  \E[Y_i(0) \mid D_i=0] \\
+&= \E[Y_i \mid D_i=50] -  \E[Y_i \mid D_i=0] \\
+&= \mu(50) - \mu(0).
+\end{aligned}
+$$
+
+- Now we're done with the causal stuff. 
+- We've worked out how to answer our question in terms of things we can estimate.
+- And the particular form --- a linear combination of subpopulation means --- is something we've done before.
+
+
+
+# Old Shit
+
+## Potential Outcomes and Treatment Effects 
+
+- Potential Outcomes
+  - There are three levels of treatment. We'll write them in terms of what the employer pays.d
+- Individual-Level Treatment Effect
+  - There are two natural individual-level treatment effects to think about.
+  - The effect of a \$50 gym membership vs none:  $\tau_i(50)  = Y_i(50) - Y_i(0)$
+  - The effect of a \$100 gym membership vs \$50:  $\tau_i(100) = Y_i(100) - Y_i(50)$
+
+$$\begin{array}{c|ccc|cc}
+i & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
 \end{array}
 $$
 
 
+## What We See 
 
+- Observed Outcomes
+  - We only observe one of these potential outcomes: $Y_i = Y_i(D_i)$
+  - That's not enough to tell use about the value of any one of these effects.
+- Randomization
+  - The employer assigns participants to these three plans randomly. 
+  - They do it by having the employees roll two dice.
+    - If they roll an 11 or 12, they get the \$100 plan.
+    - If they roll 7,8,9, or 10 they get the \$50 plan.
+    - If they roll 1-6, they get the \$0 plan---i.e. nothing.
 
-## CausalDoku 
+## Population-Level Treatment Effects
 
-Find two solutions:
+- What they care about is the population-level treatment effect.
+  - i.e. the effect of offering these plans to every employee.
+- That'll have an effect on the rate they're able to negotiate with their insurance provider.
+- We can think of our employees as having potential outcomes associated with each level of treatment.
+- And the effects we're interested in are population-level average treatment effects.
 
-- with constant treatment effects
-- with both negative and positive effects
+:::: columns
 
+::: column
+$$
+\small{
+\begin{array}{c|ccc|cc}
+j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
+1 & 5  & 10 & 10 & 5 & 0 \\
+\color{blue}2 & 10 & 10 & 10 & 0 & 0 \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{green}327 & 0 & 0  &  20 & 0 & 20 \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}358 & 15 & 18 & 20 & 3 & 2 \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+m & 10 & 10 & 5  & 0 & -5 \\
+\end{array}
+}
+$$
+
+:::
+::: column
 
 $$
-\begin{array}{ccc||c|c|c}
-% Treatment & Outcome  & Outcome if Treated  & Outcome if Control  & Causal Effect  \\
-i & D_i & Y_i & Y_i(1) & Y_i(0) & \tau_i=Y_i(1)-Y_i(0) \\
-\hline
-\hline
-1&1 & 4 & 4 & &  \\
-\hline
-2&1 & 3 & 3 & & \\
-\hline
-3&1 & 2 & 2 & & \\
-\hline
-\hline
-4&0 & 3 &   & 3 & \\
-\hline
-5&0 & 2 &   & 2 & \\
-\hline
-6& 0 & 1 &   & 1 & \\
-\hline
-\hline
+\small{
+\begin{aligned}
+\tau(50)  &= \frac{1}{m} \sum_{j=1}^m \tau_j(50)  \\
+\tau(100) &= \frac{1}{m} \sum_{j=1}^m \tau_j(100) 
+\end{aligned}
+}
+$$
+
+:::
+::::
+
+
+## Sampling
+
+- We don't want to trouble all of our employees with a survey, so we sample a subset of them.
+- In the table, I've colored a few employees so we can track them from population into the sample.
+- To have some concrete behaviors in mind, we'll keep an eye on them.
+  - In blue, we have an employee doesn't care about subsidies. 
+    - They're going to the gym 10 days/month no matter what.
+  - In purple, we have one who is a bit price-sensitive.
+    - They'll go once a week with no subsidy, twice a week if it's free, and 4x/week with free classes.
+  - In green, we have one who loves classes but hates spending money even more. 
+    - They'll go 20 days/month with free classes, but won't go at all otherwise.
+  
+:::: columns
+::: column
+$$
+\small{
+\begin{array}{c|ccc|cc}
+j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
+1 & 5  & 10 & 10 & 5 & 0 \\
+\color{blue}2 & 10 & 10 & 10 & 0 & 0 \\
+\vdots & \vdots  & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}327 & 4 & 8 & 16 & 3 & 2 \\
+\vdots & \vdots  & \vdots & \vdots & \vdots & \vdots \\
+\color{green}358 & 0 & 0  &  20 & 0 & 20 \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+m & 10 & 10 & 5  & 0 & -5 \\
+\end{array}
+}
+$$
+:::
+::: column
+
+$$
+\small{
+\begin{array}{c|cc|ccc|cc}
+i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
+\color{blue}1   &  & & 10 & 10 & 10 & 0 & 0 \\
+\color{green}2  &  & & 0  & 0  &  20 & 0 & 20 \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}n & &  & 15 & 18 & 20 & 3 & 2 \\
+\end{array}
+}
+$$
+
+:::
+::::
+
+- Each row in this table is chosen, independently with probability $1/m$, from the population table.
+- That tells us that, in particular, expectations involving the quantities in these rows coincide with population averages.
+- And if we have a large enough sample, we can approximate these expectations with sample averages.
+
+$$
+\begin{aligned}
+\E Y_i(50) = \frac{1}{m}\sum_{j=1}^m y_j(50) \\
+\E \tau_i(50) = \frac{1}{m}\sum_{j=1}^m y_j(50) - y_j(0) = \tau(50) \\
+\end{aligned}
+$$
+
+## Randomization 
+
+- We roll the dice for each of our sampled employees.
+- In this case, the people we're tracking get what it takes for them to go to the gym.
+  - The blue one rolls a 3.    They get nothing. But they're maintaining their schedule no matter what.
+  - The purple one rolls an 8. They get the $\50 plan, so they're at the gym twice a week.
+  - The green one rolls a 12.  They get the $\100 plan, so they're at the gym 20 days/month.
+  
+$$
+\begin{array}{c|cc|ccc|cc}
+i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
+\color{blue}1   & 0    & 10 & 10 & 10 & 10 & 0 & 0 \\
+\color{green}2  & 100  & 20 & 0  & 0  &  20 & 0 & 20 \\
+\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}n & 50   & 18 & 15 & 18 & 20 & 3 & 2 \\
 \end{array}
 $$
 
+## Alternate Randomization 
 
-- Note that both solutions imply the same ATE! 
- - We focus on ATEs because linearity of ATEs implies *we can* estimate them.
- - But on an individual level, these two scenarios are very different.
-- With modern stuff, we can get part of the way but not all the way there...
+- That could happen. But so could this.
+- In this case, the subsidies that go to our three people aren't that encouraging.
+  - The blue one rolls a 9.    They get the \$100 plan, but that makes no difference to their behavior.
+  - The purple one rolls an 2. They get the \$0 plan,   so they're only in the gym once a week.
+  - The green one rolls a 7.   They get the \$50 plan, but it's worth nothing to them. No free classes, no gym!
+  
+$$
+\begin{array}{c|cc|ccc|cc}
+i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
+\color{blue}1   &100  &  & 10 & 10 & 10 & 0 & 0 \\
+\color{green}2  & 50   & 0 & 0  & 0  &  20 & 0 & 20 \\
+\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}n & 0   & 15 & 15 & 18 & 20 & 3 & 2 \\
+\end{array}
+$$
 
+## An In-Class Randomization
 
+- Let's do a real one. Let's roll some dice and fill in the table.
+- What's the story here?
+  - The blue one rolls a  ...
+  - The purple one rolls a ...
+  - The green one rolls a ...
+
+$$
+\begin{array}{c|cc|ccc|cc}
+i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
+\color{blue}1   &  &  & 10 & 10 & 10 & 0 & 0 \\
+\color{green}2  &  &  & 0  & 0  &  20 & 0 & 20 \\
+\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}n &     &  & 15 & 18 & 20 & 3 & 2 \\
+\end{array}
+$$
+
+## Implications of Sampling and Randomization --- Informal
+
+- We've looked at what happened to 3 employees in a few different randomizations. 
+- This was just a thought experiment. Only one randomization actually happens.
+- But if our sample size is large enough, we'll have multiple employees of each 'type'.
+  - Some who don't respond to subsidies, like our blue one.
+  - Some who respond only if they get the biggest subsidy, like our purple one.
+  - Some who respond a bit at each level, like our green one.
+  - And other types, too.
+- And, in effect, all of the different rolls we've looked at will happen at once.
+- They'll happen to different people, of course, but people who behave more or less the same. 
+- And this randomization ensures that the *mix of types* is the same in in each treatment group.
+    - i.e., we'll have the same proportion of blue, purple, and green types among the people with $D_i=0,50,100$.
+- This means that the distribution of *each potential outcome* is the same within each group and in the whole sample.
+- And that *includes the realized outcome*, which is one of them.
+- And because we're looking at averages...
+
+$$
+\begin{array}{c|cc|ccc|cc}
+i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
+\color{blue}1   & 0    & 10 & 10 & 10 & 10 & 0 & 0 \\
+\color{green}2  & 100  & 20 & 0  & 0  &  20 & 0 & 20 \\
+\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}27 & 50   & 18 & 15 & 18 & 20 & 3 & 2 \\
+\color{blue}36   &100  &  & 10 & 10 & 10 & 0 & 0 \\
+\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}56 & 0   & 15 & 15 & 18 & 20 & 3 & 2 \\
+\color{blue}57   &  &  & 10 & 10 & 10 & 0 & 0 \\
+\color{green}58  & 50   & 0 & 0  & 0  &  20 & 0 & 20 \\
+\color{green}59  &  &  & 0  & 0  &  20 & 0 & 20 \\
+\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{purple}n &     &  & 15 & 18 & 20 & 3 & 2 \\
+\end{array}
+$$
+
+## Implications of Sampling and Randomization --- Formal
+
+- Randomization ensures that the potential outcomes have the same distribution ...
+  - within each treatment group, i.e., for people with $D_i=0$,$D_i=50$,$D_i=100$.
+  - in the whole sample.
+- And in particular, the *realized outcome* 
+- And because we're looking at averages...
+$$
+E[Y_i(d)] = E[Y_i(d)|D_i=d] = \underset{\mu(d)}{E[Y_i \mid D_i=d]} \approx \underset{\hat\mu(d)}{\frac{1}{N_d}\sum_{i:D_i=d} Y_i}
+$$
