@@ -1,8 +1,262 @@
 ---
-title: "Problem Set 4"
+title: "Problem Set 4 Solutions"
 subtitle: "QTM 220"
 format: pdf
 editor: visual
 ---
 
 Due 20 October at 2:00pm ET on Canvas. Questions about submission requirements should be directed to your TA.
+
+
+```{r}
+#| echo: false
+nba.sam<- read.csv("nba_sample_draft.csv")
+nba.pop<- read.csv("nba_population.csv")
+library(ggplot2)
+```
+
+## NBA Draft Data: Sample
+
+The data set nba.sample.draft includes the following variables from the 2021-2022 NBA season:
+
+```{=tex}
+\begin{itemize}
+\item playername: name of player 
+\item teamabbreviation : name of the team the player played on at the end of the season 
+\item age: age of player 
+\item playerheight : height in cm 
+\item playerweight: weight in kg 
+\item college: name of college player attended 
+\item country : name of country where player was born 
+\item draftyear : year player was drafted (‘Undrafted’ if undrafted) 
+\item draftround : draft round player was selected 
+\item draftnumber : number selected in his draft round (‘Undrafted’ if undrafted)
+\item gp: games played through season 
+\item pts: average points scored 
+\item reb: average rebounds 
+\item ast: average assists 
+\item netrating : team’s point differential per 100 possessions while player is on the court 
+\item orebpct : percentage of available offensive rebounds grabbed 
+\item drebpct: percentage of available defensive rebounds grabbed 
+\item usgpct: percentage of team plays used (FGA + Possession Ending FTA + TO)/POSS
+\item tspct: shooting efficiency (PTS/(2*(FGA + 0.44*FTA))
+\item astpct : percent of teammate field goals assisted 
+\item draftlevel : draft round player was selected with undrafted players coded as 3 
+\end{itemize}
+```
+You are interested in the average net rating, the team's point differential per 100 possessions while the player is on the court, among different draft levels-- players drafted in the first round, second round, or undrafted.
+
+(a) What is the subsample mean net rating among those drafted in the first round? Second round? Undrafted? Create a scatterplot with draft level on the x-axis and net rating on the y-axis.
+
+```{r}
+mean(nba.sam$net_rating[nba.sam$draftlevel==1])
+mean(nba.sam$net_rating[nba.sam$draftlevel==2])
+mean(nba.sam$net_rating[nba.sam$draftlevel==3])
+
+ggplot(nba.sam, aes(x=draftlevel, y=net_rating)) +geom_point  ()
+
+```
+
+
+(b) Using the notation from class, show that the subsample mean net rating estimator among those drafted in the first round is unbiased for the subpopulation mean net rating among those drafted in the first round.
+
+We want to show that $E[\hat{\mu}(1)] = \mu(1)$ 
+
+Subsample mean net rating estimator: $\hat{\mu}(1) = \frac{\sum_{i=1}^n 1_1 (X_i)Y_i }{\sum_{i=1}^n 1_1 (X_i)}$ 
+where $$ 1_1(X) = \left\{  \begin{array} {ll}
+1 & if \ x = 1 \\
+0 & otherwise
+\end{array}
+\right. $$
+By law of iterated expectations, 
+$E[\hat{\mu}(1)] = E[E[\frac{\sum_{i=1}^n 1_1 (X_i)Y_i }{\sum_{i=1}^n 1_1 (X_i)} | X_1....X_n]]$ 
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ E[\sum_{i=1}^n 1_1 (X_i)Y_i  | X_1....X_n]]$$ because when we condition the indicator sum is a constant 
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \sum_{i=1}^n E[ 1_1 (X_i)Y_i  | X_1....X_n]]$$ expectation of sum = sum of expectations 
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \sum_{i=1}^n 1_1 (X_i) \ E[ Y_i  | X_1....X_n]]$$
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \sum_{i=1}^n 1_1 (X_i) \ E[ Y_i  | X_i]]$$ by irrelevance of independent conditioning variables 
+
+We know $E[Y_i|X_i] = \mu(X_i)$ by definition 
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \sum_{i=1}^n 1_1 (X_i) \ \mu(X_i)]$$
+
+for all $\mu(X_i)$ that are not $\mu(1)$ (i.e. $\mu(2)$ and $\mu(3)$), the indicator function will multiply them by 0 so we can remove them
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \sum_{i=1}^n 1_1 (X_i) \ \mu(1)]$$
+$\mu(1)$ is a constant 
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \mu(1) \ \sum_{i=1}^n 1_1 (X_i)]$$
+
+The sums cancel 
+
+$$E[\mu(1)] = \mu(1) $$ as expectation of a constant is that constant 
+
+Thus the subsample mean among the first round draft picks is an unbiased estimator of the subpopulation mean among first round draft picks. 
+
+\bigskip
+
+
+(c) What is the average incremental difference in mean net rating across the draft levels in your sample using the draftlevel variable, $$\frac{1}{2} \sum_{x=2}^3 \{\hat{\mu}(x) - \hat{\mu}(x-1)\}$$
+
+```{r}
+
+(1/2)*((mean(nba.sam$net_rating[nba.sam$draftlevel==2]) - 
+          mean(nba.sam$net_rating[nba.sam$draftlevel==1])) + 
+         (mean(nba.sam$net_rating[nba.sam$draftlevel==3]) -
+            mean(nba.sam$net_rating[nba.sam$draftlevel==2])))
+
+(1/2)*(mean(nba.sam$net_rating[nba.sam$draftlevel==3]) -
+         mean(nba.sam$net_rating[nba.sam$draftlevel==1]))
+
+```
+
+
+(d) Rewrite part (c) as a linear combination of sub-sample means, $\sum_{x}\alpha(x) \hat{\mu}(x)$. What is your $\alpha(x)$ function?
+
+\bigskip 
+
+$\sum_{i=1}^3 \alpha(x) \hat{\mu}(x)$ where $$ \alpha(x) = \left\{  \begin{array} {ll}
+-\frac{1}{2} & if \ x = 1 \\
+\frac{1}{2} & if \ x =3 \\
+0 & otherwise
+\end{array}
+\right. $$
+
+This yields $\frac{1}{2} \hat{\mu}(3) - \frac{1}{2} \hat{\mu}(1)$
+
+```{r}
+(1/2)*mean(nba.sam$net_rating[nba.sam$draftlevel==3]) -(1/2)*mean(nba.sam$net_rating[nba.sam$draftlevel==1])
+```
+
+\bigskip
+
+(e) What is the estimated standard error of your average incremental difference using plug-in/normal approximation? 
+
+
+
+(f) Generate a bootstrap estimated sampling distribution of the average incremental difference estimator. Calculate a 95% confidence interval using your bootstrapped distribution. 
+
+(g) What is the average incremental difference in mean net rating across the draft levels in your sample weighted by the proportion of players drafted in each round (and undrafted)? $$\sum_{x=2}^3 P_x \{\hat{\mu}(x) - \hat{\mu}(x-1)\}$$ where $P_x = \frac{N_x}{\sum_{x=2}^3 N_x}$
+
+(h) Rewrite part (g) as a linear combination of sub-sample means, $\sum_{x}\hat{\alpha}(x) \hat{\mu}(x)$. What is your $\hat{\alpha}(x)$ function?
+
+(i) What is the lower bound on the estimated standard error of your sub-sample weighted average incremental difference using plug-in/normal approximation? 
+
+(j) Generate a bootstrap estimated sampling distribution of the weighted average incremental difference estimator. Calculate a 95% confidence interval using your bootstrapped distribution. 
+
+(k) What is the least squares difference in mean net rating across draft levels in your sample? $$\sum_{x} \tilde{w}(x) \hat{\mu}(x)$$ where $\tilde{w}(x) = \frac{N_x (x-\bar{X})}{\sum_i (X_i - \bar{X})^2}$
+
+(l) Rewrite part (k) as a linear combination of sub-sample means using the $\alpha(x)$ notation, $\sum_{x}\hat{\alpha}(x) \hat{\mu}(x)$. What is your $\hat{\alpha}(x)$ function?
+
+(m) What is the lower bound on the estimated standard error or your least squares summary of net rating across draft levels in your sample using plug-in/normal approximation? 
+
+(n) Generate a bootstrap estimated sampling distribution of the least squares estimator of net rating across draft levels. Calculate a 95% confidence interval using your bootstrapped distribution. 
+
+(o) Fill in the following table with information using your sub-sample estimates 
+
+```{=tex}
+\begin{tabular}{|c|c|p{3cm}|p{3cm}|p{3cm}|}
+\hline
+& $x$ & 1 & 2 & 3 \\
+\hline
+& $N_x$ & & &  \\
+& & & &\\
+& $\hat{\mu}(x)$ & & & \\
+& & & &\\
+& $\hat{\sigma}^2(x)$ & & & \\
+& & & & \\
+\hline
+& & & &\\
+ & $\alpha (x)$ & & & \\
+& & & &\\
+avg. increment & $\alpha^2 (x)$ & & & \\
+ & & & &\\
+& $\frac{\hat{\sigma}^2(x) \alpha^2 (x)}{N_x}$ & & & \\
+& & & &\\
+\hline
+& & & &\\
+ & $\hat{\alpha}(x)$ & & & \\
+ & & & &\\
+weighted increment & $\hat{\alpha}^2(x)$ & & & \\
+ & & & &\\
+& $\frac{\hat{\sigma}^2(x) \hat{\alpha}^2 (x)}{N_x}$ & & & \\
+& & & &\\
+\hline
+& & & &\\
+ & $\hat{\alpha}(x)$  & & & \\
+ & & & &\\
+least squares & $\hat{\alpha}^2(x)$ & & & \\
+ & & & &\\
+& $\frac{\hat{\sigma}^2(x) \hat{\alpha}^2 (x)}{N_x}$ & & & \\
+& & & &\\
+\hline
+\end{tabular}
+```
+## Population Data
+
+The data set nba\textunderscore population includes the following variables from the 2021-2022 NBA season:
+
+```{=tex}
+\begin{itemize}
+\item playername: name of player 
+\item teamabbreviation : name of the team the player played on at the end of the season 
+\item age: age of player 
+\item playerheight : height in cm 
+\item playerweight: weight in kg 
+\item college: name of college player attended 
+\item country : name of country where player was born 
+\item draftyear : year player was drafted (‘Undrafted’ if undrafted) 
+\item draftround : draft round player was selected 
+\item draftnumber : number selected in his draft round (‘Undrafted’ if undrafted)
+\item gp: games played through season 
+\item pts: average points scored 
+\item reb: average rebounds 
+\item ast: average assists 
+\item netrating : team’s point differential per 100 possessions while player is on the court 
+\item orebpct : percentage of available offensive rebounds grabbed 
+\item drebpct: percentage of available defensive rebounds grabbed 
+\item usgpct: percentage of team plays used (FGA + Possession Ending FTA + TO)/POSS
+\item tspct: shooting efficiency (PTS/(2*(FGA + 0.44*FTA))
+\item astpct : percent of teammate field goals assisted 
+\item draftlevel : draft round player was selected with undrafted players coded as 3 
+\end{itemize}
+```
+\bigskip
+
+(a) What are the sub-population mean net ratings among those drafted in the first round, second round, and undrafted? How do the sub-population means compare to your sub-sample means? How many players in the population are in each draft level? What is $\sigma^2 (x)$ for each draft level? Fill in the table to organize your results. 
+
+\begin{tabular}{|c|p{3cm}|p{3cm}|p{3cm}|}
+\hline
+$x$ & 1 & 2 & 3 \\
+\hline
+ $m_x$ & & &  \\
+& & &\\
+ $\mu(x)$ & & & \\
+ & & &\\
+$\sigma^2(x)$ & & & \\
+& & & \\
+\hline
+\end{tabular}
+
+
+```{r}
+ggplot(nba.pop, aes(x=draftlevel, y=net_rating)) +geom_point  ()
+
+```
+
+(b) What is the average incremental difference in mean net rating across the draft levels in the population using the draftlevel variable, $$\frac{1}{2} \sum_{x=2}^3 \{\mu(x) - \mu(x-1)\}$$ How does this compare to your estimate?
+
+(c) Create a sampling distribution of your average incremental difference estimator. What size (n) should your repeated samples from the population be? What is the standard error for this estimator? Visually compare (with histograms) the sampling distribution to your bootstrap estimated sampling distribution for this estimator. 
+
+(d) What is the average incremental difference in mean net rating across the draft levels in the population weighted by the proportion of players drafted in each round (and undrafted)? $$\sum_{x=2}^3 p_x \{\mu(x) - \mu(x-1)\}$$ where $p_x = \frac{m_x}{\sum_{x=2}^3 m_x}$ How does this compare to your estimate?
+
+(e) Create a sampling distribution of your weighted average incremental difference estimator. What size (n) should your repeated samples from the population be? What is the standard error for this estimator? Visually compare (with histograms) the sampling distribution to your bootstrap estimated sampling distribution for this estimator.
+
+(f) What is the least squares difference in mean net rating across draft levels in the population? $$\sum_{x} \tilde{w}(x) \mu(x)$$ where $\tilde{w}(x) = \frac{m_x (x-\bar{X})}{\sum_i (X_i - \bar{X})^2}$ How does this compare to your estimate?
+
+(g) Create a sampling distribution of your least squares estimator. What size (n) should your repeated samples from the population be? What is the standard error for this estimator? Visually compare (with histograms) the sampling distribution to your bootstrap estimated sampling distribution for this estimator.
+
+(h) Overall, how did your estimates compare to the population? How similar were your estimated standard errors to the standard errors of your estimators? Why might the estimators have different standard errors?
+
