@@ -125,9 +125,9 @@ This yields $\frac{1}{2} \hat{\mu}(3) - \frac{1}{2} \hat{\mu}(1)$
 
 (e) What is the estimated standard error of your average incremental difference using plug-in/normal approximation?
 
-\bigskip 
+\bigskip
 
-The variance of our estimator is $\sum_x \frac{\alpha^2(x) \hat{\sigma}^2(x)}{N_x}$, which we can take the square root of for the estimated standard error. First, lets calculate the sub-sample variances. 
+The variance of our estimator is $\sum_x \frac{\alpha^2(x) \hat{\sigma}^2(x)}{N_x}$, which we can take the square root of for the estimated standard error. First, lets calculate the sub-sample variances.
 
 ```{r}
 v1<- var(nba.sam$net_rating[nba.sam$draftlevel==1])
@@ -135,9 +135,9 @@ v2<- var(nba.sam$net_rating[nba.sam$draftlevel==2])
 v3<- var(nba.sam$net_rating[nba.sam$draftlevel==3])
 ```
 
-We know our $\alpha$s are $\frac{1}{2}$ and $-\frac{1}{2}$ 
+We know our $\alpha$s are $\frac{1}{2}$ and $-\frac{1}{2}$
 
-What are our sub-sample sizes? 
+What are our sub-sample sizes?
 
 ```{r}
 n1<- length(nba.sam$net_rating[nba.sam$draftlevel==1])
@@ -145,12 +145,17 @@ n2<- length(nba.sam$net_rating[nba.sam$draftlevel==2])
 n3<- length(nba.sam$net_rating[nba.sam$draftlevel==3])
 ```
 
-Putting it all together, 
+Putting it all together,
 
 ```{r}
+(((-1/2)^2)*(v1))/n1 
+
+(((1/2)^2)*(v3))/n3
+
 (((-1/2)^2)*(v1))/n1 + (((1/2)^2)*(v3))/n3
 ```
-That is the variance of our estimator, but we need the standard error, which is the square root 
+
+That is the variance of our estimator, but we need the standard error, which is the square root
 
 ```{r}
 sqrt((((-1/2)^2)*(v1))/n1 + (((1/2)^2)*(v3))/n3)
@@ -158,7 +163,7 @@ sqrt((((-1/2)^2)*(v1))/n1 + (((1/2)^2)*(v3))/n3)
 
 (f) Generate a bootstrap estimated sampling distribution of the average incremental difference estimator. Calculate a 95% confidence interval using your bootstrapped distribution.
 
-\bigskip 
+\bigskip
 
 ```{r}
 set.seed(220)
@@ -182,7 +187,7 @@ quantile(theta1,prob =c(.025,.975))
 
 (g) What is the average incremental difference in mean net rating across the draft levels in your sample weighted by the proportion of players drafted in each round (and undrafted)? $$\sum_{x=2}^3 P_x \{\hat{\mu}(x) - \hat{\mu}(x-1)\}$$ where $P_x = \frac{N_x}{\sum_{x=2}^3 N_x}$
 
-\bigskip 
+\bigskip
 
 Our $P$s: $P_2 = \frac{13}{13+14}$; $P_3 = \frac{14}{13+14}$
 
@@ -192,13 +197,11 @@ $P_2 (\hat{\mu}(2) - \hat{\mu}(1) ) + P_3 (\hat{\mu}(3) - \hat{\mu}(2))$
 (13/27)*(mean(nba.sam$net_rating[nba.sam$draftlevel==2]) - mean(nba.sam$net_rating[nba.sam$draftlevel==1])) + (14/27)*(mean(nba.sam$net_rating[nba.sam$draftlevel==3]) - mean(nba.sam$net_rating[nba.sam$draftlevel==2]))
 ```
 
-
 (h) Rewrite part (g) as a linear combination of sub-sample means, $\sum_{x}\hat{\alpha}(x) \hat{\mu}(x)$. What is your $\hat{\alpha}(x)$ function?
 
 \bigskip
 
-$P_2 \hat{\mu}(2) - P_2 \hat{\mu}(1)  + P_3 \hat{\mu}(3) - P_3 \hat{\mu}(2)$
-
+$P_2 \hat{\mu}(2) - P_2 \hat{\mu}(1) + P_3 \hat{\mu}(3) - P_3 \hat{\mu}(2)$
 
 $\sum_{i=1}^3 \hat{\alpha}(x) \hat{\mu}(x)$ where $$ \hat{\alpha}(x) = \left\{  \begin{array} {ll}
 -P_2 & if \ x = 1 \\
@@ -207,21 +210,26 @@ P_3 & if \ x =3
 \end{array}
 \right. $$
 
-
-
 (i) What is the lower bound on the estimated standard error of your sub-sample weighted average incremental difference using plug-in/normal approximation?
 
-\bigskip 
+\bigskip
 
-We already have our subsample variances and subsample sizes from earlier, but now our $\alpha$s are different 
+We already have our subsample variances and subsample sizes from earlier, but now our $\alpha$s are different
 
 ```{r}
+((-13/27)^2 *v1)/n1 
+
+((13/27 - 14/27)^2 * v2)/n2
+
+((14/27)^2 *v3)/n3
+
+
 ((-13/27)^2 *v1)/n1 + ((13/27 - 14/27)^2 * v2)/n2 + ((14/27)^2 *v3)/n3
+
 
 sqrt(((-13/27)^2 *v1)/n1 + ((13/27 - 14/27)^2 * v2)/n2 + ((14/27)^2 *v3)/n3)
 
 ```
-
 
 (j) Generate a bootstrap estimated sampling distribution of the weighted average incremental difference estimator. Calculate a 95% confidence interval using your bootstrapped distribution.
 
@@ -229,11 +237,11 @@ sqrt(((-13/27)^2 *v1)/n1 + ((13/27 - 14/27)^2 * v2)/n2 + ((14/27)^2 *v3)/n3)
 theta2<- rep(NA,B)
 
 for( b in 1:B ){
-bootind = sample(1:n,size=n,replace=T)
-dfboot = nba.sam[bootind,]
-P2<- length(dfboot$draftlevel==2)/(length(dfboot$draftlevel==2) + length(dfboot$draftlevel==3))
-P3<- length(dfboot$draftlevel==3)/(length(dfboot$draftlevel==2) + length(dfboot$draftlevel==3))
-theta2[b] = (-P2)*mean(dfboot$net_rating[dfboot$draftlevel==1]) + (P2-P3)*mean(dfboot$net_rating[dfboot$draftlevel==2]) +  P3*mean(dfboot$net_rating[dfboot$draftlevel==3])
+bootind2 = sample(1:n,size=n,replace=T)
+dfboot2 = nba.sam[bootind2,]
+P2<- length(dfboot2$draftlevel==2)/(length(dfboot2$draftlevel==2) + length(dfboot2$draftlevel==3))
+P3<- length(dfboot2$draftlevel==3)/(length(dfboot2$draftlevel==2) + length(dfboot2$draftlevel==3))
+theta2[b] = (-P2)*mean(dfboot2$net_rating[dfboot2$draftlevel==1]) + (P2-P3)*mean(dfboot2$net_rating[dfboot2$draftlevel==2]) +  P3*mean(dfboot2$net_rating[dfboot2$draftlevel==3])
 }
 
 hist(theta2)
@@ -242,7 +250,6 @@ sd(theta2)
 
 quantile(theta2,prob =c(.025,.975))
 ```
-
 
 (k) What is the least squares difference in mean net rating across draft levels in your sample? $$\sum_{x} \tilde{w}(x) \hat{\mu}(x)$$ where $\tilde{w}(x) = \frac{N_x (x-\bar{X})}{\sum_i (X_i - \bar{X})^2}$
 
@@ -254,11 +261,11 @@ for(i in 1:n){
 denom<- sum(xvar)
 ```
 
-$\tilde{w}(1) = \frac{23*(1-\bar{X})}{\sum_i (X_i - \bar{X})^2}$ 
+$\tilde{w}(1) = \frac{23*(1-\bar{X})}{\sum_i (X_i - \bar{X})^2}$
 
-$\tilde{w}(2) = \frac{13*(2-\bar{X})}{\sum_i (X_i - \bar{X})^2}$ 
+$\tilde{w}(2) = \frac{13*(2-\bar{X})}{\sum_i (X_i - \bar{X})^2}$
 
-$\tilde{w}(3) = \frac{14*(3-\bar{X})}{\sum_i (X_i - \bar{X})^2}$ 
+$\tilde{w}(3) = \frac{14*(3-\bar{X})}{\sum_i (X_i - \bar{X})^2}$
 
 ```{r}
 ((23*(1-mean(nba.sam$draftlevel)))/denom)*mean(nba.sam$net_rating[nba.sam$draftlevel==1]) + ((13*(2-mean(nba.sam$draftlevel)))/denom)*mean(nba.sam$net_rating[nba.sam$draftlevel==2]) + ((14*(3-mean(nba.sam$draftlevel)))/denom)*mean(nba.sam$net_rating[nba.sam$draftlevel==3]) 
@@ -270,7 +277,7 @@ summary(mod)
 
 (l) Rewrite part (k) as a linear combination of sub-sample means using the $\alpha(x)$ notation, $\sum_{x}\hat{\alpha}(x) \hat{\mu}(x)$. What is your $\hat{\alpha}(x)$ function?
 
-$\hat{\alpha}(x)$ is the same as our $\tilde{w}(x)$s 
+$\hat{\alpha}(x)$ is the same as our $\tilde{w}(x)$s
 
 $\sum_{i=1}^3 \hat{\alpha}(x) \hat{\mu}(x)$ where $$ \hat{\alpha}(x) = \left\{  \begin{array} {ll}
 \frac{N_1*(1-\bar{X})}{\sum_i (X_i - \bar{X})^2} & if \ x = 1 \\
@@ -281,9 +288,18 @@ $\sum_{i=1}^3 \hat{\alpha}(x) \hat{\mu}(x)$ where $$ \hat{\alpha}(x) = \left\{  
 
 (m) What is the lower bound on the estimated standard error or your least squares summary of net rating across draft levels in your sample using plug-in/normal approximation?
 
-We already have our subsample variances and subsample sizes from earlier, but now our $\alpha$s are different 
+We already have our subsample variances and subsample sizes from earlier, but now our $\alpha$s are different
 
 ```{r}
+
+(((23*(1-mean(nba.sam$draftlevel)))/denom))
+(((13*(2-mean(nba.sam$draftlevel)))/denom))
+(((14*(3-mean(nba.sam$draftlevel)))/denom))
+
+((((23*(1-mean(nba.sam$draftlevel)))/denom))^2 *v1)/n1 
+((((13*(2-mean(nba.sam$draftlevel)))/denom))^2 * v2)/n2
+((((14*(3-mean(nba.sam$draftlevel)))/denom))^2 *v3)/n3
+
 ((((23*(1-mean(nba.sam$draftlevel)))/denom))^2 *v1)/n1 + ((((13*(2-mean(nba.sam$draftlevel)))/denom))^2 * v2)/n2 + ((((14*(3-mean(nba.sam$draftlevel)))/denom))^2 *v3)/n3
 
 sqrt(((((23*(1-mean(nba.sam$draftlevel)))/denom))^2 *v1)/n1 + ((((13*(2-mean(nba.sam$draftlevel)))/denom))^2 * v2)/n2 + ((((14*(3-mean(nba.sam$draftlevel)))/denom))^2 *v3)/n3) 
@@ -293,12 +309,14 @@ sqrt(((((23*(1-mean(nba.sam$draftlevel)))/denom))^2 *v1)/n1 + ((((13*(2-mean(nba
 (n) Generate a bootstrap estimated sampling distribution of the least squares estimator of net rating across draft levels. Calculate a 95% confidence interval using your bootstrapped distribution.
 
 ```{r}
+#this is a shortcut-- it would probably be better to calculate each of the weights and do the linear combination of means within the bootstrap. But I did confirm above that lm gives me the same estimate (which it should), so this is fine 
+
 theta3<- rep(NA,B)
 
 for( b in 1:B ){
-bootind = sample(1:n,size=n,replace=T)
-dfboot = nba.sam[bootind,]
-ols<- lm(dfboot$net_rating~ dfboot$draftlevel)
+bootind3 = sample(1:n,size=n,replace=T)
+dfboot3 = nba.sam[bootind3,]
+ols<- lm(dfboot3$net_rating~ dfboot3$draftlevel)
 theta3[b] = ols$coef[2]
 }
 
@@ -310,7 +328,6 @@ quantile(theta3,prob =c(.025,.975))
 
 ```
 
-
 (o) Fill in the following table with information using your sub-sample estimates
 
 ```{=tex}
@@ -318,35 +335,35 @@ quantile(theta3,prob =c(.025,.975))
 \hline
 & $x$ & 1 & 2 & 3 \\
 \hline
-& $N_x$ & & &  \\
+& $N_x$ & 23 & 13 & 14 \\
 & & & &\\
-& $\hat{\mu}(x)$ & & & \\
+& $\hat{\mu}(x)$ & 0.713 & -3.82 & -14.47 \\
 & & & &\\
-& $\hat{\sigma}^2(x)$ & & & \\
+& $\hat{\sigma}^2(x)$ & 21.995 & 257.699 & 820.941\\
 & & & & \\
 \hline
 & & & &\\
- & $\alpha (x)$ & & & \\
+ & $\alpha (x)$ & $-\frac{1}{2}$ & 0  & $\frac{1}{2}$ \\
 & & & &\\
-avg. increment & $\alpha^2 (x)$ & & & \\
+avg. increment & $\alpha^2 (x)$ & $\frac{1}{4}$ & 0 & $\frac{1}{4}$\\
  & & & &\\
-& $\frac{\hat{\sigma}^2(x) \alpha^2 (x)}{N_x}$ & & & \\
-& & & &\\
-\hline
-& & & &\\
- & $\hat{\alpha}(x)$ & & & \\
- & & & &\\
-weighted increment & $\hat{\alpha}^2(x)$ & & & \\
- & & & &\\
-& $\frac{\hat{\sigma}^2(x) \hat{\alpha}^2 (x)}{N_x}$ & & & \\
+& $\frac{\hat{\sigma}^2(x) \alpha^2 (x)}{N_x}$ & 0.304 & 0  & 14.66 \\
 & & & &\\
 \hline
 & & & &\\
- & $\hat{\alpha}(x)$  & & & \\
+ & $\hat{\alpha}(x)$ & $-\frac{13}{27}$ & $\frac{13}{27} - \frac{14}{27}$ & $\frac{14}{27}$ \\
  & & & &\\
-least squares & $\hat{\alpha}^2(x)$ & & & \\
+weighted increment & $\hat{\alpha}^2(x)$ & 0.2318 & 0.00137 & 0.269\\
  & & & &\\
-& $\frac{\hat{\sigma}^2(x) \hat{\alpha}^2 (x)}{N_x}$ & & & \\
+& $\frac{\hat{\sigma}^2(x) \hat{\alpha}^2 (x)}{N_x}$ & 0.2821 & 0.02719 & 15.7657 \\
+& & & &\\
+\hline
+& & & &\\
+ & $\hat{\alpha}(x)$  & -0.533 & 0.06614 & 0.4669\\
+ & & & &\\
+least squares & $\hat{\alpha}^2(x)$ & 0.284 & 0.004 & 0.2180 \\
+ & & & &\\
+& $\frac{\hat{\sigma}^2(x) \hat{\alpha}^2 (x)}{N_x}$ & 0.3459 & 0.0867 & 12.7846 \\
 & & & &\\
 \hline
 \end{tabular}
