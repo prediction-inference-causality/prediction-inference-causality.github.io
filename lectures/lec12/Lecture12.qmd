@@ -368,12 +368,28 @@ $$
 ```{r}
 #| out-height: 300px
 #| fig-asp: .3 
-set.seed(0)
+set.seed(3)
+
+# Sampling 250 employees. Our population is an even mix of ...
+#   'blue guys', who go 1/4 days no matter what
+#   'green guys', who go more if it's free but --- unlike the ones in our table earlier --- don't care about classes
+
 n=250
-Yalways = rbinom(n, 30, .25)
-Y0   = ifelse(rbinom(n,1,.5),   Yalways, rbinom(n, 30, .05))
-Y50  = ifelse(rbinom(n,1,.5),   Yalways, rbinom(n, 30, .1))
-Y100 = Y50
+is.blue = rbinom(n,1, 1/2)
+Yblue   = rbinom(n, 30, 1/4) 
+Ygreen0 = rbinom(n, 30, 1/10)
+Ygreen50 = rbinom(n, 30, 1/5)
+
+Y0   = ifelse(is.blue, Yblue, Ygreen0)
+Y50  = ifelse(is.blue, Yblue, Ygreen50)
+Y100 = Y50   ### <--- this tells us we've got no effect.
+
+# Randomizing by rolling two dice. R is their sum
+R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
+D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
+Y = case_match(D, 0~Y0, 50~Y50, 100~Y100)
+
+# Randomizing by rolling two dice. R is their sum
 R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
 D = case_match(R,
   1:6~0,
@@ -385,7 +401,6 @@ Y = case_match(D,
   100~Y100)
 
 real.data = tibble(D=D, Y=Y)
-
 summaries = tibble(D=D, Y=Y) %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
 
 scatter = ggplot() + geom_point(aes(x=D, y=Y), color="red", data=tibble(D=D,Y=Y),
@@ -427,11 +442,18 @@ $$
 
 ```{r}
 data = tibble(D=D, Y=Y)
-boot.distn = function(data, B=1000) { purrr::map(1:B, function(i) {
-  data.boot = data[sample(1:nrow(data), replace=TRUE),]
-  summaries.boot = data.boot %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
-  data.frame(dif=summaries.boot$mean[summaries.boot$D==100] - summaries.boot$mean[summaries.boot$D==50])
-}) %>% bind_rows()
+boot.distn = function(data, B=1000) { 
+  rows = purrr::map(1:B, function(i) {
+    data.boot = data[sample(1:nrow(data), replace=TRUE),]
+    summaries.boot = data.boot %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
+    model = lm(Y ~ D, data=data.boot)
+    muhat = predict(model, newdata=data.frame(D=c(0,50,100)))
+
+    tauhat.dif = mean(data.boot$Y[data.boot$D==100]) - mean(data.boot$Y[data.boot$D==50]) 
+    tauhat.slope = muhat[3]-muhat[2]
+    data.frame(dif=tauhat.dif, slope=tauhat.slope)
+  })
+  rows %>% bind_rows() 
 }
 boots = boot.distn(data)
 ```
@@ -548,10 +570,11 @@ N_d & `r approx(sum(D==0))` & `r approx(sum(D==50))` & `r approx(sum(D==100))` \
 $$
 
 - What I see is that we don't have enough people randomized to the $D=100$ treatment.
-  - The variance we get from just that one term is $1/4$.
-  - Meaning the contribution to our standard error is $\sqrt{1/4}=1/2$
+  - The variance we get from just that one term is $`r approx(var(Y[D==100])/sum(D==100))`$.
+  - Meaning the contribution to our standard error is 
+  $\sqrt{`r approx(var(Y[D==100])/sum(D==100))`} \approx `r approx(sqrt(var(Y[D==100])/sum(D==100)))`$ 
   - And since we multiply standard error by 1.96 to get an 'arm' for our interval ...
-  - This ensures our arms are at least $1.96 \times 1/2 \approx 1$ day wide.
+  - This ensures our arms are at least $1.96 \times `r approx(sqrt(var(Y[D==100])/sum(D==100)))`  \approx `r approx(1.96*sqrt(var(Y[D==100])/sum(D==100)))`$ days wide.
 
 ## If We Could Do It Again
 ```{r}
@@ -580,14 +603,7 @@ scatter.new
 - This does what we need it to do: it gives us a confidence interval that to the left of $1$.
 
 ```{r}
-data = tibble(D=D, Y=Y)
-boot.distn = function(data, B=1000) { purrr::map(1:B, function(i) {
-  data.boot = data[sample(1:nrow(data), replace=TRUE),]
-  summaries.boot = data.boot %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
-  data.frame(dif=summaries.boot$mean[summaries.boot$D==100] - summaries.boot$mean[summaries.boot$D==50])
-}) %>% bind_rows()
-}
-boots = boot.distn(data)
+boots.ifwecould = boot.distn(tibble(D=D, Y=Y))
 ```
 
 ```{r}
@@ -603,7 +619,7 @@ normal.distribution.plot = ggplot() +
     geom_vline(aes(xintercept=point.estimate + c(-1,1)*1.96*se), color='purple', linetype='dotted') +
     geom_pointrange(aes(y=dnorm(2*se, mean=0, sd=se), x=point.estimate, xmin=point.estimate - 1.96*se, xmax=point.estimate + 1.96*se))
 
-distribution.plot(boots$dif, point.estimate) + xlim(min(x), max(x))
+distribution.plot(boots.ifwecould$dif, point.estimate) + xlim(min(x), max(x))
 normal.distribution.plot + xlim(min(x), max(x))
 ``` 
 
@@ -612,7 +628,6 @@ normal.distribution.plot + xlim(min(x), max(x))
 ```{r}
 #| out-height: 300px
 #| fig-asp: .3 
-
 
 model=lm(Y ~ D, data=real.data)
 mu.hat = predict(model, newdata=data.frame(D=c(0,50,100)))
@@ -628,17 +643,6 @@ scatter + geom_line(aes(x=c(0,50,100), y=mu.hat), color='blue', linetype='dashed
   - We get a much narrower interval than the one we had before.
   - But it's not in the same place at all.
 
-```{r}
-boot.distn = function(data, B=1000) { purrr::map(1:B, function(i) {
-  data.boot = data[sample(1:nrow(data), replace=TRUE),]
-  summaries.boot = data.boot %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
-  model = lm(Y ~ D, data=data.boot)
-  data.frame(dif=summaries.boot$mean[summaries.boot$D==100] - summaries.boot$mean[summaries.boot$D==50],
-             slope=model$coefficients[2]*50)
-}) %>% bind_rows()
-}
-boots = boot.distn(real.data)
-```
 
 ```{r}
 #| out-height: 250px
@@ -646,16 +650,215 @@ boots = boot.distn(real.data)
 #| layout-ncol: 2 
 #| fig-subcap:
 #|   - "Difference in Sample Means Sampling Dist"
-#|   - "Slope-Based Sampling Dist" 
+#|   - "Fitted-Line-Based Sampling Dist" 
 
 real.point.estimate = mean(real.data$Y[real.data$D==100]) - mean(real.data$Y[real.data$D==50])
 x = seq(slope.point.estimate-7*se, slope.point.estimate+7*se, length.out=1000)
-distribution.plot(boots$dif,   real.point.estimate) + xlim(min(x), max(x))
+distribution.plot(boots$dif,   real.point.estimate) + xlim(min(x), max(x)) 
 distribution.plot(boots$slope, slope.point.estimate) + xlim(min(x), max(x))
 ```
 
+## What's Going On?
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+
+scatter + geom_line(aes(x=c(0,50,100), y=mu.hat), color='blue', linetype='dashed') + 
+  coord_cartesian(ylim=range(summaries$mean) + .5*c(-1,+1))
+```
+
+- Let's zoom in. It looks like our like our blue line ...
+  - *overestimates* $\mu(100)$
+  - *underestimates* $\mu(50)$
+  - therefore *overestimates* $\tau(100)=\mu(100)-\mu(50)$.
+- That's what it looks like when we compare to the subsample means, anyway.
+- And that's why we get a bigger estimate than we did *using* the subsample means.
+- It looks like---although we haven't done the calculation---this line-based estimator is *biased*.
+
+## Implications
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Difference in Sample Means Sampling Dist"
+#|   - "Fitted-Line-Based Sampling Dist" 
+
+distribution.plot(boots$dif,   real.point.estimate) + xlim(min(x), max(x))
+distribution.plot(boots$slope, slope.point.estimate)  + xlim(min(x), max(x))
+```
+
+- This isn't a disaster if all we want to know is whether our effect $\tau(100)$ is &gt;1
+  - i.e, if we want to know whether the \$100 plan gives us an additional gym day over the \$50 one.
+  - No matter which approach we use, we get the same answer: we don't know.
+  - Our interval estimates both include numbers above and below 1.
+- But if what we wanted to know was whether $\tau(100) > 0$, we'd get different answers.
+  - The difference in subsample means approach would say we don't know.
+  - The fitted line approach would say we do know---in fact, that $\tau(100) > 1/2$.
+- And this is a problem. This is fake data, so I can tell you it's wrong. The actual effect is exactly zero.
+- In the data we're looking at, the potential outcomes $Y_i(50)$ and $Y_i(100)$ are *exactly the same*.
+
+## The Data
+
+```{r}
+#| eval: false
+#| echo: true
+
+# Sampling 250 employees. Our population is an even mix of ...
+#   'blue guys', who go 1/4 days no matter what
+#   'green guys', who go more if it's free but --- unlike the ones in our table earlier --- don't care about classes
+
+n=250
+is.blue = rbinom(n,1, 1/2)
+Yblue   = rbinom(n, 30, 1/4) 
+Ygreen0 = rbinom(n, 30, 1/10)
+Ygreen50 = rbinom(n, 30, 1/5)
+
+Y0   = ifelse(is.blue, Yblue, Ygreen0)
+Y50  = ifelse(is.blue, Yblue, Ygreen50)
+Y100 = Y50   ### <--- this tells us we've got no effect.
+
+# Randomizing by rolling two dice. R is their sum
+R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
+D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
+Y = case_match(D, 0~Y0, 50~Y50, 100~Y100)
+``` 
+
+## Bias
 
 
+```{r}
+
+line.based.estimates = purrr::map(1:1000, function(b) {
+  n=250
+  is.blue = rbinom(n,1, 1/2)
+  Yblue   = rbinom(n, 30, 1/4) 
+  Ygreen0 = rbinom(n, 30, 1/10)
+  Ygreen50 = rbinom(n, 30, 1/5)
+
+  Y0   = ifelse(is.blue, Yblue, Ygreen0)
+  Y50  = ifelse(is.blue, Yblue, Ygreen50)
+  Y100 = Y50   ### <--- this tells us we've got no effect.
+
+  # Randomizing by rolling two dice. R is their sum
+  R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
+  D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
+  Y  = case_match(D, 0~Y0, 50~Y50, 100~Y100)
+
+  model=lm(Y ~ D, data=tibble(D=D, Y=Y))
+  mu.hat = predict(model, newdata=data.frame(D=c(0,50,100)))
+  data.frame(estimate =  mu.hat[3]-mu.hat[2], se = sqrt(vcov(model)[2,2])*50)
+}) %>% bind_rows()
+
+```
+
+```{r}
+#| out-height: 500px
+
+line.based.estimates$i = 1:nrow(line.based.estimates)
+slope.se = sqrt(vcov(model)[2,2])*50
+line.sampling.dist = ggplot() + 
+  geom_histogram(aes(x=estimate, y=after_stat(density)), bins=50, alpha=.2, data=line.based.estimates) + 
+  geom_vline(aes(xintercept=mean(estimate)), color='blue', data=line.based.estimates) +
+  geom_pointrange(aes(x=slope.point.estimate, y=dnorm(2*slope.se, mean=0, sd=slope.se), 
+                      xmin=slope.point.estimate - 1.96*slope.se, 
+                      xmax=slope.point.estimate + 1.96*slope.se))
+line.sampling.dist
+``` 
+
+- We can do a little simulation to calculate the bias of our line-based estimator.
+- We'll generate 1000 fake datasets like the one we've been looking at.
+  - And calculate our estimator for each one. This gives us draws from our estimator's *sampling distribution*. 
+  - I've used them to draw a histogram that approximates this sampling sampling distribution.
+- The mean of these point estimates is $`r approx(mean(line.based.estimates$estimate))`$. Since our actual effect is zero, that's our bias. The blue line.
+- Our actual point estimate is off in the same direction---but a bit more than usual.
+  - It's shown in black with a corresponding 95% interval.
+  - An interval that fails to cover the actual effect of zero.
+
+## Coverage
+
+```{r}
+#| out-height: 500px
+covers =  abs(line.based.estimates$estimate) <= 1.96*line.based.estimates$se 
+line.sampling.dist + geom_pointrange(aes(x=estimate, y=(8*i/100)*dnorm(2*slope.se, mean=0, sd=slope.se), 
+                      xmin=estimate - 1.96*se, 
+                      xmax=estimate + 1.96*se), data=line.based.estimates[1:100,], color='purple', alpha=.4)  
+```
+
+- We can construct 95% confidence intervals the same way in each fake dataset.
+  - I've drawn 100 of these intervals in purple. 
+  - You can see that they sometimes cover zero, but not as often as you'd like.
+- `r sum(covers)` / `r nrow(line.based.estimates)` &asymp; `r percent(mean(covers))` of them cover zero. That's not good. 
+- If that's typical of our analysis, people *really* shouldn't trust us. 
+
+## Where We're Headed 
+
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Difference in Sample Means Sampling Dist (n=250)"
+#|   - "Fitted-Line-Based Sampling Dist (n=250)" 
+
+xrange = c(-4,4)
+scale_x = scale_x_continuous(breaks=seq(min(xrange), max(xrange), by=1), limits=xrange)
+distribution.plot(boots$dif,   real.point.estimate) + scale_x
+distribution.plot(boots$slope, slope.point.estimate)  + scale_x
+```
+
+:::: r-stack
+
+::: {.fragment .fade-out data-fragment-index="0"}
+
+- Next time, we're going to talk about why fitting lines **is** common practice and **isn't** a good idea.
+- It has to do with sample size. When sample sizes are small, we get wide intervals.
+  - And a small amount of bias may be negligible in comparison to it. 
+  - That means we can often get away with stuff like fitting lines.
+- You can see that in the sampling distribution plots below.
+  - We've done the same analysis using only $50$ of our $250$ observations.
+  - And the line-based estimate gives us a wider interval that covers the actual effect: zero.
+-  We'll see exactly how much worse coverage gets as a function of sample size.
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+
+- The reason fitting lines is common practice is historical.
+- Common practice is rooted in tradition dating back to the 1930s or so. 
+  - Nobody had computers. So samples were almost always small. 
+  - And working with lines usually wasn't such a big problem.
+- That changed in the 1970s. 
+  - And what statisticians were thinking about changed too.
+  - A lot of what are now called *machine learning methods* were developed at that time.
+- It's taking some time to cover the basics so we'll be prepared, but that's where we're going.
+:::
+::::
 
 
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Difference in Sample Means Sampling Dist (n=50)"
+#|   - "Fitted-Line-Based Sampling Dist (n=50)" 
+
+ind = c(51:100) 
+# because 1:50 happened to give us an unusually large line-based estimate (of ~2)
+# and that didn't help make the point we want
+
+summaries.small = real.data[ind, ] %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
+small.point.estimate = summaries.small$mean[summaries.small$D==100] - summaries.small$mean[summaries.small$D==50]
+smallboots = boot.distn(real.data[ind, ])
+
+model=lm(Y ~ D, data=real.data[ind,])
+mu.hat = predict(model, newdata=data.frame(D=c(0,50,100)))
+small.slope.point.estimate = mu.hat[3]-mu.hat[2]
+
+distribution.plot(smallboots$dif[is.finite(smallboots$dif)],   small.point.estimate) + scale_x
+distribution.plot(smallboots$slope, small.slope.point.estimate)  + scale_x
+# on the is.finite thing: 
+#  - we get some NAs when our bootstrap sample includes no D=100 points. 
+#  - It's pretty rare. We'll ignore it.
+```
 
