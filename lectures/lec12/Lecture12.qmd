@@ -44,6 +44,9 @@ approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=c
 ```
 
 ```{r ggplot-themes}
+fontsize = 16
+textcolor = "#888888"
+
 class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
         panel.background = element_rect(fill = "transparent", colour = NA),
                     legend.background = element_rect(fill="transparent", colour = NA),
@@ -51,10 +54,10 @@ class.theme = theme(plot.background = element_rect(fill = "transparent", colour 
                     legend.key = element_rect(fill="transparent", colour = NA),
         axis.ticks.x = element_blank(),
         axis.ticks.y = element_blank(),
-        axis.text.x  = element_text(colour = "#aaaaaa"),
-        axis.text.y  = element_text(colour = "#aaaaaa"),
-        axis.title.x  = element_text(colour = "#aaaaaa"),
-        axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
+        axis.text.x  = element_text(colour = textcolor, size=fontsize),
+        axis.text.y  = element_text(colour = textcolor, size=fontsize),
+        axis.title.x  = element_text(colour = textcolor),
+        axis.title.y  = element_text(colour = textcolor, angle=90)
 )
 
 theme_set(class.theme)
@@ -72,6 +75,7 @@ grid.theme = theme_get()
 
 theme_set(simplified.theme)
 ```
+
 
 ```{r table-styling}
 ellipsis <- function(df, nhead=5L, ntail=2) {
@@ -127,11 +131,11 @@ $$
 \begin{array}{c|ccc|cc}
 j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
 1 & 5  & 10 & 10 & 5 & 0 \\
-\color{blue}2 & 10 & 10 & 10 & 0 & 0 \\
+2 & 10 & 10 & 10 & 0 & 0 \\
 \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{green}327 & 0 & 0  &  20 & 0 & 20 \\
+327 & 0 & 0  &  20 & 0 & 20 \\
 \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}358 & 15 & 18 & 20 & 3 & 2 \\
+358 & 15 & 18 & 20 & 3 & 2 \\
 \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
 m & 10 & 10 & 5  & 0 & -5 \\
 \end{array}
@@ -141,30 +145,32 @@ $$
 ## What We Want To Know
 
 - What we want to know is the population-level average treatment effect.
-  - i.e. the effect of offering these plans to every employee.
+  - i.e. the average increase in monthly gym visits if we offered these plans to every employee.
 
 $$
+\small{
 \begin{aligned}
-\tau(50)  &= \frac{1}{m} \sum_{j=1}^m \tau_j(50)  \\
-\tau(100) &= \frac{1}{m} \sum_{j=1}^m \tau_j(100)
+\tau(50)  &= \frac{1}{m} \sum_{j=1}^m \tau_j(50)  && \quad \text{this is the first increment---the effect of \$50 vs. \$0} \\
+\tau(100) &= \frac{1}{m} \sum_{j=1}^m \tau_j(100) && \quad \text{this is the second increment---the effect of \$100 vs. \$50} \\
 \end{aligned}
+}
 $$
 
 - What's hard about this?
   - *Sampling*. We only observe information about a fraction of these people.
   - *Missing Data*. For that fraction, we only observe one of the potential outcomes.
 
-Gray out missing potential outcomes, too. No colors.
+
 $$
 \small{
 \begin{array}{c|ccc|cc}
 j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
-\color{gray}1 & 5  & 10 & 10 & 5 & 0 \\
-\color{blue}2 & 10 & 10 & 10 & 0 & 0 \\
+\color{gray}1 & \color{gray}5  & \color{gray}10 & \color{gray}10 & \color{gray}5 & \color{gray}0 \\
+2 & 10 & \color{gray}10 & \color{gray}10 & \color{gray}0 & \color{gray}0 \\
 \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{green}327 & 0 & 0  &  20 & 0 & 20 \\
+327 & \color{gray}0 & \color{gray}0  &  20 & \color{gray}0 & \color{gray}20 \\
 \color{gray}\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{gray}358 & 15 & 18 & 20 & 3 & 2 \\
+358 & \color{gray}15 & 18 & \color{gray}20 & \color{gray}3 & \color{gray}2 \\
 \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
 \color{gray}m & \color{gray}10 & \color{gray}10 & \color{gray}5  & \color{gray}0 & \color{gray}-5 \\
 \end{array}
@@ -173,32 +179,36 @@ $$
 
 ## Sampling
 
+:::: columns
+::: column
+### Our Population 
 $$
 \small{
 \begin{array}{c|ccc|cc}
 j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
-1 & 5  & 10 & 10 & 5 & 0 \\
-\color{blue}2 & 10 & 10 & 10 & 0 & 0 \\
+\color{gray} 1 & \color{gray}5  & \color{gray}10 & \color{gray}10 & \color{gray}5 & \color{gray}0 \\ 
+\color{blue}2 & \color{blue}10 & \color{blue}10 & \color{blue}10 & \color{blue}0 & \color{blue}0 \\
 \vdots & \vdots  & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}327 & 4 & 8 & 16 & 3 & 2 \\
+\color{purple}327 & \color{purple}15 & \color{purple}18 & \color{purple}20 & \color{purple}3 & \color{purple}2 \\
 \vdots & \vdots  & \vdots & \vdots & \vdots & \vdots \\
-\color{green}358 & 0 & 0  &  20 & 0 & 20 \\
+\color{green}358 & \color{green}0 & \color{green}0  &  \color{green}20 & \color{green}0 & \color{green}20 \\
 \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-m & 10 & 10 & 5  & 0 & -5 \\
+\color{gray}m & \color{gray}10 & \color{gray}10 & \color{gray}5  & \color{gray}0 & \color{gray}-5 \\
 \end{array}
 }
 $$
+
 :::
 ::: column
-
+### Our Sample
 $$
 \small{
-\begin{array}{c|cc|ccc|cc}
-i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
-\color{blue}1   &  & & 10 & 10 & 10 & 0 & 0 \\
-\color{green}2  &  & & 0  & 0  &  20 & 0 & 20 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}n & &  & 15 & 18 & 20 & 3 & 2 \\
+\begin{array}{c|ccc|cc}
+i &  Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
+\color{blue}1 & \color{blue}10 & \color{blue}10 & \color{blue}10 & \color{blue}0 & \color{blue}0 \\
+\color{green}2 & \color{green}0 & \color{green}0  &  \color{green}20 & \color{green}0 & \color{green}20 \\
+\vdots & \vdots  & \vdots & \vdots & \vdots \\
+\color{purple}n & \color{purple}15 & \color{purple}18 & \color{purple}20 & \color{purple}3 & \color{purple}2 \\
 \end{array}
 }
 $$
@@ -221,287 +231,634 @@ $$
 \small{
 \begin{array}{c|cc|ccc|cc}
 i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
-\color{blue}1   &  & & 10 & 10 & 10 & 0 & 0 \\
-\color{green}2  &  & & 0  & 0  &  20 & 0 & 20 \\
+\color{blue}1   &  \color{blue}0 & \color{blue}10 & \color{blue}10 & \color{gray}10 &  \color{gray}10 &  \color{gray}0 &  \color{gray}0 \\
+\color{green}2  &  \color{green}100& \color{green} 20 &  \color{gray}0  &  \color{gray}0  &  \color{green}20 &  \color{gray}0 &  \color{gray}20 \\
 \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}n & &  & 15 & 18 & 20 & 3 & 2 \\
+\color{purple}n &  \color{purple}50& \color{purple}18  & \color{gray}15 &  \color{purple}18 &  \color{gray}20 &  \color{gray}3 &  \color{gray}2 \\
 \end{array}
 }
 $$
 
-## This is What We're Left With
+- We'll do this *randomly*, e.g. by rolling a die. In effect, this is just *another sampling step*.
+- Think of the group that receives each treatment as being drawn from our population by a two-stage process.
+  - First, roll an $m$-sided die to choose a row from our population table *to consider*.
+  - Then, roll a 3-sided die to decide whether we're included in the subsample with $D_i=d$.
 
-- How do we recover we need?
 
-[ Two column table ]
-
-- If we had all the potential outcomes, we could approximate the population-level average treatment effect by a sample average.
+:::: columns
+::: {.column width="30%"}
 $$
-\frac{1}{m} \sum_j y_j(50) - y_j(0) \approx \frac{1}{n} \sum_i Y_i(50) - Y_i(0)
+\small{
+\begin{array}{c|cc}
+i & D_i & Y_i    \\
+\color{blue}1   &  \color{blue}0 & \color{blue}10 \\
+\vdots & 0 & \vdots  \\
+\end{array}
+}
+$$
+:::
+::: {.column width="30%"}
+$$
+\small{
+\begin{array}{c|cc}
+i & D_i & Y_i    \\
+\vdots & 50 & \vdots \\
+\color{purple}n &  \color{purple}50& \color{purple}18 \\
+\end{array}
+}
+$$
+:::
+::: {.column width="30%"}
+$$
+\small{
+\begin{array}{c|cc}
+i & D_i & Y_i    \\
+\vdots & 100 & \vdots \\
+\color{green}2  &  \color{green}100& \color{green} 20  \\
+\end{array}
+}
+$$
+:::
+::::
+
+
+
+## Getting By With What We Have
+
+
+- If we had all the potential outcomes... 
+- We could approximate a population-level average treatment effect by a sample average.
+
+$$
+\small{
+\frac{1}{m} \sum_{j=1}^m y_j(50) - y_j(0) \approx \frac{1}{n} \sum_{i=1}^n Y_i(50) - Y_i(0) 
+}
 $$
 
 - This works because of the law of large numbers. Sample averages approximate population averages.
-- But we don't have all the potential outcomes. We only have one of them for each person.
-- One thing we can do is average the outcomes we do have. Does this work?
+- By the same logic, we can do the same using *each treatment group*. 
+- When we randomize, these are random samples from the population, too.
 
 $$
-\begin{aligned}
-\frac{1}{n} \sum_i Y_i(50) &\overset{?}{\approx} \frac{1}{N_{50}} \sum_{i:D_i=50}Y_i(50) = \frac{1}{N_{50}} \sum_{i:D_i=50}Y_i \\
-\frac{1}{n} \sum_i Y_i(0)  &\overset{?}{\approx} \frac{1}{N_{0}} \sum_{i:D_i=0}Y_i(0)    = \frac{1}{N_{0}} \sum_{i:D_i=0}Y_i
-\end{aligned}
+\small{
+\frac{1}{m} \sum_{j=1}^m y_j(50) - y_j(0) \approx \frac{1}{N_d} \sum_{i:D_i=d}^n Y_i(50) - Y_i(0) = \frac{1}{N_d} \sum_{i:D_i=d} Y_i(50) - \frac{1}{N_d}\sum_{i:D_i=d} Y_i(0)
+}
+$$ 
+
+- This still isn't something we can use. We don't have all the potential outcomes. But it just takes one tweak. 
+- We use *different subsamples* to approximate the averages of diferent potential outcomes. 
+- In particular, we use the subsample in which that potential outcome is observed.
+
+$$
+\small{
+\frac{1}{m} \sum_{j=1}^m y_j(50) - y_j(0) \approx \frac{1}{N_d} \sum_{i:D_i=50} Y_i(50) - \frac{1}{N_0}\sum_{i:D_i=0} Y_i(0)  = \frac{1}{N_d} \sum_{i:D_i=50} Y_i - \frac{1}{N_0}\sum_{i:D_i=0} Y_i
+}
 $$
 
-- This works because of randomization. The coin-flip that determines treatment *has nothing to do with the potential outcomes*. Or anything else.
-- So we are, in effect, just sampling again when we choose the rows with $D_i=50$ and $D_i=0$. This time, from the sample.
-
-[ Table split into two tables ]
 
 ## Formal Identification
 
-- All this is getting at the idea that we can write the population-level average treatment effect 
-  in terms of means of the observed outcome in subpopulations.
-$$
-\begin{aligned}
-\frac{1}{m}\sum_j y_j(50) - y_j(0) 
-&= \E[Y_i(50) - Y_i(0)] \\
-&= \E[Y_i(50) \mid D_i=50] -  \E[Y_i(0) \mid D_i=0] \\
-&= \E[Y_i \mid D_i=50] -  \E[Y_i \mid D_i=0] \\
-&= \mu(50) - \mu(0).
-\end{aligned}
-$$
+- Here, in formal language, is the crux of this argument. As a result of sampling and randomization, ...
+- Subsample averages of realized outcomes are *unbiased and consistent* estimators of population averages of potential outcomes.
+- That's because *randomized assignment* ensures that the treatment $D_i$ is *independent* of the potential outcomes.
 
-- Now we're done with the causal stuff. 
-- We've worked out how to answer our question in terms of things we can estimate.
-- And the particular form --- a linear combination of subpopulation means --- is something we've done before.
-
-
-
-# Old Shit
-
-## Potential Outcomes and Treatment Effects 
-
-- Potential Outcomes
-  - There are three levels of treatment. We'll write them in terms of what the employer pays.d
-- Individual-Level Treatment Effect
-  - There are two natural individual-level treatment effects to think about.
-  - The effect of a \$50 gym membership vs none:  $\tau_i(50)  = Y_i(50) - Y_i(0)$
-  - The effect of a \$100 gym membership vs \$50:  $\tau_i(100) = Y_i(100) - Y_i(50)$
-
-$$\begin{array}{c|ccc|cc}
-i & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
-\end{array}
-$$
-
-
-## What We See 
-
-- Observed Outcomes
-  - We only observe one of these potential outcomes: $Y_i = Y_i(D_i)$
-  - That's not enough to tell use about the value of any one of these effects.
-- Randomization
-  - The employer assigns participants to these three plans randomly. 
-  - They do it by having the employees roll two dice.
-    - If they roll an 11 or 12, they get the \$100 plan.
-    - If they roll 7,8,9, or 10 they get the \$50 plan.
-    - If they roll 1-6, they get the \$0 plan---i.e. nothing.
-
-## Population-Level Treatment Effects
-
-- What they care about is the population-level treatment effect.
-  - i.e. the effect of offering these plans to every employee.
-- That'll have an effect on the rate they're able to negotiate with their insurance provider.
-- We can think of our employees as having potential outcomes associated with each level of treatment.
-- And the effects we're interested in are population-level average treatment effects.
-
-:::: columns
-
-::: column
 $$
 \small{
-\begin{array}{c|ccc|cc}
-j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
-1 & 5  & 10 & 10 & 5 & 0 \\
-\color{blue}2 & 10 & 10 & 10 & 0 & 0 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{green}327 & 0 & 0  &  20 & 0 & 20 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}358 & 15 & 18 & 20 & 3 & 2 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-m & 10 & 10 & 5  & 0 & -5 \\
-\end{array}
+\begin{aligned}
+\frac{1}{m}\sum_j y_j(d) 
+  &= \E[Y_i(d)]            && \text{sampling} \\
+  &= \E[Y_i(d) \mid D_i=d] && \text{irrelevance of independent conditioning variables} \\
+  &= \E[Y_i \mid D_i=d]=\mu(d)    && \text{$Y_i(d)=Y_i$ \ when \ $D_i=d$ } \\
+&\approx \hat\mu(d) = \frac{1}{N_d}\sum_{i:D_i=d} Y_i && \text{law of large numbers}
+\end{aligned}
 }
 $$
 
+- If we can express what we want to estimate as a linear combination of potential outcome means...
+- This means we can *rewrite it* as a linear combination of *subpopulation means*.
+
+$$
+\small{
+\begin{aligned}
+\tau(50) &= \frac{1}{m}\sum_j y_j(50) - y_j(0) = \mu(50) - \mu(0) \\
+\tau(100) &= \frac{1}{m}\sum_j y_j(100) - y_j(50) = \mu(100) - \mu(50) \\
+&\frac{1}{m}\sum_j \alpha(100)y_j(100) + \alpha(50)y_j(50) + \alpha(0)y_j(0) = \alpha(100)\mu(100) + \alpha(50)\mu(50) + \alpha(0)\mu(0) \\
+\end{aligned}
+}
+$$
+
+## Where This Leaves Us
+
+$$
+\small{
+\begin{aligned}
+\tau(50) &= \frac{1}{m}\sum_j y_j(50) - y_j(0) = \mu(50) - \mu(0) \\
+\tau(100) &= \frac{1}{m}\sum_j y_j(100) - y_j(50) = \mu(100) - \mu(50) \\
+&\frac{1}{m}\sum_j \alpha(100)y_j(100) + \alpha(50)y_j(50) + \alpha(0)y_j(0) = \alpha(100)\mu(100) + \alpha(50)\mu(50) + \alpha(0)\mu(0) \\
+\end{aligned}
+}
+$$
+
+- Once we've done this, we can put away our causal thinking.
+- We know, in terms of the distribution of our observations ($D_i,Y_i$), what we want to estimate.
+- And there's nothing especially causal about that. We can just use the techniques we've already learned.
+
+
+## Today's Focus
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+set.seed(3)
+
+# Sampling 250 employees. Our population is an even mix of ...
+#   'blue guys', who go 1/4 days no matter what
+#   'green guys', who go more if it's free but --- unlike the ones in our table earlier --- don't care about classes
+
+n=250
+is.blue = rbinom(n,1, 1/2)
+Yblue   = rbinom(n, 30, 1/4) 
+Ygreen0 = rbinom(n, 30, 1/10)
+Ygreen50 = rbinom(n, 30, 1/5)
+
+Y0   = ifelse(is.blue, Yblue, Ygreen0)
+Y50  = ifelse(is.blue, Yblue, Ygreen50)
+Y100 = Y50   ### <--- this tells us we've got no effect.
+
+# Randomizing by rolling two dice. R is their sum
+R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
+D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
+Y = case_match(D, 0~Y0, 50~Y50, 100~Y100)
+
+# Randomizing by rolling two dice. R is their sum
+R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
+D = case_match(R,
+  1:6~0,
+  7:10~50,
+  11:12~100)
+Y = case_match(D,
+  0~Y0,
+  50~Y50,
+  100~Y100)
+
+real.data = tibble(D=D, Y=Y)
+summaries = tibble(D=D, Y=Y) %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
+
+scatter = ggplot() + geom_point(aes(x=D, y=Y), color="red", data=tibble(D=D,Y=Y),
+                                     position=position_jitter(w=10,h=0), alpha=.3) +
+           geom_pointrange(aes(x=D, y=mean, ymin=mean-2*sd, ymax=mean+2*sd), data=summaries) +
+           scale_x_continuous(breaks=c(0,50,100)) + labs(x="D", y="Y") + ylim(-3,15)
+scatter
+``` 
+
+- Let's talk about estimating $\tau(100)$, the effect of a \$100 gym membership vs. a \$50 membership.
+  - We really don't want to spend \$100/month if we don't have to.
+  - So we're hoping it's not much better than spending \$50/month.
+- The statistical challenge is we've leaned into that preference in our experiment too.
+- We've designed our experiment so not many people are in the \$100 group.
+- In particular, for each employee in our sample, we're rolling two dice
+  - If the sum is 11 or 12, they get the \$100 plan.
+  - If the sum if 7,8,9, or 10, they get the \$50 plan.
+  - If the sum is 1-6, they get the \$0 plan.
+
+## We Know How To Do This
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+point.estimate = summaries$mean[summaries$D==100] - summaries$mean[summaries$D==50]
+scatter
+``` 
+
+$$
+\tau(100) = \mu(100) - \mu(50)
+$$
+
+- We can use a simple difference in subsample means as a point estimate.
+
+$$
+\hat\tau(100) = \hat\mu(100) - \hat\mu(50) = `r approx(summaries$mean[summaries$D==100])` - `r approx(summaries$mean[summaries$D==50])` \approx `r approx(point.estimate)`
+$$
+
+- And we can use an estimate of its sampling distribution to calibrate an interval estimate.
+
+```{r}
+data = tibble(D=D, Y=Y)
+boot.distn = function(data, B=1000) { 
+  rows = purrr::map(1:B, function(i) {
+    data.boot = data[sample(1:nrow(data), replace=TRUE),]
+    summaries.boot = data.boot %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
+    model = lm(Y ~ D, data=data.boot)
+    muhat = predict(model, newdata=data.frame(D=c(0,50,100)))
+
+    tauhat.dif = mean(data.boot$Y[data.boot$D==100]) - mean(data.boot$Y[data.boot$D==50]) 
+    tauhat.slope = muhat[3]-muhat[2]
+    data.frame(dif=tauhat.dif, slope=tauhat.slope)
+  })
+  rows %>% bind_rows() 
+}
+boots = boot.distn(data)
+```
+
+```{r plotting-code}
+width = function(samples, center=mean(samples), alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( center - w/2 <= samples & samples <= center + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-center))))$root
+}
+
+distribution.plot = function(boot.samples, point.estimate, w=width(boot.samples), interval.replications=0, point.replications=0) { 
+  drange = c(0, dnorm(0, mean=0, sd=sd(boot.samples)))
+  p = ggplot(data.frame(samples=boot.samples)) + 
+    geom_histogram(aes(x=samples, y=after_stat(density)), alpha=.3, bins=50)  +
+    geom_pointrange(aes(y=dnorm(2*sd(samples), mean=0, sd=sd(samples)), 
+      x=point.estimate, xmin=point.estimate - w/2, xmax=point.estimate + w/2)) + 
+      geom_vline(xintercept=mean(boot.samples), color='blue') + 
+      geom_vline(xintercept=quantile(boot.samples, c(.025,.975)), color='blue', linetype='dotted') 
+  if(interval.replications > 0) { 
+    K = interval.replications
+    p = p + geom_pointrange(aes(y=y, x=x, xmin=xmin, xmax=xmax), 
+          data=data.frame(y=seq(min(drange), max(drange), length.out=K), 
+                  x=boot.samples[1:K], xmin=boot.samples[1:K] - w/2, xmax=boot.samples[1:K] + w/2), color='purple', alpha=.2)
+  }
+  if(point.replications > 0) { 
+    K = point.replications
+    p = p + geom_point(aes(y=y, x=x), 
+          data=data.frame(y=seq(min(drange), max(drange), length.out=K), 
+                  x=boot.samples[1:K], xmin=boot.samples[1:K] - w/2, xmax=boot.samples[1:K] + w/2), color='purple', alpha=.2)
+  }
+  p
+}
+```
+
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+#| layout-ncol: 2
+
+se = sqrt( var(Y[D==100])/sum(D==100) + var(Y[D==50])/sum(D==50) )
+x = seq(point.estimate-4*se, point.estimate+4*se, length.out=1000)
+normal.distribution.plot = ggplot() + 
+    geom_area(aes(x=x, y=dnorm(x, mean=point.estimate, sd=se)), color='purple', fill='purple', alpha=.08) +
+    geom_vline(aes(xintercept=point.estimate), color='purple', linetype='solid') +
+    geom_vline(aes(xintercept=point.estimate + c(-1,1)*1.96*se), color='purple', linetype='dotted') +
+    geom_pointrange(aes(y=dnorm(2*se, mean=0, sd=se), x=point.estimate, xmin=point.estimate - 1.96*se, xmax=point.estimate + 1.96*se))
+
+distribution.plot(boots$dif, point.estimate) + xlim(min(x), max(x))
+normal.distribution.plot + xlim(min(x), max(x))
+``` 
+
+## But We're Not Happy With Our Precision
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+normal.distribution.plot + xlim(min(x), max(x))
+``` 
+
+- It's worth it to spend the extra money if it gets us at least 1 day/month for the average employee.
+  - And we can't rule that out.
+  - But we can't 'rule it in' either. 
+- We just don't have compelling evidence in one direction or the other.
+- So let's look at why that is. What did we do wrong when designing this experiment? 
+
+
+## Variance
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+normal.distribution.plot + xlim(min(x), max(x))
+``` 
+
+- Let's calculate the variance of our point estimate to see where the problem is.
+$$
+\Var\qty[\sum_d \alpha(d) \hat\mu(d)]  = \sum_d \sigma^2(d) \alpha^2(d) \times \E\qty[ \frac{1}{N_d} ]
+$$
+
+- We can use this table.
+
+$$
+\begin{array}{c|ccc}
+d & 0 & 50 & 100 \\
+\hline
+\hat\sigma^2(d) & `r approx(var(Y[D==0]))` & `r approx(var(Y[D==50]))` & `r approx(var(Y[D==100]))` \\
+\alpha^2(d) &  &  &  \\
+N_d & `r approx(sum(D==0))` & `r approx(sum(D==50))` & `r approx(sum(D==100))` \\
+\frac{\hat\sigma^2(d) \alpha^2(d)}{N_d} &  &  &  \\
+\end{array}
+$$
+
+- What do you see?
+
+## Variance
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+normal.distribution.plot + xlim(min(x), max(x))
+``` 
+
+
+$$
+\begin{array}{c|ccc}
+d & 0 & 50 & 100 \\
+\hline
+\hat\sigma^2(d) & `r approx(var(Y[D==0]))` & `r approx(var(Y[D==50]))` & `r approx(var(Y[D==100]))` \\
+\alpha^2(d) & 0 & 1 & 1 \\
+N_d & `r approx(sum(D==0))` & `r approx(sum(D==50))` & `r approx(sum(D==100))` \\
+\frac{\hat\sigma^2(d) \alpha^2(d)}{N_d} & 0 & `r approx(var(Y[D==50])/sum(D==50))` & `r approx(var(Y[D==100])/sum(D==100))` \\
+\end{array}
+$$
+
+- What I see is that we don't have enough people randomized to the $D=100$ treatment.
+  - The variance we get from just that one term is $`r approx(var(Y[D==100])/sum(D==100))`$.
+  - Meaning the contribution to our standard error is 
+  $\sqrt{`r approx(var(Y[D==100])/sum(D==100))`} \approx `r approx(sqrt(var(Y[D==100])/sum(D==100)))`$ 
+  - And since we multiply standard error by 1.96 to get an 'arm' for our interval ...
+  - This ensures our arms are at least $1.96 \times `r approx(sqrt(var(Y[D==100])/sum(D==100)))`  \approx `r approx(1.96*sqrt(var(Y[D==100])/sum(D==100)))`$ days wide.
+
+## If We Could Do It Again
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+
+n = 250
+D = sample(c(50,100), size=n, replace=TRUE) 
+Y = case_match(D,
+  0~Y0,
+  50~Y50,
+  100~Y100)
+
+summaries.new = tibble(D=D, Y=Y) %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
+point.estimate = summaries.new$mean[summaries.new$D==100] - summaries.new$mean[summaries.new$D==50]
+
+scatter.new = ggplot() + geom_point(aes(x=D, y=Y), color="red", data=tibble(D=D,Y=Y),
+                                     position=position_jitter(w=10,h=0), alpha=.3) +
+           geom_pointrange(aes(x=D, y=mean, ymin=mean-2*sd, ymax=mean+2*sd), data=summaries) +
+           scale_x_continuous(breaks=c(0,50,100)) + labs(x="D", y="Y") + ylim(-3,15)
+scatter.new
+```
+
+- We'd assign more people to the $D=100$ treament to get a more precise estimate.
+- Here's what we'd get if we assigned people to each of our 2 *relevant* treatments with probability $1/2$.
+- This does what we need it to do: it gives us a confidence interval that to the left of $1$.
+
+```{r}
+boots.ifwecould = boot.distn(tibble(D=D, Y=Y))
+```
+
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+#| layout-ncol: 2
+
+se = sqrt( var(Y[D==100])/sum(D==100) + var(Y[D==50])/sum(D==50) )
+x = seq(point.estimate-4*se, point.estimate+4*se, length.out=1000)
+normal.distribution.plot = ggplot() + 
+    geom_area(aes(x=x, y=dnorm(x, mean=point.estimate, sd=se)), color='purple', fill='purple', alpha=.08) +
+    geom_vline(aes(xintercept=point.estimate), color='purple', linetype='solid') +
+    geom_vline(aes(xintercept=point.estimate + c(-1,1)*1.96*se), color='purple', linetype='dotted') +
+    geom_pointrange(aes(y=dnorm(2*se, mean=0, sd=se), x=point.estimate, xmin=point.estimate - 1.96*se, xmax=point.estimate + 1.96*se))
+
+distribution.plot(boots.ifwecould$dif, point.estimate) + xlim(min(x), max(x))
+normal.distribution.plot + xlim(min(x), max(x))
+``` 
+
+## But We Can't
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+
+model=lm(Y ~ D, data=real.data)
+mu.hat = predict(model, newdata=data.frame(D=c(0,50,100)))
+slope.point.estimate = mu.hat[3]-mu.hat[2]
+
+scatter + geom_line(aes(x=c(0,50,100), y=mu.hat), color='blue', linetype='dashed')
+```
+
+- This is our data. We have to do what we can. So we get clever.
+- Instead of estimating each subpopulation mean separately, we *fit a line* to the data.
+- We take $\hat\mu(d)$ to be the height of the line at $d$ and $\hat\tau(d)=\hat\mu(100)-\hat\mu(50)$ as before.
+- And when we bootstrap it ... 
+  - We get a much narrower interval than the one we had before.
+  - But it's not in the same place at all.
+
+
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Difference in Sample Means Sampling Dist"
+#|   - "Fitted-Line-Based Sampling Dist" 
+
+real.point.estimate = mean(real.data$Y[real.data$D==100]) - mean(real.data$Y[real.data$D==50])
+x = seq(slope.point.estimate-7*se, slope.point.estimate+7*se, length.out=1000)
+distribution.plot(boots$dif,   real.point.estimate) + xlim(min(x), max(x)) 
+distribution.plot(boots$slope, slope.point.estimate) + xlim(min(x), max(x))
+```
+
+## What's Going On?
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+
+scatter + geom_line(aes(x=c(0,50,100), y=mu.hat), color='blue', linetype='dashed') + 
+  coord_cartesian(ylim=range(summaries$mean) + .5*c(-1,+1))
+```
+
+- Let's zoom in. It looks like our like our blue line ...
+  - *overestimates* $\mu(100)$
+  - *underestimates* $\mu(50)$
+  - therefore *overestimates* $\tau(100)=\mu(100)-\mu(50)$.
+- That's what it looks like when we compare to the subsample means, anyway.
+- And that's why we get a bigger estimate than we did *using* the subsample means.
+- It looks like---although we haven't done the calculation---this line-based estimator is *biased*.
+
+## Implications
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Difference in Sample Means Sampling Dist"
+#|   - "Fitted-Line-Based Sampling Dist" 
+
+distribution.plot(boots$dif,   real.point.estimate) + xlim(min(x), max(x))
+distribution.plot(boots$slope, slope.point.estimate)  + xlim(min(x), max(x))
+```
+
+- This isn't a disaster if all we want to know is whether our effect $\tau(100)$ is &gt;1
+  - i.e, if we want to know whether the \$100 plan gives us an additional gym day over the \$50 one.
+  - No matter which approach we use, we get the same answer: we don't know.
+  - Our interval estimates both include numbers above and below 1.
+- But if what we wanted to know was whether $\tau(100) > 0$, we'd get different answers.
+  - The difference in subsample means approach would say we don't know.
+  - The fitted line approach would say we do know---in fact, that $\tau(100) > 1/2$.
+- And this is a problem. This is fake data, so I can tell you it's wrong. The actual effect is exactly zero.
+- In the data we're looking at, the potential outcomes $Y_i(50)$ and $Y_i(100)$ are *exactly the same*.
+
+## The Data
+
+```{r}
+#| eval: false
+#| echo: true
+
+# Sampling 250 employees. Our population is an even mix of ...
+#   'blue guys', who go 1/4 days no matter what
+#   'green guys', who go more if it's free but --- unlike the ones in our table earlier --- don't care about classes
+
+n=250
+is.blue = rbinom(n,1, 1/2)
+Yblue   = rbinom(n, 30, 1/4) 
+Ygreen0 = rbinom(n, 30, 1/10)
+Ygreen50 = rbinom(n, 30, 1/5)
+
+Y0   = ifelse(is.blue, Yblue, Ygreen0)
+Y50  = ifelse(is.blue, Yblue, Ygreen50)
+Y100 = Y50   ### <--- this tells us we've got no effect.
+
+# Randomizing by rolling two dice. R is their sum
+R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
+D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
+Y = case_match(D, 0~Y0, 50~Y50, 100~Y100)
+``` 
+
+## Bias
+
+
+```{r}
+
+line.based.estimates = purrr::map(1:1000, function(b) {
+  n=250
+  is.blue = rbinom(n,1, 1/2)
+  Yblue   = rbinom(n, 30, 1/4) 
+  Ygreen0 = rbinom(n, 30, 1/10)
+  Ygreen50 = rbinom(n, 30, 1/5)
+
+  Y0   = ifelse(is.blue, Yblue, Ygreen0)
+  Y50  = ifelse(is.blue, Yblue, Ygreen50)
+  Y100 = Y50   ### <--- this tells us we've got no effect.
+
+  # Randomizing by rolling two dice. R is their sum
+  R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
+  D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
+  Y  = case_match(D, 0~Y0, 50~Y50, 100~Y100)
+
+  model=lm(Y ~ D, data=tibble(D=D, Y=Y))
+  mu.hat = predict(model, newdata=data.frame(D=c(0,50,100)))
+  data.frame(estimate =  mu.hat[3]-mu.hat[2], se = sqrt(vcov(model)[2,2])*50)
+}) %>% bind_rows()
+
+```
+
+```{r}
+#| out-height: 500px
+
+line.based.estimates$i = 1:nrow(line.based.estimates)
+slope.se = sqrt(vcov(model)[2,2])*50
+line.sampling.dist = ggplot() + 
+  geom_histogram(aes(x=estimate, y=after_stat(density)), bins=50, alpha=.2, data=line.based.estimates) + 
+  geom_vline(aes(xintercept=mean(estimate)), color='blue', data=line.based.estimates) +
+  geom_pointrange(aes(x=slope.point.estimate, y=dnorm(2*slope.se, mean=0, sd=slope.se), 
+                      xmin=slope.point.estimate - 1.96*slope.se, 
+                      xmax=slope.point.estimate + 1.96*slope.se))
+line.sampling.dist
+``` 
+
+- We can do a little simulation to calculate the bias of our line-based estimator.
+- We'll generate 1000 fake datasets like the one we've been looking at.
+  - And calculate our estimator for each one. This gives us draws from our estimator's *sampling distribution*. 
+  - I've used them to draw a histogram that approximates this sampling sampling distribution.
+- The mean of these point estimates is $`r approx(mean(line.based.estimates$estimate))`$. Since our actual effect is zero, that's our bias. The blue line.
+- Our actual point estimate is off in the same direction---but a bit more than usual.
+  - It's shown in black with a corresponding 95% interval.
+  - An interval that fails to cover the actual effect of zero.
+
+## Coverage
+
+```{r}
+#| out-height: 500px
+covers =  abs(line.based.estimates$estimate) <= 1.96*line.based.estimates$se 
+line.sampling.dist + geom_pointrange(aes(x=estimate, y=(8*i/100)*dnorm(2*slope.se, mean=0, sd=slope.se), 
+                      xmin=estimate - 1.96*se, 
+                      xmax=estimate + 1.96*se), data=line.based.estimates[1:100,], color='purple', alpha=.4)  
+```
+
+- We can construct 95% confidence intervals the same way in each fake dataset.
+  - I've drawn 100 of these intervals in purple. 
+  - You can see that they sometimes cover zero, but not as often as you'd like.
+- `r sum(covers)` / `r nrow(line.based.estimates)` &asymp; `r percent(mean(covers))` of them cover zero. That's not good. 
+- If that's typical of our analysis, people *really* shouldn't trust us. 
+
+## Where We're Headed 
+
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Difference in Sample Means Sampling Dist (n=250)"
+#|   - "Fitted-Line-Based Sampling Dist (n=250)" 
+
+xrange = c(-4,4)
+scale_x = scale_x_continuous(breaks=seq(min(xrange), max(xrange), by=1), limits=xrange)
+distribution.plot(boots$dif,   real.point.estimate) + scale_x
+distribution.plot(boots$slope, slope.point.estimate)  + scale_x
+```
+
+:::: r-stack
+
+::: {.fragment .fade-out data-fragment-index="0"}
+
+- Next time, we're going to talk about why fitting lines **is** common practice and **isn't** a good idea.
+- It has to do with sample size. When sample sizes are small, we get wide intervals.
+  - And a small amount of bias may be negligible in comparison to it. 
+  - That means we can often get away with stuff like fitting lines.
+- You can see that in the sampling distribution plots below.
+  - We've done the same analysis using only $50$ of our $250$ observations.
+  - And the line-based estimate gives us a wider interval that covers the actual effect: zero.
+-  We'll see exactly how much worse coverage gets as a function of sample size.
 :::
-::: column
+::: {.fragment .current-visible data-fragment-index="0"}
 
-$$
-\small{
-\begin{aligned}
-\tau(50)  &= \frac{1}{m} \sum_{j=1}^m \tau_j(50)  \\
-\tau(100) &= \frac{1}{m} \sum_{j=1}^m \tau_j(100) 
-\end{aligned}
-}
-$$
-
+- The reason fitting lines is common practice is historical.
+- Common practice is rooted in tradition dating back to the 1930s or so. 
+  - Nobody had computers. So samples were almost always small. 
+  - And working with lines usually wasn't such a big problem.
+- That changed in the 1970s. 
+  - And what statisticians were thinking about changed too.
+  - A lot of what are now called *machine learning methods* were developed at that time.
+- It's taking some time to cover the basics so we'll be prepared, but that's where we're going.
 :::
 ::::
 
 
-## Sampling
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Difference in Sample Means Sampling Dist (n=50)"
+#|   - "Fitted-Line-Based Sampling Dist (n=50)" 
 
-- We don't want to trouble all of our employees with a survey, so we sample a subset of them.
-- In the table, I've colored a few employees so we can track them from population into the sample.
-- To have some concrete behaviors in mind, we'll keep an eye on them.
-  - In blue, we have an employee doesn't care about subsidies. 
-    - They're going to the gym 10 days/month no matter what.
-  - In purple, we have one who is a bit price-sensitive.
-    - They'll go once a week with no subsidy, twice a week if it's free, and 4x/week with free classes.
-  - In green, we have one who loves classes but hates spending money even more. 
-    - They'll go 20 days/month with free classes, but won't go at all otherwise.
-  
-:::: columns
-::: column
-$$
-\small{
-\begin{array}{c|ccc|cc}
-j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
-1 & 5  & 10 & 10 & 5 & 0 \\
-\color{blue}2 & 10 & 10 & 10 & 0 & 0 \\
-\vdots & \vdots  & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}327 & 4 & 8 & 16 & 3 & 2 \\
-\vdots & \vdots  & \vdots & \vdots & \vdots & \vdots \\
-\color{green}358 & 0 & 0  &  20 & 0 & 20 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-m & 10 & 10 & 5  & 0 & -5 \\
-\end{array}
-}
-$$
-:::
-::: column
+ind = c(51:100) 
+# because 1:50 happened to give us an unusually large line-based estimate (of ~2)
+# and that didn't help make the point we want
 
-$$
-\small{
-\begin{array}{c|cc|ccc|cc}
-i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
-\color{blue}1   &  & & 10 & 10 & 10 & 0 & 0 \\
-\color{green}2  &  & & 0  & 0  &  20 & 0 & 20 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}n & &  & 15 & 18 & 20 & 3 & 2 \\
-\end{array}
-}
-$$
+summaries.small = real.data[ind, ] %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
+small.point.estimate = summaries.small$mean[summaries.small$D==100] - summaries.small$mean[summaries.small$D==50]
+smallboots = boot.distn(real.data[ind, ])
 
-:::
-::::
+model=lm(Y ~ D, data=real.data[ind,])
+mu.hat = predict(model, newdata=data.frame(D=c(0,50,100)))
+small.slope.point.estimate = mu.hat[3]-mu.hat[2]
 
-- Each row in this table is chosen, independently with probability $1/m$, from the population table.
-- That tells us that, in particular, expectations involving the quantities in these rows coincide with population averages.
-- And if we have a large enough sample, we can approximate these expectations with sample averages.
+distribution.plot(smallboots$dif[is.finite(smallboots$dif)],   small.point.estimate) + scale_x
+distribution.plot(smallboots$slope, small.slope.point.estimate)  + scale_x
+# on the is.finite thing: 
+#  - we get some NAs when our bootstrap sample includes no D=100 points. 
+#  - It's pretty rare. We'll ignore it.
+```
 
-$$
-\begin{aligned}
-\E Y_i(50) = \frac{1}{m}\sum_{j=1}^m y_j(50) \\
-\E \tau_i(50) = \frac{1}{m}\sum_{j=1}^m y_j(50) - y_j(0) = \tau(50) \\
-\end{aligned}
-$$
-
-## Randomization 
-
-- We roll the dice for each of our sampled employees.
-- In this case, the people we're tracking get what it takes for them to go to the gym.
-  - The blue one rolls a 3.    They get nothing. But they're maintaining their schedule no matter what.
-  - The purple one rolls an 8. They get the $\50 plan, so they're at the gym twice a week.
-  - The green one rolls a 12.  They get the $\100 plan, so they're at the gym 20 days/month.
-  
-$$
-\begin{array}{c|cc|ccc|cc}
-i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
-\color{blue}1   & 0    & 10 & 10 & 10 & 10 & 0 & 0 \\
-\color{green}2  & 100  & 20 & 0  & 0  &  20 & 0 & 20 \\
-\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}n & 50   & 18 & 15 & 18 & 20 & 3 & 2 \\
-\end{array}
-$$
-
-## Alternate Randomization 
-
-- That could happen. But so could this.
-- In this case, the subsidies that go to our three people aren't that encouraging.
-  - The blue one rolls a 9.    They get the \$100 plan, but that makes no difference to their behavior.
-  - The purple one rolls an 2. They get the \$0 plan,   so they're only in the gym once a week.
-  - The green one rolls a 7.   They get the \$50 plan, but it's worth nothing to them. No free classes, no gym!
-  
-$$
-\begin{array}{c|cc|ccc|cc}
-i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
-\color{blue}1   &100  &  & 10 & 10 & 10 & 0 & 0 \\
-\color{green}2  & 50   & 0 & 0  & 0  &  20 & 0 & 20 \\
-\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}n & 0   & 15 & 15 & 18 & 20 & 3 & 2 \\
-\end{array}
-$$
-
-## An In-Class Randomization
-
-- Let's do a real one. Let's roll some dice and fill in the table.
-- What's the story here?
-  - The blue one rolls a  ...
-  - The purple one rolls a ...
-  - The green one rolls a ...
-
-$$
-\begin{array}{c|cc|ccc|cc}
-i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
-\color{blue}1   &  &  & 10 & 10 & 10 & 0 & 0 \\
-\color{green}2  &  &  & 0  & 0  &  20 & 0 & 20 \\
-\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}n &     &  & 15 & 18 & 20 & 3 & 2 \\
-\end{array}
-$$
-
-## Implications of Sampling and Randomization --- Informal
-
-- We've looked at what happened to 3 employees in a few different randomizations. 
-- This was just a thought experiment. Only one randomization actually happens.
-- But if our sample size is large enough, we'll have multiple employees of each 'type'.
-  - Some who don't respond to subsidies, like our blue one.
-  - Some who respond only if they get the biggest subsidy, like our purple one.
-  - Some who respond a bit at each level, like our green one.
-  - And other types, too.
-- And, in effect, all of the different rolls we've looked at will happen at once.
-- They'll happen to different people, of course, but people who behave more or less the same. 
-- And this randomization ensures that the *mix of types* is the same in in each treatment group.
-    - i.e., we'll have the same proportion of blue, purple, and green types among the people with $D_i=0,50,100$.
-- This means that the distribution of *each potential outcome* is the same within each group and in the whole sample.
-- And that *includes the realized outcome*, which is one of them.
-- And because we're looking at averages...
-
-$$
-\begin{array}{c|cc|ccc|cc}
-i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
-\color{blue}1   & 0    & 10 & 10 & 10 & 10 & 0 & 0 \\
-\color{green}2  & 100  & 20 & 0  & 0  &  20 & 0 & 20 \\
-\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}27 & 50   & 18 & 15 & 18 & 20 & 3 & 2 \\
-\color{blue}36   &100  &  & 10 & 10 & 10 & 0 & 0 \\
-\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}56 & 0   & 15 & 15 & 18 & 20 & 3 & 2 \\
-\color{blue}57   &  &  & 10 & 10 & 10 & 0 & 0 \\
-\color{green}58  & 50   & 0 & 0  & 0  &  20 & 0 & 20 \\
-\color{green}59  &  &  & 0  & 0  &  20 & 0 & 20 \\
-\vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}n &     &  & 15 & 18 & 20 & 3 & 2 \\
-\end{array}
-$$
-
-## Implications of Sampling and Randomization --- Formal
-
-- Randomization ensures that the potential outcomes have the same distribution ...
-  - within each treatment group, i.e., for people with $D_i=0$,$D_i=50$,$D_i=100$.
-  - in the whole sample.
-- And in particular, the *realized outcome* 
-- And because we're looking at averages...
-$$
-E[Y_i(d)] = E[Y_i(d)|D_i=d] = \underset{\mu(d)}{E[Y_i \mid D_i=d]} \approx \underset{\hat\mu(d)}{\frac{1}{N_d}\sum_{i:D_i=d} Y_i}
-$$
