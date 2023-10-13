@@ -406,11 +406,11 @@ The data set nba\textunderscore population includes the following variables from
 \hline
 $x$ & 1 & 2 & 3 \\
 \hline
- $m_x$ & & &  \\
+ $m_x$ & 279 & 144 & 182 \\
 & & &\\
- $\mu(x)$ & & & \\
+ $\mu(x)$ & -1.4279 & -7.0729 & -5.4555\\
  & & &\\
-$\sigma^2(x)$ & & & \\
+$\sigma^2(x)$ & 337.0019 & 315.3823 & 693.7344\\
 & & & \\
 \hline
 \end{tabular}
@@ -418,18 +418,146 @@ $\sigma^2(x)$ & & & \\
 ```{r}
 ggplot(nba.pop, aes(x=draftlevel, y=net_rating)) +geom_point  ()
 
+np1<- length(nba.pop$net_rating[nba.pop$draftlevel==1])
+np1
+np2<- length(nba.pop$net_rating[nba.pop$draftlevel==2])
+np2
+np3<- length(nba.pop$net_rating[nba.pop$draftlevel==3])
+np3
+
+np1+np2+np3
+
+mu1<- mean(nba.pop$net_rating[nba.pop$draftlevel==1])
+mu1
+mu2<- mean(nba.pop$net_rating[nba.pop$draftlevel==2])
+mu2
+mu3<- mean(nba.pop$net_rating[nba.pop$draftlevel==3])
+mu3
+
+vp1<- var(nba.pop$net_rating[nba.pop$draftlevel==1])
+vp1
+vp2<- var(nba.pop$net_rating[nba.pop$draftlevel==2])
+vp2
+vp3<- var(nba.pop$net_rating[nba.pop$draftlevel==3])
+vp3
 ```
+The subsample means are quite different. The first round draft picks net rating is negative, on average, when it was positive in our sample. Our subsample mean of net ratings for undrafted players was also a lot lower than the population average-- when we see the variance among undrafted players, it makes sense that our sample could be pretty off (it is also pretty small).
+
 
 (b) What is the average incremental difference in mean net rating across the draft levels in the population using the draftlevel variable, $$\frac{1}{2} \sum_{x=2}^3 \{\mu(x) - \mu(x-1)\}$$ How does this compare to your estimate?
 
+\bigskip 
+
+```{r}
+(1/2)*(mu3 - mu1)
+
+```
+It is higher (closer to 0) than the sample. Our 95\% confidence interval from the bootstrap covers. 
+
+
 (c) Create a sampling distribution of your average incremental difference estimator. What size (n) should your repeated samples from the population be? What is the standard error for this estimator? Visually compare (with histograms) the sampling distribution to your bootstrap estimated sampling distribution for this estimator.
+
+\bigskip 
+
+The repeated sample should be of size 50 (the same size of the sample data), but the samples are taken from the population. 
+
+```{r}
+S=10000
+thetapop1<- rep(NA,S)
+n=50
+
+for( s in 1:S ){
+samind = sample(1:n,size=n,replace=T)
+dfsam = nba.pop[samind,]
+thetapop1[s] = (1/2)*mean(dfsam$net_rating[dfsam$draftlevel==3]) -(1/2)*mean(dfsam$net_rating[dfsam$draftlevel==1])
+}
+
+hist(thetapop1)
+
+sd(thetapop1)
+```
+
+The standard error is smaller than our estimated standard error. The sampling distribution looks a lot more normal than the bootstrap estimated sampling distribution (maybe our sample is a bit small)
+
+
 
 (d) What is the average incremental difference in mean net rating across the draft levels in the population weighted by the proportion of players drafted in each round (and undrafted)? $$\sum_{x=2}^3 p_x \{\mu(x) - \mu(x-1)\}$$ where $p_x = \frac{m_x}{\sum_{x=2}^3 m_x}$ How does this compare to your estimate?
 
+\bigskip
+
+What are our population $p$s? $p_2 = \frac{144}{326}$; $P_3 = \frac{182}{326}$
+
+$p_2 (\mu(2) - \mu(1) ) + p_3 (\mu(3) - \mu(2))$
+
+```{r}
+(np2/(np2+np3))*(mean(nba.pop$net_rating[nba.pop$draftlevel==2]) - mean(nba.pop$net_rating[nba.pop$draftlevel==1])) + (np3/(np2+np3))*(mean(nba.pop$net_rating[nba.pop$draftlevel==3]) - mean(nba.pop$net_rating[nba.pop$draftlevel==2]))
+```
+The true weighted increment average is higher than the sample, the 95\% confidence interval we calculated before covers this true estimand. 
+
+\bigskip 
+
 (e) Create a sampling distribution of your weighted average incremental difference estimator. What size (n) should your repeated samples from the population be? What is the standard error for this estimator? Visually compare (with histograms) the sampling distribution to your bootstrap estimated sampling distribution for this estimator.
+
+
+```{r}
+thetapop2<- rep(NA,S)
+
+for( s in 1:S ){
+samind2 = sample(1:n,size=n,replace=T)
+dfsam2 = nba.pop[samind2,]
+p2<- length(dfsam2$draftlevel==2)/(length(dfsam2$draftlevel==2) + length(dfsam2$draftlevel==3))
+p3<- length(dfsam2$draftlevel==3)/(length(dfsam2$draftlevel==2) + length(dfsam2$draftlevel==3))
+thetapop2[s] = (-p2)*mean(dfsam2$net_rating[dfsam2$draftlevel==1]) + (p2-p3)*mean(dfsam2$net_rating[dfsam2$draftlevel==2]) +  p3*mean(dfsam2$net_rating[dfsam2$draftlevel==3])
+}
+
+hist(thetapop2)
+
+sd(thetapop2)
+```
+More normal and tighter than the estimated, our estimated standard error was higher. 
+
 
 (f) What is the least squares difference in mean net rating across draft levels in the population? $$\sum_{x} \tilde{w}(x) \mu(x)$$ where $\tilde{w}(x) = \frac{m_x (x-\bar{X})}{\sum_i (X_i - \bar{X})^2}$ How does this compare to your estimate?
 
+```{r}
+xvarpop<- rep(NA, length(nba.pop$net_rating))
+for(i in 1:length(nba.pop$net_rating)){
+  xvarpop[i]<- (nba.pop$draftlevel[i] - mean(nba.pop$draftlevel))^2
+}
+denompop<- sum(xvarpop)
+```
+
+```{r}
+((np1*(1-mean(nba.pop$draftlevel)))/denompop)*mu1 + ((np2*(2-mean(nba.pop$draftlevel)))/denompop)*mu2 + ((np3*(3-mean(nba.pop$draftlevel)))/denompop)*mu3 
+
+#Just to check because it should be the same as the slope: 
+modpop<- lm(net_rating~draftlevel, data=nba.pop)
+summary(modpop)
+```
+The true least squares average increment is higher (closer to 0). 
+
+
 (g) Create a sampling distribution of your least squares estimator. What size (n) should your repeated samples from the population be? What is the standard error for this estimator? Visually compare (with histograms) the sampling distribution to your bootstrap estimated sampling distribution for this estimator.
 
+```{r}
+
+thetapop3<- rep(NA,S)
+
+for( s in 1:S ){
+samind3 = sample(1:n,size=n,replace=T)
+dfsam3 = nba.pop[samind3,]
+ols<- lm(dfsam3$net_rating~ dfsam3$draftlevel)
+thetapop3[s] = ols$coef[2]
+}
+
+hist(thetapop3)
+
+sd(thetapop3)
+
+```
+
+Sampling distribution is more normal and much tighter than estimated sampling distribution, standard error lower than estimated standard error. 
+
 (h) Overall, how did your estimates compare to the population? How similar were your estimated standard errors to the standard errors of your estimators? Why might the estimators have different standard errors?
+
+The subpopulations have pretty high variance and so do the subsamples. All of our estimators put a lot of weight on the undrafted players and the is the subsample (and subpopulation) with the greatest conditional variance. Our bootstrap estimated sampling distributions are not as similar to the actual sampling distributions (that we generated using the population) as we might want. Our sample is pretty small. All of our CIs covered the population estimands; our estimated standard errors were all larger than the standard errors of our estimators, but at least that means we are being more conservative. 
