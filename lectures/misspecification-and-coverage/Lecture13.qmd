@@ -1,0 +1,402 @@
+---
+title: "QTM 220: Lecture 13"
+subtitle: "Misspecification and Statistical Inference"
+format: 
+  clean-revealjs:
+    height: 1000
+    width: 1290
+    theme: [default, "class.scss"]
+    smaller: true
+    slide-number: true
+    pdf-separate-fragments: true
+    fig-format: svg
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
+---
+
+
+```{r load-libraries}
+library(purrr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(ggplot2)
+library(htmltools)
+library(kableExtra)
+library(scales)
+
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+```
+
+```{r ggplot-themes}
+fontsize = 16
+textcolor = "#888888"
+
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+        panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = textcolor, size=fontsize),
+        axis.text.y  = element_text(colour = textcolor, size=fontsize),
+        axis.title.x  = element_text(colour = textcolor),
+        axis.title.y  = element_text(colour = textcolor, angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+              axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+
+```{r table-styling}
+ellipsis <- function(df, nhead=5L, ntail=2) {
+    rownames(df) = as.character(1:nrow(df))
+    stopifnot("data.frame" %in% class(df))
+    els <- rep(NA, ncol(df)) %>% 
+        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
+        data.frame(stringsAsFactors=FALSE) %>% 
+        tibble::as_tibble()
+    rownames(els) = "⋮"
+    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
+}
+```
+
+```{r fake-data}
+#| out-height: 300px
+#| fig-asp: .3 
+set.seed(3)
+
+# Sampling 250 employees. Our population is an even mix of ...
+#   'blue guys', who go 1/4 days no matter what
+#   'green guys', who go more if it's free but --- unlike the ones in our table earlier --- don't care about classes
+
+n=250
+is.blue = rbinom(n,1, 1/2)
+Yblue   = rbinom(n, 30, 1/4) 
+Ygreen0 = rbinom(n, 30, 1/10)
+Ygreen50 = rbinom(n, 30, 1/5)
+
+Y0   = ifelse(is.blue, Yblue, Ygreen0)
+Y50  = ifelse(is.blue, Yblue, Ygreen50)
+Y100 = Y50   ### <--- this tells us we've got no effect.
+
+# Randomizing by rolling two dice. R is their sum
+R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
+D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
+Y = case_match(D, 0~Y0, 50~Y50, 100~Y100)
+
+# Randomizing by rolling two dice. R is their sum
+R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
+D = case_match(R,
+  1:6~0,
+  7:10~50,
+  11:12~100)
+Y = case_match(D,
+  0~Y0,
+  50~Y50,
+  100~Y100)
+
+real.data = tibble(D=D, Y=Y)
+summaries = tibble(D=D, Y=Y) %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
+
+scatter = ggplot() + geom_point(aes(x=D, y=Y), color="red", data=tibble(D=D,Y=Y),
+                                     position=position_jitter(w=10,h=0, seed=0), alpha=.3) +
+           geom_pointrange(aes(x=D, y=mean, ymin=mean-2*sd, ymax=mean+2*sd), data=summaries) +
+           scale_x_continuous(breaks=c(0,50,100)) + labs(x="D", y="Y") + ylim(-3,15)
+
+model=lm(Y ~ D, data=tibble(D=D, Y=Y))
+predictions = tibble(D=c(0,50,100), muhat=predict(model, newdata=data.frame(D=c(0,50,100))))
+
+dif.point.estimate = mean(Y[D==100]) - mean(Y[D==50])
+slope.point.estimate = predictions$muhat[3]-predictions$muhat[2]
+``` 
+
+```{r}
+boot.distn = function(data, B=1000) { 
+  rows = purrr::map(1:B, function(i) {
+    data.boot = data[sample(1:nrow(data), replace=TRUE),]
+    summaries.boot = data.boot %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
+    model = lm(Y ~ D, data=data.boot)
+    muhat = predict(model, newdata=data.frame(D=c(0,50,100)))
+
+    tauhat.dif = mean(data.boot$Y[data.boot$D==100]) - mean(data.boot$Y[data.boot$D==50]) 
+    tauhat.slope = muhat[3]-muhat[2]
+    data.frame(dif=tauhat.dif, slope=tauhat.slope)
+  })
+  rows %>% bind_rows() 
+}
+```
+
+```{r plotting-code}
+width = function(samples, center=mean(samples), alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( center - w/2 <= samples & samples <= center + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-center))))$root
+}
+
+distribution.plot = function(boot.samples, point.estimate, w=width(boot.samples), interval.replications=0, point.replications=0) { 
+  drange = c(0, dnorm(0, mean=0, sd=sd(boot.samples)))
+  p = ggplot(data.frame(samples=boot.samples)) + 
+    geom_histogram(aes(x=samples, y=after_stat(density)), alpha=.3, bins=50)  +
+    geom_pointrange(aes(y=dnorm(2*sd(samples), mean=0, sd=sd(samples)), 
+      x=point.estimate, xmin=point.estimate - w/2, xmax=point.estimate + w/2)) + 
+      geom_vline(xintercept=mean(boot.samples), color='blue') + 
+      geom_vline(xintercept=quantile(boot.samples, c(.025,.975)), color='blue', linetype='dotted') 
+  if(interval.replications > 0) { 
+    K = interval.replications
+    p = p + geom_pointrange(aes(y=y, x=x, xmin=xmin, xmax=xmax), 
+          data=data.frame(y=seq(min(drange), max(drange), length.out=K), 
+                  x=boot.samples[1:K], xmin=boot.samples[1:K] - w/2, xmax=boot.samples[1:K] + w/2), color='purple', alpha=.2)
+  }
+  if(point.replications > 0) { 
+    K = point.replications
+    p = p + geom_point(aes(y=y, x=x), 
+          data=data.frame(y=seq(min(drange), max(drange), length.out=K), 
+                  x=boot.samples[1:K], xmin=boot.samples[1:K] - w/2, xmax=boot.samples[1:K] + w/2), color='purple', alpha=.2)
+  }
+  p
+}
+```
+
+
+# Last Time
+
+## We Talked About Estimating An Average Treatment Effect
+
+::: {.hidden}
+$$
+\newcommand{\alert}[1]{\textcolor{red}{#1}}
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\V}{V}
+\DeclareMathOperator{\Var}{\V}
+\DeclareMathOperator*{\argmin}{argmin}
+\newcommand{\inred}[1]{\textcolor{red}{#1}}
+\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
+$$ 
+:::
+
+```{r}
+#| out-height: 250px
+#| fig-asp: .25
+scatter + geom_pointrange(aes(x=D, y=mean, ymin=mean-sd, ymax=mean+sd), summaries) 
+```
+
+- We reduced the problem to estimating a difference in subpopulation means.
+- And we tried estimating that using a difference in subsample means. 
+- But we weren't happy with the resulting precision. 
+    - The problem was that we had too few observations with the expensive treatment ($D_i=100$).
+    - This made the subsample mean a high-variance estimate of the corresponding subpopulation mean.
+
+$$
+\begin{aligned}
+\tau(100) &= \frac{1}{m_{100}}\sum_{j:d_j=100} y_j - \frac{1}{m_{50}}\sum_{j:d_j=50} y_j \\ 
+          &\approx \frac{1}{N_{100}}\sum_{i:D_i=100} Y_i - \frac{1}{N_{50}}\sum_{i:D_i=50}Y_i
+          \qqtext{with} \Var[\hat\tau(100)] \ge \Var[\hat\mu(100)]=\frac{\Var[Y \mid D_i=100]}{N_{100}} \approx `r approx(var(Y[D==100])/sum(D==100))`
+\end{aligned}
+$$
+
+
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Bootstrap Estimate of the Sampling Distribution"
+#|   - "Normal Estimate of the Sampling Distribution"
+
+point.estimate = dif.point.estimate
+se = sqrt( var(Y[D==100])/sum(D==100) + var(Y[D==50])/sum(D==50) )
+x = seq(point.estimate-4*se, point.estimate+4*se, length.out=1000)
+normal.distribution.plot = ggplot() + 
+    geom_area(aes(x=x, y=dnorm(x, mean=point.estimate, sd=se)), color='purple', fill='purple', alpha=.08) +
+    geom_vline(aes(xintercept=point.estimate), color='purple', linetype='solid') +
+    geom_vline(aes(xintercept=point.estimate + c(-1,1)*1.96*se), color='purple', linetype='dotted') +
+    geom_pointrange(aes(y=dnorm(2*se, mean=0, sd=se), x=point.estimate, xmin=point.estimate - 1.96*se, xmax=point.estimate + 1.96*se))
+
+boots = boot.distn(real.data)
+limits = c(min(x), max(x))
+breaks = floor(min(limits)):ceiling(max(limits))
+scale_x = scale_x_continuous(breaks=breaks, limits=limits)
+distribution.plot(boots$dif, point.estimate) + scale_x
+normal.distribution.plot + scale_x
+```
+
+
+## An Attempt At Being Clever
+
+```{r}
+#| out-height: 250px
+#| fig-asp: .25
+scatter + geom_pointrange(aes(x=D, y=mean, ymin=mean-sd, ymax=mean+sd), summaries) +
+          geom_line(aes(x=D, y=muhat), color='blue', linetype='dashed', predictions)
+```
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+- To work around this, we tried estimating our subpopulation means using the heights of a *fitted line*. 
+$$
+\hat\tau(100) = \hat\mu(100) - \hat\mu(50) \qqtext{where} \hat\mu(x) = \hat a x + \hat b \qfor \hat a,\hat b = \argmin_{a,b} \sum_{i=1}^n \qty(ax + b - Y_i)^2
+$$ 
+
+- This *did* reduce variance. 
+    - It let us use observations about what happens with cheaper treatments to estimate the line's slope. 
+    - We had a lot of those. 
+- The downside was that the line gave us pretty different estimates of the subpopulation means.
+    - We were higher at $D_i=100$ and low at $D_i=50$.
+    - So the difference, high - low, was bigger.
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+- These two approaches lead to meaningfully different claims about the treatment effect.
+- If what we wanted to know was whether the effect is positive, we'd get different answers.
+- The difference in subsample means approach would say we don't know. 
+    - A bootstrap-calibrated confidence interval based on that estimate covers zero.
+- The fitted line approach would say we do know that it's positive. 
+    - A bootstrap-calibrated confidence interval based on that approach is to the right of zero.
+- This is fake data, so I can tell you that's wrong. The actual effect is exactly zero.
+- In the data we're looking at, the potential outcomes $Y_i(50)$ and $Y_i(100)$ are *exactly the same*.
+:::
+::::
+```{r}
+#| out-height: 250px
+#| fig.asp: .25
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Difference in Means Bootstrap Sampling Distribution"
+#|   - "Fitted-Line-Based Bootstrap Sampling Distribution" 
+
+distribution.plot(boots$dif,   dif.point.estimate) + scale_x
+distribution.plot(boots$slope, slope.point.estimate)  + scale_x
+```
+
+
+## We Can See That In The Code
+
+```{r}
+#| eval: false
+#| echo: true
+
+# Sampling 250 employees. Our population is an even mix of ...
+#   'blue guys', who go 1/4 days no matter what
+#   'green guys', who go more if it's free but --- unlike the ones in our table earlier --- don't care about classes
+
+n=250
+is.blue = rbinom(n,1, 1/2)
+Yblue   = rbinom(n, 30, 1/4) 
+Ygreen0 = rbinom(n, 30, 1/10)
+Ygreen50 = rbinom(n, 30, 1/5)
+
+Y0   = ifelse(is.blue, Yblue, Ygreen0)
+Y50  = ifelse(is.blue, Yblue, Ygreen50)
+Y100 = Y50   ### <--- this tells us we've got no effect.
+
+# Randomizing by rolling two dice. R is their sum
+R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
+D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
+Y = case_match(D, 0~Y0, 50~Y50, 100~Y100)
+``` 
+
+## The Line-Based Estimator is **Biased**
+
+```{r}
+
+line.based.estimates = purrr::map(1:1000, function(b) {
+  n=250
+  is.blue = rbinom(n,1, 1/2)
+  Yblue   = rbinom(n, 30, 1/4) 
+  Ygreen0 = rbinom(n, 30, 1/10)
+  Ygreen50 = rbinom(n, 30, 1/5)
+
+  Y0   = ifelse(is.blue, Yblue, Ygreen0)
+  Y50  = ifelse(is.blue, Yblue, Ygreen50)
+  Y100 = Y50   ### <--- this tells us we've got no effect.
+
+  # Randomizing by rolling two dice. R is their sum
+  R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
+  D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
+  Y  = case_match(D, 0~Y0, 50~Y50, 100~Y100)
+
+  model=lm(Y ~ D, data=tibble(D=D, Y=Y))
+  mu.hat = predict(model, newdata=data.frame(D=c(0,50,100)))
+  data.frame(estimate =  mu.hat[3]-mu.hat[2], se = sqrt(vcov(model)[2,2])*50)
+}) %>% bind_rows()
+
+```
+
+```{r}
+#| out-height: 500px
+
+line.based.estimates$i = 1:nrow(line.based.estimates)
+slope.se = sqrt(vcov(model)[2,2])*50
+line.sampling.dist = ggplot() + 
+  geom_histogram(aes(x=estimate, y=after_stat(density)), bins=50, alpha=.2, data=line.based.estimates) + 
+  geom_vline(aes(xintercept=mean(estimate)), color='blue', data=line.based.estimates) +
+  geom_pointrange(aes(x=slope.point.estimate, y=dnorm(2*slope.se, mean=0, sd=slope.se), 
+                      xmin=slope.point.estimate - 1.96*slope.se, 
+                      xmax=slope.point.estimate + 1.96*slope.se)) + scale_x
+line.sampling.dist
+``` 
+
+- We can do a little simulation to see that.
+- We'll generate 1000 fake datasets like the one we've been looking at.
+  - And calculate our estimator for each one. 
+  - This gives us draws from our estimator's *actual* sampling distribution. 
+  - I've used them to draw a histogram.
+- The mean of these point estimates is $`r approx(mean(line.based.estimates$estimate))`$. 
+    - Since our actual effect is zero, that's our bias. The blue line.
+- Our actual point estimate is off in the same direction---but a bit more than usual.
+  - It's shown in black with a corresponding 95% interval.
+  - An interval that fails to cover the actual effect of zero.
+
+## The Resulting Coverage Is **Bad**
+
+```{r}
+#| out-height: 500px
+covers =  abs(line.based.estimates$estimate) <= 1.96*line.based.estimates$se 
+line.sampling.dist + geom_pointrange(aes(x=estimate, y=(8*i/100)*dnorm(2*slope.se, mean=0, sd=slope.se), 
+                      xmin=estimate - 1.96*se, 
+                      xmax=estimate + 1.96*se), data=line.based.estimates[1:100,], color='purple', alpha=.4) + scale_x 
+```
+
+- We can construct 95% confidence intervals the same way in each fake dataset.
+  - I've drawn 100 of these intervals in purple. 
+  - You can see that they sometimes cover zero, but not as often as you'd like.
+- `r sum(covers)` / `r nrow(line.based.estimates)` &asymp; `r percent(mean(covers))` of them cover zero. That's not good. 
+- If that's typical of our analysis, people really shouldn't trust us. 
+- So why have statisticians gotten away with fitting lines for so long?
+  
+## Language Games
+
+- fdsf
+- fsdf
