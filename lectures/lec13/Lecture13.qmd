@@ -91,8 +91,6 @@ ellipsis <- function(df, nhead=5L, ntail=2) {
 ```
 
 ```{r fake-data}
-#| out-height: 300px
-#| fig-asp: .3 
 set.seed(3)
 
 # Sampling 250 employees. Our population is an even mix of ...
@@ -130,7 +128,7 @@ summaries = tibble(D=D, Y=Y) %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y
 
 scatter = ggplot() + geom_point(aes(x=D, y=Y), color="red", data=tibble(D=D,Y=Y),
                                      position=position_jitter(w=10,h=0, seed=0), alpha=.3) +
-           geom_pointrange(aes(x=D, y=mean, ymin=mean-2*sd, ymax=mean+2*sd), data=summaries) +
+           geom_pointrange(aes(x=D, y=mean, ymin=mean-2*sd/sqrt(n), ymax=mean+2*sd/sqrt(n)), data=summaries, alpha=.8) +
            scale_x_continuous(breaks=c(0,50,100)) + labs(x="D", y="Y") + ylim(-3,15)
 
 model=lm(Y ~ D, data=tibble(D=D, Y=Y))
@@ -193,7 +191,7 @@ distribution.plot = function(boot.samples, point.estimate, w=width(boot.samples)
 
 # Review
 
-## We've Talked About Estimating An Average Treatment Effect
+## Estimating An Average Treatment Effect
 
 ::: {.hidden}
 $$
@@ -208,33 +206,57 @@ $$
 :::
 
 ```{r}
-#| out-height: 250px
-#| fig-asp: .25
-scatter + geom_pointrange(aes(x=D, y=mean, ymin=mean-sd, ymax=mean+sd), summaries) 
+#| out-height: 400px
+#| fig-asp: .4
+scatter 
 ```
+
 
 - We reduced the problem to estimating a difference in subpopulation means.
 - And we tried estimating that using a difference in subsample means. 
-- But we weren't happy with the resulting precision. 
+- I've drawn these, $\pm$ two standard errors, in black.
+
+$$
+\tau(100) = \frac{1}{m_{100}}\sum_{j:d_j=100} y_j - \frac{1}{m_{50}}\sum_{j:d_j=50} y_j 
+          \approx \hat\tau(100) = \frac{1}{N_{100}}\sum_{i:D_i=100} Y_i - \frac{1}{N_{50}}\sum_{i:D_i=50} Y_i
+$$          
+
+
+## Dissapointing Results
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+scatter 
+```
+
+- We weren't happy with the resulting precision. 
     - The problem was that we had too few observations with the expensive treatment ($D_i=100$).
     - This made the subsample mean a high-variance estimate of the corresponding subpopulation mean.
 
 $$
-\begin{aligned}
-\tau(100) &= \frac{1}{m_{100}}\sum_{j:d_j=100} y_j - \frac{1}{m_{50}}\sum_{j:d_j=50} y_j \\ 
-          &\approx \frac{1}{N_{100}}\sum_{i:D_i=100} Y_i - \frac{1}{N_{50}}\sum_{i:D_i=50}Y_i
-          \qqtext{with} \Var[\hat\tau(100)] \ge \Var[\hat\mu(100)]=\frac{\Var[Y \mid D_i=100]}{N_{100}} \approx `r approx(var(Y[D==100])/sum(D==100))`
-\end{aligned}
+\Var[\hat\tau(100)] = \Var[\hat\mu(50)] + \Var[\hat\mu(100)] \ge \Var[\hat\mu(100)] = \frac{\Var[Y \mid D_i=100]}{N_{100}} \approx `r approx(var(Y[D==100])/sum(D==100))` \approx `r approx(sqrt(var(Y[D==100])/sum(D==100)))`^2
 $$
 
+## Uninformative Interval Estimates 
 
 ```{r}
-#| out-height: 250px
-#| fig.asp: .25
+#| out-height: 400px
+#| fig-asp: .4
+scatter 
+```
+
+- Our confidence intervals, whether calibrated via bootstrap or normal approximation, are wide.
+  - One thing people find notable is that they contain both positive and negative numbers.
+  - This means we can't say, with confidence, whether our treatment effect is positive or negative. 
+
+```{r}
+#| out-height: 200px
+#| fig.asp: .2
 #| layout-ncol: 2 
 #| fig-subcap:
-#|   - "Bootstrap Estimate of the Sampling Distribution"
-#|   - "Normal Estimate of the Sampling Distribution"
+#|   - "Bootstrap Sampling Distribution for the Difference-in-Means"
+#|   - "Normal Approximation to the Sampling Distribution for the Difference-in-Means"
 
 point.estimate = dif.point.estimate
 se = sqrt( var(Y[D==100])/sum(D==100) + var(Y[D==50])/sum(D==50) )
@@ -257,41 +279,35 @@ normal.distribution.plot + scale_x
 ## An Attempt At Being Clever
 
 ```{r}
-#| out-height: 250px
-#| fig-asp: .25
-scatter + geom_pointrange(aes(x=D, y=mean, ymin=mean-sd, ymax=mean+sd), summaries) +
-          geom_line(aes(x=D, y=muhat), color='blue', linetype='dashed', predictions)
+#| out-height: 400px
+#| fig-asp: .4
+scatter.with.lsq = scatter +  
+  geom_line(aes(x=D, y=muhat), color='blue', linetype='dashed', data=predictions) + 
+  geom_point(aes(x=D,y=muhat), color='blue', data=predictions)
+scatter.with.lsq
 ```
 
-:::: r-stack
-::: {.fragment .fade-out data-fragment-index="0"}
-- To work around this, we tried estimating our subpopulation means using the heights of a *fitted line*. 
+- To work around this, we tried estimating our subpopulation means using the [least-squares line]{.fg style="color:blue"}. 
 $$
 \hat\tau(100) = \hat\mu(100) - \hat\mu(50) \qqtext{where} \hat\mu(x) = \hat a x + \hat b \qfor \hat a,\hat b = \argmin_{a,b} \sum_{i=1}^n \qty(aX_i + b - Y_i)^2
 $$ 
 
-- This *did* reduce variance. 
-    - It let us use observations about what happens with cheaper treatments to estimate the line's slope. 
-    - We had a lot of those. 
-- The downside was that the line gave us pretty different estimates of the subpopulation means.
-    - We were higher at $D_i=100$ and low at $D_i=50$.
-    - So the difference, high - low, was bigger.
-:::
-::: {.fragment .current-visible data-fragment-index="0"}
-- These two approaches lead to meaningfully different claims about the treatment effect.
-- If what we wanted to know was whether the effect is positive, we'd get different answers.
-- The difference in subsample means approach would say we don't know. 
-    - A bootstrap-calibrated confidence interval based on that estimate covers zero.
-- The fitted line approach would say we do know that it's positive. 
-    - A bootstrap-calibrated confidence interval based on that approach is to the right of zero.
-- This is fake data, so I can tell you that's wrong. The actual effect is exactly zero.
-- In the data we're looking at, the potential outcomes $Y_i(50)$ and $Y_i(100)$ are *exactly the same*.
-:::
-::::
+## An Attempt At Being Clever
 ```{r}
-#| out-height: 250px
-#| fig.asp: .25
-#| layout-ncol: 2 
+#| out-height: 400px
+#| fig-asp: .4
+scatter.with.lsq = scatter +  
+  geom_line(aes(x=D, y=muhat), color='blue', linetype='dashed', data=predictions) + 
+  geom_point(aes(x=D,y=muhat), color='blue', data=predictions)
+scatter.with.lsq
+```
+
+:::: columns
+::: {.column width="40%"}
+```{r}
+#| out-height: 200px
+#| fig.asp: .2
+#| layout-nrow: 2 
 #| fig-subcap:
 #|   - "Difference in Means Bootstrap Sampling Distribution"
 #|   - "Fitted-Line-Based Bootstrap Sampling Distribution" 
@@ -300,8 +316,47 @@ distribution.plot(boots$dif,   dif.point.estimate) + scale_x
 distribution.plot(boots$slope, slope.point.estimate)  + scale_x
 ```
 
+:::
+::: {.column width="60%"}
 
-## We Can See That In The Code
+- This *did* reduce variance. 
+    - There are lots of observations for cheaper treatments.
+    - These helped us get a more precise estimate of the line's slope.
+- But the line gave us pretty different estimates of the subpopulation means.
+    - We were higher at $D_i=100$ and low at $D_i=50$.
+    - So the difference, high - low, was bigger.
+:::
+::::
+
+
+## Inconsistent Interval Estimates
+
+```{r}
+#| out-height: 200px
+#| fig.asp: .2
+#| layout-nrow: 2 
+#| fig-subcap:
+#|   - "Difference in Means Bootstrap Sampling Distribution"
+#|   - "Fitted-Line-Based Bootstrap Sampling Distribution" 
+
+distribution.plot(boots$dif,   dif.point.estimate) + scale_x
+distribution.plot(boots$slope, slope.point.estimate)  + scale_x
+```
+
+- These estimates are so different that our confidence intervals lead to meaningfully different claims.
+- In particular, they say different things about whether out treatment effect is positive.
+- The difference in subsample means approach would say we don't know. 
+    - A bootstrap-calibrated confidence interval based on that estimate covers zero.
+- The fitted line approach would say we do know that it's positive. 
+    - A bootstrap-calibrated confidence interval based on that approach is to the right of zero.
+
+
+## That's Wrong
+
+- This is fake data, so we can see that by looking at the code generating it.
+- In the data we're looking at ...
+  - The actual effect is exactly zero.
+  - The potential outcomes $Y_i(50)$ and $Y_i(100)$ are *exactly the same*.
 
 ```{r}
 #| eval: false
@@ -390,7 +445,7 @@ line.sampling.dist
 covers =  abs(line.based.estimates$estimate) <= 1.96*line.based.estimates$se 
 line.sampling.dist + geom_pointrange(aes(x=estimate, y=(8*i/100)*dnorm(2*slope.se, mean=0, sd=slope.se), 
                       xmin=estimate - 1.96*se, 
-                      xmax=estimate + 1.96*se), data=line.based.estimates[1:100,], color='purple', alpha=.4) 
+                      xmax=estimate + 1.96*se), data=line.based.estimates[1:100,], color='purple', alpha=.3) 
 ```
 
 - We can construct 95% confidence intervals the same way in each fake dataset.
@@ -401,7 +456,7 @@ line.sampling.dist + geom_pointrange(aes(x=estimate, y=(8*i/100)*dnorm(2*slope.s
 - So why have statisticians gotten away with fitting lines for so long?
 - In essence, it's by pretending we were trying to do something else.
 
-## Pretending it Isn't
+## What We Pretend To Do
 
 ```{r}
 #| out-height: 400px
@@ -423,26 +478,38 @@ line.sampling.dist + geom_pointrange(aes(x=estimate, y=(8*i/100)*dnorm(2*slope.s
 ```
 
 - Our estimator --- 50 times the slope of the least squares line --- *is* a good estimator of something.
+- It's a good estimate of the analogous population summary --- 50 times the *population least squares slope*. The red line.
+- `r sum(covers)` / `r nrow(line.based.estimates)` &asymp; `r percent(mean(covers))` of our intervals cover it. That makes it sound pretty good. 
+
+:::: columns
+::: column
 
 $$
+\small{
 \begin{aligned}
 \hat\tau(100) &= \hat\mu(100) - \hat\mu(50) = \qty(100 \hat a + \hat b) - \qty(50 \hat a + \hat b) = 50\hat a \\
 \qqtext{where} & \hat\mu(x) = \hat a x + \hat b \qfor \hat a,\hat b = \argmin_{a,b} \sum_{i=1}^n \qty(aX_i + b - Y_i)^2
 \end{aligned}
+}
 $$ 
 
-- It's a good estimate of the analogous population summary --- 50 times the *population least squares slope*. The red line.
+:::
+::: column
 
 $$
+\small{
 \begin{aligned}
 \tilde\tau(100) &= \tilde\mu(100) - \tilde\mu(50)) = \qty(100 \tilde a + \tilde b) - \qty(50 \tilde a + \tilde b) = 50\tilde a \\ 
 \qqtext{where} & \tilde\mu(x) = \tilde a x + \tilde b \qfor \tilde a,\tilde b = \argmin_{a,b} \E\qty[\qty(aX_i + b - Y)^2]
 \end{aligned}
+}
 $$
 
-- `r sum(covers)` / `r nrow(line.based.estimates)` &asymp; `r percent(mean(covers))` of our intervals cover it. That makes it sound pretty good. 
+:::
+::::
 
-## The Problem: That's Not What We Wanted To Estimate
+
+## **Problem**: That's Not What We Wanted To Estimate
 
 ```{r}
 #| out-height: 400px
@@ -450,12 +517,12 @@ $$
 
 pop.predictions = tibble(D=c(0,50,100), mu=mutilde) 
 pop.summaries = tibble(D=c(0,50,100), mu=mu)
-scatter + geom_pointrange(aes(x=D, y=mean, ymin=mean-sd, ymax=mean+sd), summaries) +
-          geom_line(aes(x=D, y=muhat), color='blue', linetype='dashed', predictions) +
+pop.scatter = scatter.with.lsq +
           geom_line(aes(x=D, y=mutilde), color='red', linetype='dashed',  pop.predictions) + 
+          geom_point(aes(x=D, y=mutilde), color='red',  pop.predictions) + 
           geom_point(aes(x=D, y=mu), color='green', size=3, data=pop.summaries) +
           geom_line(aes(x=D, y=mu), color='green', data=pop.summaries) + coord_cartesian(ylim=c(2,10))
-
+pop.scatter
 ```
 
 - The effects we want to estimate are, as a result of randomization, differences in subpopulation means.
@@ -464,7 +531,7 @@ $$
 $$
 
 - The population [least squares line]{.fg style="color:red"} *doesn't go through these means*. It can't. 
-- They don't lie along a line. They lie along a [hockey-stick shaped curve]{.fg style="color:green"}. 
+- They don't lie along a line. They lie along a [hockey-stick shaped curve]{.fg style="color:LimeGreen"}. 
 - This means no line---including the population least squares line---can tell us what we want to know.
 - This problem has a history of getting buried in technically correct but opaque language. 
 
@@ -472,25 +539,21 @@ $$
 ## Language Games
 
 ```{r}
-#| out-height: 250px
-#| fig-asp: .25
+#| out-height: 400px
+#| fig-asp: .4
 
-pop.predictions = tibble(D=c(0,50,100), mu=mu) 
-scatter + geom_pointrange(aes(x=D, y=mean, ymin=mean-sd, ymax=mean+sd), summaries) +
-          geom_line(aes(x=D, y=muhat), color='blue', linetype='dashed', predictions) +
-          geom_line(aes(x=D, y=mu), color='red', linetype='dashed',  pop.predictions)
-
+pop.scatter
 ```
 
 
 - The widespread use of causal language is a recent development.
 - In the past, people would do a little linguistic dance to avoid talking about causality.
-- In essence, they'd talk about what they were estimating as if it were what they wanted to know.
-  - 'The association between $Y$ and $D$ is $`r approx(cor(Y,D))`$.
-  - 'The regression coefficient for $Y$ on $D$ is $`r approx(coef(model)[2])`$.
-- And they'd state confidence intervals about analogous summaries in a population.
+- They'd talk about what they were really estimating as if it were what you wanted to know.
 - This not only buried issues of causality, it buried issues of bias due to *misspecification*.
   - e.g., due to trying to use a line to estimate a hockey-stick shaped curve.
+- They'd say 'The regression coefficient for $Y$ on $D$ is $`r approx(coef(model)[2])`$.'
+  - You'd be left to intepret this as saying the treatment effect was roughly $50 \times `r approx(coef(model)[2])`$.
+  - That's wrong, but it's your fault for interpreting it that way. **They set you up**.
 
 # Today
 
@@ -516,7 +579,7 @@ is not centered on what we want to estimate.
 - From a point-estimation perspective, more data is always good. Our estimators do get more accurate.
 - But from an inferential perspective, it can be very bad. When we use misspecified moedls, our coverage claims will get increasingly inaccurate.
 
-## A Picture
+## The Impact of Misspecification as Sample Size Grows
 
 ```{r}
 
@@ -543,10 +606,21 @@ sampling.dist = function(n) {
 }) %>% bind_rows()
 }
 
-bootstrap.sampling.dist.plot = function(estimates) { 
+bootstrap.sampling.dist.plot = function(estimates, type='histogram', integration.range=NULL) { 
   drange = c(0, dnorm(0, mean=0, sd=sd(estimates$estimate, na.rm=TRUE)))
-  ggplot() + 
-    geom_histogram(aes(x=estimate, y=after_stat(density)), bins=50, alpha=.2, data=estimates) + 
+  if(type=='histogram') { 
+    base = ggplot() + geom_histogram(aes(x=estimate, y=after_stat(density)), bins=50, alpha=.2, data=estimates) 
+  } else { 
+    x = mean(estimates$estimate,na.rm=T) + seq(-1,1,by=.01)*5*sd(estimates$estimate,na.rm=T)
+    normal.approx = data.frame(x=x, fx=dnorm(x, mean=mean(estimates$estimate,na.rm=T), sd=sd(estimates$estimate,na.rm=T)))
+    base = ggplot() + geom_area(aes(x=x, y=fx), data=normal.approx, color='purple', fill='purple', alpha=.08)
+    if(!is.null(integration.range)) { 
+      in.range = integration.range[1] <= x & x <= integration.range[2]
+      base = base +  geom_area(aes(x=x, y=fx), data=normal.approx[in.range,], color=NA, fill='yellow', alpha=.4)
+    }
+    estimates$se = sd(estimates$estimate,na.rm=T)
+  }
+  base +
     geom_vline(aes(xintercept=mean(estimate)), color='blue', data=estimates) +
     geom_pointrange(aes(x=estimate, y=dnorm(2*se, mean=0, sd=se), 
                         xmin=estimate - 1.96*se, 
@@ -601,6 +675,8 @@ estimates200$n = 200
 ## Coverage
 
 ```{r}
+#| out-height: 500px
+#| 
 estimates = rbind(estimates50, estimates100, estimates200)
 covg = estimates %>% group_by(n,type) %>% summarize(coverage = mean(abs(estimate) <= 1.96*se, na.rm=T))
 
@@ -610,16 +686,137 @@ ggplot(covg) + geom_line(aes(x=n, y=coverage, color=type)) + geom_point(aes(x=n,
 ```
 
 - Here are the coverage rates for each estimator at each sample size.
-- Today, we're going to do an exercise. We're going to work out how to calculate this by hand.
-- This isn't just an exercise in doing the computer's work for it. 
-- The point is to get some perspective on what it means to have 'just a little bit of bias'.
-- This'll come in handy when people around you say a bit of misspecification isn't a big deal.
+- The difference in sample means works more or less as we'd like.
+  - Coverage is always pretty good and is roughly 95% --- what we claim --- in larger samples.
+- The line-based estimator does the opposite.
+  - Coverage is bad in small samples and worse in larger ones.
+- Now, we're going to do some exercises. We're going to work out how to calculate coverage by hand.
+  - The point is to get some perspective on what it means to have 'just a little bit of bias'.
+  - This'll come in handy when people around you say a bit of misspecification isn't a big deal.
+
+# Exercises
+
+## Set Up
+
+```{r}
+#| layout-ncol: 2
+#| output-height: 400px
+limits = c(-2,3)
+breaks = floor(min(limits)):ceiling(max(limits))
+scale_x = scale_x_continuous(breaks=breaks, limits=limits) 
+bootstrap.sampling.dist.plot(estimates[estimates$type=='line' & estimates$n == 50,]) + scale_x
+bootstrap.sampling.dist.plot(estimates[estimates$type=='line' & estimates$n == 50,], type='normal') + scale_x
+```
+
+- Above, I've drawn the sampling distribution for the estimator $\hat\tau$ and a normal approximation to it.
+- We're going to calculate that estimator's coverage rate. Approximately. We'll make some simplifications.
+- We'll act as if the normal approximation to the sampling distribution were perfect.
+- We'll assume our intervals are perfectly calibrated.
+  - i.e., for a draw $\hat\tau$ from the sampling distribution ...
+  - the interval is $\hat\tau \pm 1.96\sigma$ where $\sigma$ is our estimator's actual standard error.
 
 
-## Simplifications
+## Exercise 1
+
+```{r}
+#| output-height: 300px
+#| fig-asp: .3
+se = sd(estimates[estimates$type=='line' & estimates$n == 50,]$estimate)
+bootstrap.sampling.dist.plot(estimates[estimates$type=='line' & estimates$n == 50,], type='normal') + scale_x +
+  geom_vline(aes(xintercept=x), data=tibble(x=1.96*se*c(-1,1)), color='green', linetype='dashed', size=1)
+```
+
+- Let's think about things from the treatment effect's perspective. The solid green line. 
+- Let's give it arms the same length as our intervals have. They go out to the dashed green lines.
+- An interval's arms touch the effect if and only if the effect touches the interval's center, i.e., the corresponding point estimate.
+- So we're calculating the proportion of point estimates covered by *the treatment effect's arms*.
+- **Exercise**. Write this in terms of the sampling distribution's [probability density f(x)]{.fg color="purple"}
+  - This is a calculation you can illustrate with a sketch on top of the plot above. You may want to start there.
+
+## Exercise 1
+
+```{r}
+#| output-height: 300px
+#| fig-asp: .3
+se = sd(estimates[estimates$type=='line' & estimates$n == 50,]$estimate)
+bootstrap.sampling.dist.plot(estimates[estimates$type=='line' & estimates$n == 50,], 
+                             type='normal', integration.range=1.96*se*c(-1,1)) +
+  geom_vline(aes(xintercept=x), data=tibble(x=1.96*se*c(-1,1)), color='green', linetype='dashed', size=1) + scale_x
+```
+
+- To calculate the proportion of point estimates covered by *the treatment effect's arms* 
+- We integrate the sampling distribution's probability density from one to the other.
+
+$$
+\text{coverage} = \int_{-1.96\sigma}^{1.96\sigma} f(x) dx \qqtext{ where } f(x)=\frac{1}{\sqrt{2\pi} \sigma} e^{-\frac{(x-\tilde\tau)^2}{2\sigma^2}}
+$$
+
+- Here I've written in the actual formula of the density of the normal I drew.
+  - The one with mean $\tilde\tau$ and standard deviation $\sigma$.
+  - I'm not expecting you to have that memorized, but it does come in handy from time to time.
+- This doesn't yet give us all that much *generalizable* intution. 
+- But we'll derive some by, to some degree, simplifying that integral.
+
+## Exercise 2
+
+```{r}
+#| output-height: 300px
+#| fig-asp: .3
+se = sd(estimates[estimates$type=='line' & estimates$n == 50,]$estimate)
+bootstrap.sampling.dist.plot(estimates[estimates$type=='line' & estimates$n == 50,], 
+                             type='normal', integration.range=1.96*se*c(-1,1)) +
+  geom_vline(aes(xintercept=x), data=tibble(x=1.96*se*c(-1,1)), color='green', linetype='dashed', size=1) + scale_x
+```
+
+- Now we'll rewrite our coverage as an integral of the [standard normal density]{.fg style="color:blue"}
+- To do it, we're going back to basic calculus. We're making a *substitution* $u=(x-\tilde\tau)/\sigma$.
+- This means we have to change the limits.
+  - As $x$ goes from $-1.96\sigma$ to $1.96\sigma$ ...
+  - $u$ goes from $-1.96-\tilde\tau/\sigma$ to $1.96-\tilde\tau/\sigma$.
+- And make a substitution into the integrand.
+  - For $(x-\tilde\tau)^2/\sigma^2$, we subtitute $u^2$.
+- And multiply by $dx/du$ so we get to integrate over $u$.
+  - $x= u\sigma + \tilde\tau$ so $dx=\sigma du$
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+$$
+\text{coverage} = \int_{-1.96\sigma}^{1.96\sigma} e^{-\frac{(x-\tilde\tau)^2}{2\sigma^2}} dx 
+\phantom{ =\int_{-1.96-\tilde\tau/\sigma}^{1.96-\tilde\tau/\sigma} \frac{1}{\sqrt{2\pi} \sigma} e^{-\frac{u^2}{2}} \sigma du = \int_{-1.96-\tilde\tau/\sigma}^{1.96+\tilde\tau/\sigma} \textcolor{blue}{\frac{1}{\sqrt{2\pi}} e^{-\frac{u^2}{2}}} du} 
+$$
+
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+$$
+\text{coverage} 
+= \int_{-1.96\sigma}^{1.96\sigma} e^{-\frac{(x-\tilde\tau)^2}{2\sigma^2}} dx \\
+= \int_{-1.96-\tilde\tau/\sigma}^{1.96+\tilde\tau/\sigma} \frac{1}{\sqrt{2\pi} \sigma} e^{-\frac{u^2}{2}} \sigma du \\
+= \int_{-1.96-\tilde\tau/\sigma}^{1.96+\tilde\tau/\sigma} \textcolor{blue}{\frac{1}{\sqrt{2\pi}} e^{-\frac{u^2}{2}}} du 
+$$
+
+:::
+::::
+
+## Implications
+
+```{r}
+#| layout-nrow: 2
+#| output-height: 300px
+#| fig-asp: .3
+lines50 = estimates[estimates$type=='line' & estimates$n == 50,]
+se = sd(lines50$estimate, na.rm=T)
+bootstrap.sampling.dist.plot(lines50, type='normal', integration.range=1.96*se*c(-1,1)) +
+  geom_vline(aes(xintercept=x), data=tibble(x=1.96*se*c(-1,1)), color='green', linetype='dashed', size=1) + scale_x
+
+tau.tilde = pop.summary
+x = mean(lines50$estimate, na.rm=T)/se + seq(-1,1,by=.01)*5
+xin = x[ -1.96 - tau.tilde/se <= x & x <= 1.96 - tau.tilde/se ]
+breaks = sort(c(seq(-3,2,by=1), c(-1.96-tau.tilde/se, 1.96-tau.tilde/se)))
+names(breaks) = NULL
+# TODO: label nicely
+scale_x_standardized = scale_x_continuous(breaks=breaks, limits=(limits-tau.tilde)/se) 
+ggplot() + geom_area(aes(x=x, y=dnorm(x)), color='purple', fill='purple', alpha=.2) +
+  geom_area(aes(x=xin, y=dnorm(xin)), color=NA, fill='yellow', alpha=.4) + scale_x_standardized
+```
 
 
-
-
-## Old School 
-## Another Picure
