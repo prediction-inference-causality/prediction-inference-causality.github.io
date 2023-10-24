@@ -57,15 +57,9 @@ The attached data from their experiment has the following variables:
 ```
 (a) Create a balance table showing the similarity of individuals assigned to treated and control across sex, age, household size, and turnout in previous elections.
 
-
-
-
 (b) Create a balance table showing the similarity of individuals assigned to each level of treatment and control across sex, age, household size, and turnout in previous elections. Be sure to note how many individuals are in each level of treatment.
 
-
-
-
-(c) Calculate the subsample proportion of 2006 primary turnout within each level of treatment (and control). 
+(c) Calculate the subsample proportion of 2006 primary turnout within each level of treatment (and control).
 
 ```{r}
 mean(ggl$outcome[ggl$civic==1])
@@ -75,8 +69,6 @@ mean(ggl$outcome[ggl$neighbors==1])
 mean(ggl$outcome[ggl$treatment==" Control"])
 
 ```
-
-
 
 (d) Let's define the following treatment effects of interest: $\hat{\tau}(civic) = \hat{\mu}(civic) - \hat{\mu}(control)$, $\hat{\tau}(hawthorne) = \hat{\mu}(hawthorne) - \hat{\mu}(civic)$, $\hat{\tau}(self) = \hat{\mu}(self) - \hat{\mu}(hawthorne)$, $\hat{\tau}(neighbor) = \hat{\mu}(neighbor) - \hat{\mu}(self)$. Calculate each of these and interpret each in plain language.
 
@@ -91,15 +83,90 @@ mean(ggl$outcome[ggl$neighbors==1]) - mean(ggl$outcome[ggl$self==1])
 
 ```
 
-
-
 (e) Create a bootstrap estimated sampling distribution for each of your $\tau$s and a 95% confidence interval for each.
 
 
 
-(f) Create four dummy variables-- one for each treatment-- where an observation is coded as 1 if the house hold received that treatment and 0 otherwise (other treatment or control). Run an additive linear regression of 2006 primary vote on the four treatment variables. Report your results in a table and provide plain language interpretations of your estimates. 
+(f) Create four dummy variables-- one for each treatment-- where an observation is coded as 1 if the house hold received that treatment and 0 otherwise (other treatment or control). Run an additive linear regression of 2006 primary vote on the four treatment variables. Report your results in a table and provide plain language interpretations of your estimates.
 
-(g) Run an additive linear regression of 2006 primary vote on the four treatment variables and the pre-treatment turnout variables (i.e. general election voting in 2002 and 2000, primary election voting in 2004, 2002, and 2000). Report your results in a table (one table for both models is fine) and provide plain language interpretations of your estimates. 
+```{r}
+votemod1<- lm(outcome~ civic + hawth + self + neighbors, data=ggl)
+```
+
+The intercept is the voter turnout among the control group. Each treatment coefficient is the difference in turnout between that treatment and control-- for example, the civic duty turnout is the intercept + the beta on civic duty. Thus each coefficient on the levels of treatment are the treatment effects (but specifically when we define the treatment effect as the difference between treatment and control-- not the treatment effects we defined in part d)
+
+
+(g) Run an additive linear regression of 2006 primary vote on the four treatment variables and the pre-treatment turnout variables (i.e. general election voting in 2002 and 2000, primary election voting in 2004, 2002, and 2000). Report your results in a table (one table for both models is fine) and provide plain language interpretations of your estimates.
+
+first we need to make numerical dummies for the pre-treatment covariates 
+
+```{r}
+
+ggl$numg2000<- ifelse(ggl$g2000=="yes", 1,0)
+ggl$numg2002<- ifelse(ggl$g2002=="yes", 1,0)
+ggl$nump2000<- ifelse(ggl$p2000=="yes", 1,0)
+ggl$nump2002<- ifelse(ggl$p2002=="yes", 1,0)
+ggl$nump2004<- ifelse(ggl$p2004=="Yes", 1,0)
+
+votemod2<- lm(outcome~ civic + hawth + self + neighbors + nump2004 + nump2002 + nump2000 + numg2002 + numg2000, data=ggl)
+
+#stargazer(votemod1,votemod2, title="Voter Turnout Experiment")
+```
+
+\begin{table}[!htbp] \centering 
+  \caption{Voter Turnout Experiment} 
+  \label{} 
+\begin{tabular}{@{\extracolsep{5pt}}lcc} 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex] 
+ & \multicolumn{2}{c}{\textit{Dependent variable:}} \\ 
+\cline{2-3} 
+\\[-1.8ex] & \multicolumn{2}{c}{outcome} \\ 
+\\[-1.8ex] & (1) & (2)\\ 
+\hline \\[-1.8ex] 
+ civic & 0.018$^{***}$ & 0.018$^{***}$ \\ 
+  & (0.003) & (0.003) \\ 
+  & & \\ 
+ hawth & 0.026$^{***}$ & 0.025$^{***}$ \\ 
+  & (0.003) & (0.003) \\ 
+  & & \\ 
+ self & 0.049$^{***}$ & 0.048$^{***}$ \\ 
+  & (0.003) & (0.003) \\ 
+  & & \\ 
+ neighbors & 0.081$^{***}$ & 0.081$^{***}$ \\ 
+  & (0.003) & (0.003) \\ 
+  & & \\ 
+ nump2004 &  & 0.156$^{***}$ \\ 
+  &  & (0.002) \\ 
+  & & \\ 
+ nump2002 &  & 0.133$^{***}$ \\ 
+  &  & (0.002) \\ 
+  & & \\ 
+ nump2000 &  & 0.100$^{***}$ \\ 
+  &  & (0.002) \\ 
+  & & \\ 
+ numg2002 &  & 0.101$^{***}$ \\ 
+  &  & (0.002) \\ 
+  & & \\ 
+ numg2000 &  & $-$0.003 \\ 
+  &  & (0.002) \\ 
+  & & \\ 
+ Constant & 0.297$^{***}$ & 0.077$^{***}$ \\ 
+  & (0.001) & (0.002) \\ 
+  & & \\ 
+\hline \\[-1.8ex] 
+Observations & 344,084 & 344,084 \\ 
+R$^{2}$ & 0.003 & 0.075 \\ 
+Adjusted R$^{2}$ & 0.003 & 0.075 \\ 
+Residual Std. Error & 0.464 (df = 344079) & 0.447 (df = 344074) \\ 
+F Statistic & 292.976$^{***}$ (df = 4; 344079) & 3,101.000$^{***}$ (df = 9; 344074) \\ 
+\hline 
+\hline \\[-1.8ex] 
+\textit{Note:}  & \multicolumn{2}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
+\end{tabular} 
+\end{table} 
+
+The betas from this model are still recovering the treatment effects (relative to control) for each treatment. The fact that the pre-treatment covariates do not change the effects is good-- they shouldn't! Randomization of treatment implies the treatment effects should be uncorrelated with pre-treatment turnout, so our treatment effects are just more precise by including the covariates. 
 
 (h) BONUS: Why might we be concerned about using individual turnout as the outcome for this experiment?
 
@@ -120,15 +187,16 @@ mean(ggl$outcome[ggl$neighbors==1]) - mean(ggl$outcome[ggl$self==1])
 whi<- read.csv("whidata.csv")
 ```
 
-The data based on the CEE+MPA arm of the WHI trial can be found in whidata.csv and contains the following variables: 
+The data based on the CEE+MPA arm of the WHI trial can be found in whidata.csv and contains the following variables:
+
+```{=tex}
 \begin{itemize}
 \item treat : binary indicating whether the participant received CEE+MPA or placebo 
 \item age : the age group that the participant is in at the beginning of the trial 
 \item breastcancer : binary indicating whether the participant developed invasive breast cancer during the trial 
 \end{itemize}
-
-(a) Create a balance table showing the number of participants assigned to CEE+MPA and placebo by age group. Why do randomized experiments report balance tables? What do you think of the balance on age in the WHI? 
-
+```
+(a) Create a balance table showing the number of participants assigned to CEE+MPA and placebo by age group. Why do randomized experiments report balance tables? What do you think of the balance on age in the WHI?
 
 ```{r}
 mean(whi$treat[whi$age=="50-59"])
@@ -141,6 +209,7 @@ mean(whi$treat[whi$age=="70-79"])
 1 - mean(whi$treat[whi$age=="70-79"])
 ```
 
+```{=tex}
 \begin{tabular}{|c|c|c|}
 Age Group & CEE+MPA Treatment & Placebo\\
 \hline
@@ -151,14 +220,14 @@ Age Group & CEE+MPA Treatment & Placebo\\
 70-79 & 50.71\%  & 49.29\% \\
 \hline
 \end{tabular}
+```
+Because randomization is indeed random, there is a probability (albeit small) that all participants randomized to treatment are older (or of a particular race or have a particular pre-existing health condition). We should have an apples-to-apples comparison between treatment and control in expectation, but any given randomization might be off. A balance table shows that the pre-treatment observables are similar between treatment and control, which makes us more confident that unobservables (potential outcomes) are similarly balanced and we can make our apples-to-apples comparison.
 
-Because randomization is indeed random, there is a probability (albeit small) that all participants randomized to treatment are older (or of a particular race or have a particular pre-existing health condition). We should have an apples-to-apples comparison between treatment and control in expectation, but any given randomization might be off. A balance table shows that the pre-treatment observables are similar between treatment and control, which makes us more confident that unobservables (potential outcomes) are similarly balanced and we can make our apples-to-apples comparison. 
-
-The balance looks good here. There is no hard and fast rule, but this is not cause for concern. 
+The balance looks good here. There is no hard and fast rule, but this is not cause for concern.
 
 \bigskip
 
-(b) Estimate the overall treatment effect (difference in proportions) of CEE+MPA on breast cancer and interpret your result. 
+(b) Estimate the overall treatment effect (difference in proportions) of CEE+MPA on breast cancer and interpret your result.
 
 ```{r}
 mean(whi$breastcancer[whi$treat==1]) 
@@ -168,10 +237,10 @@ mean(whi$breastcancer[whi$treat==0])
 mean(whi$breastcancer[whi$treat==1]) - mean(whi$breastcancer[whi$treat==0]) 
 
 ```
+
 The CEE+MPA treatment increases invasive breast cancer by 0.00509. (Let's not say the "risk" of breast cancer increases by 0.00509 since we haven't defined what risk means-- this is the overall difference in proportion of participants with breast cancer, not person-year hazards)
 
-
-(c) Create a bootstrap estimated sampling distribution of your treatment effect and report your 95\% confidence interval. Interpret your confidence interval. 
+(c) Create a bootstrap estimated sampling distribution of your treatment effect and report your 95% confidence interval. Interpret your confidence interval.
 
 ```{r}
 set.seed(220)
@@ -189,11 +258,12 @@ n=16608
 #I don't want to render this every time it takes too long 
 
 ```
-Our confidence interval, while extremely close to 0 and narrow, does not include 0. It appears likely that there is a positive, albeit small, effect of CEE+MPA on invasive breast cancer. 
+
+Our confidence interval, while extremely close to 0 and narrow, does not include 0. It appears likely that there is a positive, albeit small, effect of CEE+MPA on invasive breast cancer.
 
 \bigskip
 
-(d) Estimate the treatment effect of CEE+MPA on breast cancer within each age group. 
+(d) Estimate the treatment effect of CEE+MPA on breast cancer within each age group.
 
 ```{r}
 whi$age50s<- ifelse(whi$age=="50-59", 1, 0)
@@ -218,8 +288,7 @@ subsams[6,3] - subsams[5,3]
 agemeans<- whi %>% group_by(age,treat) %>% summarize(mean=mean(breastcancer))
 ```
 
-
-(e) Create a bootstrap estimated sampling distribution for the within-group treatment effects and report your 95\% confidence interval for each age group. Interpret. 
+(e) Create a bootstrap estimated sampling distribution for the within-group treatment effects and report your 95% confidence interval for each age group. Interpret.
 
 ```{r}
 #B=10000
@@ -247,19 +316,16 @@ agemeans<- whi %>% group_by(age,treat) %>% summarize(mean=mean(breastcancer))
 
 ```
 
-All of our CIs include 0 so while our pooled estimate suggested a positive (small) effect of CEE+MPA on invasive breast cancer, the conditional effects (by age group) could be 0. 
+All of our CIs include 0 so while our pooled estimate suggested a positive (small) effect of CEE+MPA on invasive breast cancer, the conditional effects (by age group) could be 0.
 
-
-
-(f) Using the 50-59 year olds as the reference category, run an additive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, and 70-79 year olds as your regressors. Report your results in a table and interpret. 
+(f) Using the 50-59 year olds as the reference category, run an additive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, and 70-79 year olds as your regressors. Report your results in a table and interpret.
 
 ```{r}
 whimod1<- lm(breastcancer ~ treat + age60s + age70s, data=whi)
 
 ```
 
-
-(g)  Using the 50-59 year olds as the reference category, run an interactive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, 70-79 year olds, 60-69 year olds * treatment, and 70-79 year olds * treatment as your regressors. Report your results in a table (you can use one table for both models) and interpret. 
+(g) Using the 50-59 year olds as the reference category, run an interactive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, 70-79 year olds, 60-69 year olds \* treatment, and 70-79 year olds \* treatment as your regressors. Report your results in a table (you can use one table for both models) and interpret.
 
 ```{r}
 whimod2<- lm(breastcancer ~ treat + age60s + age70s + treat*age60s + treat*age70s, data=whi)
@@ -268,9 +334,7 @@ whimod2<- lm(breastcancer ~ treat + age60s + age70s + treat*age60s + treat*age70
 
 ```
 
-
-
-
+```{=tex}
 \begin{table}[!htbp] \centering 
   \caption{WHI Results} 
   \label{} 
@@ -311,16 +375,16 @@ F Statistic & 4.247$^{***}$ (df = 3; 16604) & 2.657$^{**}$ (df = 5; 16602) \\
 \textit{Note:}  & \multicolumn{2}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
 \end{tabular} 
 \end{table}
+```
+(h) Write the equations for each or your models using $\beta_i$ as your parameters. Fill in the following table using with the $\beta$s from your models (not numbers, for example $\beta_0 + \beta_1$.) Then fill in the table using the estimates from your models.
 
-(h) Write the equations for each or your models using $\beta_i$ as your parameters. Fill in the following table using with the $\beta$s from your models (not numbers, for example $\beta_0 + \beta_1$.) Then fill in the table using the estimates from your models. 
-
-
-Additive: 
+Additive:
 
 $BreastCancer_i = \beta_0 + \beta_1 Treatment_i + \beta_2 Age60s_i + \beta_3 Age70s_i$
 
 \bigskip
 
+```{=tex}
 \begin{tabular}{|c|c|c|c|c| }
 \hline
  & Age Group & Prop. Breast Cancer T=1 & Prop. Breast Cancer T=0 & $BC(T=1)-BC(T=0)$ \\
@@ -338,15 +402,16 @@ numbers & 60-69 & 0.015 + 0.005 + 0.005 &  0.015 + 0.005 & 0.005 \\
 numbers & 70-79 & 0.015 + 0.005 + 0.008 & 0.015 + 0.008 & 0.005 \\
 \hline 
 \end{tabular}
-
+```
 \bigskip
 
-to be clear about the different model/estimates, I am going to use Gamma 
+to be clear about the different model/estimates, I am going to use Gamma
 
-Interactive: 
+Interactive:
 
 $BreastCancer_i = \gamma_0 + \gamma_1 Treatment_i + \gamma_2 Age60s_i + \gamma_3 Age70s_i + \gamma_4 Treatment_i*Age60s + \gamma_5 Treatment_i *Age70s$
 
+```{=tex}
 \begin{tabular}{|c|c|c|c|c| }
 \hline
  & Age Group & Prop. Breast Cancer T=1 & Prop. Breast Cancer T=0 & $\hat{ATE}|Age$ \\
@@ -364,27 +429,27 @@ numbers & 60-69 & .016+ .004+.005+.001 & .016+.005 & .004+.001\\
 numbers & 70-79 & .016 + .004 + .006 + .004 & .016+.006 & .004+.004  \\
 \hline 
 \end{tabular}
+```
+\bigskip
 
+(i) Compare the results from your models to the $\hat{ATE}$s by age group that you recovered in part (d).
 
-\bigskip 
+The interactive model recovers very similar estimates as our subgroup ATEs. The additive model is structured such that the difference between treated and control within each age group has to be the same (the slopes are the same)-- it is assuming constant effects of the treatment on each age group.
 
-(i) Compare the results from your models to the $\hat{ATE}$s by age group that you recovered in part (d). 
+\bigskip
 
-The interactive model recovers very similar estimates as our subgroup ATEs. The additive model is structured such that the difference between treated and control within each age group has to be the same (the slopes are the same)-- it is assuming constant effects of the treatment on each age group. 
+read + reflect?
 
-\bigskip 
-
-read + reflect? 
-
-
-## Dogs 
+## Dogs
 
 ```{r}
 #| echo: false
 dogs<- read.csv("dogs.csv")
 ```
 
-The Giant Database of Dogs, a crowd-sourced dataset organized by Prof. Leanne Powner, includes the following variables: 
+The Giant Database of Dogs, a crowd-sourced dataset organized by Prof. Leanne Powner, includes the following variables:
+
+```{=tex}
 \begin{itemize}
 \item Obs – unique observation number for case identification
 \item Name – dog’s name as provided by the owner (excess text removed)
@@ -394,10 +459,10 @@ The Giant Database of Dogs, a crowd-sourced dataset organized by Prof. Leanne Po
 yellow/blond, no primary color, other\}. Other was not an open-ended response.
 \item Heritage – 1 = single breed, 2 = designer/deliberate mix, 3 = mixed/unknown
 \end{itemize}
+```
+Use dogs.csv for the following.
 
-Use dogs.csv for the following. 
-
-(a) Recode gender and fixed into numerical binary variables. Regress dog's weight on gender and fixed. Report your results in a table and interpret your estimates in plain language. 
+(a) Recode gender and fixed into numerical binary variables. Regress dog's weight on gender and fixed. Report your results in a table and interpret your estimates in plain language.
 
 ```{r}
 dogs$num.gender<- ifelse(dogs$Gender=="Male", 1, 0)
@@ -407,17 +472,15 @@ dogmod<- lm(Weight ~ num.gender + num.fixed, data=dogs)
 
 ```
 
-Being a male dog (relative to female) is associated with a 2.619 pound increase in dog weight  holding `fixed' constant. A dog being fixed is associated with a 1.519 increase in dog weight holding gender constant. 
+Being a male dog (relative to female) is associated with a 2.619 pound increase in dog weight holding \`fixed' constant. A dog being fixed is associated with a 1.519 increase in dog weight holding gender constant.
 
-
-(b) Create a scatter plot with weight on the y-axis, fixed on the x-axis, and use different colors for male and female dogs (include a legend). 
+(b) Create a scatter plot with weight on the y-axis, fixed on the x-axis, and use different colors for male and female dogs (include a legend).
 
 ```{r}
 ggplot(dogs, aes(x=num.fixed, y=Weight, color=Gender)) + geom_jitter()
 ```
 
-
-(c) Regress dog's weight on gender, fixed, and gender*fixed. Report your results in a table (one table for both models is fine) and provide plain language interpretations of your estimates.
+(c) Regress dog's weight on gender, fixed, and gender\*fixed. Report your results in a table (one table for both models is fine) and provide plain language interpretations of your estimates.
 
 ```{r}
 dogmod2<- lm(Weight ~ num.gender*num.fixed, data=dogs)
@@ -425,8 +488,7 @@ dogmod2<- lm(Weight ~ num.gender*num.fixed, data=dogs)
 #stargazer(dogmod,dogmod2, title="Dog Weight Models")
 ```
 
-
-
+```{=tex}
 \begin{table}[!htbp] \centering 
   \caption{Dog Weight Models} 
   \label{} 
@@ -460,16 +522,17 @@ F Statistic & 0.482 (df = 2; 447) & 0.392 (df = 3; 446) \\
 \hline \\[-1.8ex] 
 \textit{Note:}  & \multicolumn{2}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
 \end{tabular} 
-\end{table} 
-
+\end{table}
+```
 (d) Write the equations for each or your models using $\beta_i$s as your parameters. Fill in the following table using with the $\beta$s from your models (not numbers, for example $\beta_0 + \beta_1$.)
 
 \bigskip
 
-$Weight_i = \beta_0 + \beta_1 Gender_i + \beta_2 Fixed_i$ 
+$Weight_i = \beta_0 + \beta_1 Gender_i + \beta_2 Fixed_i$
 
-note this depends on how you coded gender. I coded male =1, female=0 
+note this depends on how you coded gender. I coded male =1, female=0
 
+```{=tex}
 \begin{table}[H]
 \caption*{Weight: Additive Model $\beta$s}
 \begin{tabular}{c | c | c |}
@@ -481,11 +544,12 @@ Not Fixed & $\beta_0 + \beta_1$ & $\beta_0 $\\
 \hline 
 \end{tabular}
 \end{table}
+```
+to distinguish from the previous equation, I will use gamma for parameters.
 
-to distinguish from the previous equation, I will use gamma for parameters. 
+$Weight_i = \gamma_0 + \gamma_1 Gender_i + \gamma_2 Fixed_i + \gamma_3 Gender_i * Fixed_i$
 
-$Weight_i = \gamma_0 + \gamma_1 Gender_i + \gamma_2 Fixed_i + \gamma_3 Gender_i * Fixed_i$ 
-
+```{=tex}
 \begin{table}[H]
 \caption*{Weight: Interactive Model $\beta$s}
 \begin{tabular}{c | c | c |}
@@ -497,9 +561,10 @@ Not Fixed & $\gamma_0 + \gamma_1$ & $\gamma_0$ \\
 \hline 
 \end{tabular}
 \end{table}
+```
+(e) Fill in the table using the estimates from your models.
 
-(e) Fill in the table using the estimates from your models. 
-
+```{=tex}
 \begin{table}[H]
 \caption*{Weight: Additive Model Estimates}
 \begin{tabular}{c | c | c |}
@@ -511,7 +576,8 @@ Not Fixed & 43.024 + 2.619 = 45.643 & 43.024\\
 \hline 
 \end{tabular}
 \end{table}
-
+```
+```{=tex}
 \begin{table}[H]
 \caption*{Weight: Interactive Model Estimates}
 \begin{tabular}{c | c | c |}
@@ -523,13 +589,14 @@ Not Fixed & 46.023 - 2.441 = 43.582 & 46.023 \\
 \hline 
 \end{tabular}
 \end{table}
-
+```
 (g) Calculate the subsample mean weights among fixed females, unfixed females, fixed males, and unfixed males. Compare your results to your additive and interactive tables of predicted weights.
 
 ```{r}
 weights<- dogs %>% group_by(num.gender,num.fixed) %>% summarize(mean=mean(Weight,na.rm=T))
 ```
 
+```{=tex}
 \begin{tabular}{|c|c|c|}
 \hline 
 Gender & Fixed & Mean \\
@@ -540,5 +607,5 @@ Male & Not Fixed & 43.58 \\
 Male & Fixed & 47.33 \\
 \hline
 \end{tabular}
-
+```
 These are about the same as our interactive model means, slightly different from the additive model means (because the additive model forces the same slopes!)
