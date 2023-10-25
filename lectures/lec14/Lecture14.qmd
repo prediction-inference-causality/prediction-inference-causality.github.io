@@ -1,5 +1,5 @@
 ---
-title: "QTM 220: Lecture 14"
+title: "QTM 220: Lectures 14-15"
 subtitle: "Descriptive Regression With Multiple Covariates"
 format: 
   clean-revealjs:
@@ -119,7 +119,7 @@ $$
 
 ## Exercise 1: One Regression Line
 
-![](figures/BoundRegMatchPosA)
+![](figures/BoundRegMatchPosA){height=600px}
 
 - Here's a plot of some data with binary $X$ and $Y$. We've jittered the points a little.
 - **Exercise**. Draw the least squares regression line. What's the slope?
@@ -127,7 +127,7 @@ $$
 
 ## Exercise 1: Solution
 
-![](figures/BoundRegMatchPosB)
+![](figures/BoundRegMatchPosB){height=600px}
 
 - The slope is $1/3$ ($2/6$). 
 - The line goes through the subsample means:
@@ -136,7 +136,7 @@ $2/6$ on the left and $4/6$ on the right.
 
 ## Exercise 2: Two Regression Lines
 
-![](figures/BoundRegMatchPosA)
+![](figures/BoundRegMatchPosA){height=600px}
 
 - Let's add a second binary covariate $Z \in \{a,b\}$. We'll choose Z. We'll label each point either $a$ or $b$.
 - Then we'll draw two regression lines: one each for the $Z=a$ and $Z=b$ subsamples.
@@ -144,7 +144,7 @@ $2/6$ on the left and $4/6$ on the right.
 
 ## Exercise 2: Solution
 
-![](figures/BoundRegMatchZero)
+![](figures/BoundRegMatchZero){height=600px}
 
 
 ## Exercise 3: Three Regression Lines
@@ -157,33 +157,57 @@ $2/6$ on the left and $4/6$ on the right.
 
 ## Exercise 3: Solution
 
-![](figures/BoundRegMatchNeg)
+![](figures/BoundRegMatchNeg){height=600px}
 
 - Let's think about the *average slope* here. 
 - There are two averages we might think of...
   - The simple unweighted average, $\frac{1}{3}\sum_z \text{slope}_z$
-  - The subsample-size weighted average, $\sum_z P_z \text{slope}_z$ for $P_z=N_z/N$.
+  - The subsample-size weighted average, $\sum_z P_z \ \text{slope}_z$ for $P_z=N_z/N$.
 - Both are negative. And that's interesting---when we drew one line ignoring $z$, the slope was positive.
 
 ## Lesson
 
-![](figures/BoundRegMatchNeg)
+![](figures/BoundRegMatchNeg){height=600px}
 
 - The *ignore-z slope* is not necessarily similar to the *average-z slope*.
 - This has huge implications. People often get confused because they mean one and use the other.
 - We'll explore this in some examples soon. Any questions now?
 
-## Working With More Than One Covariate
+## What Regression Is {.small}
+
+- Regression is *choosing a curve* that predicts outcomes (Y) from covariates (X).
+- We choose from a set of curves we call a **regression model**.
+- Saying **least squares regression** specifies that we choose the best according to a particular criterion.
+- We pick the curve that minimizes the sum of squared errors.
+
+$$
+\begin{aligned}
+\hat \mu &= \argmin_{m \in \model} \ell(m) \qfor \ell(m) = \sum_{i=1}^n \qty{m(X_i) - Y_i}^2 \quad \text{ where } \ 
+&& \model \ \text{ is the model} \\
+&&& m \ \text{ is a curve we're considering } \\
+&&& \ell(m) \ \text{ is the criterion we're using to choose} \\
+&&& \hat\mu \ \text{ is the curve we do choose}.
+\end{aligned}
+$$
+
+- We can then use that curve to summarize the data.
+- We can make a prediction $Y \approx \hat\mu(X)$ at any value of $X$.
+- We can summarize the predictions at multiple values of $X$.
+  - e.g. average treatment effects in our gym subsidy example.
+  - e.g. average increase in income associated with a year of high school. 
+  
+
+## Models for Data With More Than One Covariate
 
 - Often we want to work with subsamples defined in terms of multiple covariates.
-- As with continuous conditioning variables, there are many ways to do this.
-- And as with continuous conditioning variables, the choice matters: misspecification leads to big problems inferentially.
+- As with continuous covariates, there are many ways to do this.
+- And as with continuous covariates, the choice matters: misspecification leads to big problems inferentially.
 - Today we will look at two common approaches to modeling data with two covariates.
 
 $$
 \begin{aligned}
-m(x,z) &= \beta_0 + \beta_1 x + \beta_2 z  && \text{ additive } \\
-m(x,z) &= \beta_0 + \beta_1 x + \beta_2 z + \textcolor{blue}{\beta_{3} xz} && \text{ fully-interacted }
+\model &= \qty{ m(x,z) = b_0 + b_1 x + b_2 z } && \text{ additive model } \\
+\model &= \qty{ m(x,z) = b_0 + b_1 x + b_2 z + \textcolor{blue}{b_{3} xz} } && \text{ fully-interacted model }
 \end{aligned}
 $$
 
@@ -195,147 +219,165 @@ $$
   - This isn't misspecified when our covariates are binary. It'll go through the 4 subsample means.
 - When we have more than two covariates, these are the extremes---there are models somewhere in between.
 
-## Function vs. Coefficient-Oriented Interpretations
-
-- There are two ways to think about what you're doing when you do regression.
-- I have a strong preference for one of them. But I'll try to give you both perspectives.
-- You'll need both to be able to understand what other people are saying.
-- I tend to translate into my preferred interpretation before doing anything else.
-
-:::: columns
-::: column
-### The Selecting-A-Curve Interpretation
+##  A Note on Interpretation
 
 $$
 \begin{aligned}
-\hat\mu &= \argmin_{m \in \model} \sum_{i=1}^n \qty{m(X_i,Z_i) - Y_i}^2 \qqtext{where} \\
-\model &= \qty{m(x,z) = \beta_0 + \beta_1 x + \beta_2 z : \beta \in \R^3}
+\model &= \qty{ m(x,z) = b_0 + b_1 x + b_2 z } && \text{ additive model } \\
+\model &= \qty{ m(x,z) = b_0 + b_1 x + b_2 z + \textcolor{blue}{b_{3} xz} } && \text{ fully-interacted model }
 \end{aligned}
 $$
 
-- We think about choosing the curve that fits best from a set of curves.
-- We call this set of curves our **regression model**.
-- We can then use that curve to ...
-  - make predictions $\hat\mu(x,z)$, just like we've used subsample means.
-  - summarize predictions at multiple values of $x$ and $z$. 
-    - e.g. average treatment effects.
-
-:::
-
-::: column
-### The Finding-Coefficients Interpretation
-
-$$
-\begin{aligned}
-\hat\mu(x,z) &= \hat\beta_0 + \hat\beta_1 x + \hat\beta_2 z  \qqtext{where} \\
-\hat\beta &= \argmin_{b \in \R^3}\sum_{i=1}^n \qty{b_0 + b_1 X_i + b_2 Z_i - Y_i}^2 
-\end{aligned}
-$$
-
-- We think about the coefficients that give you the best-fit.
-- If you use the same model, it is, of course, the same curve. 
-- You can do the same things with it, but when you think this way ...
-- You tend to focus on **interpreting the coefficients**. 
-- These are the summaries you wind up talking about.
-  - This can be very confusing.
-  - The coefficient of $x$ (or $z$) means different things in different models.
-
-
-
-:::
-::::
-
+- Some people focus on the **estimated coefficients** in models like this. In my opinion, this is a mistake.
+- These coefficients *are* summaries of our curve $\hat\mu$. But **they're different summaries in different models**.
+- It makes sense to think about which model is best if you want to estimate an average treatment effect.
+- It doesn't make sense to think about which model is best if you want to estimate *the coefficient of $x$*.
+- We saw in our intro exercise that the least squares slopes can be totally different when ...
+  - we ignore $z$ 
+  - we find different slopes for each $z$ --- even if we then average them.
+- My advice: **focus on the curve**. 
+  - If someone talks about a coefficient ... 
+  - look at their model and see what it does to the curve.
 
 # The Additive Model
 
-- There are really two ways 
+
+## One Binary and One Continuous Covariate
+
+![](figures/psc){height=500px}
+
+- Here's what we draw when we have two covariates and ...
+  - one is binary 
+  - one is continuous (or continuous*ish* e.g. education in years) 
+- We put the continuous one on the x-axis and color points to show the binary one.
+
+## One Binary and One Continuous Covariate
+
+![](figures/em3D1){height=500px}
+
+- But what the math sees is this. It sees points in 3D space.
+  - One dimension for the outcome
+  - One dimension for the continuous covariate
+  - One dimension for the binary covariate. 
+- It just happens that all points lie on two sheets---one for each value of the binary covariate.
 
 
-## One Binary and One Continuous Conditioning Variable
+## One Binary and One Continuous Covariate
 
-![](figures/psc)
+![](figures/em3D2){height=500px}
 
-- When we have 
-## One Binary and One Continuous Conditioning Variable
-
-![](figures/em3D1)
-
-## One Binary and One Continuous Conditioning Variable
-
-![](figures/em3D2)
+- We can rotate this plot to get a better sense of things.
+- That's a useful thing to do with 3D visualization.
+- Like you might turn an apple instead of looking at it from a single perspective.
 
 ## Regression Plane
 
-![](figures/em3D3)
+![](figures/em3D3){height=500px}
 
-## Misspecification Activity
 
-Draw the two regression lines (i.e., edges of the regression plane) implied by 
 $$
-\hat{y} = B_0 + B_1 x + B_2 z
+\hat\mu(x,z) = b_0 + b_1 x + b_2 z
 $$
 
 :::: r-stack
 ::: {.fragment .fade-out data-fragment-index="0"}
-![](figures/multAct)
+
+- When we take this perspective, the additive regression model *fits a plane* to the data.
+- And when $z$ is binary, you can think of this as giving is *two regression lines*
+  - One where that plane intersects the sheet with $z=0$ 
+  - Another where it intersects the sheet with $z=1$.
 :::
 ::: {.fragment .current-visible data-fragment-index="0"}
-![](figures/multActSol)
+
+- These lines are related because we have to be able to draw a plane through them.
+- Using the plane equation---if our geometric intution doesn't do it for us---we can see they have the same slope.
+
+$$
+\begin{aligned}
+\hat\mu(x,0) = b_0 + b_1 x + b_2 \cdot 0 = b_0 + b_1 x \\
+\hat\mu(x,1) = b_0 + b_1 x + b_2 \cdot 1 = (b_0+b_1) + b_1 x \\
+\end{aligned}
+$$
+
 :::
 ::::
 
-## Regression Plane for Two Continuous Conditioning Variables
+## Misspecification Activity
 
-![](figures/em3D4)
+$$
+\hat\mu(x,z) = \hat\beta_0 + \hat\beta_1 x + \hat\beta_2 z
+$$
 
-## Descriptive Interpretation of Additive Regression
+- Draw the two regression lines implied by the least squares fit of the additive model.
+- Then draw the lines *you think* you should use to fit the data.
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+![](figures/multAct){height=600px}
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+![](figures/multActSol){height=600px}
+:::
+::::
+
+## Regression Plane for Two Continuous Covariates
+
+![](figures/em3D4){height=600px}
+
+- All the same ideas apply when we have two continuous covariates.
+- What changes is there are no special 'sheets' to think about.
+- Fundamentally, we have to draw things in 2D
+
+
+
+# Examples of Additive Regression
+
+## Additive Regression with a Civil Liberties Outcome
 
 $$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} + b_2 \text{dem} $$
 
-![](figures/pscMarg)
+![](figures/pscMarg){height=600px}
 
 ## Recall: Simple Regression with SCscore
 
 $$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} $$
 
-![](figures/lmPlot)
+![](figures/lmPlot){height=600px}
 
 ## Recall: Simple Regression with Party
 
 $$ m(scscore, dem) = b_0 + b_1 \ \text{dem} $$
 
-![](figures/lmBin)
+![](figures/lmBin){height=600px}
 
-## Descriptive Interpretation of Additive Regression
-
-$$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} + b_2 \text{dem} $$
-
-![](figures/pscMarg)
-
-
-## Descriptive Interpretation of Additive Regression
+## Additive Regression
 
 $$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} + b_2 \text{dem} $$
 
-![](figures/pscMarg2)
+![](figures/pscMarg){height=600px}
 
-## Recall: Simple Regression with SCscore
+## Breaking Things Down: Federalism Outcome
 
 $$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} $$
 
-![](figures/pscMarg20)
+![](figures/pscMarg20){height=600px}
 
-## Recall: Simple Regression with Party
+::: aside
+We've changed the outcome so our lines are a bit further apart. It helps us see things.
+:::
+
+## Breaking Things Down: Federalism Outcome
 
 $$ m(scscore, dem) = b_0 + b_1 \ \text{dem} $$
 
-![](figures/pscMarg21)
+![](figures/pscMarg21){height=600px}
 
-## Descriptive Interpretation of Additive Regression
+
+## Breaking Things Down: Federalism Outcome
 
 $$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} + b_2 \text{dem} $$
 
-![](figures/pscMarg22)
+![](figures/pscMarg22){height=600px}
 
 
 ## Predictions Using Additive Models
@@ -363,80 +405,119 @@ $$ \hat\mu(s+1,z)-\hat\mu(s,z)=\hat\beta_1 $$
 :::
   
 
-# Interactive Multiple Linear Regression
+# The Fully-Interacted Model
 
 
-##  Multiple Regression with an Interaction
+## Breaking Down the Fully Interacted Model
+![](figures/pscInt){height=600px}
 
+$$ \hat\mu(scscore, dem) = \hat\beta_0 + \hat\beta_1 \cdot \text{scscore} + \hat\beta_2 \cdot \text{dem} + \hat \beta_4  \cdot \text{scscore} \cdot \text{dem} $$
 
+## Breaking Down the Fully Interacted Model
+![](figures/pscInt0){height=600px}
+$$ \hat\mu(scscore, dem) = \hat\beta_0 + \hat\beta_1 \cdot \text{scscore} + \hat\beta_2 \cdot \text{dem} + \hat \beta_4  \cdot \text{scscore} \cdot \text{dem} $$
 
+## Breaking Down the Fully Interacted Model
+![](figures/pscInt1){height=600px}
+$$ \hat\mu(scscore, dem) = \hat\beta_0 + \hat\beta_1 \cdot \text{scscore} + \hat\beta_2 \cdot \text{dem} + \hat \beta_4  \cdot \text{scscore} \cdot \text{dem} $$
 
-## Descriptive Interpretation of Interaction Model
-$$\widehat{Fedlib}_i = B_0 + B_1 \cdot SCscore_i + B_2 \cdot Dem_i + B_3 \cdot SCscore_i \cdot Dem_i$$
+## Breaking Down the Fully Interacted Model
+![](figures/pscInt2){height=600px}
+$$ \hat\mu(scscore, dem) = \hat\beta_0 + \hat\beta_1 \cdot \text{scscore} + \hat\beta_2 \cdot \text{dem} + \hat \beta_4  \cdot \text{scscore} \cdot \text{dem} $$
 
-![](figures/pscInt)
+## Breaking Down the Fully Interacted Model
+![](figures/pscInt3){height=600px}
+$$ \hat\mu(scscore, dem) = \hat\beta_0 + \hat\beta_1 \cdot \text{scscore} + \hat\beta_2 \cdot \text{dem} + \hat \beta_4  \cdot \text{scscore} \cdot \text{dem} $$
 
-## Descriptive Interpretation of Interaction Model
-$$\widehat{Fedlib}_i = B_0 + B_1 \cdot SCscore_i + B_2 \cdot Dem_i + B_3 \cdot SCscore_i \cdot Dem_i$$
+## Predictions Using The Fully-Interacted Model
 
-![](figures/pscInt0)
+$$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} + b_2 \text{dem} + b_3 \text{scscore} \ \text{dem}  $$
 
+- The predicted outcomes for Republican and Democrat-appointed justices with zero SCscore.
+$$ \hat\mu(0,0) = \hat\beta_0 \qand \hat\mu(0,1) = \hat\beta_0 + \hat\beta_2$$
 
-## Descriptive Interpretation of Interaction Model
-$$\widehat{Fedlib}_i = B_0 + B_1 \cdot SCscore_i + B_2 \cdot Dem_i + B_3 \cdot SCscore_i \cdot Dem_i$$
+- The predicted difference in outcomes between Democrat and Republican-appointed justices at $SCscore=s$.
+$$ 
+\hat \mu(s,1) - \hat \mu(s,0) = \qty(\hat\beta_0 + \hat\beta_1 s + \hat\beta_2 + \textcolor{blue}{\hat\beta_3 s}) - \qty(\hat\beta_0 + \hat\beta_1 s) = \hat\beta_2 + \textcolor{blue}{\hat\beta_3 s}
+$$
 
-![](figures/pscInt2)
+- What's the predicted difference in outcomes for two justices appointed by Democrats with scscores $s+1$ and $s$.
 
-## Descriptive Interpretation of Interaction Model
-$$\widehat{Fedlib}_i = B_0 + B_1 \cdot SCscore_i + B_2 \cdot Dem_i + B_3 \cdot SCscore_i \cdot Dem_i$$
+::: fragment
 
-![](figures/pscInt3)
+$$ 
+\begin{aligned}
+\hat\mu(s+1,1)-\hat\mu(s,1)
+&= \qty{\hat\beta_0 + \hat\beta_1 (s+1) + \hat \beta_2 + \hat \beta_3 (s+1)} 
+-\qty{\hat\beta_0 + \hat\beta_1 s    + \hat \beta_2 + \hat \beta_3  s} \\
+&= (\hat\beta_1+\hat\beta_3)\qty{(s+1)-s} = \hat\beta_1+\hat\beta_3
+\end{aligned}
+$$
 
-## Interactive Interpretations
+- What about Republican-appointees?
+  
+:::
+  
+## Going Backward: Interpreting Coefficients
 
-- $B_0$: Mean outcome for a Rep justice with a zero SCscore.
-- $B_1$: Mean difference in outcomes between justices appointed by Republicans, but with a one unit difference in SCscore.
-- $B_0 + B_2$:  Mean outcome for a Dem justice with a zero SCscore.
-- $B_2$: Mean difference in outcomes between justices with a zero SCscore, but appointed by different parties (Dem minus Rep).
-- $B_1+ B_3$:  Mean difference in outcomes between Dem justices with a one unit difference in SCscore.
-- $B_3$: Mean difference between the mean difference in outcomes between Dem justices with a one unit difference in SCscore and the mean difference in outcomes between Rep justices with a one unit difference in SCscore.
+$$\hat\mu(scscore,dem) = \hat\beta_0 + \hat\beta_1 \cdot scscore + \hat\beta_2 \cdot dem + \hat \beta_4  \cdot scscore \cdot dem$$
+
+![](figures/pscInt3){height=600px}
 
 
 ## Summary Activity
-![](figures/finalAct)
+We'll draw the following things.
+
+1. The least squares regression line, ignoring z.
+2. The least squares fit of the additive model.
+3. The least squares fit of the fully-interacted model.
+4. The sample-proportion-weighted average of the two lines from (3).
+
+![](figures/finalAct){height=600px}
 
 ## Summary Activity
-![](figures/finalAct1)
+
+![](figures/finalAct){height=900px}
 
 ## Summary Activity
-![](figures/finalAct2)
+![](figures/finalAct1){height=900px}
 
 ## Summary Activity
-![](figures/finalAct3)
+![](figures/finalAct2){height=900px}
 
 ## Summary Activity
-![](figures/finalAct4)
+![](figures/finalAct3){height=900px}
+
+## Summary Activity
+![](figures/finalAct4){height=900px}
 
 
 # Omitted Variable Bias: Adding/Removing Covariates in the Additive Model
 
-## Multiple Regression with 2 Conditioning Variables
+## Starting Point: Residuals and Covariates are Uncorrelated
 
-## Residuals and covariates uncorrelated
+$$
+\hat\beta = \argmin_{\beta \in \R^3} \ell(\beta) \qfor \ell(\beta) = \sum_{i=1}^n \qty{b_0 + b_1 X_i + b_2 Z_i - Y_i}^2
+$$
 
-
+$$
 \begin{align*}
-\frac{\partial SSR}{\partial \tilde{B}_1} &=  - \sum_{i=1}^N 2e_i \cdot x_i \\
-\frac{\partial SSR}{\partial \tilde{B}_2} &=  - \sum_{i=1}^N 2 e_i\cdot z_i
+\frac{\partial \ell}{\partial b_0}\mid_{b=\hat\beta} &=  - \sum_{i=1}^n 2 \hat\varepsilon_i  \qfor \hat\varepsilon_i = Y_i - \hat\mu(X_i,Z_i) \\
+\frac{\partial \ell}{\partial b_1}\mid_{b=\hat\beta} &=  - \sum_{i=1}^n 2 \hat\varepsilon_i X_i \\
+\frac{\partial \ell}{\partial b_2}\mid_{b=\hat\beta} &=  - \sum_{i=1}^n 2 \hat\varepsilon_i Z_i \\
 \end{align*}
+$$
 
-We set both equal to zero when solving. 
+## A Formula For Omitted Variable Bias
 
 
-## 
+Suppose we want $\hat\beta_1$ from the additive model, but we run a regression
+of $Y$ on $X$ alone. How far off are we?
 
-Suppose we want $B_1$ from $y_i=B_{0}+B_{1}x_{i}+B_{2}z_{i}+e_i$, but we run the regression of $y$ on $x$ alone. Then,
-
+$$
+\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} =
+\frac{\sum_{i=1}^n (X_i - \bar X) \qty(\hat\beta_0 + \hat\beta_1 X_i + \hat \beta_2 Z_i + \hat\varepsilon_i)}{\sum_{i=1}^n (X_i - \bar X)^2} = ...
+$$
 
 
 
