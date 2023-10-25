@@ -20,6 +20,7 @@ ggl$hawth<- ifelse(ggl$treatment==" Hawthorne", 1, 0)
 ggl$self<- ifelse(ggl$treatment==" Self", 1, 0)
 ggl$neighbors<- ifelse(ggl$treatment==" Neighbors", 1, 0)
 ggl$outcome<- ifelse(ggl$voted=="No",0,1)
+ggl$numsex<- ifelse(ggl$sex=="female",1,0)
 ```
 
 ## Gerber, Green, and Larimer Michigan Voter Experiment
@@ -57,6 +58,40 @@ The attached data from their experiment has the following variables:
 ```
 (a) Create a balance table showing the similarity of individuals assigned to treated and control across sex, age, household size, and turnout in previous elections.
 
+```{r}
+mean(ggl$sex )
+```
+
+
+\begin{table}
+\begin{tabular}{|c|c|c|}
+\hline
+ & Treatment & Control \\
+ \hline 
+ \hline 
+Sex & & \\
+\hline
+Age & & \\
+\hline
+Household Size & & \\
+\hline
+General 2000 & & \\
+\hline
+General 2002 & & \\
+\hline 
+Primary 2000 & & \\
+\hline
+Primary 2002 & & \\
+\hline
+Primary 2004 & & \\
+\hline
+N & & \\
+\hline
+\end{tabular}
+\end{table}
+
+
+
 (b) Create a balance table showing the similarity of individuals assigned to each level of treatment and control across sex, age, household size, and turnout in previous elections. Be sure to note how many individuals are in each level of treatment.
 
 (c) Calculate the subsample proportion of 2006 primary turnout within each level of treatment (and control).
@@ -85,9 +120,7 @@ mean(ggl$outcome[ggl$neighbors==1]) - mean(ggl$outcome[ggl$self==1])
 
 (e) Create a bootstrap estimated sampling distribution for each of your $\tau$s and a 95% confidence interval for each.
 
-
-
-(f) Create four dummy variables-- one for each treatment-- where an observation is coded as 1 if the house hold received that treatment and 0 otherwise (other treatment or control). Run an additive linear regression of 2006 primary vote on the four treatment variables. Report your results in a table and provide plain language interpretations of your estimates.
+(f) Create four dummy variables-- one for each treatment-- where an observation is coded as 1 if the house hold received that treatment and 0 otherwise (other treatment or control). Run an additive linear regression of 2006 primary vote on the four treatment variables. Report your results in a table and provide plain language interpretations of your coefficient estimates.
 
 ```{r}
 votemod1<- lm(outcome~ civic + hawth + self + neighbors, data=ggl)
@@ -95,10 +128,9 @@ votemod1<- lm(outcome~ civic + hawth + self + neighbors, data=ggl)
 
 The intercept is the voter turnout among the control group. Each treatment coefficient is the difference in turnout between that treatment and control-- for example, the civic duty turnout is the intercept + the beta on civic duty. Thus each coefficient on the levels of treatment are the treatment effects (but specifically when we define the treatment effect as the difference between treatment and control-- not the treatment effects we defined in part d)
 
+(g) Run an additive linear regression of 2006 primary vote on the four treatment variables and the pre-treatment turnout variables (i.e. general election voting in 2002 and 2000, primary election voting in 2004, 2002, and 2000). Report your results in a table (one table for both models is fine) and compare the coefficients on your treatment variables to your results in part (f).
 
-(g) Run an additive linear regression of 2006 primary vote on the four treatment variables and the pre-treatment turnout variables (i.e. general election voting in 2002 and 2000, primary election voting in 2004, 2002, and 2000). Report your results in a table (one table for both models is fine) and provide plain language interpretations of your estimates.
-
-first we need to make numerical dummies for the pre-treatment covariates 
+first we need to make numerical dummies for the pre-treatment covariates
 
 ```{r}
 
@@ -113,6 +145,7 @@ votemod2<- lm(outcome~ civic + hawth + self + neighbors + nump2004 + nump2002 + 
 #stargazer(votemod1,votemod2, title="Voter Turnout Experiment")
 ```
 
+```{=tex}
 \begin{table}[!htbp] \centering 
   \caption{Voter Turnout Experiment} 
   \label{} 
@@ -164,9 +197,9 @@ F Statistic & 292.976$^{***}$ (df = 4; 344079) & 3,101.000$^{***}$ (df = 9; 3440
 \hline \\[-1.8ex] 
 \textit{Note:}  & \multicolumn{2}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
 \end{tabular} 
-\end{table} 
-
-The betas from this model are still recovering the treatment effects (relative to control) for each treatment. The fact that the pre-treatment covariates do not change the effects is good-- they shouldn't! Randomization of treatment implies the treatment effects should be uncorrelated with pre-treatment turnout, so our treatment effects are just more precise by including the covariates. 
+\end{table}
+```
+The betas from this model are still recovering the treatment effects (relative to control) for each treatment. The fact that the pre-treatment covariates do not change the effects is good-- they shouldn't! Randomization of treatment implies the treatment effects should be uncorrelated with pre-treatment turnout, so our treatment effects are just more precise by including the covariates.
 
 (h) BONUS: Why might we be concerned about using individual turnout as the outcome for this experiment?
 
@@ -318,14 +351,14 @@ agemeans<- whi %>% group_by(age,treat) %>% summarize(mean=mean(breastcancer))
 
 All of our CIs include 0 so while our pooled estimate suggested a positive (small) effect of CEE+MPA on invasive breast cancer, the conditional effects (by age group) could be 0.
 
-(f) Using the 50-59 year olds as the reference category, run an additive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, and 70-79 year olds as your regressors. Report your results in a table and interpret.
+(f) Using the 50-59 year olds as the reference category, run an additive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, and 70-79 year olds as your regressors. Report your results in a table.
 
 ```{r}
 whimod1<- lm(breastcancer ~ treat + age60s + age70s, data=whi)
 
 ```
 
-(g) Using the 50-59 year olds as the reference category, run an interactive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, 70-79 year olds, 60-69 year olds \* treatment, and 70-79 year olds \* treatment as your regressors. Report your results in a table (you can use one table for both models) and interpret.
+(g) Using the 50-59 year olds as the reference category, run an interactive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, 70-79 year olds, 60-69 year olds \* treatment, and 70-79 year olds \* treatment as your regressors. Report your results in a table (you can use one table for both models).
 
 ```{r}
 whimod2<- lm(breastcancer ~ treat + age60s + age70s + treat*age60s + treat*age70s, data=whi)
@@ -376,7 +409,7 @@ F Statistic & 4.247$^{***}$ (df = 3; 16604) & 2.657$^{**}$ (df = 5; 16602) \\
 \end{tabular} 
 \end{table}
 ```
-(h) Write the equations for each or your models using $\beta_i$ as your parameters. Fill in the following table using with the $\beta$s from your models (not numbers, for example $\beta_0 + \beta_1$.) Then fill in the table using the estimates from your models.
+(h) Write the equations for each or your models using $\beta_i$s as your parameters. Fill in the tables below using the $\beta$s from your models (not numbers, for example $\beta_0 + \beta_1$.) Let $BC(T=1)-BC(T=0)$ be the difference in the proportion of those who developed invasive breast cancer for those that received treatment and control. Then fill in the tables using the estimates from your models.
 
 Additive:
 
@@ -432,13 +465,13 @@ numbers & 70-79 & .016 + .004 + .006 + .004 & .016+.006 & .004+.004  \\
 ```
 \bigskip
 
-(i) Compare the results from your models to the $\hat{ATE}$s by age group that you recovered in part (d).
+(i) Compare the results from your models to the $\hat{ATE}$s by age group that you recovered in part (d). What is different between (f) and (g)?
 
 The interactive model recovers very similar estimates as our subgroup ATEs. The additive model is structured such that the difference between treated and control within each age group has to be the same (the slopes are the same)-- it is assuming constant effects of the treatment on each age group.
 
 \bigskip
 
-read + reflect?
+
 
 ## Dogs
 
