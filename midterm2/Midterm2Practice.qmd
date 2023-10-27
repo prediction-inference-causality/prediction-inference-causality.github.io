@@ -10,6 +10,8 @@ editor: visual
 library(ggplot2)
 library(tidyverse)
 library(patchwork)
+library(cpsR)
+library(scales)
 ```
 
 \section*{Problem 1}
@@ -272,5 +274,153 @@ $Y_i$ is a individual $i$'s income and $X_i$ is that individual's number of year
 
 \section*{Problem 5}
 
+```{r get-data}
+#| cache: true
+#| echo: false
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+cps.sampling.ratio = 1/25 # Not true. 1/2500 households are surveyed. But for the sake of plotting, it's ok.
 
+california.state.code = 6
+year = 2020
+cps.data = results=get_asec(year=year, vars=c('pearnval', 'a_age', 'a_hga', 'gestfips', 'gtco', 'gtcbsasz'), key=census.api.key)
+```
+
+```{r transform-data}
+#| cache: false
+#| echo: false
+all.earnings = data.frame(state.code = cps.data$gestfips,
+                          county.code = cps.data$gtco,
+                          age=cps.data$a_age,
+                          income=cps.data$pearnval,
+                          education.code=cps.data$a_hga,
+                          education=case_match(cps.data$a_hga,
+                                           0  ~ 0,   # child
+                                           31 ~ 0,   # < grade 1
+                                           32 ~ 4,   #  grade 1-4
+                                           33 ~ 6,   #  grade 5-6
+                                           34 ~ 8,   #  grade 7-8 
+                                           35 ~ 9,   #  grade 9
+                                           36 ~ 10,  #  grade 10
+                                           37 ~ 11,  #  grade 11
+                                           38 ~ 11,  #  grade 12 no diploma
+                                           39 ~ 12,  #  high school grad
+                                           40 ~ 13,  #  some college
+                                           41 ~ 14,  #  associate degree (vocational)
+                                           42 ~ 14,  #  associate degree (academic)
+                                           43 ~ 16,  #  bachelors degree
+                                           44 ~ 18,  #  masters degree
+                                           45 ~ 20,  #  professional school degree
+                                           46 ~ 20)) #  doctorate
+
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+earnings = filter(all.earnings, education >= 8 & 
+                                state.code == california.state.code & 
+                                age %>% in.interval(c(25,35)))
+```
+
+```{r ggplot-themes}
+fontsize = 12
+textcolor = "#888888"
+
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+        panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = textcolor, size=fontsize),
+        axis.text.y  = element_text(colour = textcolor, size=fontsize),
+        axis.title.x  = element_text(colour = textcolor),
+        axis.title.y  = element_text(colour = textcolor, angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+              axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+```{r}
+scale_y = function(limits=c(-.3e5, 3e5)) { 
+  scale_y_continuous(labels=label_dollar(), limits=limits)
+}
+
+years = 8:20
+scale_x = function(limits=c(min(years)-.5, max(years)+.5)) { 
+  scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=limits)
+}
+dot.size = 2
+jitter.nocolor = function(earnings) { 
+  ggplot(earnings) + geom_point(aes(x=education, y=income, alpha=foreground), 
+                                size=dot.size, position=position_jitter(seed=0,w=.3), color='#F7766D') +
+                                scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.2)) + 
+                                guides(color=FALSE, alpha=FALSE)
+} 
+
+earnings2 = earnings
+earnings2$income[earnings2$education==10] = earnings2$income[earnings2$education==10]*3 
+
+plot.aggregate.comparison = function(earnings2) {
+  summaries2 = earnings2 %>% group_by(education) %>% summarize(mean=mean(income), sd=sd(income), mean.X = mean(education))
+  aggregate.comparison.plot= jitter.nocolor(earnings2) + 
+    geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries2[summaries2$education <= 12,]) +
+    #geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education %in% c(8,12),], color='blue', alpha=.4) +
+    geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education<=12,], color='black', linetype='dashed') +
+    scale_y(c(0, .7e5))
+
+  model = lm(income ~ education, data=earnings2[earnings2$education <= 12,])
+  lm.predictions = data.frame(education=seq(8,12,by=.01))
+  lm.predictions$muhat = predict(model, newdata=lm.predictions)
+  aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5)) +
+      geom_line(aes(x=education, y=muhat), data=lm.predictions, color='red', alpha=.4)
+}
+plot.aggregate.comparison(earnings2)
+
+mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
+epsilon = rnorm(nrow(earnings)) * .1*sd(earnings$income[earnings$education %in% 8:12])
+
+earnings1 = earnings
+earnings1$income = mu[ifelse(earnings$education==12, 12, 8)] + epsilon
+
+earnings2 = earnings
+earnings2$income = mu[ifelse(earnings$education >= 10, 12, 8)] + epsilon
+
+mu3 = NA+mu
+mu3[8]=mu[8]
+mu3[9]=mu[10]
+mu3[10]=(mu[11]+mu[12])/2
+mu3[11]=mu[12]
+mu3[12]=mu[12]
+earnings3 = earnings
+earnings3$income = mu3[earnings$education] + epsilon
+
+
+over.people = function(earnings) {
+  hsed = earnings$education[earnings$education %in% 9:12]
+  mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
+  mean(mu[hsed] - mu[hsed-1])
+}
+over.years = function(earnings) {
+  mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
+  mean(mu[9:12] - mu[8:11])
+}
+lsq.slope = function(earnings) { 
+  model = lm(income ~ education, data=earnings[earnings$education <= 12,])
+  coef(model)[2]
+}
+
+plot.aggregate.comparison(earnings1)
+```
 
