@@ -182,48 +182,11 @@ ggplot() + geom_histogram(aes(x=Y.bar, y=after_stat(density)), alpha=.3) +
            geom_pointrange(aes(x=mean(Y.bar), xmin=mean(Y.bar)-1.96*sd(Y)/sqrt(n), xmax=mean(Y.bar)+1.96*sd(Y)/sqrt(n), y=5)) + theme_bw() + xlab('') + ylab('')
 ```
 
+
+
+
 \subsection*{Part a}
-What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket
-if necessary for clarity, on the appropriate plot above.
-```{r}
-#| echo: true
-#| eval: false
-mean(Y)
-```
-
-
-The sample mean. It's indicated by the solid vertical line on the left histogram.
-\vspace{.5in}
-
-
-\subsection*{Part b}
-What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
-```{r}
-#| echo: true
-#| eval: false
-sd(Y)
-```
-
-The sample standard deviation. It's the distance between the solid vertical and either dashed vertical line on the left histogram.
-\vspace{.5in}
-
-
-\subsection*{Part c}
-What does this code calculate? State it in words and mark it with an 'c', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
-```{r}
-#| echo: true
-#| eval: false
-sd(Y.bar)
-```
-
-
-The bootstrap sampling distribution's standard deviation. 
-It's the distance between the solid vertical and either dashed vertical line on the left histogram.
-\vspace{.5in}
-
-
-\subsection*{Part d}
-What does this code calculate? State it in words and mark it with an 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 ```{r}
 #| echo: true
 #| eval: false
@@ -236,8 +199,8 @@ A 95\% confidence interval --- based on normal approximation --- for the mean of
 \vspace{.5in}
 
 
-\subsection*{Part e}
-How could you calculate roughly the same thing as in part d using 'sd(Y.bar)' and not 'sd(Y)'?
+\subsection*{Part b}
+How could you calculate roughly the same thing as in part a using 'sd(Y.bar)' and not 'sd(Y)'?
 
 
 We can use the standard deviation of the bootstrap sampling distribution, rather than 'sd(Y)/sqrt(n)', as our estimate of standard error.
@@ -271,7 +234,46 @@ Consider the following \texttt{R} code:
 
 \section*{Problem 4}
 
-$Y_i$ is a individual $i$'s income and $X_i$ is that individual's number of years of education. We take a random sample of individuals and record their years of education and income. Define $\hat{\mu}(16)$ as the subsample mean income among those with 16 years of education. Define an indicator function for $x=16$ and show that $\hat{\mu}(16)$ is an unbiased estimator of $\mu(16)$, the subpopulation mean income for those with 16 years of education. Justify your steps. 
+$Y_i$ is a individual $i$'s income and $X_i$ is that individual's number of years of education. We take a random sample of individuals and record their years of education and income. Define $\hat{\mu}(16)$ as the subsample mean income among those with 16 years of education. Define the indicator function for $x=16$ as $$ 1_{16}(X) = \left\{  \begin{array} {ll}
+1 & if \ x = 16 \\
+0 & otherwise
+\end{array}
+\right. $$
+
+Show that $\hat{\mu}(16)$ is an unbiased estimator of $\mu(16)$, the subpopulation mean income for those with 16 years of education. Justify your steps. 
+
+
+\bigskip 
+
+We want to show that $E[\hat{\mu}(16)] = \mu(16)$
+
+Subsample mean income estimator: $\hat{\mu}(16) = \frac{\sum_{i=1}^n 1_{16} (X_i)Y_i }{\sum_{i=1}^n 1_{16} (X_i)}$ where $$ 1_{16}(X) = \left\{  \begin{array} {ll}
+1 & if \ x = 16 \\
+0 & otherwise
+\end{array}
+\right. $$ By law of iterated expectations, $E[\hat{\mu}(16)] = E[E[\frac{\sum_{i=1}^n 1_{16} (X_i)Y_i }{\sum_{i=1}^n 1_{16} (X_i)} | X_1....X_n]]$
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ E[\sum_{i=1}^n 1_{16} (X_i)Y_i  | X_1....X_n]]$$ because when we condition the indicator sum is a constant
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n E[ 1_{16} (X_i)Y_i  | X_1....X_n]]$$ expectation of sum = sum of expectations
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \ E[ Y_i  | X_1....X_n]]$$ $$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \ E[ Y_i  | X_i]]$$ by irrelevance of independent conditioning variables
+
+We know $E[Y_i|X_i] = \mu(X_i)$ by definition
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \ \mu(X_i)]$$
+
+for all $\mu(X_i)$ that are not $\mu(16)$ (i.e. $\mu(12)$ and $\mu(18)$), the indicator function will multiply them by 0 so we can remove them
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \ \mu(16)]$$ $\mu(16)$ is a constant
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \mu(16) \ \sum_{i=1}^n 1_{16} (X_i)]$$
+
+The sums cancel
+
+$$E[\mu(16)] = \mu(16) $$ as expectation of a constant is that constant
+
+Thus the subsample mean of income among those with 16 years of education is an unbiased estimator of the subpopulation mean income among those with 16 years of education.
 
 
 
