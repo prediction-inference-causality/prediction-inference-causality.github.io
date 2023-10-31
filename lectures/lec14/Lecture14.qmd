@@ -104,6 +104,8 @@ $$
 \DeclareMathOperator{\Var}{\V}
 \newcommand{\inred}[1]{\textcolor{red}{#1}}
 \newcommand{\inblue}[1]{\textcolor{blue}{#1}}
+\newcommand{X}{\mathbf{X}}
+\newcommand{Y}{\mathbf{Y}}
 $$ 
 :::
 
@@ -492,8 +494,17 @@ We'll draw the following things.
 ![](figures/finalAct4){height=900px}
 
 
-# Omitted Variable Bias: Adding/Removing Covariates in the Additive Model
+# Omitted Variable Bias
 
+Adding and Removing Covariates in the Additive Model
+
+## Question
+
+![](figures/finalAct2){height=600px}
+
+- Suppose we want the slope coefficient $\hat\beta_1$ from the additive model.
+- But we run a regression of $Y$ on $X$ alone. How far off are we?
+  
 ## Starting Point: Residuals and Covariates are Uncorrelated
 
 $$
@@ -501,27 +512,105 @@ $$
 $$
 
 $$
+\begin{aligned}
+0 
+&= \frac{\partial}{\partial b_j}\mid_{b=\hat\beta} \ell(b) \\
+&= \sum_{i=1}^n \frac{\partial}{\partial b_j}\mid_{b=\hat\beta} \qty{b_0 + b_1 X_i + b_2 Z_i - Y_i}^2 \\
+&= \sum_{i=1}^n 2 \times \qty{\hat\beta_0 + \hat\beta_1 X_i + \hat\beta_2 Z_i - Y_i} \times \frac{\partial}{\partial b_j}\qty{b_0 + b_1 X_i + b_2 Z_i - Y_i}
+\end{aligned}
+$$
+
+so ...
+
 \begin{align*}
-\frac{\partial \ell}{\partial b_0}\mid_{b=\hat\beta} &=  - \sum_{i=1}^n 2 \hat\varepsilon_i  \qfor \hat\varepsilon_i = Y_i - \hat\mu(X_i,Z_i) \\
-\frac{\partial \ell}{\partial b_1}\mid_{b=\hat\beta} &=  - \sum_{i=1}^n 2 \hat\varepsilon_i X_i \\
-\frac{\partial \ell}{\partial b_2}\mid_{b=\hat\beta} &=  - \sum_{i=1}^n 2 \hat\varepsilon_i Z_i \\
+0=\frac{\partial \ell}{\partial b_0}\mid_{b=\hat\beta} &=  -2 \sum_{i=1}^n \hat\varepsilon_i  \qfor \hat\varepsilon_i = Y_i - \hat\mu(X_i,Z_i) \\
+0=\frac{\partial \ell}{\partial b_1}\mid_{b=\hat\beta} &=  -2 \sum_{i=1}^n \hat\varepsilon_i X_i \\
+0=\frac{\partial \ell}{\partial b_2}\mid_{b=\hat\beta} &=  -2 \sum_{i=1}^n \hat\varepsilon_i Z_i \\
 \end{align*}
 $$
 
-## A Formula For Omitted Variable Bias
+and therefore
+$$
+\begin{aligned}
+0= 0 - 0\bar X &= \sum_{i=1}^n \hat\varepsilon_i X_i - \sum_{i=1}^n \hat\varepsilon \bar X =
+\sum_{i=1}^n \hat\varepsilon (X_i - \bar X) \\
+0= 0 - 0\bar X &= \sum_{i=1}^n \hat\varepsilon_i X_i - \sum_{i=1}^n \hat\varepsilon \bar X =
+\sum_{i=1}^n \hat\varepsilon (X_i - \bar X) \\
+\end{aligned}
+$$
 
+## Deriving A Formula For Omitted Variable Bias
+
+
+
+
+$$
+\begin{aligned}
+\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+&= \frac{\sum_{i=1}^n (X_i - \bar X) \qty(\hat\beta_0 + \hat\beta_1 X_i + \hat \beta_2 Z_i + \hat\varepsilon_i)}{\sum_{i=1}^n (X_i - \bar X)^2} \\
+&= ...
+\end{aligned}
+$$
+
+## Deriving A Formula For Omitted Variable Bias
 
 Suppose we want $\hat\beta_1$ from the additive model, but we run a regression
 of $Y$ on $X$ alone. How far off are we?
 
 $$
-\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} =
-\frac{\sum_{i=1}^n (X_i - \bar X) \qty(\hat\beta_0 + \hat\beta_1 X_i + \hat \beta_2 Z_i + \hat\varepsilon_i)}{\sum_{i=1}^n (X_i - \bar X)^2} = ...
+\begin{aligned}
+\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+&= \frac{\sum_{i=1}^n (X_i - \bar X) \qty(\hat\beta_0 + \hat\beta_1 X_i + \hat \beta_2 Z_i + \hat\varepsilon_i)}{\sum_{i=1}^n (X_i - \bar X)^2} \\
+&= \hat\beta_0 \frac{\sum_{i=1}^n (X_i - \bar X)}{\sum_{i=1}^n (X_i - \bar X)^2}
++ \hat\beta_1 \frac{\sum_{i=1}^n (X_i - \bar X) X_i}{\sum_{i=1}^n (X_i - \bar X)^2} \\
+&+ \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
++ \frac{\sum_{i=1}^n (X_i - \bar X) \hat\varepsilon_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+\end{aligned}
 $$
 
+Here's an expanded version.
 
+- Are any of these terms zero? Why?
+- Do we know the values of any of the other sums?
+
+::: fragment
+- The first term is zero because $\sum_{i=1}^n X_i = \sum_{i=1}^n \bar X$: $\sum_{i=1}^n \bar X = n \bar X = n \times \frac{1}{n}\sum_{i=1}^n X_i$ 
+- The last term is zero because the residuals are uncorrelated with $X$: $\sum_{i=1}^n (X_i - \bar X_i) \hat\varepsilon_i = 0$
+- The second term is $\hat\beta_1$ because $\sum_{i=1}^n (X_i - \bar X) X_i = \sum_{i=1}^n (X_i - \bar X)X_i - \sum_{i=1}^n (X_i - \bar X) \bar X = \sum_{i=1}^n (X_i-\bar{X})^2
+  - How is this related to what we said about the first term?
+
+:::
+
+## A Formula for Omitted Variable Bias
+$$
+\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_i}{\sum_{i=1}^n (X_i - \bar X)^2}\\
+= \hat \beta_{YX} + \hat\beta_{YZ}\hat\beta_{ZX}
+$$
+
+- The first term is the coefficient on $X$ in the additive model.
+- The second, which we call **omitted variable bias**, is ...
+  - the coefficient on $Z$ 
+  - times the coefficient in the simple linear regression of $Z$ on $X$.
+- Story: when we leave $Z$ out of our regression, the effect of $Z$ on $Y$ is --- insofar as $X$ predicts $Z$ --- baked into the effect of $X$ in $Y$.
+- This is why, if you're discussing coefficients, it's so important to be clear about what model you're using.
+
+## OVB and Covariate Balance
+
+$$
+\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_i}{\sum_{i=1}^n (X_i - \bar X)^2}\\
+= \hat \beta_{YX} + \hat\beta_{YZ}\hat\beta_{ZX}
+$$
+
+- Now we'll use this OVB formula to explain something people do in real experiments that might seem confusing.
+  - They look at the coefficient on treatment ($X$) in different models---models that include additional covariates ($X$).  
+  - And they act pleased that it's the same. Shouldn't it be different?
+
+- We'll look at an experiment that looked at the effect of various mail treatments on turnout.
 
 #  The Social Pressure Experiment
+
 
 ![](figures/abstractGGL.png)
 
@@ -546,5 +635,131 @@ $$
 ![](figures/GGL.png)
 
 ## Including Covariates 
-
 ![](figures/GGL2.png)
+
+## Why doesn't the coefficient on treatment change?
+$$
+\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_i}{\sum_{i=1}^n (X_i - \bar X)^2}\\
+= \hat \beta_{YX} + \hat\beta_{YZ}\hat\beta_{ZX}
+$$
+
+::: fragment
+
+- Because treatment $X$ *isn't predictive* of the covariate $Z$.
+- We can see from the table that $\hat\beta_{ZX} \approx 0$ so OVB must be zero.
+
+:::
+
+![](figures/GGL.png)
+
+
+## What We've Left Out
+
+- This is a half-truth. Our OVB formula is for *one omitted covariate* $Z$.
+- But what's really getting omitted is many covariates.
+- The OVB formula for many covariates is---if we were to try to write it the same way---much more complicated.
+- But it looks *exactly like the 1-covariate case* when we use matrix notation.
+- Most things do. That's why we use it. We're going to get started now.
+
+# Regression in Matrix Notation
+
+## Scalar vs. Vector Notation
+
+$$
+\begin{aligned}
+Y_1 & = \hat \beta_0 + \hat \beta_1 X_{11} + \hat \beta_2 X_{21} + ... \hat \beta_K X_{K1} + \hat\varepsilon_1 \\
+Y_2 & = \hat \beta_0 + \hat \beta_1 X_{12} + \hat \beta_2 X_{22} + ... \hat \beta_K X_{K2} + \hat\varepsilon_2 \\
+& \vdots \\
+Y_n & = \hat \beta_0 + \hat \beta_1 X_{1n} + \hat \beta_2 X_{2n} + ... \hat \beta_K X_{Kn} + \hat\varepsilon_n \\
+\end{aligned}
+$$
+
+is just a less compact way of writing ...
+
+$$
+\begin{aligned}
+Y_1 &= \X_{1}^T \hat \beta + \hat\varepsilon_1 \\
+Y_2 &= \X_{2}^T \hat \beta + \hat\varepsilon_2 \\
+&\vdots \\
+Y_n &= \X_{n}^T \hat \beta + \hat\varepsilon_n \\
+\end{aligned}
+\qfor
+\X_i = \begin{pmatrix} 1 \\ X_{1i} \\ X_{2i} \\ \vdots \\ X_{Ki} \end{pmatrix}
+\qand
+\hat\beta = \begin{pmatrix} \hat \beta_0 \\ \hat \beta_1 \\ \hat \beta_2 \\ \vdots \\ \hat \beta_K \end{pmatrix}
+$$
+
+## Scalar vs. Matrix Notation
+
+$$
+\begin{aligned}
+Y_1 & = \hat \beta_0 + \hat \beta_1 X_{11} + \hat \beta_2 X_{21} + ... \hat \beta_K X_{K1} + \hat\varepsilon_1 \\
+Y_2 & = \hat \beta_0 + \hat \beta_1 X_{12} + \hat \beta_2 X_{22} + ... \hat \beta_K X_{K2} + \hat\varepsilon_2 \\
+& \qquad \qquad \qquad \quad  ... \\
+Y_n & = \hat \beta_0 + \hat \beta_1 X_{1n} + \hat \beta_2 X_{2n} + ... \hat \beta_K X_{Kn} + \hat\varepsilon_n \\
+\end{aligned}
+$$
+
+is just a less compact way of writing ...
+
+$$
+\begin{aligned}
+\underbrace{\left( \begin{array}{c} Y_1 \\ Y_2 \\ \vdots \\ Y_n \end{array} \right)}_{\Y} 
+&=  \underbrace{\left( \begin{array}{ccccc} 1 & X_{11} & X_{21} & ... & X_{K1} \\ 1 & X_{12} & X_{22} & ... & X_{K2} \\ \vdots &  \vdots &  \vdots & \ddots &  \vdots \\  1 & X_{1n} & X_{2n} & ... & X_{Kn} \end{array} \right)}_{\X} 
+\underbrace{\left( \begin{array}{c} \hat \beta_0 \\ \hat \beta_1 \\ \hat \beta_2 \\ \vdots \\ \hat \beta_K \end{array} \right)}_{\hat\beta} 
++ \underbrace{\left( \begin{array}{c} \hat\varepsilon_1 \\  \hat\varepsilon_2 \\ \vdots \\  \hat\varepsilon_n \end{array} \right)}_{\bf\hat\varepsilon}
+\end{aligned}
+\Y = \X \hat \beta + {\bf\hat \varepsilon}
+$$
+
+i.e., $\Y = \X \hat \beta + {\bf\hat \varepsilon}$.
+
+
+## Least Squares Solution
+
+$$
+\hat\beta  = (\X'\X)^{-1} \X^T \Y \qqtext{solves} 
+\argmin_{b \in \R^{K+1}}  \norm{ X b - Y}^2
+$$
+
+- Let's prove it. As before, we'll characterize $\hat\beta$ as the vector $b$ where **all partial derivatives are zero**.
+- It's easier to do it in **vector notation**. We can convert to **matrix notation** in the end.
+
+$$
+\hat\beta = \qty(\sum_{i=1}^n \X_i \X_i^T)^{-1} \sum_i \X_i Y_i  \text{ solves } = \argmin_{b \in \R^{K+1}}  \sum_{i=1}^n  \qty{\X_i^T b - Y_i}^2
+$$
+
+
+## A Simple Summary: A Prediction at a Point x
+
+$$ 
+\hat \mu(x) = x^T \hat \beta \qfor \hat\beta  = (\X^T\X)^{-1} \X^T \Y 
+$$
+
+- What is the variance of this prediction?
+
+$$
+\begin{aligned}
+\E \qty{ x^T\hat\beta- \E x^T \hat\beta)}^2 
+&=\E \qty{x^T (\hat\beta-\E\hat\beta)}^2 \\ 
+&=\E \qty{x^T (\hat\beta-\E\hat\beta)}\qty{(\hat\beta-\E\hat\beta)^T x} \\
+&=x^T \qty{\E (\hat\beta-\E\hat\beta) (\hat\beta-\E\hat\beta)^T} x 
+\end{aligned}
+$$
+
+- Here $\E (\hat\beta-\E\hat\beta) (\hat\beta-\E\hat\beta)^T$ is called 
+the **covariance matrix** of $\hat\beta$. 
+- And we can calculate it using our formula for $\hat\beta$.
+
+##
+
+
+## Bias?
+
+- What is the **mean** of this prediction?
+
+$$ 
+\hat \mu(x) = x^T \hat \beta \qfor \hat\beta  = (\X^T\X)^{-1} \X^T \Y 
+$$
+

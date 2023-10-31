@@ -1,0 +1,335 @@
+---
+title: "Solutions: Midterm 2 Practice Problems"
+format: pdf
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| warning: false
+library(ggplot2)
+library(tidyverse)
+library(patchwork)
+```
+
+\section*{Problem 1}
+
+In the following three parts, choose the figure with the appropriate regression line(s).
+
+\subsubsection*{Part A}
+
+Choose the figure with the solid line that represents the simple regression line ($y\sim x$).
+
+```{r, fig.width=10,fig.height=4}
+#| echo: false
+#| warning: false
+n <- 1000
+zz <- c(rep(0,n/2),rep(1,n/2))
+set.seed(123456)
+xx <-  3 - 2*zz + rnorm(n,mean=0,sd = 1)
+yy <- 2*zz*xx - xx + rnorm(n)
+
+
+modAct1 <- lm(yy ~ xx)
+modAct2 <- lm(yy ~ xx + zz)
+
+
+df <- data.frame(xx,yy,zz)
+
+p <- ggplot(data = df, aes(x = xx, y = yy)) +
+  geom_point(aes(shape = factor(zz)),size = 1,alpha=.5) +
+  scale_shape_manual(values = c(1,19), label = c("z=0","z=1")) +
+  xlab("x") +
+  ylab("y") +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        legend.box.just = "left",
+        legend.justification = c("left","top"),
+        legend.position = c(0,1),
+        legend.margin = margin(6,6,6,6),
+        legend.title = element_blank(),
+        legend.box.background = element_rect(color="black",size=1))
+
+coef1 <- modAct1$coefficients
+coef2 <- modAct2$coefficients
+# simple regression line y ~ x --------
+simpleA <- p + geom_abline(intercept = coef1[1], slope = coef1[2]) + ggtitle("A3")
+
+simpleB <- p + geom_hline(yintercept = mean(df$yy)) + ggtitle("A1")
+
+mod3 <- lm(yy ~ xx:zz, data = df)
+simpleC <- p + geom_abline(intercept = coef(mod3)[1], slope = coef(mod3)[2]) +
+  ggtitle("A2")
+
+
+#pdf(file="Q1partAplot.pdf",width=10,height=4)
+simpleB + simpleC + simpleA
+#dev.off() 
+
+```
+
+\color{red} A3 \color{black}
+
+\subsubsection*{Part B}
+
+Choose the figure with the two dashed lines associated with the additive multiple regression ($y\sim x+z$).
+
+```{r,fig.width=10,fig.height=4}
+#| echo: false
+# multiple additive regression y ~ x + z
+addA <- p + geom_abline(intercept = coef2[1], slope = coef2[2], linetype = 'dashed') +
+  geom_abline(intercept = coef2[1] + coef2[3], slope = coef2[2], linetype = 'dashed') +
+  ggtitle("B1")
+
+addB <- p + geom_vline(xintercept = 1, linetype = 'dashed') +
+  geom_vline(xintercept = 3.25, linetype = 'dashed') +
+  ggtitle("B2")
+
+addC <- p + geom_curve(aes(x = -2,xend=6,y=-6,yend=-1),
+               curvature = -0.8,
+               angle = 70,
+               linetype = 'dashed') +
+  geom_curve(aes(x=-2,y=0,xend=4,yend=-7),
+             curvature = -0.5,
+             linetype = 'dashed') +
+  ggtitle("B3")
+
+#pdf(file="Q1partBplot.pdf",width=10,height=4)
+addA + addB + addC
+#dev.off()
+```
+
+\color{red} B1 \color{black}
+
+\subsubsection*{Part C}
+
+Choose the figure with the two dotted lines associated with the interactive multiple regression ($y\sim x*z$).
+
+```{r,fig.width=10,fig.height=4}
+#| echo: false
+# interactive model
+mod3 <- lm(yy ~ xx*zz, data = df)
+coef3 <- coef(mod3)
+intC2 <- p + geom_abline(intercept = coef3[1], slope = coef3[2],
+                linetype = 'dotted') +
+  geom_abline(intercept = coef3[1] + coef3[3],
+              slope = coef3[2] + coef3[4],
+              linetype = 'dotted') +
+  ggtitle("C2")
+
+
+intC1 <- p + geom_abline(intercept = coef3[1], slope = coef3[2]*1.5,
+                linetype = 'dotted') +
+  geom_abline(intercept = coef3[1] + coef3[3]*4,
+              slope = coef3[2] + coef3[4]*4,
+              linetype = 'dotted') +
+  ggtitle("C1")
+
+intC3 <- p + geom_curve(aes(x = -2,y = -2.5,xend=3,yend=5),
+               curvature = 0.3,
+               #angle = 30,
+               linetype = 'dotted') +
+  geom_curve(aes(x=0,y=5,xend=6,yend=-5),
+             curvature = 0.3,
+             angle=95,
+             linetype = 'dotted') +
+  ggtitle("C3")
+
+#pdf(file="Q1partCplot.pdf",width=10,height=4)
+intC1 + intC2 + intC3
+#dev.off()
+```
+
+\color{red} C2 \color{black}
+
+\section*{Problem 2}
+
+Suppose we have a sample $Y_1 \ldots Y_n$ stored on an \textbf{R} vector $Y$ of length $n$. We run this code.
+
+```{r}
+#| echo: false
+set.seed(123)
+n = 1000
+Y = rnorm(n)
+```
+
+```{r}
+#| echo: true
+B=10000
+Y.bar = rep(NA,B)
+for(b in 1:B) {
+  Y.bar[b]= mean(sample(Y,size=n,replace=TRUE))
+}
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| out-height: 6in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the vector Y's elements
+#|  -  Histogram of the Y.bar's elements
+ggplot() + geom_histogram(aes(x=Y,     y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(Y)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(Y)+c(-1,1)*sd(Y)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(Y), xmin=mean(Y)-1.96*sd(Y), xmax=mean(Y)+1.96*sd(Y), y=.15)) + theme_bw() + xlab('') + ylab('')
+ggplot() + geom_histogram(aes(x=Y.bar, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(Y.bar)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(Y.bar)+c(-1,1)*sd(Y.bar)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(Y.bar), xmin=mean(Y.bar)-1.96*sd(Y)/sqrt(n), xmax=mean(Y.bar)+1.96*sd(Y)/sqrt(n), y=5)) + theme_bw() + xlab('') + ylab('')
+```
+
+\subsection*{Part a}
+
+What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+mean(Y) - 1.96* sd(Y)/sqrt(n)
+mean(Y) + 1.96* sd(Y)/sqrt(n)
+```
+
+A 95% confidence interval --- based on normal approximation --- for the mean of the population our sample $Y_1 \ldots Y_n$ is drawn from. This is indicated by the horizontal segment (with a dot in the middle) on the right histogram. \vspace{.5in}
+
+\subsection*{Part b}
+
+How could you calculate roughly the same thing as in part a using 'sd(Y.bar)' and not 'sd(Y)'?
+
+We can use the standard deviation of the bootstrap sampling distribution, rather than 'sd(Y)/sqrt(n)', as our estimate of standard error.
+
+```{=tex}
+\begin{verbatim}
+mean(Y) - 1.96 * sd(Y.bar)
+mean(Y) + 1.96 * sd(Y.bar)
+\end{verbatim}
+```
+\section*{Problem 3}
+
+Consider the following \texttt{R} code:
+
+```{=tex}
+\begin{verbatim}
+1. lm(residuals(lm(y~z)) ~ residuals(lm(z~x)))
+2. lm(y ~ residuals(lm(z~x)))
+3. lm(residuals(lm(y~z)) ~ residuals(lm(x~z)))
+4. lm(residuals(lm(y~z)) ~ x)
+5. lm(residuals(lm(y~x)) ~ residuals(lm(x~z)))
+6. lm(residuals(lm(y~x)) ~ z)
+7. lm(residuals(lm(y~x)) ~ residuals(lm(z~x)))
+8. lm(y ~ residuals(lm(x~z)))
+ \end{verbatim}
+```
+```{=tex}
+\begin{itemize}
+\item[a)]  Choose one of the above that will produce the coefficient on $x$ from the multiple regression of $y \sim x + z$\\
+\color{red} 3 and 8  \color{black}
+\item[b)] Choose one of the above that will produce the same residuals as the residuals from the multiple regression of $y \sim x + z$\\
+ \color{red}  3 and 7 \color{black}
+\end{itemize}
+```
+\section*{Problem 4}
+
+We take a random sample of $n$ individuals and record their years of education and income. $Y_i$ is an individual $i$'s income and $X_i$ is that individual's number of years of education. Define $$\hat{\mu}(16) = \frac{1}{\sum_{i=1}^n 1_{16}(X_i)} \sum_{i=1}^n 1_{16}(X_i)Y_i$$ as the subsample mean income among those with 16 years of education. Define the indicator function for $x=16$ as $$ 1_{16}(X_i) = \left\{  \begin{array} {ll}
+1 & if \ x = 16 \\
+0 & otherwise
+\end{array}
+\right. $$
+
+Show that $\hat{\mu}(16)$ is an unbiased estimator of $\mu(16)$, the subpopulation mean income for those with 16 years of education. Justify your steps.
+
+\bigskip
+
+We want to show that $E[\hat{\mu}(16)] = \mu(16)$
+
+Subsample mean income estimator: $\hat{\mu}(16) = \frac{\sum_{i=1}^n 1_{16} (X_i)Y_i }{\sum_{i=1}^n 1_{16} (X_i)}$ where $$ 1_{16}(X) = \left\{  \begin{array} {ll}
+1 & if \ x = 16 \\
+0 & otherwise
+\end{array}
+\right. $$ By law of iterated expectations, $E[\hat{\mu}(16)] = E[E[\frac{\sum_{i=1}^n 1_{16} (X_i)Y_i }{\sum_{i=1}^n 1_{16} (X_i)} | X_1....X_n]]$
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ E[\sum_{i=1}^n 1_{16} (X_i)Y_i  | X_1....X_n]]$$ because when we condition the indicator sum is a constant
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n E[ 1_{16} (X_i)Y_i  | X_1....X_n]]$$ expectation of sum = sum of expectations
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \ E[ Y_i  | X_1....X_n]]$$ $$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \ E[ Y_i  | X_i]]$$ by irrelevance of independent conditioning variables
+
+We know $E[Y_i|X_i] = \mu(X_i)$ by definition
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \ \mu(X_i)]$$
+
+for all $\mu(X_i)$ that are not $\mu(16)$ (i.e. $\mu(12)$ and $\mu(18)$), the indicator function will multiply them by 0 so we can remove them
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \ \mu(16)]$$ $\mu(16)$ is a constant
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \mu(16) \ \sum_{i=1}^n 1_{16} (X_i)]$$
+
+The sums cancel
+
+$$E[\mu(16)] = \mu(16) $$ as expectation of a constant is that constant
+
+Thus the subsample mean of income among those with 16 years of education is an unbiased estimator of the subpopulation mean income among those with 16 years of education.
+
+\section*{Problem 5}
+
+In the below visualization, the x-axis is an individual's years of education, the y-axis is income, the red line is the least squares line, and the black dots indicate the mean income within each year of education. You have three options to summarize the change in income across an additional year of education: the average over years, the average weighted by the proportion of individuals with the years of education $P_x$, and the slope of the least squares line. Rank these options smallest to largest regarding the magnitude of the estimate you expect and explain your reasoning.
+
+```{=tex}
+\begin{figure}[H]
+\includegraphics{test.png}
+\caption*{Income and Years of Education}
+\end{figure}
+```
+
+\bigskip 
+
+Smallest: average over years-- if we were to take the average over years, we are just taking the difference in income between the 8 year subsample and 12 year subsample and dividing (all the subsample means in between cancel). The mean income in the 8 year subsample is higher than the intercept of the least squares line, so we can see the difference between 8 year and 12 year will be smaller than the least squares slope. 
+
+In between: least squares slope -- because this is visualized for us on the plot, we can compare what we expect our over years and over people estimates to be directly to this line. Because we think the average over people will be smaller than this slope and the average over people will be larger than this slope, the slope is ranked in the middle. 
+
+Largest: average over people -- since we already argued that the average over years should be less than the least squares slope, we just need to argue that the average over people is greater than the least squares slope. $P_x$ weights each incremental difference by the number of observations in $\hat{\mu}(x)$ and most of our individuals have 12 years of education. Thus the incremental difference in average income between 11 years and 12 years will be significantly up-weighted relative to all the other increments. This incremental difference in income is much steeper than the least squares line, and because of the number of individuals in our sample with 12 years of education, we expect the average over people to yield the largest estimate. 
+
+\section*{Problem 6}
+
+Suppose we want $\gamma_1$ from $y_i = \gamma_0 + \gamma_1 x_i + \gamma_2 w_i + e_i$ but we run the regression $lm (y\sim x)$ without $w$. We have de-meaned our variables $x_i$ and $w_i$ such that $\bar{x}=0$ and $\bar{w}=0$. Will the coefficient on $x$ from $lm (y\sim x)$ be equal to $\gamma_1$? Derive what your coefficient on $x$ will be in terms of $\gamma$s and justify your steps.
+
+\bigskip 
+
+The coefficient on $x$ from $lm (y\sim x)$ is $$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$$
+
+Plug in $y_i$ defined by the multivariate regression: $y_i = \gamma_0 + \gamma_1 x_i + \gamma_2 w_i + e_i$
+
+
+$$\frac{\sum_{i=1}^n x_i (\gamma_0 + \gamma_1 x_i + \gamma_2 w_i + e_i)}{\sum_{i=1}^n x_i^2 }$$
+
+Distribute 
+
+$$\frac{\sum_{i=1}^n x_i \gamma_0 }{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \gamma_1 x_i}{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \gamma_2 w_i }{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 }$$
+Let's work through each term. 
+
+$\frac{\sum_{i=1}^n x_i \gamma_0 }{\sum_{i=1}^n x_i^2 } = \frac{ \gamma_0 \sum_{i=1}^n x_i }{\sum_{i=1}^n x_i^2 } = \frac{ \gamma_0 *0 }{\sum_{i=1}^n x_i^2 } = 0$ because $x$ is demeaned
+
+(It might be helpful to consider the term if we had not demeaned $x$. We would have $\frac{\gamma_0 \sum_{i=1}^n (x_i - \bar{x}) }{\sum_{i=1}^n x_i^2 } = \frac{\gamma_0 (\sum_{i=1}^n x_i - \sum_{i=1}^n \bar{x}) }{\sum_{i=1}^n x_i^2 } = \frac{\gamma_0 (\sum_{i=1}^n x_i - n\bar{x}) }{\sum_{i=1}^n x_i^2 }$ 
+
+and we know that $\bar{x} = \frac{1}{n} \sum x_i$, so we have $\frac{\gamma_0 (\sum_{i=1}^n x_i - n( \frac{1}{n} \sum_{i=1}^n x_i)) }{\sum_{i=1}^n x_i^2 } = \frac{\gamma_0 (\sum_{i=1}^n x_i -  \sum_{i=1}^n x_i) }{\sum_{i=1}^n x_i^2 } = \frac{ \gamma_0 *0 }{\sum_{i=1}^n x_i^2 } = 0$ ) 
+
+\bigskip
+
+$\frac{\sum_{i=1}^n x_i \gamma_1 x_i}{\sum_{i=1}^n x_i^2 } = \frac{  \gamma_1 \sum_{i=1}^n x_i x_i}{\sum_{i=1}^n x_i^2 } = \gamma_1$ 
+
+\bigskip 
+
+$\frac{\sum_{i=1}^n x_i \gamma_2 w_i }{\sum_{i=1}^n x_i^2 } = \frac{\gamma_2 \sum_{i=1}^n x_i w_i }{\sum_{i=1}^n x_i^2 }$
+
+\bigskip 
+
+$\frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 } = \frac{0}{\sum_{i=1}^n x_i^2 } =0$ we know that $\sum_{i=1}^n x_i  e_i =0$ from the first order conditions on our least squares estimator (we chose the intercept and coefficient(s) that minimize the sum of squared residuals)
+
+\bigskip 
+
+Thus we have 
+
+$$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 } = \gamma_1 + \frac{\gamma_2 \sum_{i=1}^n x_i w_i }{\sum_{i=1}^n x_i^2 }$$
+The coefficient on $x$ from the simple regression of $y$ on $x$ will be equal to $\gamma_1$ if either $\gamma_2$ or the coefficient on $x$ from the simple regression from $x$ on $w$ is 0. If either of these is non-zero, our simple regression will not give us the same result as our regression that includes both $x$ and $w$ 
+
