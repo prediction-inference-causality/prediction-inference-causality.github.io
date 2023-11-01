@@ -1,0 +1,688 @@
+---
+title: "QTM 220: Lectures 16"
+subtitle: "Least Squares Regression in Linear Models"
+format: 
+  clean-revealjs:
+    height: 1000
+    width: 1290
+    theme: [default, "class.scss"]
+    smaller: true
+    slide-number: true
+    pdf-separate-fragments: true
+    fig-format: svg
+    default-image-extension: svg
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
+---
+
+
+```{r load-libraries}
+library(purrr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(ggplot2)
+library(htmltools)
+library(kableExtra)
+library(scales)
+library(cpsR)
+library(maps)
+
+options(knitr.kable.NA = '')
+
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+```
+
+```{r ggplot-themes}
+fontsize = 16
+textcolor = "#888888"
+
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+        panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = textcolor, size=fontsize),
+        axis.text.y  = element_text(colour = textcolor, size=fontsize),
+        axis.title.x  = element_text(colour = textcolor),
+        axis.title.y  = element_text(colour = textcolor, angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+              axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+
+```{r table-styling}
+ellipsis <- function(df, nhead=5L, ntail=2) {
+    rownames(df) = as.character(1:nrow(df))
+    stopifnot("data.frame" %in% class(df))
+    els <- rep(NA, ncol(df)) %>% 
+        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
+        data.frame(stringsAsFactors=FALSE) %>% 
+        tibble::as_tibble()
+    rownames(els) = "⋮"
+    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
+}
+```
+
+```{r get-data}
+#| cache: true
+#| 
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+cps.sampling.ratio = 1/25 # Not true. 1/2500 households are surveyed. But for the sake of plotting, it's ok.
+
+years = c(2019,2020,2021,2022)
+cps.data = purrr::map(years, function(year) { 
+  data=get_asec(year=year, vars=c('pearnval', 'a_age', 'a_hga', 'gestfips', 'gtco', 'gtcbsasz'), key=census.api.key)
+  data$year=year
+  data
+}) %>% bind_rows()
+```
+
+```{r transform-data}
+#| cache: false
+#| 
+all.earnings = data.frame(state.code = cps.data$gestfips,
+                          county.code = cps.data$gtco,
+                          year=cps.data$year,
+                          age=cps.data$a_age,
+                          income=cps.data$pearnval,
+                          education.code=cps.data$a_hga,
+                          education=case_match(cps.data$a_hga,
+                                           0  ~ 0,   # child
+                                           31 ~ 0,   # < grade 1
+                                           32 ~ 4,   #  grade 1-4
+                                           33 ~ 6,   #  grade 5-6
+                                           34 ~ 8,   #  grade 7-8 
+                                           35 ~ 9,   #  grade 9
+                                           36 ~ 10,  #  grade 10
+                                           37 ~ 11,  #  grade 11
+                                           38 ~ 11,  #  grade 12 no diploma
+                                           39 ~ 12,  #  high school grad
+                                           40 ~ 13,  #  some college
+                                           41 ~ 14,  #  associate degree (vocational)
+                                           42 ~ 14,  #  associate degree (academic)
+                                           43 ~ 16,  #  bachelors degree
+                                           44 ~ 18,  #  masters degree
+                                           45 ~ 20,  #  professional school degree
+                                           46 ~ 20)) #  doctorate
+
+all.earnings$degree = factor(all.earnings$education >= 16, 
+                     levels=c(FALSE, TRUE), 
+                     labels=c('no 4-year degree','4-year degree')) 
+
+coarsen = function(x, group, seed=0) {
+  current.seed = .Random.seed
+  set.seed(seed)
+  x.coarsened = rep(NA, length(x))
+  for(gg in unique(group)) {
+    x.coarsened[group==gg] = runif(sum(group==gg), min(x[group==gg]), max(x[group==gg]))
+  }
+  set.seed(current.seed)
+  x.coarsened
+} 
+```
+
+```{r}
+paradox = purrr::map(unique(all.earnings$state.code), function(code) {
+  in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+  earnings = filter(all.earnings, education >= 8 & 
+                                state.code == code)
+  aggregate.model = lm(income ~ year, data=earnings)
+  group.model = lm(income ~ year + degree, data=earnings)
+  data.frame(code=code, happens=coef(aggregate.model)[2] * coef(group.model)[2] < 0) 
+}) %>% bind_rows()
+
+codes=unique(paradox$code[paradox$happens])
+```
+
+# Review
+
+::: {.hidden}
+$$
+\newcommand{\alert}[1]{\textcolor{red}{#1}}
+\newcommand{\model}{\mathcal{M}}
+\newcommand{\R}{\mathbb{R}}
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\V}{V}
+\DeclareMathOperator{\Var}{\V}
+\newcommand{\inred}[1]{\textcolor{red}{#1}}
+\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
+\newcommand{X}{\mathbf{X}}
+\newcommand{Y}{\mathbf{Y}}
+$$ 
+:::
+
+## Simpson's Paradox {.smaller}
+
+::: {.center}
+![](figures/finalAct2){height=400px}
+:::
+
+- Sometimes, the *aggregate relationship* between two variables is opposite the *within-groups relationship*.
+- Above, the aggregate relationship is positive. But the within-groups relationship is negative.
+- We can see this when we compare the slopes $\hat\beta_1$ we get by fitting two models.
+
+$$
+\small{
+\begin{aligned}
+\model &= \qty{ m(x,z) = b_0 + b_1 x } \qquad        & \text{univariate model} \\
+\model &= \qty{ m(x,z) = b_0 + b_1 x + b_2 z} \qquad & \text{additive bivariate model}
+\end{aligned}
+}
+$$
+
+- We didn't really need to fit a regression model to see this. It's obvious from the scatterplot.
+- Sometimes things are a bit less obvious and we need to fit a model to see it. 
+
+## Pandemic-Era Income Growth in Manhattan 
+
+```{r}
+#| out-height: 400px
+ 
+in_interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+earnings = all.earnings %>% filter(education >= 8 & state.code==36 & county.code==61)
+aggregate.model = lm(income ~ year, data=earnings)
+group.model = lm(income ~ year + degree, data=earnings)
+
+summaries = earnings %>% group_by(year) %>% summarize(mean=mean(income), sd=sd(income), n=n())
+group.summaries = earnings %>% group_by(year, degree) %>% summarize(mean=mean(income), sd=sd(income), n=n())
+grid = expand.grid(year=unique(earnings$year), degree=unique(earnings$degree))
+grid$aggregate = predict(aggregate.model, newdata=grid)
+grid$group = predict(group.model, newdata=grid)
+
+ggplot(earnings) + geom_point(aes(x=year, y=income, color=degree), alpha=.2, size=.5, position=position_jitter(width=.1)) +
+  geom_pointrange(aes(x=year, y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n)), data=summaries) +
+  geom_pointrange(aes(x=year+.1*(2*(degree=='4-year degree')-1), y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n), color=degree), data=group.summaries) +
+  scale_y_continuous(labels=dollar_format(), limits=c(0, 200000)) +
+  geom_line(aes(x=year, y=aggregate), data=grid, linetype='dashed') +
+  geom_line(aes(x=year, y=group, color=degree), data=grid, linetype='dashed') 
+```
+
+- Above, we're looking at income growth, i.e. the relationship between year and income.
+- We're looking at it for Manhattan residents who responded to the CPS.
+- In aggregate, income growth is negative. But within groups, income growth is positive.
+- **Q**. What's going on? Think about the time period we're looking at.
+
+\ \
+
+::: fragment
+
+- People with 4-year degrees, who tend to have higher incomes, moved away during the pandemic.
+- You can see this by looking at the fraction of respondents with 4-year degrees over time.
+
+:::
+
+## Fraction of Respondents with 4-Year Degrees
+
+```{r}
+#| out-height: 600px
+ggplot(group.summaries[group.summaries$degree=='4-year degree', ]) + 
+    geom_line(aes(x=year,y=n/summaries$n))
+```
+
+## Omitted Variable Bias
+$$
+\begin{aligned}
+&\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_i}{\sum_{i=1}^n (X_i - \bar X)^2} \\
+&\qfor \hat\beta = \argmin_{b} \sum_{i=1}^n \qty{ b_0 + b_1 X_i + b_2 Z_i - Y_i }^2
+\end{aligned}
+$$
+
+- We can understand what we're seeing as a form of **omitted variable bias**.
+- Omitted variable bias is the **change in a slope parameter** when we **omit a covariate** from our model.
+- The formula above is a special case. 
+- It's the slope in the **univariate model** that we get by omitting $Z$ from the **additive model**.
+
+$$
+\begin{aligned}
+\model &= \qty{ m(x,z) = b_0 + b_1 x } \qquad        & \text{univariate model} \\
+\model &= \qty{ m(x,z) = b_0 + b_1 x + b_2 z} \qquad & \text{additive bivariate model}
+\end{aligned}
+$$
+
+## OVB and Covariate Balance
+
+
+$$
+\small{
+\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat\beta_2 \frac{\textcolor{blue}{\sum_{i=1}^n (X_i - \bar X) Z_i}}{\sum_{i=1}^n (X_i - \bar X)^2}
+}
+$$
+
+- Leaving $Z$ out doesn't result in OVB when $X$ and $Z$ are *uncorrelated*.
+- When $X$ is binary, this happens when $Z$ has the same mean in two subsamples.
+- The subsample where $X=1$ and the whole sample.
+
+$$
+\small{
+\begin{aligned}
+\textcolor{blue}{\sum_i (X_i - \bar X) Z_i} 
+= \sum_i X_i Z_i - \bar X \sum_i Z_i  
+&= \sum_i X_i \times \frac{\sum_i X_i Z_i}{\sum_i X_i} - \frac{\sum_i X_i}{n} \times \sum_i Z_i  \\
+&= \sum_i X_i \times \qty( \frac{\sum_i X_i Z_i}{\sum_i X_i} - \frac{\sum_i Z_i}{n} ) 
+\end{aligned}
+}
+$$
+
+- Or, equivalently, when its mean is the same in the $X=0$ and $X=1$ subsamples. 
+- That's what we see in *balance tables*. 
+
+## An Example
+
+![](figures/GGL.png){height=400px}
+
+- Suppose we're comparing Civic Duty and Control.
+$$
+X_i = \begin{cases}
+1 & \text{ if person $i$ receives Civic Duty} \\
+0 & \text{ if person $i$ receives Control}
+\end{cases}
+$$
+
+- We want to see our covariate means are zero in the subsamples receiving those two treatments.
+- That tells us it doesn't matter whether we include any one covariate $Z$. We're not going to get OVB.
+
+$$
+\small{
+\begin{aligned}
+\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat\beta_2 \sum_{i=1}^n \frac{(X_i - \bar X) Z_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat \beta_1 + \hat\beta_2 \sum_i X_i \times \qty( \frac{\sum_i X_i Z_i}{\sum_i X_i} - \frac{\sum_i Z_i}{n} )  
+\end{aligned}
+}
+$$
+
+## Thinking About Our Example More Carefully
+
+![](figures/GGL.png){height=400px}
+
+- But we're not really talking about leaving out any one covariate $Z$. 
+- We're talking about leaving out *all 8* in the table above.
+- That, roughly speaking, is the difference between the models that were considered in this study.
+- The good news is that our formula generalizes. We can leave out *any number of balanced covariates* without OVB.
+
+$$
+\small{
+\begin{aligned}
+&\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat \beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i1}}{\sum_{i=1}^n (X_i - \bar X)^2} 
++\hat \beta_3 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i2}}{\sum_{i=1}^n (X_i - \bar X)^2} + \ldots \\
+&\qfor \hat\beta = \argmin_{b} \sum_{i=1}^n \qty{ b_0 + b_1 X_i + b_2 Z_{i1} + b_3 Z_{i2} + \ldots - Y_i}^2
+\end{aligned}
+}
+$$
+
+##  Could **Covariate Interaction Terms** Change Things?
+
+![](figures/GGL.png){height=400px}
+
+
+- We do have OVB formulas telling us it won't *if the interaction is balanced*.
+- Here's one for leaving out two *interacted covariates*. And it generalizes to any number.
+
+$$
+\small{
+\begin{aligned}
+&\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i1}}{\sum_{i=1}^n (X_i - \bar X)^2} \\
+&+ \hat\beta_3 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i2}}{\sum_{i=1}^n (X_i - \bar X)^2} +
+ + \hat\beta_4 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i1} Z_{i2} Z_{i2}}{\sum_{i=1}^n (X_i - \bar X)^2} \\
+&\qfor \hat\beta = \argmin_{b} \sum_{i=1}^n \qty{ b_0 + b_1 X_i + b_2 Z_{i1} + b_3 Z_{i2} + b_4 Z_{i1} Z_{i2} - Y_i}^2
+\end{aligned}
+}
+$$
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+
+- **Q.** What's missing?
+
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+
+- **Q.** What's missing? **A.** The information to use it. Our table doesn't show balance in any interactions. 
+
+:::
+::::
+
+## What About **Treatment/Covariate Interactions**?
+
+- You could try to make the same argument---that we don't have the information---but it doesn't work.
+- We do have the information. We just have to be a bit clever with our arithmetic.
+- Here's the **slope of a univariate model** in terms of the coefficients of a **bivariate model** with treatment/covariate interaction.
+
+$$
+\small{
+\begin{aligned}
+&\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i}}{\sum_{i=1}^n (X_i - \bar X)^2} 
++ \hat\beta_3 \textcolor{blue}{\frac{\sum_{i=1}^n (X_i - \bar X) X_i Z_{i}}{\sum_{i=1}^n (X_i - \bar X)^2}} \\
+&\qfor \hat\beta = \argmin_{b} \sum_{i=1}^n \qty{ b_0 + b_1 X_i + b_2 Z_{i} + b_3 X_i Z_{i} - Y_i}^2
+\end{aligned}
+}
+$$
+
+- And we can calculate this [new factor]{.fg style="text:blue"} using information we have.
+
+$$
+\small{
+\begin{aligned}
+\textcolor{blue}{\sum_{i=1}^n (X_i - \bar X) X_i Z_i}
+&= \sum_{i=1}^n X_i^2 Z_{i} - \bar X \sum_{i=1}^n X_i Z_{i} = \sum_{i=1}^n X_i Z_{i}   - \bar X \sum_{i=1}^n X_i Z_{i} \\
+&= (1-\bar X)\sum_{i=1}^n X_i Z_i = (1-\bar X)\bar X \times n \times \frac{\sum_{i=1}^n X_i Z_i}{\sum_{i=1}^n X_i}
+\end{aligned}
+}
+$$
+
+- But we see that the slope coefficients $\hat\beta_1$ in these two models are essentially never the same. 
+- This formula doesn't require *agreement* between subsample means. It requires them to be zero.
+
+## Is This A Bad Thing?
+
+:::: columns
+::: column
+![](figures/finalAct3){height=400px}
+:::
+::: column
+Hint. Think about *predictions*, not *coefficients*.
+
+$$
+\small{
+\begin{aligned}
+\hat \mu(x+1,z)-\hat\mu(x,z)   &= \hat\beta_1 && \text{ in the univariate model } \\ 
+\hat \mu(x+1,z)-\hat\mu(x,z)   &= \hat\beta_1 + \hat\beta_3 z && \text{ in the interacted model } 
+\end{aligned}
+}
+$$
+:::
+::::
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+- No, not really. It doesn't really make sense to compare these two slope coefficients.
+- The slope coefficients $\hat\beta_1$ in these two models do not mean the same thing.
+- It's more reasonable to compare the *average slope* in the interacted model to *the slope* in the univariate model.
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+- And the average slope in the interacted model isn't $\hat\beta_1$. It's between the $z=0$ and $z=1$ slopes. 
+- For $z \in [0,1]$, that's between $\hat \beta_1$ and $\hat\beta_1+\hat \beta_3$.
+- **Takeaway.** We need the coefficients $\hat\beta_1$ to be different for the average slopes to be the same.
+:::
+::::
+
+
+## Why are we talking about OVB formulas? 
+
+- These formulas compare **estimated coefficients** in two models. 
+    - At best, it's the difference between two estimators of the same thing.
+    - At worst, it's something else entirely.
+- In any case, that's not what bias is. 
+    - Bias isn't about the relationship between two estimators.
+    - It's about the relationship between an estimator and what it's meant to estimate.
+- We've been talking about OVB because it's a good warm-up for the real thing. 
+- We'll get there, but we're going to take a bit of a detour we're going to take first.
+    - We've been talking about a few simple *bivariate models*. 
+    - Now we're going to talk about regression models in general.
+- This should, in the end, make it easier to understand what bias really is.
+
+## One Thing To Notice
+
+- All of our OVB formulas are essentially the same.
+- All we need to do is think of interaction terms as *additional covariates* in an additive model.
+    - If we take $Z_4=Z_1 Z_2$ in our first formula, we get the second---a formula for interacted covariates.
+    - If we take $Z_2=X Z$ in our first formula, we get the third---a formula for treatment/covariate interactions.
+
+$$
+\small{
+\begin{aligned}
+&\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat \beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i1}}{\sum_{i=1}^n (X_i - \bar X)^2} 
++\hat \beta_3 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i2}}{\sum_{i=1}^n (X_i - \bar X)^2} + \ldots \\
+&\color{gray} \qfor \hat\beta = \argmin_{b} \sum_{i=1}^n \qty{ b_0 + b_1 X_i + b_2 Z_{i1} + b_3 Z_{i2} + \ldots - Y_i}^2 \\
+&\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i1}}{\sum_{i=1}^n (X_i - \bar X)^2} \\
+&+ \hat\beta_3 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i2}}{\sum_{i=1}^n (X_i - \bar X)^2} +
+ + \hat\beta_4 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i1} Z_{i2} Z_{i2}}{\sum_{i=1}^n (X_i - \bar X)^2} \\
+&\color{gray}\qfor \hat\beta = \argmin_{b} \sum_{i=1}^n \qty{ b_0 + b_1 X_i + b_2 Z_{i1} + b_3 Z_{i2} + b_4 Z_{i1} Z_{i2} - Y_i}^2 \\
+&\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
+=\hat\beta_1 + \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_{i}}{\sum_{i=1}^n (X_i - \bar X)^2} 
++ \hat\beta_3 \frac{\sum_{i=1}^n (X_i - \bar X) X_i Z_{i}}{\sum_{i=1}^n (X_i - \bar X)^2} \\
+&\color{gray} \qfor \hat\beta = \argmin_{b} \sum_{i=1}^n \qty{ b_0 + b_1 X_i + b_2 Z_{i} + b_3 X_i Z_{i} - Y_i}^2
+\end{aligned}
+}
+$$
+
+- This is a general phenomenon in linear regression. The math for additive models ... 
+- also works for additive models in *functions* of the covariates---like interactions.
+- In the Machine Learning tradition, we tend to call these functions *features*.
+
+# Regression in General
+
+## What Regression Is
+
+$$ Y_i \approx \hat\mu(X_i) \qfor \hat\mu \in \model \qqtext{where} \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ m(\textbf{X}_i) - Y_i}^2 $$
+
+- Regression is **choosing a function** of covariates $\textbf{X}_i$ to predict outcomes $Y_i$.
+- Typically---and we'll follow this convention---we'll think of $Y_i$ as a real number.
+- But $\textbf{X}_i$ can be anything. 
+    - A real number---univariate regression: $\textbf{X}_i = X_i$
+    - Two real numbers $\textbf{X}_i=(X_i,Z_i)$.
+    - K real numbers $\textbf{X}_i=(X_{i1},X_{i2},...,X_{iK})$.
+    - An image, a text document, a function, etc.
+- And what sort of thing it is doesn't really change how it works mathematically.
+    - The reason is that the math doesn't really look at the covariate $X$. 
+    - It only looks at the values $m(\textbf{X}_i)$ of the functions we're considering. 
+- Linear regression is a special case in which we choose $m$ from a **linear model**.
+- That is, a set of functions we can combine by adding and scaling without leaving the model.
+
+$$ \small{ m_1, m_2 \in \model \implies b_1 m_1 + b_2 m_2 \in \model \qqtext{ for all } b_1,b_2 \in \R }$$
+
+
+## Linear Models {.smaller}
+
+```{r}
+#| out-height: 600px
+ 
+ggplot(earnings) + geom_point(aes(x=year, y=income, color=degree), alpha=.2, size=.5, position=position_jitter(width=.1)) +
+  geom_pointrange(aes(x=year+.1*(2*(degree=='4-year degree')-1), y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n), color=degree), data=group.summaries) +
+  scale_y_continuous(labels=dollar_format(), limits=c(0, 200000)) 
+```
+
+
+
+- The first linear model we worked with was **the saturated model**. 
+    - We call it *saturated* because it *every function of $x$*---to make $m(x_j)=y$, set $b_j=y$. 
+    - This model couldn't be misspecified. 
+    - No matter what the true relationship between $X$ and $Y$ was, it was in the model.
+    - When we fit it via least squares, our prediction $\hat\mu(x)$ was the mean of $Y_i$ on the subsample with $X_i=x$ 
+$$
+\small{
+\model = \qty{ m(x) = \sum_j b_j 1_{x_j}(x) : b_j \in \R } 
+}
+$$    
+
+## More Linear Models {.smaller}
+
+![](figures/finalAct1){height=600px}
+
+- The second linear model we worked with was the set of **lines**.
+    - When $x$ is binary, this was just a different way of writing the saturated model. - There's a line through any two points $(0,m(0))$ and $(1,m(1))$.
+    - But with many-valued $x$, we started having to worry about **misspecification**.
+    - To reduce misspecification, people often use higher-order **polynomials** instead.
+$$\small{
+\begin{aligned}
+\model &= \qty{ m(x) = b_0 + b_1 x : b_0,b_1 \in \R } && \text{lines} \\
+\model &= \qty{ m(x) = b_0 + b_1 x + b_2 x^2: b_0,b_1,b_2 \in \R } && \text{quadratic polynomials}
+\end{aligned}
+}
+$$
+
+## Bivariate Models {.smaller}
+
+![](figures/finalAct3){height=600px}
+
+- In the last two classes, we've talked about two *bivariate models*.
+
+$$\small{
+\begin{aligned}
+\model &= \qty{ m(x_1,x_2) = b_0 + b_1x_1 + b_2 x_2 : b \in \R^3 }                 &&\text{additive bivariate model} \\
+\model &= \qty{ m(x_1,x_2) = b_0 + b_1x_1 + b_2 x_2 + b_3 x_1 x_2: b \in \R^4 }      &&\text{interacted bivariate model} \\
+\end{aligned}
+}
+$$
+
+
+## What Do All Of These Models Have in Common?
+
+$$
+\small{
+\begin{aligned}
+\model &= \qty{ m(x) = \sum_j b_j 1_{x_j}(x) : b_j \in \R } && \text{saturated} \\
+\model &= \qty{ m(x) = b_0 + b_1 x : b_0,b_1 \in \R } && \text{lines} \\
+\model &= \qty{ m(x) = b_0 + b_1 x + b_2 x^2: b_0,b_1,b_2 \in \R } && \text{quadratic polynomials} \\
+\model &= \qty{ m(x_1,x_2) = b_0 + b_1x_1 + b_2 x_2 : b \in \R^3 }                 &&\text{additive bivariate model} \\
+\model &= \qty{ m(x_1,x_2) = b_0 + b_1x_1 + b_2 x_2 + b_3 x_1 x_2: b \in \R^4 }      &&\text{interacted bivariate model} \\
+\end{aligned}
+}
+$$
+
+::: fragment
+
+- They're the set of **all linear combinations** of a set of **features**.
+$$
+\begin{aligned}
+\model &= \qty{ m(x) = \sum_j b_j \phi_j(x) : b \in \R^{K+1} } && \text{ general form }
+\end{aligned}
+$$
+
+- If you know the features $\phi_j$, you know the model---the set of curves $m(x)$.
+- And if you know the model---the set of curves---you can work out a corresponding set of features. 
+- That's a matter of linear algebra. We'll look into that in a few weeks.
+
+
+
+
+:::
+
+## Exercise: List the Features $\phi_j$ for Each Model
+
+$$
+\small{
+\begin{aligned}
+\model &= \qty{ m(x) = \sum_j b_j 1_{x_j}(x) : b_j \in \R } && \text{saturated} \\
+\model &= \qty{ m(x) = b_0 + b_1 x : b_0,b_1 \in \R } && \text{lines} \\
+\model &= \qty{ m(x) = b_0 + b_1 x + b_2 x^2: b_0,b_1,b_2 \in \R } && \text{quadratic polynomials} \\
+\model &= \qty{ m(x_1,x_2) = b_0 + b_1x_1 + b_2 x_2 : b \in \R^3 }                 &&\text{additive bivariate model} \\
+\model &= \qty{ m(x_1,x_2) = b_0 + b_1x_1 + b_2 x_2 + b_3 x_1 x_2: b \in \R^4 }      &&\text{interacted bivariate model} \\
+\end{aligned}
+}
+$$
+
+
+## Least Squares in General
+
+### Choosing a Curve --- Useful for Thinking
+
+$$
+\hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ m(\textbf{X}_i) - Y_i}^2 \qqtext{ for } \model = \qty{ m(x) = \sum_j b_j \phi_j(x) : b \in \R^{K+1} }
+$$
+
+### Finding Coefficients --- Useful for Math
+
+$$
+\hat \mu(x) = \sum_{0=1}^K \hat\beta_j \phi_j(x) \qqtext{ where } \hat\beta = \argmin_{b \in \R^{K+1}} \sum_{i=1}^n \qty{ \sum_j b_j \phi_j(\textbf{X}_i) - Y_i}^2
+$$
+
+## Least Squares Residuals
+
+[TODO: 4 PLOT]
+
+The residuals $\hat\varepsilon_i = Y_i - \hat\mu(X_i)$ are **orthogonal** to the every feature $\phi_j(X_i)$.
+$$
+\small{
+\sum_{i=1}^n \hat\varepsilon_i \phi_j(X_i) = 0 \qfor j=0,1,\ldots,K
+}
+$$
+
+Familiar example ...
+
+## Least Squares Residuals
+
+This means they're **orthogonal** to every curve $m(x)$ in the model.
+$$
+\small{
+\begin{aligned}
+\sum_{i=1}^n  \hat\varepsilon_i m(X_i) 
+&=  \sum_{i=1}^n \hat\varepsilon_i \qty{ \sum_j b_j \phi_j(X_i) } && \text{ for any $m \in \model$ } \\
+&=  \sum_j \sum_{i=1}^n \hat\varepsilon_i b_j \phi_j(X_i)         && \text{ distributing } \\
+&=  \sum_j b_j \sum_{i=1}^n \hat\varepsilon_i \phi_j(X_i)         && \text{ pulling out constants} \\
+&=  \sum_j b_j \times 0 = 0                              
+\end{aligned}
+}
+$$
+
+## Least Squares Residuals
+
+*If the constant $1$ is in the model*, this means they're **uncorrelated** with every curve in the model. Why?
+
+::: fragment
+
+$$
+m \in \model \qqtext{ and } 1 \in \model \implies m - \bar m \times 1 \in \model \qqtext{ for the `coefficient' } \bar m = \frac{1}{n}\sum_{i=1}^n m(X_i)
+$$
+
+and therefore
+
+$$
+\sum_i \hat\varepsilon_i \qty{ m(X_i) - \bar m } = 0 \qfor m \in \model
+$$
+
+:::
+
+## Proof
+
+$$
+\small{
+\qqtext{Let's prove that } \sum_{i=1}^n \hat\varepsilon_i \phi_j(X_i) = 0 \qfor j=0,1,\ldots,K
+}
+$$
+
+
+# Least Squares in Vectorial Terms
