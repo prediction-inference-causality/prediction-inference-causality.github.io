@@ -1,0 +1,355 @@
+---
+title: "Exam 2 (November 9/13)"
+subtitle: "QTM 220"
+execute:
+  echo: false
+  warning: false
+format: 
+  pdf:
+    include-in-header: 
+      text: |
+        \usepackage{amsmath}
+        \usepackage{setspace}
+        \onehalfspacing
+        \usepackage{amssymb}
+        \usepackage{physics}
+        \usepackage{color}
+        \usepackage{fullpage}
+        \usepackage{graphicx}
+        \usepackage{cancel}
+        \usepackage{physics}
+        \usepackage{fullpage}
+        \DeclareMathOperator{\E}{E}
+        \DeclareMathOperator{\Var}{V}
+        \DeclareMathOperator{\bias}{bias}
+        \newenvironment{answer}{\ \\ \color{red}}{\color{black}}
+        % replace 'red' with 'white' above  to hide solutions (in printout)
+---
+
+```{r}
+#| echo: false
+#| warning: false
+library(ggplot2)
+library(tidyverse)
+library(patchwork)
+```
+
+\subsection*{Problem 1}
+Suppose we have a sample of $Y_1 \ldots Y_n$ and $X_1 \ldots X_n$  stored in an \textbf{R} dataframe `df' with $n$ rows. $X$ can take the values of 1,2,3,4 or 5. We run this code.
+
+```{r}
+#| echo: false
+set.seed(123)
+n = 1000
+Y= rep(NA,n)
+X = c(rep(1,350), rep(2,300),rep(3,200),rep(4,100),rep(5,50))
+for(i in 1:n){
+  Y[i] = X[i] + rnorm(1,0,2) 
+}
+df<- data.frame(x=X,y=Y)
+
+```
+
+```{r}
+#| echo: true
+B=10000
+theta<- rep(NA,B)
+for( b in 1:B ){
+bootind = sample(1:n,size=n,replace=T)
+dfboot = df[bootind,]
+theta[b] = (1/4)*mean(dfboot$y[dfboot$x==5]) -(1/4)*mean(dfboot$y[dfboot$x==1])
+}
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the vector Y's elements
+#|  -  Jittered Scatterplot of X and Y
+ggplot() + geom_histogram(aes(x=Y,     y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(Y)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(Y)+c(-1,1)*sd(Y)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(Y), xmin=mean(Y)-1.96*sd(Y), xmax=mean(Y)+1.96*sd(Y), y=.025)) + theme_bw() + xlab('') + ylab('')
+
+ggplot(df, aes(x=x, y=y)) +geom_jitter(shape=1,alpha=.3) + geom_point(x=1,y=mean(df$y[df$x==1]),size=3) + geom_point(x=2,y=mean(df$y[df$x==2]),size=3) + geom_point(x=3,y=mean(df$y[df$x==3]),size=3)+ geom_point(x=4,y=mean(df$y[df$x==4]),size=3) + geom_point(x=5,y=mean(df$y[df$x==5]),size=3) + geom_segment(aes(x=1,y=mean(y[x==1])-sd(y[x==1]), xend=1, yend=mean(y[x==1])+sd(y[x==1]))) + geom_segment(aes(x=2,y=mean(y[x==2])-sd(y[x==2]), xend=2, yend=mean(y[x==2])+sd(y[x==2]))) + geom_segment(aes(x=3,y=mean(y[x==3])-sd(y[x==3]), xend=3, yend=mean(y[x==3])+sd(y[x==3]))) + geom_segment(aes(x=4,y=mean(y[x==4])-sd(y[x==4]), xend=4, yend=mean(y[x==4])+sd(y[x==4]))) + geom_segment(aes(x=5,y=mean(y[x==5])-sd(y[x==5]), xend=5, yend=mean(y[x==5])+sd(y[x==5]))) 
+  
+
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the theta's elements
+ggplot() + geom_histogram(aes(x=theta, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(theta)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(theta)+c(-1,1)*sd(theta)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(theta), xmin=mean(theta)-1.96*sd(theta), xmax=mean(theta)+1.96*sd(theta), y=1)) + theme_bw() + xlab('') + ylab('')
+
+```
+
+
+\subsection*{Part a}
+What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket
+if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mean(Y)
+```
+
+\begin{answer}
+The sample mean (unconditioned). It's indicated by the solid vertical line on the sample histogram.
+\end{answer}
+
+\subsection*{Part b}
+What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(Y)
+```
+
+\begin{answer}
+The sample standard deviation. It's the distance between the solid vertical and either dashed vertical line on the sample histogram.
+\end{answer}
+
+
+\subsection*{Part c}
+What does this code calculate? State it in words and mark it with a 'c', and an arrow or bracket
+if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mean(Y[X==1])
+```
+
+\begin{answer}
+The conditional sample mean of Y among X=1. It's indicated by the black dot on the scatterplot where X=1.
+\end{answer}
+
+\subsection*{Part d}
+What does this code calculate? State it in words and mark it with a 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(theta)
+```
+
+\begin{answer}
+The bootstrap sampling distribution's standard deviation for the average increment estimator. 
+It's the distance between the solid vertical and either dashed vertical line on the sampling distribution histogram.
+\end{answer}
+
+\subsection*{Part e}
+What does this code calculate? State it in words and mark it with a 'e', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+(1/4)(mean(Y[X=5]) - mean(Y[X=1])) 
+- 1.96* sqrt((1/4)^2*var(Y[X=5])/length(Y[X=5]) + (-1/4)^2*var(Y[X=1])/length(Y[X=1]))
+(1/4)(mean(Y[X=5]) - mean(Y[X=1]))
++ 1.96* sqrt((1/4)^2*var(Y[X=5])/length(Y[X=5]) + (-1/4)^2*var(Y[X=1])/length(Y[X=1]))
+```
+
+\begin{answer}
+A 95\% confidence interval --- based on normal approximation --- for the average incremental difference in Y from X=1 to X=5 in the population from which our data was drawn. This is indicated by the horizontal segment (with a dot in the middle) on the sampling distribution histogram (theta).
+\end{answer}
+
+\subsection*{Part f}
+How could you calculate roughly the same thing as in part e using 'sd(theta)' and not \begin{verbatim} sqrt((1/4)^2*var(Y[X=5])/length(Y[X=5]) + (-1/4)^2*var(Y[X=1])/length(Y[X=1])) \end{verbatim}
+
+\begin{answer}
+
+We can use the standard deviation of the bootstrap sampling distribution as our estimate of standard error.
+
+\begin{verbatim}
+mean(Y) - 1.96 * sd(theta)
+mean(Y) + 1.96 * sd(theta)
+\end{verbatim}
+
+\end{answer}
+
+
+\subsection*{Problem 2}
+
+In the following parts, choose the figure with the appropriate regression line(s).
+
+
+```{r, fig.width=10,fig.height=4}
+#| echo: false
+#| warning: false
+n <- 500
+zz <- c(rep(0,n/2),rep(1,n/2))
+set.seed(220220)
+xx <-  1 + 2*zz + rnorm(n,mean=0,sd = 1)
+yy <- 2*zz*xx - xx + rnorm(n)
+
+
+modAct1 <- lm(yy ~ xx)
+modAct2 <- lm(yy ~ xx + zz)
+
+
+df <- data.frame(xx,yy,zz)
+
+p <- ggplot(data = df, aes(x = xx, y = yy)) +
+  geom_point(aes(shape = factor(zz)),size = 1,alpha=.5) +
+  scale_shape_manual(values = c(1,19), label = c("z=0","z=1")) +
+  xlab("x") +
+  ylab("y") +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        legend.box.just = "left",
+        legend.justification = c("left","top"),
+        legend.position = c(0,1),
+        legend.margin = margin(6,6,6,6),
+        legend.title = element_blank(),
+        legend.box.background = element_rect(color="black",size=1))
+
+coef1 <- modAct1$coefficients
+coef2 <- modAct2$coefficients
+mod3 <- lm(yy ~ xx+zz+xx*zz, data = df)
+coef3 <- coef(mod3)
+# simple regression line y ~ x --------
+
+
+```
+
+
+```{r}
+#| echo: false
+#ggplot(data = df, aes(x = xx, y = yy)) +
+#  geom_point(size = 1,alpha=.5) +
+#  xlab("x") +
+#  ylab("y") +
+#  theme_bw() + geom_abline(intercept = coef1[1], slope = coef1[2]) + ggtitle("A3")
+```
+
+\subsubsection*{Part A}
+
+Choose the figure with the two dashed lines associated with the additive multiple regression ($y\sim x+z$).
+
+```{r,fig.width=10,fig.height=4}
+#| echo: false
+# multiple additive regression y ~ x + z
+addA <- p + geom_abline(intercept = coef2[1], slope = coef2[2], linetype = 'dashed') +
+  geom_abline(intercept = coef2[1] + coef2[3], slope = coef2[2], linetype = 'dashed') +
+  ggtitle("A3")
+
+addB <- p + geom_abline(intercept = 0.5, slope = coef3[2]*1.5,
+                linetype = 'dashed')+ geom_abline(intercept = 0.5, slope = -1,
+                linetype = 'dashed') + ggtitle("A1")
+
+addC <- p + geom_curve(aes(x = -2,xend=6,y=-6,yend=-1),
+               curvature = -0.8,
+               angle = 70,
+               linetype = 'dashed') +
+  geom_curve(aes(x=-2,y=0,xend=4,yend=-7),
+             curvature = -0.5,
+             linetype = 'dashed') +
+  ggtitle("A2")
+
+#pdf(file="Q1partBplot.pdf",width=10,height=4)
+ addB + addC + addA
+#dev.off()
+```
+
+\color{red} A3 \color{black}
+
+\subsubsection*{Part B}
+
+Choose the figure with the two dotted lines associated with the interactive multiple regression ($y\sim x*z$).
+
+```{r,fig.width=10,fig.height=4}
+#| echo: false
+# interactive model
+
+intC2 <- p + geom_abline(intercept = coef3[1], slope = coef3[2],
+                linetype = 'dotted') +
+  geom_abline(intercept = coef3[1] + coef3[3],
+              slope = coef3[2] + coef3[4],
+              linetype = 'dotted') +
+  ggtitle("B2")
+
+
+intC1 <- p + geom_abline(intercept = coef3[1], slope = coef3[2]*1.5,
+                linetype = 'dotted') +
+  geom_abline(intercept = 5,
+              slope = coef3[2]*1.5,
+              linetype = 'dotted') +
+  ggtitle("B1")
+
+intC3 <- p + geom_curve(aes(x = -2,y = -2.5,xend=3,yend=5),
+               curvature = 0.3,
+               #angle = 30,
+               linetype = 'dotted') +
+  geom_curve(aes(x=0,y=5,xend=6,yend=-5),
+             curvature = 0.3,
+             angle=95,
+             linetype = 'dotted') +
+  ggtitle("B3")
+
+#pdf(file="Q1partCplot.pdf",width=10,height=4)
+intC1 + intC2 + intC3
+#dev.off()
+```
+
+\color{red} B2 \color{black}
+
+\subsection*{Problem 3}
+
+Suppose we want $\beta_1$ from $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i +  \beta_3 w_i + e_i$ but we run the regression $lm (y\sim x)$ without $z$ or $w$. We have de-meaned our variables $x_i$, $z_i$, and $w_i$ such that $\bar{x}=0$, $\bar{y}=0$, and $\bar{w}=0$. Under what condition(s) will the coefficient on $x$ from $lm (y\sim x)$ be equal to $\beta_1$? Derive what your coefficient on $x$ will be in terms of $\beta$s and justify your steps.
+
+\bigskip
+
+\color{red}
+
+The coefficient on $x$ from $lm (y\sim x)$ is $$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$$
+
+Plug in $y_i$ defined by the multivariate regression: $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i +  \beta_3 w_i + e_i$
+
+$$\frac{\sum_{i=1}^n x_i (\beta_0 + \beta_1 x_i + \beta_2 z_i +  \beta_3 w_i + e_i)}{\sum_{i=1}^n x_i^2 }$$
+
+Distribute
+
+$$\frac{\sum_{i=1}^n x_i \beta_0 }{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_1 x_i}{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_2 z_i }{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_3 w_i }{\sum_{i=1}^n x_i^2 }+  \frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 }$$ Let's work through each term.
+
+$$\frac{\sum_{i=1}^n x_i \beta_0 }{\sum_{i=1}^n x_i^2 } = \frac{ \beta_0 \sum_{i=1}^n x_i }{\sum_{i=1}^n x_i^2 } = \frac{ \beta_0 *0 }{\sum_{i=1}^n x_i^2 } = 0$$ 
+
+as $x$ is demeaned, $\sum x_i =0$ 
+
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i \beta_1 x_i}{\sum_{i=1}^n x_i^2 } = \frac{  \beta_1 \sum_{i=1}^n x_i x_i}{\sum_{i=1}^n x_i^2 } = \beta_1$$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i \beta_2 z_i }{\sum_{i=1}^n x_i^2 } = \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 }$$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i \beta_3 w_i }{\sum_{i=1}^n x_i^2 } = \frac{\beta_3 \sum_{i=1}^n x_i w_i }{\sum_{i=1}^n x_i^2 }$$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 } = \frac{0}{\sum_{i=1}^n x_i^2 } =0$$ we know that $\sum_{i=1}^n x_i e_i =0$ from the first order conditions on our least squares estimator (we chose the intercept and coefficient(s) that minimize the sum of squared residuals)
+
+\bigskip
+
+Thus we have
+
+$$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 } = \beta_1 + \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 } + \frac{\beta_3 \sum_{i=1}^n x_i w_i }{\sum_{i=1}^n x_i^2 }$$ The coefficient on $x$ from the simple regression of $y$ on $x$ will be equal to $\beta_1$ if: (1) $\beta_2$ or the coefficient on $x$ from the simple regression from $z$ on $x$ is 0 and (2) $\beta_3$ or the coefficient on $x$ from the simple regression of $w$ on $x$ if 0. If either of these terms is non-zero, our simple regression will not give us the same result as our regression that includes both $x$, $z$, and $w$. If $x$ is randomized (like a random treatment assignment), it should not be correlated with $z$ or $w$, so our short regression coefficient should give us $\beta_1$. 
+\color{black}
+
+\bigskip 
+
+\subsection*{Problem ...}
+
+FWL problem? 
+
+unbiasedness proof? 
+
+causal (balance? multi-level treatment? coefficient on treatment as ATE?)
+
