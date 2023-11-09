@@ -1,7 +1,28 @@
 ---
 title: "Midterm 2 Practice Problems"
-format: pdf
-editor: visual
+execute:
+  echo: false
+  warning: false
+format: 
+  pdf:
+    include-in-header: 
+      text: |
+        \usepackage{amsmath}
+        \usepackage{setspace}
+        \onehalfspacing
+        \usepackage{amssymb}
+        \usepackage{physics}
+        \usepackage{color}
+        \usepackage{fullpage}
+        \usepackage{graphicx}
+        \usepackage{cancel}
+        \usepackage{physics}
+        \usepackage{fullpage}
+        \DeclareMathOperator{\E}{E}
+        \DeclareMathOperator{\Var}{V}
+        \DeclareMathOperator{\bias}{bias}
+        \newenvironment{answer}{\ \\ \color{red}}{\color{black}}
+        % replace 'red' with 'white' above  to hide solutions (in printout)
 ---
 
 ```{r}
@@ -84,6 +105,11 @@ simpleB + simpleC + simpleA
 
 ```
 
+\begin{answer}
+A3 
+\end{answer}
+
+
 \subsubsection*{Part B}
 Choose the figure with the two dashed lines associated with the least squares fit of the additive bivariate regression model, i.e., $\hat\mu(x,z)=\hat\beta_0 + \hat\beta_1 x+ \hat\beta_2 z$.
 
@@ -111,6 +137,10 @@ addC <- p + geom_curve(aes(x = -2,xend=6,y=-6,yend=-1),
 addA + addB + addC
 #dev.off()
 ```
+
+\begin{answer}
+B1
+\end{answer}
 
 \subsubsection*{Part C}
 Choose the figure with the two dotted lines associated with the least squares fit of the fully-interacted regression model, i.e., $\hat\mu(x,z) = \hat\beta_0 + \hat\beta_1 x + \hat\beta_2 z + \hat\beta_3 xz$.
@@ -150,8 +180,11 @@ intC1 + intC2 + intC3
 #dev.off()
 ```
 
+\begin{answer}
+C2
+\end{answer}
 
-
+\newpage
 \section*{Problem 2}
 
 Suppose we have a sample $Y_1 \ldots Y_n$ stored on an \textbf{R} vector $Y$ of length $n$. We run this code.
@@ -190,7 +223,6 @@ ggplot() + geom_histogram(aes(x=Y.bar, y=after_stat(density)), alpha=.3) +
            geom_pointrange(aes(x=mean(Y.bar), xmin=mean(Y.bar)-1.96*sd(Y)/sqrt(n), xmax=mean(Y.bar)+1.96*sd(Y)/sqrt(n), y=5)) + theme_bw() + xlab('') + ylab('')
 ```
 
-
  \vspace{.5in}
 
 \subsection*{Part a}
@@ -206,12 +238,28 @@ mean(Y) + 1.96* sd(Y)/sqrt(n)
 
 \vspace{.5in}
 
+\begin{answer}
+A 95\% confidence interval --- based on normal approximation --- for the mean of the population our sample $Y_1 \ldots Y_n$ is drawn from. This is indicated by the horizontal segment (with a dot in the middle) on the right histogram. 
+\end{answer}
+
 \subsection*{Part b}
 
 How could you calculate roughly the same thing as in part a using 'sd(Y.bar)' and not 'sd(Y)'?
 
 \vspace{.5in}
 
+
+\begin{answer}
+We can use the standard deviation of the bootstrap sampling distribution, rather than 'sd(Y)/sqrt(n)', as our estimate of standard error. 
+
+\begin{verbatim}
+mean(Y) - 1.96 * sd(Y.bar)
+mean(Y) + 1.96 * sd(Y.bar)
+\end{verbatim}
+
+\end{answer}
+
+\newpage
 \section*{Problem 3}
 Suppose $Y_1 \ldots Y_n$ are sampled with replacement from a population with mean $\mu=1$ and variance $\sigma^2=1$.
 In Midterm 1, we discussed the estimator $\tilde{Y}_k = \frac{1}{n-k} \sum_{i=1}^n Y_i$ for $k=2$. Here, we'll
@@ -228,6 +276,31 @@ for each of the three sample sizes $n=10$, $n=10^2=100$, and $n=10^4=10,000$, do
 
 You should have 6 sketches with corresponding means, standard errors, and coverage probabilities. That's more than we'd ask for on the real exam. If you get the idea and want to save time by skipping the $n=10^2$ case, that's fine.
 
+\newpage
+\begin{answer}
+Let's start by calculating the mean and the resulting bias.
+ \begin{align*}
+ \E[\tilde{Y}] &= \frac{1}{n-k}\sum_{i=1}^n \E[Y_i] = \frac{n}{n-k}\mu 
+ \end{align*}
+so the bias is 
+\begin{align*}
+ \E[\tilde{Y}] - \mu &= \qty(\frac{n}{n-k} - 1) \mu = \qty(\frac{n}{n-k} - \frac{n-k}{n-k}) \mu = \frac{k}{n-k} \mu.
+\end{align*}
+
+And the variance.
+\begin{answer}
+ \begin{align*}
+ V[\tilde{Y}] &= V[ \frac{1}{n-2} \displaystyle \sum_{i=1}^n Y_i] \\
+ &= \frac{1}{(n-2)^2} V[ \sum_{i=1}^n Y_i]\\
+ &= \frac{1}{(n-2)^2} \qty(\sum_{i=1}^n V[Y_i])\\
+ &=\frac{1}{(n-2)^2} \qty(\sum_{i=1}^n \sigma^2 )\\
+ &=\frac{1}{(n-2)^2} n\sigma^2 \\
+ &= \frac{n\sigma^2}{(n-2)^2}
+\vspace{2in}
+\end{align*}
+\end{answer}
+
+\newpage
 \section*{Problem 4}
 
 We take a random sample of $n$ individuals and record their years of education and income. $Y_i$ is an individual $i$'s income and $X_i$ is that individual's number of years of education. Let
@@ -237,6 +310,43 @@ Show that $\hat{\mu}(16)$ is an unbiased estimator of $\mu(16)$, the subpopulati
 
 
 
+\begin{answer}
+
+We want to show that $\E[\hat{\mu}(16)] = \mu(16)$. That's what unbiasedness means. Here are the steps. Justifications are given in a list below. 
+$$
+\begin{aligned}
+\E[\hat{\mu}(16)] 
+&\overset{(a)}{=} 
+\E\qty[\E\qty[\frac{\sum_{i=1}^n 1_{16} (X_i)Y_i }{\sum_{i=1}^n 1_{16} (X_i)} \mid X_1 \ldots X_n]] \\
+&\overset{(b)}{=}\E\qty[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \E\qty[ Y_i  \mid X_1 \ldots X_n]] \\
+&\overset{(c)}{=}\E\qty[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \E\qty[ Y_i  \mid X_i]] \\
+&\overset{(d)}{=}\E\qty[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \mu(X_i) ] \\
+&\overset{(e)}{=}
+\E\qty[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) \ \mu(16)] \\
+&\overset{(f)}{=} \mu(16) \ \E\qty[\frac{1}{\sum_{i=1}^n 1_{16} (X_i)}  \ \sum_{i=1}^n 1_{16} (X_i) ] =  \mu(16).
+\end{aligned}
+$$
+
+\begin{itemize}
+\item[(a)] Law of iterated expectations.
+\item[(b)] Linearity of conditional expectations. The indicators $1_{16}(X_i)$ are functions of $X_1 \ldots X_n$, so we can pull them --- and  out of the conditional expectation as if they were constants. 
+\item[(c)] Irrelevance of independent conditioning variables. $Y_i$ is independent of $X_j$ for $j \neq i$.
+\item[(d)] Just notation. $\mu(X_i)=\E[Y_i \mid X_i]$ by definition.
+\item[(e)] This is the `indicator trick'.
+$$
+1_{16} (X_i)\mu(X_i)  
+= \begin{cases}
+  \mu(16) & \text{ if } X_i = 16 \\ 
+  0 \text{ otherwise } 
+\end{cases} 
+= 1_{16} (X_i) \mu(16)
+$$
+\item[(f)]  Linearity of expectations lets us pull the constant $\mu(16)$ out of the expectation. What remains inside is the sum is the quotient ratio of $\sum_{i=1}^n 1_{16}(X_i)$ and itself, i.e., 1.
+\end{itemize}
+
+\end{answer}
+
+\newpage
 \section*{Problem 5}
 
 In the below visualization, the x-axis is an individual's years of education, the y-axis is income, the red line is the least squares line, and the black dots indicate the mean income within each year of education. You have three options to summarize the change in income across an additional year of education: the average over years, the average weighted by the proportion of individuals with the years of education $P_x$, and the slope of the least squares line. Rank these options smallest to largest regarding the magnitude of the estimate you expect and explain your reasoning. 
@@ -246,9 +356,85 @@ In the below visualization, the x-axis is an individual's years of education, th
 \caption*{Income and Years of Education}
 \end{figure}
 
+\begin{answer}
+
+\textbf{Smallest:} The average over years. If we were to take the average over years, we are just taking the difference in income between the 8 year subsample and 12 year subsample and dividing by $4$. We can visualize this as the slope of the \emph{secant} connecting the subsample mean $\hat\mu(8)$ to $\hat\mu(12)$. This slope is less steep than the slope of the least squares line, which is drawn into the plot.
+
+\textbf{Middle:} The least squares slope. We've already argued that this is bigger than the average over years, so what's left is to show that it's smaller than the average over people. $P_x$ weights each incremental difference by the number of observations with $X_i=x$
+and most of our individuals have 12 years of education. Thus the incremental difference  $\hat\mu(12)-\hat\mu(11)$ in average income between 11 years and 12 years will be weighted substantially more than all the other increments and, as this is much larger than slope of the least squares line --- it's at the slope of the rightmost dashed segment --- the resulting weighted average should exceed the least squares slope.
+
+\textbf{Largest:} The average over people. That's what we've just argued.
+
+
+
+\end{answer}
+
+\newpage
 \section*{Problem 6}
 Suppose we want the slope parameter $\hat\gamma_1$ from the least squares fit of the additive model,
 $\hat \mu_2(x,z) = \hat\gamma_0 + \hat\gamma_1 x + \hat\gamma_2 z$. But we instead have the slope parameter $\hat\beta_1$ from the least squares fit of the univariate regression model, $\hat\mu_1(x)=\hat \beta_0 + \hat\beta_1 x$. And suppose we've centered our covariates so $\bar X_i$ and $\bar Z_i$ are zero. Will 
 the slope paramter we want ($\hat\gamma_1$) be equal to the one we have ($\hat\beta_1$)? Derive a formula for $\hat\gamma_1$ in terms of $\hat\beta_1$ and explain the steps in your derivation. 
 
 \paragraph{Hint} Start with the formula for the slope $\hat\gamma_1$ in a univariate regression and use the expansion $Y_i = \hat\mu_2(X_i,Z_i) + \hat\varepsilon_i$ where $\hat\varepsilon_i = Y_i-\hat\mu_2(X_i)$ are the residuals from the fit of the the additive model. What do we know about these residuals and why do we know it?
+
+\begin{answer}
+
+The slopes $\hat\gamma_1$ and $\hat\beta_1$ will be the same if either $\gamma_2=0$ or the slope for the univariate regression of $Z_i$ on $X_i$ is zero. To see that, we can look at the following formula for $\hat\gamma_1$.
+$$
+\begin{aligned}
+\hat\gamma_1 &= \hat\beta_1 - \hat\gamma_2 \textcolor{purple}{\frac{\sum_{i=1}^n X_i \ Z_i}{\sum_{i=1}^n X_i^2}} = \hat\beta_1 - \hat\gamma_2  \textcolor{purple}{\frac{\sum_{i=1}^n (X_i-\bar X) \ Z_i}{\sum_{i=1}^n X_i^2}} \quad \text{because } \quad \bar X=0. 
+\end{aligned}
+$$
+The \textcolor{purple}{factor multiplying $\hat\gamma_2$} is the slope of the  univariate regression of $Z_i$ on $X_i$. 
+
+
+Now let's derive this formula. The formula for the univariate regression slope $\hat\beta_1$ is 
+$$
+\begin{aligned}
+\hat\beta_1 
+&= \frac{\sum_{i=1}^n (X_i-\bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2 } 
+&= \frac{\sum_{i=1}^n X_i Y_i}{\sum_{i=1}^n X_i^2 }  
+\end{aligned}
+$$
+where the latter equivalence holds because $\bar X=0$.
+
+To express this in terms of the slope $\hat\gamma_1$ in the additive model, we plug in an expansion of $Y_i$ in terms of the additive regression curve $\hat\mu_2$ and the corresponding residuals.
+$$
+Y_i = \hat\mu_2(X_i,Z_i) + \hat\varepsilon_i = \hat\gamma_0 + \hat\gamma_1 X_i + \hat\gamma_2 Z_i + \hat\varepsilon_i.
+$$
+
+Plugging this in and distributing gives us the following formula.
+
+$$
+\begin{aligned}
+\hat\beta_1 
+&= \frac{\sum_{i=1}^n X_i (\hat\gamma_0 + \hat\gamma_1 X_i + \hat\gamma_2 Z_i + \hat\varepsilon_i)}{\sum_{i=1}^n X_i^2 } \\
+&= \hat\gamma_0 \frac{\textcolor{blue}{\sum_{i=1}^n X_i}}{\sum_{i=1}^n X_i^2} \\
+&+ \hat\gamma_1 \frac{\textcolor{blue}{\sum_{i=1}^n X_i \ X_i}}{\sum_{i=1}^n X_i^2} \\
+&+ \hat\gamma_2 \frac{\textcolor{blue}{\sum_{i=1}^n X_i \ Z_i}}{\sum_{i=1}^n X_i^2} \\
+&+ \frac{\textcolor{blue}{\sum_{i=1}^n X_i \ \hat\varepsilon_i}}{\sum_{i=1}^n X_i^2} \\
+\end{aligned}
+$$
+
+Let's work through each term. 
+\begin{enumerate}
+\item The term multiplying $\hat\gamma_0$ is zero, as the numerator is $n \bar X$ and $\bar X=0$.
+\item The term multiplying $\hat\gamma_1$ is one, as the numerator and denominator are the same.
+\item The term multiplying $\hat\gamma_2$ is what it is. We'll include it in our formula.
+\item The last term is zero because the \emph{residuals} $\hat\varepsilon_i$ from our fit of the additive model are
+are orthogonal to all curves in the model, i.e., they satisfy $\sum_{i=1}^n m(X_i,Z_i) \hat\varepsilon_i=0$ for all
+curves in the model including the curve $m(x,z)=x$. We proved this in class using the property that
+the minimizer $\hat\beta$ of the sum of squared errors $\ell(b)$ satisfies the zero-derivative condition
+$\frac{\partial}{\partial b_j} \ell(b) = 0$ for all $j$. 
+\end{enumerate}
+
+This leaves us with the follwing simplified formula.
+$$
+\begin{aligned}
+\hat\beta_1 &= \hat\gamma_1 + \hat\gamma_2 \frac{\textcolor{blue}{\sum_{i=1}^n X_i \ Z_i}}{\sum_{i=1}^n X_i^2} 
+\end{aligned}
+$$
+Solving for $\hat\gamma_1$ gives us the formula we claimed we'd derive.
+
+
+\end{answer}
