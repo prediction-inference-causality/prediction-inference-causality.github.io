@@ -1,0 +1,396 @@
+---
+title: "Exam 2 (November 13)"
+subtitle: "QTM 220"
+execute:
+  echo: false
+  warning: false
+format: 
+  pdf:
+    include-in-header: 
+      text: |
+        \usepackage{amsmath}
+        \usepackage{setspace}
+        \onehalfspacing
+        \usepackage{amssymb}
+        \usepackage{physics}
+        \usepackage{color}
+        \usepackage{fullpage}
+        \usepackage{graphicx}
+        \usepackage{cancel}
+        \usepackage{physics}
+        \usepackage{fullpage}
+        \DeclareMathOperator{\E}{E}
+        \DeclareMathOperator{\Var}{V}
+        \DeclareMathOperator{\bias}{bias}
+        \newenvironment{answer}{\ \\ \color{red}}{\color{black}}
+        % replace 'red' with 'white' above  to hide solutions (in printout)
+---
+
+```{r}
+#| echo: false
+#| warning: false
+library(ggplot2)
+library(tidyverse)
+library(patchwork)
+```
+
+\subsection*{Problem 1}
+Suppose we have a sample of $(X_,Y_1) \ldots (X_n,Y_n)$ drawn with replacement from a population. It's stored in an \textbf{R} dataframe `df' with $n$ rows. $X$ can take the values of 1,2,3,4 or 5. We run this code.
+
+```{r}
+#| echo: false
+set.seed(123)
+n = 1000
+Y= rep(NA,n)
+X = c(rep(1,350), rep(2,300),rep(3,200),rep(4,100),rep(5,50))
+for(i in 1:n){
+  Y[i] = X[i] + rnorm(1,0,2) 
+}
+df<- data.frame(x=X,y=Y)
+
+```
+
+```{r}
+#| echo: true
+B=10000
+theta<- rep(NA,B)
+for( b in 1:B ){
+bootind = sample(1:n,size=n,replace=T)
+dfboot = df[bootind,]
+theta[b] = (1/4)*(mean(dfboot$y[dfboot$x==5]) - mean(dfboot$y[dfboot$x==1]))
+}
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the vector Y's elements
+#|  -  Jittered Scatterplot of X and Y
+ggplot() + geom_histogram(aes(x=Y,     y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(Y)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(Y)+c(-1,1)*sd(Y)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(Y), xmin=mean(Y)-1.96*sd(Y), xmax=mean(Y)+1.96*sd(Y), y=.025)) + theme_bw() + xlab('') + ylab('')
+
+ggplot(df, aes(x=x, y=y)) +geom_jitter(shape=1,alpha=.3) + geom_point(x=1,y=mean(df$y[df$x==1]),size=3) + geom_point(x=2,y=mean(df$y[df$x==2]),size=3) + geom_point(x=3,y=mean(df$y[df$x==3]),size=3)+ geom_point(x=4,y=mean(df$y[df$x==4]),size=3) + geom_point(x=5,y=mean(df$y[df$x==5]),size=3) + geom_segment(aes(x=1,y=mean(y[x==1])-sd(y[x==1]), xend=1, yend=mean(y[x==1])+sd(y[x==1]))) + geom_segment(aes(x=2,y=mean(y[x==2])-sd(y[x==2]), xend=2, yend=mean(y[x==2])+sd(y[x==2]))) + geom_segment(aes(x=3,y=mean(y[x==3])-sd(y[x==3]), xend=3, yend=mean(y[x==3])+sd(y[x==3]))) + geom_segment(aes(x=4,y=mean(y[x==4])-sd(y[x==4]), xend=4, yend=mean(y[x==4])+sd(y[x==4]))) + geom_segment(aes(x=5,y=mean(y[x==5])-sd(y[x==5]), xend=5, yend=mean(y[x==5])+sd(y[x==5]))) 
+  
+
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the theta's elements
+ggplot() + geom_histogram(aes(x=theta, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(theta)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(theta)+c(-1,1)*sd(theta)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(theta), xmin=mean(theta)-1.96*sd(theta), xmax=mean(theta)+1.96*sd(theta), y=1)) + theme_bw() + xlab('') + ylab('')
+
+```
+
+
+\subsection*{Part a}
+What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket
+if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mean(Y)
+```
+
+\vspace{1 in}
+
+
+\subsection*{Part b}
+What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(Y)
+```
+
+\vspace{1 in}
+
+
+\subsection*{Part c}
+What does this code calculate? State it in words and mark it with a 'c', and an arrow or bracket
+if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mean(Y[X==1])
+```
+
+\vspace{1 in}
+
+\vspace{1 in}
+
+\subsection*{Part d}
+What does this code calculate? State it in words and mark it with a 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(theta)
+```
+
+\newpage
+
+\subsection*{Part e}
+What does this code calculate? State it in words and mark it with a 'e', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+(1/4)(mean(Y[X=5]) - mean(Y[X=1])) 
+- 1.96* sqrt((1/4)^2*var(Y[X=5])/length(Y[X=5]) + (-1/4)^2*var(Y[X=1])/length(Y[X=1]))
+
+(1/4)(mean(Y[X=5]) - mean(Y[X=1]))
++ 1.96* sqrt((1/4)^2*var(Y[X=5])/length(Y[X=5]) + (-1/4)^2*var(Y[X=1])/length(Y[X=1]))
+```
+
+\vspace{2 in}
+
+\subsection*{Part f}
+How could you calculate roughly the same thing as in part e using 'sd(theta)' replacing \begin{verbatim} sqrt((1/4)^2*var(Y[X=5])/length(Y[X=5]) + (-1/4)^2*var(Y[X=1])/length(Y[X=1])) \end{verbatim}
+
+\vspace{1 in}
+
+
+\subsection*{Problem 2}
+
+In the following parts, choose the figure with the appropriate regression line(s). Clearly mark one choice, no explanation needed.
+
+
+```{r, fig.width=10,fig.height=4}
+#| echo: false
+#| warning: false
+n <- 500
+zz <- c(rep(0,n/2),rep(1,n/2))
+set.seed(220220)
+xx <-  1 + 2*zz + rnorm(n,mean=0,sd = 1)
+yy <- 2*zz*xx - xx + rnorm(n)
+
+
+modAct1 <- lm(yy ~ xx)
+modAct2 <- lm(yy ~ xx + zz)
+
+
+df <- data.frame(xx,yy,zz)
+
+p <- ggplot(data = df, aes(x = xx, y = yy)) +
+  geom_point(aes(shape = factor(zz)),size = 1,alpha=.5) +
+  scale_shape_manual(values = c(1,19), label = c("z=0","z=1")) +
+  xlab("x") +
+  ylab("y") +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        legend.box.just = "left",
+        legend.justification = c("left","top"),
+        legend.position = c(0,1),
+        legend.margin = margin(6,6,6,6),
+        legend.title = element_blank(),
+        legend.box.background = element_rect(color="black",size=1))
+
+coef1 <- modAct1$coefficients
+coef2 <- modAct2$coefficients
+mod3 <- lm(yy ~ xx+zz+xx*zz, data = df)
+coef3 <- coef(mod3)
+# simple regression line y ~ x --------
+
+
+```
+
+
+```{r}
+#| echo: false
+#ggplot(data = df, aes(x = xx, y = yy)) +
+#  geom_point(size = 1,alpha=.5) +
+#  xlab("x") +
+#  ylab("y") +
+#  theme_bw() + geom_abline(intercept = coef1[1], slope = coef1[2]) + ggtitle("A3")
+```
+
+\subsubsection*{Part A}
+
+Choose the figure with the two dashed lines associated with the additive multiple regression ($\hat\mu(x,z)=\hat\beta_0 + \hat\beta_1 x + \hat\beta_2 z$).
+
+```{r,fig.width=10,fig.height=4}
+#| echo: false
+# multiple additive regression y ~ x + z
+addA <- p + geom_abline(intercept = coef2[1], slope = coef2[2], linetype = 'dashed') +
+  geom_abline(intercept = coef2[1] + coef2[3], slope = coef2[2], linetype = 'dashed') +
+  ggtitle("A3")
+
+addB <- p + geom_abline(intercept = 0.5, slope = coef3[2]*1.5,
+                linetype = 'dashed')+ geom_abline(intercept = 0.5, slope = -1,
+                linetype = 'dashed') + ggtitle("A1")
+
+addC <- p + geom_curve(aes(x = -2,xend=6,y=-6,yend=-1),
+               curvature = -0.8,
+               angle = 70,
+               linetype = 'dashed') +
+  geom_curve(aes(x=-2,y=0,xend=4,yend=-7),
+             curvature = -0.5,
+             linetype = 'dashed') +
+  ggtitle("A2")
+
+#pdf(file="Q1partBplot.pdf",width=10,height=4)
+ addB + addC + addA
+#dev.off()
+```
+
+
+\subsubsection*{Part B}
+
+Choose the figure with the two dotted lines associated with the interactive multiple regression ($\hat\mu(x,z)=\hat\beta_0 + \hat\beta_1 x + \hat\beta_2 z + \hat\beta_3 xz$).
+
+```{r,fig.width=10,fig.height=4}
+#| echo: false
+# interactive model
+
+intC2 <- p + geom_abline(intercept = coef3[1], slope = coef3[2],
+                linetype = 'dotted') +
+  geom_abline(intercept = coef3[1] + coef3[3],
+              slope = coef3[2] + coef3[4],
+              linetype = 'dotted') +
+  ggtitle("B2")
+
+
+intC1 <- p + geom_abline(intercept = coef3[1], slope = coef3[2]*1.5,
+                linetype = 'dotted') +
+  geom_abline(intercept = 5,
+              slope = coef3[2]*1.5,
+              linetype = 'dotted') +
+  ggtitle("B1")
+
+intC3 <- p + geom_curve(aes(x = -2,y = -2.5,xend=3,yend=5),
+               curvature = 0.3,
+               #angle = 30,
+               linetype = 'dotted') +
+  geom_curve(aes(x=0,y=5,xend=6,yend=-5),
+             curvature = 0.3,
+             angle=95,
+             linetype = 'dotted') +
+  ggtitle("B3")
+
+#pdf(file="Q1partCplot.pdf",width=10,height=4)
+intC1 + intC2 + intC3
+#dev.off()
+```
+
+
+\subsection*{Problem 3}
+
+\subsubsection*{Part A} 
+
+```{r}
+#| echo: false
+
+p3n <- 200
+z <- c(rep(0,p3n/2),rep(1,p3n/2))
+set.seed(220220)
+x <-   z + rnorm(p3n,mean=1,sd=1) + z*rnorm(p3n,mean=3,sd = 1)
+y <- (-0.5)*x + (4)*z + rnorm(p3n)
+
+
+dfp3 <- data.frame(y,x,z)
+
+q1 <- ggplot(data = dfp3, aes(x = x, y = y)) +
+  geom_point(aes(shape = factor(z)),size = 1,alpha=.5) +
+  scale_shape_manual(values = c(1,19), label = c("z=0","z=1")) +
+  xlab("x") +
+  ylab("y") +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        legend.box.just = "left",
+        legend.justification = c("left","top"),
+        legend.position = c(0,1),
+        legend.margin = margin(6,6,6,6),
+        legend.title = element_blank(),
+        legend.box.background = element_rect(color="black",size=1))
+
+q2<- ggplot(data = dfp3, aes(x = x, y = z)) +
+  geom_jitter(height=.25) +  xlab("x") +
+  ylab("z") +
+  theme_bw()
+
+
+
+modone<- lm(y~x+z,data=dfp3)
+modtwo<- lm(z ~ x, data=dfp3)
+
+```
+
+We have collected $y$, $x$, and a binary variable $z$. The scatter plots below show our data. 
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Scatterplot 1
+#|  -  Scatterplot 2 (jittered)
+q1
+q2
+
+```
+
+\subsubsection*{Part A}
+Do you expect the coefficient on $x$ from the simple regression of $y$ on $x$ ($\hat\mu(x)=\hat\beta_0 + \hat\beta_1 x)$) to be: (choose one, no explanation needed)
+
+\begin{itemize}
+\item Positive
+
+\item Negative
+
+\item Zero 
+\end{itemize}
+\newpage
+\subsubsection*{Part B}
+We then run the regression $\hat\mu(x,z) = \hat\beta_0 + \hat\beta_1 x + \hat\beta_2 z$ which gives us the following output: 
+```{r}
+summary(modone)
+```
+And we run the regression $lm(z \sim x)$ which gives us the following output: 
+```{r}
+summary(modtwo)
+```
+
+
+How would you use these outputs to calculate the coefficient on $x$ from the simple regression $lm(y\sim x)$? Explain your steps and define any notation you use. Plug in the estimates from your output (you can leave it as an equation). 
+
+\vspace{2 in}
+
+\newpage
+\subsubsection*{Part C (Bonus)}
+Suppose we want $\hat\beta_1$ from the additive regression of $y$ on three variables, $\hat\mu(x,z,w) = \hat\beta_0 + \hat\beta_1 x + \hat\beta_2 z +  \hat\beta_3 w$, but we run the univariate regression $lm (y\sim x)$ without $z$ or $w$. Under what condition(s) will the coefficient on $x$ from the univariate regression, which is $\frac{\sum_{i=1}^n (X_i-\bar X) Y_i}{\sum_{i=1}^n (X_i-\bar X)^2 }$, be equal to $\hat\beta_1$ from the additive model? Explain your answer. You'll probably want to derive a formula for the univariate regression coefficient in terms of $\hat\beta_0 \ldots \hat\beta_3$. 
+
+
+\newpage
+
+\subsection*{Problem 4}
+
+Let's reconsider what we were doing in Problem 1. In that problem, we were using a difference in means to estimate some population summary. Suppose that, instead of that difference in means, we used the slope of a least squares line fit to the data in Figure 2.
+This gives us a \emph{biased} estimator of the same population summary. I've plotted the sampling distribution of that estimator below, with its mean indicated by the thin solid line; dashed lines indicating the mean plus or minus two standard errors; and the population summary we're estimating indicated by a thick black line.
+
+
+```{r}
+bias = -1
+se = 1
+mu=0
+breaks = seq(-5,5,1)
+x=seq(min(breaks), max(breaks), length.out=1000)
+ggplot() + 
+    geom_area(aes(x=x, y=dnorm(x, mean=mu+bias, sd=se)), alpha=.1) +
+    geom_vline(aes(xintercept=mu+bias)) +
+    geom_vline(aes(xintercept=mu+bias+c(-2,2)*se), linetype='dotted') + 
+    geom_vline(aes(xintercept=mu), color='black', size=1) +
+    scale_x_continuous(breaks=breaks, limits=range(breaks)) +
+    theme_bw() + theme(axis.text.x = element_blank(), axis.text.y=element_blank()) +
+    xlab('') + ylab('')
+```
+
+\subsubsection*{Part A}
+Letting $\hat\theta$ be our point estimator, i.e. a draw from the sampling distribution above, explain how to calculate the coverage of the confidence interval $\hat\theta \pm 2\  \text{se}$ in terms of the sampling distribution's density $f(x)$.  Is the coverage closer to 0\%, 50\%, or 95\%?  You do not need to calculate the coverage any more precisely than that---just explain how to do it.
+
+\subsubsection*{Part B}
+Suppose the data we have...
