@@ -1,0 +1,81 @@
+---
+title: "Problem Set 6 Solutions"
+subtitle: "QTM 220"
+format: pdf
+editor: visual
+---
+```{r}
+#| echo: false
+library(ggplot2)
+library(sandwich)
+```
+
+
+Due 1 December at 2:00pm ET on Canvas. Questions about submission requirements should be directed to your TA.
+
+\subsection{California CPS Revisited}
+
+
+(a) Using the California sample of 25-35 year olds, regress income on education and age (in an additive model). Report your results in a table, including the standard errors that R automatically calculates. 
+
+```{r}
+cps<- read.csv("California_CPS_degrees.csv")
+
+mod1<- lm(income~ education + age,data=cps)
+
+summary(mod1)
+
+```
+
+(b) Create a matrix of your $X$ information for your model (education and age) and include a column of 1s to estimate an intercept. Using the following matrix functions in base R, calculate $(X'X)^{-1}X'Y$ and confirm your resulting $\hat{\beta}s$ are the same as your $lm$ results: 
+
+Let $X$ be your matrix in R. Use $\%*\%$ to multiply matrices, i.e. $X\%*\%X$ will yield $XX$ 
+
+Use $t(X)$ to take the transpose of matrix $X$
+
+
+Use solve($X$) to take the inverse of matrix $X$ 
+
+```{r}
+df.mat<- data.frame(constant=rep(1,length(cps$income)), edu=cps$education, age=cps$age)
+
+X<- data.matrix(df.mat)
+
+solve(t(X)%*%X)%*%t(X)%*%(cps$income)
+
+```
+
+
+(c) Extract the predicted values and residuals from your model using predict(model name) and residuals(model name), then create a scatter plot of your predicted values and residuals. What do you see? Would you guess the errors are homoskedastic or heteroskedastic? Why? 
+
+```{r}
+
+pred<- predict(mod1)
+resid<- residuals(mod1)
+
+df<- data.frame(pred=pred,resid=resid)
+
+
+rplot<- ggplot(df, aes(x=pred,y=resid)) + geom_point(alpha=.2)
+
+rplot
+```
+
+
+(d) install the sandwich package and get heteroskdasticity consistent standard errors for your model
+
+(e) do matrix algebra to get the same thing 
+
+\subsection{Neto and Cox}
+
+Propensity score matching 
+
+make a balance table 
+
+\subsection{Menopausal Hormone Therapy}
+
+compare RCT and observational studies 
+
+read some stuff 
+
+reflect 
