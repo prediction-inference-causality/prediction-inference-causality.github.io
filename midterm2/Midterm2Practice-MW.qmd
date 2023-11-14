@@ -266,7 +266,7 @@ In Midterm 1, we discussed the estimator $\tilde{Y}_k = \frac{1}{n-k} \sum_{i=1}
 talk about that case and the case $k=\sqrt{n}$. For both estimators $\tilde{Y}_2$ and $\tilde{Y}_{\sqrt{n}}$, 
 for each of the three sample sizes $n=10$, $n=10^2=100$, and $n=10^4=10,000$, do the following.
 \begin{itemize}
-\item Calculate the estimator's mean $\hat\mu$ and standard error $\hat\sigma_n$. 
+\item Calculate the estimator's mean $\hat\mu$ and standard error $\sigma_n$. 
 \item Sketch the estimator's sampling distribution. Label your axes clearly and include $\mu=1$ in your sketch.
 \item On top of your sketches, illustrate how you've calculate the coverage probability of the 
       interval estimate $\hat\mu \pm 1.96 \hat\sigma_n$.
@@ -278,27 +278,97 @@ You should have 6 sketches with corresponding means, standard errors, and covera
 
 \newpage
 \begin{answer}
-Let's start by calculating the mean and the resulting bias.
+Let's start by considering the general case, with arbitrary $\mu$, $\sigma$, and $k$. 
+We'll calculate the mean.
  \begin{align*}
- \E[\tilde{Y}] &= \frac{1}{n-k}\sum_{i=1}^n \E[Y_i] = \frac{n}{n-k}\mu 
+ \E[\tilde{Y}_k] &= \frac{1}{n-k}\sum_{i=1}^n \E[Y_i] = \frac{n}{n-k}\mu = \qty{\frac{n-k}{n-k} + \frac{k}{n-k}} \mu = \qty{1+\frac{k}{n-k}}\mu.
  \end{align*}
 so the bias is 
 \begin{align*}
- \E[\tilde{Y}] - \mu &= \qty(\frac{n}{n-k} - 1) \mu = \qty(\frac{n}{n-k} - \frac{n-k}{n-k}) \mu = \frac{k}{n-k} \mu.
+ \E[\tilde{Y}] - \mu &= \frac{k}{n-k} \mu.
+\end{align*}
+And the variance and resulting standard error.
+ \begin{align*}
+ V[\tilde{Y}_k] &= V[ \frac{1}{n-k} \displaystyle \sum_{i=1}^n Y_i] \\
+ &= \frac{1}{(n-k)^2} V[ \sum_{i=1}^n Y_i]\\
+ &= \frac{1}{(n-k)^2} \qty(\sum_{i=1}^n V[Y_i])\\
+ &=\frac{1}{(n-k)^2} \qty(\sum_{i=1}^n \sigma^2 )\\
+ &=\frac{1}{(n-k)^2} n\sigma^2 \\
+ &= \frac{n\sigma^2}{(n-k)^2} 
+\end{align*}
+so the standard error is
+\begin{align*}
+\sigma_n = \sigma \sqrt{\frac{n}{(n-k)^2}}
 \end{align*}
 
-And the variance.
-\begin{answer}
- \begin{align*}
- V[\tilde{Y}] &= V[ \frac{1}{n-2} \displaystyle \sum_{i=1}^n Y_i] \\
- &= \frac{1}{(n-2)^2} V[ \sum_{i=1}^n Y_i]\\
- &= \frac{1}{(n-2)^2} \qty(\sum_{i=1}^n V[Y_i])\\
- &=\frac{1}{(n-2)^2} \qty(\sum_{i=1}^n \sigma^2 )\\
- &=\frac{1}{(n-2)^2} n\sigma^2 \\
- &= \frac{n\sigma^2}{(n-2)^2}
-\vspace{2in}
-\end{align*}
+Specializing to the case $\mu=\sigma=1$ we're considering, we get a mean of 
+$1 + 2/(n-2)$ and standard error of $\sqrt{n/(n-2)^2}$ for $\tilde{Y}_2$ and
+a mean of $1 + \sqrt{n}/(n-\sqrt{n})=1+1/(\sqrt{n}-1)$ and standard error of
+$\sqrt{n/(n-\sqrt{n})^2}=1/(\sqrt{n}-1)$ for $\tilde{Y}_{\sqrt{n}}$.
+
 \end{answer}
+
+Now let's draw some pictures. I'll do it with code, so they'll be a bit more precise than what I'd expect on an exam. We'll have $k=2$ on the left and $k=\sqrt{n}$ on the right, with sample size increasing as we go downward. I'm scaling the $x$-axis so the sampling distributions all look about the same size---the spacing between the ticks is $1/\sqrt{n}$.
+
+I've drawn a normal approximation to the estimator's sampling distribution in gray. 
+The black line is $\E[\tilde Y]$ and the blue line is $\mu=1$. The dotted lines indicate $\E[\tilde Y] \pm 1.96\sigma_n$. 95\% of the sampling distribution is between them. And if we draw arms of length $1.96\sigma_n$ on a point estimate $\hat\mu$ drawn from this sampling distribution, we'll get an interval covering $\mu$ if and only if arms of the same length drawn around $\mu$ touch the point estimate $\hat\mu$ --- i.e., if they're within the range $\mu \pm 1.96\sigma_n$ where we've colored the sampling distribution yellow. Thus, the coverage probability is the area we've colored yellow---the mass of the sampling distribution that's in this range. 
+
+For $k=2$, this coverage probability is well above 50\% but less than 95\% at $n=10$ and gets closer to 95\% as $n$ increases (and therefore bias decreases). For $k=\sqrt{n}$ we get essentially the same coverage probability as $n$ increases because $bias/se = \{ 1/(\sqrt{n}-1) \} / \{ 1/(\sqrt{n}-1) \} = 1$ for all $n$. This is a bit worse than the coverage probability for $k=2$ at $n=10$ because $\sqrt{10} \approx 3>2$, but still closer to 95\% than
+to 50\%.
+
+
+```{r}
+#| echo: false
+#| warning: false
+#| out-height: 6in
+#| fig-ncol: 2
+#| fig-nrow: 3
+
+set.seed(1234)
+mu=1
+sigma = 1
+
+error = rnorm(100000)
+bias = function(n,k) { k*mu/(n-k) }
+se = function(n,k) { sqrt(n*sigma^2 / (n-k)^2) }
+
+theplot=function(n,k) {
+    breaks = seq(mu-5/sqrt(n), mu+5/sqrt(n), by=1/sqrt(n)) 
+    signs  = case_when(
+      breaks < 0 ~ '-', 
+      breaks == 0 ~ '',
+      breaks > 0 ~ '+')
+    offsets = case_when(
+      breaks != 0 ~ sprintf('%d/sqrt(n)', round(abs(breaks*sqrt(n)))),
+      breaks == 0 ~ '')
+    labels.abstract = sprintf('mu %s %s', signs, offsets)
+  x = seq(min(breaks), max(breaks), by=.01/sqrt(n))
+  thek = if(k=='two') { 2 } else { sqrt(n) }
+  xin = x[mu - 2*se(n,thek) <= x & x <= mu + 2*se(n,thek)]
+  p = ggplot() + 
+    geom_area(aes(x=x, y=dnorm(x, mean=mu+bias(n,thek), sd=se(n,thek))), alpha=.1) +
+    geom_area(aes(x=xin, y=dnorm(xin, mean=mu+bias(n,thek), sd=se(n,thek))), alpha=.2, fill='yellow') +
+    geom_vline(aes(xintercept=mu+bias(n,thek))) +
+    geom_vline(aes(xintercept=mu+bias(n,thek)+c(-2,2)*se(n,thek)), linetype='dotted') + 
+    geom_vline(aes(xintercept=mu), color='blue') +
+    scale_x_continuous(breaks=breaks, limits=range(breaks)) +
+    scale_y_continuous(limits=c(0, dnorm(0, sd=se(n,2)))) +
+    theme_bw() + theme(axis.text.x = element_blank(), axis.text.y=element_blank()) +
+    xlab('') + ylab('')
+  p
+}
+
+
+
+
+theplot(10^1,'two')
+theplot(10^1,'sqrtn')
+theplot(10^2,'two')
+theplot(10^2,'sqrtn')
+theplot(10^4,'two')
+theplot(10^4,'sqrtn')
+```
+
 
 \newpage
 \section*{Problem 4}
