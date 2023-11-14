@@ -858,12 +858,6 @@ c <- 1/2#
 plot(y,x/(c+x-y),col="blue")#
 points(y,y/(c),col="red")
 x <- 1/3#
-y <- seq(1/2,3/4/,.01)#
-c <- 1/2#
-#
-plot(y,x/(c+x-y),col="blue")#
-points(y,y/(c),col="red")
-x <- 1/3#
 y <- seq(1/2,3/4,.01)#
 c <- 1/2#
 #
@@ -877,3 +871,186 @@ c <- 1/2#
 #
 plot(y,x/(c+x-y),col="blue")#
 points(y,y/(c),col="red")
+library(car)#
+library(foreign)#
+library(mgcv)#
+#library(KRLS)#
+netocox <- read.csv("netocox.csv")#
+netocox$enpres <- netocox$ENPRES #
+netocox$eneth <- netocox$ENETH#
+netocox$ro <- netocox$RUNOFF #
+#
+attach(netocox)#
+#
+country <- 	as.character(COUNTRY)#
+country[country=="EQUADOR"] <- "ECUADOR"#
+#
+prox <- c(.55,#
+.8,#
+.63,#
+.93,#
+1,#
+1,#
+.64,#
+1,#
+.61,#
+.96,#
+.41,#
+.87,#
+1,#
+.05,#
+1,#
+1)#
+#
+y1 <- c(expression(Y(1)[ARG]),#
+expression(Y(1)[AUS]),#
+expression(Y(1)[BRA]),#
+expression(Y(1)[COL]),#
+expression(Y(1)[CR]),#
+expression(Y(1)[DR]),#
+expression(Y(1)[ES]),#
+expression(Y(1)[ECU]),#
+expression(Y(1)[FIN]),#
+expression(Y(1)[FRA]),#
+expression(Y(1)[ICE]),#
+expression(Y(1)[KOR]),#
+expression(Y(1)[PERU]),#
+expression(Y(1)[POR]),#
+expression(Y(1)[USA]),#
+expression(Y(1)[VEN])#
+)#
+#
+y0 <- c(expression(Y(0)[ARG]),#
+expression(Y(0)[AUS]),#
+expression(Y(0)[BRA]),#
+expression(Y(0)[COL]),#
+expression(Y(0)[CR]),#
+expression(Y(0)[DR]),#
+expression(Y(0)[ES]),#
+expression(Y(0)[ECU]),#
+expression(Y(0)[FIN]),#
+expression(Y(0)[FRA]),#
+expression(Y(0)[ICE]),#
+expression(Y(0)[KOR]),#
+expression(Y(0)[PERU]),#
+expression(Y(0)[POR]),#
+expression(Y(0)[USA]),#
+expression(Y(0)[VEN])#
+)
+pdf("p5.pdf")#
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==1],enpres[ro==1],labels=country[ro==1],col="blue")#
+mod0 <- lm(enpres ~ eneth, data=netocox[ro==0,])#
+abline(mod0,col="red",lwd=2)#
+mod1 <- lm(enpres ~ eneth, data=netocox[ro==1,])#
+abline(mod1,col="blue",lwd=2)#
+segments(x0=eneth[ro==1],y0=predict(mod0,newdata=netocox[ro==1,]),y1=predict(mod1),col="blue")#
+text(x=1.75,y=4.5,expression(paste(hat(APD1),"=0.79")),cex=1.5,col="blue")#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))#
+dev.off()
+pdf("p6.pdf")#
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=country[ro==0],col="red")#
+mod0 <- lm(enpres ~ eneth, data=netocox[ro==0,])#
+abline(mod0,col="red",lwd=2)#
+mod1 <- lm(enpres ~ eneth, data=netocox[ro==1,])#
+abline(mod1,col="blue",lwd=2)#
+segments(x0=eneth[ro==0],y0=predict(mod0),y1=predict(mod1,newdata=netocox[ro==0,]),col="red")#
+text(x=1.75,y=4.5,expression(paste(hat(APD0),"=0.55")),cex=1.5,col="red")#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))#
+dev.off()
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=country[ro==0],col="red")#
+mod0 <- lm(enpres ~ eneth, data=netocox[ro==0,])#
+abline(mod0,col="red",lwd=2)#
+mod1 <- lm(enpres ~ eneth, data=netocox[ro==1,])#
+abline(mod1,col="blue",lwd=2)#
+segments(x0=eneth[ro==0],y0=predict(mod0),y1=predict(mod1,newdata=netocox[ro==0,]),col="red")#
+text(x=1.75,y=4.5,expression(paste(hat(APD)[0],"=0.55")),cex=1.5,col="red")#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))
+pdf("p5.pdf")#
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==1],enpres[ro==1],labels=country[ro==1],col="blue")#
+mod0 <- lm(enpres ~ eneth, data=netocox[ro==0,])#
+abline(mod0,col="red",lwd=2)#
+mod1 <- lm(enpres ~ eneth, data=netocox[ro==1,])#
+abline(mod1,col="blue",lwd=2)#
+segments(x0=eneth[ro==1],y0=predict(mod0,newdata=netocox[ro==1,]),y1=predict(mod1),col="blue")#
+text(x=1.75,y=4.5,expression(paste(hat(APD)[1],"=0.79")),cex=1.5,col="blue")#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))#
+dev.off()
+pdf("p6.pdf")#
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=country[ro==0],col="red")#
+mod0 <- lm(enpres ~ eneth, data=netocox[ro==0,])#
+abline(mod0,col="red",lwd=2)#
+mod1 <- lm(enpres ~ eneth, data=netocox[ro==1,])#
+abline(mod1,col="blue",lwd=2)#
+segments(x0=eneth[ro==0],y0=predict(mod0),y1=predict(mod1,newdata=netocox[ro==0,]),col="red")#
+text(x=1.75,y=4.5,expression(paste(hat(APD)[0],"=0.55")),cex=1.5,col="red")#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))#
+dev.off()
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=country[ro==0],col="red")#
+text(eneth[ro==1],enpres[ro==1],labels=country[ro==1],col="blue")#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=country[ro==0],col="red")#
+#text(eneth[ro==1],enpres[ro==1],labels=country[ro==1],col="blue")#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=y0[ro==0],col="red")#
+#text(eneth[ro==1],enpres[ro==1],labels=country[ro==1],col="blue")#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=country[ro==0],col="red")#
+text(eneth[ro==1],enpres[ro==1],labels=country[ro==1],col="blue")#
+mod <- lm(enpres ~ eneth+ro, data=netocox)#
+abline(mod$coef[1],mod$coef[2],col="red",lwd=2)#
+abline(mod$coef[1]+mod$coef[3],mod$coef[2],col="blue",lwd=2)#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))#
+text(x=1.75,y=4.5,expression(paste(hat(ATE),"=0.63")),cex=1.5,col="purple")
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=country[ro==0],col="red")#
+text(eneth[ro==1],enpres[ro==1],labels=country[ro==1],col="blue")#
+mod <- lm(enpres ~ eneth+ro, data=netocox)#
+abline(mod$coef[1],mod$coef[2],col="red",lwd=2)#
+abline(mod$coef[1]+mod$coef[3],mod$coef[2],col="blue",lwd=2)#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))#
+text(x=1.75,y=4.5,expression(paste(hat(beta),"=0.63")),cex=1.5,col="purple")
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=country[ro==0],col="red")#
+text(eneth[ro==1],enpres[ro==1],labels=country[ro==1],col="blue")#
+mod <- lm(enpres ~ eneth+ro, data=netocox)#
+abline(mod$coef[1],mod$coef[2],col="red",lwd=2)#
+abline(mod$coef[1]+mod$coef[3],mod$coef[2],col="blue",lwd=2)#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))#
+text(x=1.75,y=4.5,expression(paste(hat(beta)[z],"=0.63")),cex=1.5,col="purple")
+pdf("p2.pdf")#
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=country[ro==0],col="red")#
+text(eneth[ro==1],enpres[ro==1],labels=country[ro==1],col="blue")#
+mod <- lm(enpres ~ eneth+ro, data=netocox)#
+abline(mod$coef[1],mod$coef[2],col="red",lwd=2)#
+abline(mod$coef[1]+mod$coef[3],mod$coef[2],col="blue",lwd=2)#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))#
+text(x=1.75,y=4.5,expression(paste(hat(beta)[z],"=0.63")),cex=1.5,col="purple")#
+dev.off()
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=country[ro==0],col="red")#
+text(eneth[ro==1],enpres[ro==1],labels=country[ro==1],col="blue")#
+mod <- lm(enpres ~ eneth+ro, data=netocox)#
+abline(mod$coef[1],mod$coef[2],col="red",lwd=2)#
+abline(mod$coef[1]+mod$coef[3],mod$coef[2],col="blue",lwd=2)#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))#
+text(x=1.75,y=4.5,expression(paste(hat(beta)[runoff],"=0.63")),cex=1.5,col="purple")
+pdf("p2.pdf")#
+plot(eneth,enpres,type="n",xlim=c(0.75,3),xlab="effective number of ethnic groups",ylab="effective number of presidential candidates")#
+text(eneth[ro==0],enpres[ro==0],labels=country[ro==0],col="red")#
+text(eneth[ro==1],enpres[ro==1],labels=country[ro==1],col="blue")#
+mod <- lm(enpres ~ eneth+ro, data=netocox)#
+abline(mod$coef[1],mod$coef[2],col="red",lwd=2)#
+abline(mod$coef[1]+mod$coef[3],mod$coef[2],col="blue",lwd=2)#
+legend("topleft",legend=c("no runoff","runoff"),lwd=2,col=c("red","blue"))#
+text(x=1.75,y=4.5,expression(paste(hat(beta)[runoff],"=0.63")),cex=1.5,col="purple")#
+dev.off()
