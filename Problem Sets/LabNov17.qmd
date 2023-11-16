@@ -1,0 +1,85 @@
+---
+title: "Lab Nov 17"
+format: pdf
+editor: visual
+---
+
+## Matrices in R 
+
+Let's use our WHI experiment data 
+
+```{r}
+whi<- read.csv("whidata.csv")
+whi$age50s<- ifelse(whi$age=="50-59", 1, 0)
+whi$age60s<- ifelse(whi$age=="60-69", 1, 0)
+whi$age70s<- ifelse(whi$age=="70-79",1,0)
+
+```
+
+Start with simple additive model 
+
+```{r}
+whimod1<- lm(breastcancer ~ treat + age60s + age70s, data=whi)
+
+summary(whimod1)
+```
+
+
+How can we get the same thing using matrices? We want $(X'X)^{-1}X'Y$, so we need a matrix $X$ that has our covariates in it and a column of 1s so we can estimate an intercept. 
+
+```{r}
+df.mat<- data.frame(constant=rep(1,length(whi$breastcancer)), treat=whi$treat, age60s=whi$age60s, age70s=whi$age70s)
+
+X<- data.matrix(df.mat)
+
+dim(X)
+
+```
+
+To test our matrix functions, I want to use something smaller to be able to check it. I will use the matrix from PS 3: $C = \begin{bmatrix} 3 \\ 2 \\ 5 \\ 7 \end{bmatrix}$ and $A = \begin{bmatrix} 1 & 0\\ 1 & 1 \\ 1 & 1\\ 1 & 2 \end{bmatrix}$
+
+```{r}
+A<- matrix(c(1,1,1,1,0,1,1,2),ncol=2)
+dim(A)
+C<- matrix(c(3,2,5,7),ncol=1)
+dim(C)
+#What is the transpose of A?
+t(A)
+
+t(A)%*%A
+#What is the inverse of A'A?
+solve(t(A)%*%A)
+
+solve(t(A)%*%A)%*%t(A)%*%C
+``` 
+
+Let's go back to our WHI data 
+
+```{r}
+betas<- solve(t(X)%*%X)%*%t(X)%*%whi$breastcancer
+dim(betas)
+betas
+```
+
+We got the same answer as lm! 
+
+optional: make a new version of $X$ that includes all three age variables. What happens? 
+
+```{r}
+df.mat2<- data.frame(constant=rep(1,length(whi$breastcancer)), treat=whi$treat, age50s=whi$age50s ,age60s=whi$age60s, age70s=whi$age70s)
+
+X2<- data.matrix(df.mat2)
+
+dim(X2)
+
+#solve(t(X2)%*%X2)
+```
+
+
+How do we use matrices to estimate standard errors for our betas? What is the sandwich estimator? 
+
+$$\hat V\left[\hat{ \beta}\right]  = \left[X^T X \right]^{-1}  X^T
+     {\text{diag}} \left[ (Y - X\hat{\beta})^2 \right]
+      X \left[X^T X \right]^{-1}.$$
+
+
