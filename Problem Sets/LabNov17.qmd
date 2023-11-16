@@ -82,4 +82,52 @@ $$\hat V\left[\hat{ \beta}\right]  = \left[X^T X \right]^{-1}  X^T
      {\text{diag}} \left[ (Y - X\hat{\beta})^2 \right]
       X \left[X^T X \right]^{-1}.$$
 
+We know we can deal with $X$ now, but what is the thing in the middle of the sandwich? A diagonal matrix of the residuals squared. 
+
+
+```{r}
+resid<- residuals(whimod1)
+```
+
+so we have our residuals and we can square them, but how do we make a diagonal matrix? 
+
+```{r}
+test<- c(4,5,6,7,8)
+
+diag(test)
+
+```
+
+So we can make a diagonal matrix of our squared residuals the same way. What should the dimensions of the matrix be? 
+
+```{r}
+D<- diag(resid^2)
+
+dim(D)
+
+```
+
+Let's use our sandwich estimator 
+
+```{r}
+betavar<- solve(t(X)%*%X)%*%t(X)%*%D%*%X%*%solve(t(X)%*%X)
+```
+
+
+Are we done? The diagonal is the variance of our betas and we need to take the squareroot to get the standard error. 
+
+```{r}
+sqrt(diag(betavar))
+```
+
+
+That was complicated. Big matrices. Is there an easier way to do it? The sandwich package 
+
+```{r}
+library(sandwich)
+sandwich(whimod1)
+
+sqrt(diag(sandwich(whimod1)))
+
+```
 
