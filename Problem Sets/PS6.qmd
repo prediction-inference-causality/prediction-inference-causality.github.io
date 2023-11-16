@@ -1,5 +1,5 @@
 ---
-title: "Problem Set 6 Solutions"
+title: "Problem Set 6"
 subtitle: "QTM 220"
 format: pdf
 editor: visual
@@ -17,14 +17,7 @@ Due 1 December at 2:00pm ET on Canvas. Questions about submission requirements s
 
 (a) Using the California sample of 25-35 year olds, regress income on education and age (in an additive model). Report your results in a table, including the standard errors that R automatically calculates.
 
-```{r}
-cps<- read.csv("California_CPS_degrees.csv")
 
-mod1<- lm(income~ education + age,data=cps)
-
-summary(mod1)
-
-```
 
 (b) Create a matrix of your $X$ information for your model (education and age) and include a column of 1s to estimate an intercept. Using the following matrix functions in base R, calculate $(X'X)^{-1}X'Y$ and confirm your resulting $\hat{\beta}s$ are the same as your $lm$ results:
 
@@ -34,53 +27,21 @@ Use $t(X)$ to take the transpose of matrix $X$
 
 Use solve($X$) to take the inverse of matrix $X$
 
-```{r}
-df.mat<- data.frame(constant=rep(1,length(cps$income)), edu=cps$education, age=cps$age)
-
-X<- data.matrix(df.mat)
-
-solve(t(X)%*%X)%*%t(X)%*%(cps$income)
-
-```
+\bigskip 
 
 (c) Extract the predicted values and residuals from your model using predict(model name) and residuals(model name), then create a scatter plot of your predicted values and residuals. What do you see? Would you guess the errors are homoskedastic or heteroskedastic? Why?
 
-```{r}
 
-pred<- predict(mod1)
-resid<- residuals(mod1)
-
-df<- data.frame(pred=pred,resid=resid)
-
-
-rplot<- ggplot(df, aes(x=pred,y=resid)) + geom_point(alpha=.2)
-
-rplot
-```
 
 (d) Install the sandwich package and compute heteroskdasticity consistent standard errors for your model using sandwich(model name). 
 
-```{r}
-sandwich(mod1)
 
-sqrt(diag(sandwich(mod1)))
-
-```
 
 (e) Compute the same HC standard errors for your model using your matrix $X$ and our sandwich estimator, $$\hat V\left[\hat{ \beta}\right]  = \left[X^T X \right]^{-1}  X^T
  {\text{diag}} \left[ (Y - X\hat{\beta})^2 \right]
   X \left[X^T X \right]^{-1}.$$
 
-```{r}
-D<- diag(resid^2)
 
-dim(D)
-
-betavar<- solve(t(X)%*%X)%*%t(X)%*%D%*%X%*%solve(t(X)%*%X)
-
-sqrt(diag(betavar))
-
-```
 
 (f) Use a bootstrap to estimate the standard errors for each of the $\beta$s. 
 
@@ -128,7 +89,7 @@ Young & 1 & 1.5 \\
 
 \bigskip
 
-Old: $\frac{3}{8}$; Young: $\frac{1}{2}$
+
 
 \bigskip 
 
@@ -175,30 +136,15 @@ Use netocox.csv for Neto and Cox's 1997 data on the effect of runoff elections o
 
 For the purposes of this exercise, let's assume that runoff systems are randomly assigned such that we can interpret estimates causally. 
 
-```{r}
-#| echo: false
-netocox <- read.csv("netocox.csv")
-netocox$enpres <- netocox$ENPRES 
-netocox$eneth <- netocox$ENETH
-netocox$ro <- netocox$RUNOFF
 
-attach(netocox)
-
-```
 
 (a) Are the number of effective ethnic groups balanced across treatment and control countries? Make a (small) balance table reporting the means of the pre-treatment covariate. 
 
 
 
-
-
 (b) Fit an additive linear model of runoff and ethnic groups on number of presidential candidates. Calculate the Average Partial Derivative ($\hat{APD}$) of this model. 
 
-```{r}
-mod2<- lm(netocox$ENPRES~netocox$RUNOFF+netocox$ENETH)
-summary(mod2)
 
-```
 (c) Fit an interactive linear model of runoff and ethnic groups on number of presidential candidates. Calculate the Average Partial Derivative ($\hat{APD}$) of this model. 
 
 
