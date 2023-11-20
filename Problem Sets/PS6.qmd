@@ -1,0 +1,300 @@
+---
+title: "Problem Set 6"
+subtitle: "QTM 220"
+format: pdf
+editor: visual
+---
+
+```{r}
+#| echo: false
+library(ggplot2)
+library(sandwich)
+```
+
+Due 1 December at 2:00pm ET on Canvas. Questions about submission requirements should be directed to your TA.
+
+\subsection{California CPS Revisited}
+
+(a) Using the California sample of 25-35 year olds, regress income on education and age (in an additive model). Report your results in a table, including the standard errors that R automatically calculates.
+
+
+
+(b) Create a matrix of your $X$ information for your model (education and age) and include a column of 1s to estimate an intercept. Using the following matrix functions in base R, calculate $(X'X)^{-1}X'Y$ and confirm your resulting $\hat{\beta}s$ are the same as your $lm$ results:
+
+Let $X$ be your matrix in R. Use $\%*\%$ to multiply matrices, i.e. $X\%*\%X$ will yield $XX$
+
+Use $t(X)$ to take the transpose of matrix $X$
+
+Use solve($X$) to take the inverse of matrix $X$
+
+\bigskip 
+
+(c) Extract the predicted values and residuals from your model using predict(model name) and residuals(model name), then create a scatter plot of your predicted values and residuals. What do you see? Would you guess the errors are homoskedastic or heteroskedastic? Why?
+
+
+
+(d) Install the sandwich package and compute heteroskdasticity consistent standard errors for your model using sandwich(model name). 
+
+
+
+(e) Compute the same HC standard errors for your model using your matrix $X$ and our sandwich estimator, $$\hat V\left[\hat{ \beta}\right]  = \left[X^T X \right]^{-1}  X^T
+ {\text{diag}} \left[ (Y - X\hat{\beta})^2 \right]
+  X \left[X^T X \right]^{-1}.$$
+
+
+
+(f) Use a bootstrap to estimate the standard errors for each of the $\beta$s. 
+
+
+
+(g) Compare the standard errors you got from R in part (a) to the robust (sandwich) you calculated in parts (e) and (f). Why are they different? How do these compare to what you estimated from the bootstrap?
+
+\subsection{Causal Warm Up: Bone Density }
+
+Doctors (and researchers) hypothesize that higher calcium intake causes greater bone density (stronger bones).  To test this, a clinic runs an experiment where patients are treated with a calcium supplement or a placebo for 1 year, after which their bone density is measured. Patients are first classified as old or young, then treatment assignment is randomized within the groups. Bone Density T-Scores indicate how “normal” someone’s bone density is—0 is typical, positive numbers are better, negative numbers are worse (a threshold score of -2.5 is used to diagnose osteoporosis). 
+
+The resulting (fake) data is below. 
+
+\begin{tabular}{|c|c|c|}
+\hline
+Age Classification & Calcium Supplement & Bone Density T-Score \\
+\hline
+Old & 1 & -2 \\
+\hline
+Old & 0 & -3 \\
+\hline
+Old & 1 & -2 \\
+\hline
+Old & 0 & 0 \\
+\hline
+Old & 1 & -1 \\
+\hline
+Old & 0 & 0 \\
+\hline
+Old & 0 & -2 \\
+\hline
+Old & 0 & 0 \\
+\hline
+Young & 0 & 0 \\
+\hline 
+Young & 1 & 1 \\
+\hline
+Young & 0 & -1 \\
+\hline 
+Young & 1 & 1.5 \\
+\hline
+\end{tabular}
+
+(a) What is the probability of receiving treatment for the young? What is the probability of receiving treatment for the old? 
+
+\bigskip
+
+
+
+\bigskip 
+
+(b) Using simple difference in means, what is the treatment effect of the calcium supplement on bone density among the young? What is the treatment effect of the calcium supplement among the old? 
+
+
+(c) What is the average of these treatment effects, weighting by the number of participants in each category? 
+
+
+
+(d) If you ignored the blocked randomization and calculated the ATE using the difference in means in treated and control, what would your estimate be? 
+
+
+(e) Input the data in R, creating a binary variable for age classification. Run two regressions: a simple additive of bone density score on treatment, and an interactive with age, treatment, and age*treatment. Write the equations for your two models using $\beta$s. Report your results in a table. Which model corresponds with which estimate of the treatment effect? Fill in the table below with the $\beta$s notation from your equations and the estimates from your model. 
+
+
+\begin{tabular}{|c|c|}
+\hline
+& $\beta$s \\
+\hline 
+Avg Bone Density [Treated, Old] & \\
+\hline 
+Avg Bone Density [Control, Old] & \\
+\hline 
+Avg Bone Density [Treated, Young] & \\
+\hline 
+Avg Bone Density [Control, Young] & \\
+\hline 
+$\hat{ATE}_{Old}$ & \\
+\hline 
+$\hat{ATE}_{Young}$ & \\
+\hline
+\end{tabular}
+
+
+\subsection{Neto and Cox}
+
+Use netocox.csv for Neto and Cox's 1997 data on the effect of runoff elections on the number of effective presidential candidates. The following variables are included: 
+\begin{itemize}
+\item RUNOFF : whether the country has a runoff electoral system (treatment)
+\item ENPRES : the effective number of presidential candidates (outcome)
+\item ENETH : the effective number of ethnic groups 
+\end{itemize}
+
+For the purposes of this exercise, let's assume that runoff systems are randomly assigned such that we can interpret estimates causally. 
+
+
+
+(a) Are the number of effective ethnic groups balanced across treatment and control countries? Make a (small) balance table reporting the means of the pre-treatment covariate. 
+
+
+
+(b) Fit an additive linear model of number of presidential candidates on runoff and ethnic groups. Calculate the Average Partial Derivative ($\hat{APD}$) of this model. 
+
+
+(c) Fit an interactive linear model of number of presidential candidates on runoff and ethnic groups. Calculate the Average Partial Derivative ($\hat{APD}$) of this model. 
+
+
+
+(d) Using the interactive model, impute $Y(1)$s for the no runoff countries and $Y(0)$s for the runoff countries. Fill in your estimates in the table below, then calculate the ATE, ATT (average treatment effect on the treated), and ATC (average treatment effect on control) of runoff on presidential candidates. How could you recover each average effect (ATE, ATT, ATC) using $\hat{APD}$?
+
+\begin{tabular}{|c|c|c|c|}
+\hline
+Country & Runoff? & Y(0) & Y(1) \\
+\hline 
+Argentina & 0 & & \\
+\hline
+Austria & 1 & & \\
+\hline
+Brazil & 1 & & \\
+\hline
+Colombia & 0 & & \\
+\hline
+Costa Rica & 1 & & \\
+\hline
+Dominican Republic & 0 & & \\
+\hline
+El Salvador & 1 & & \\
+\hline 
+Ecuador & 1 & & \\
+\hline
+Finland & 0 & & \\
+\hline
+France & 1 & & \\
+\hline
+Iceland & 0 & & \\
+\hline
+Korea & 0 & & \\
+\hline
+Peru & 1 & & \\
+\hline
+Portugal & 1 & & \\
+\hline
+USA & 0 & & \\
+\hline
+Venezuela & 0 & & \\
+\hline 
+\end{tabular}
+
+
+\bigskip 
+
+
+(e) Fit an interactive polynomial model of number of presidential candidates on runoff and ethnic groups (and ethnic groups squared). Calculate the Average Partial Derivative ($\hat{APD}$) of this model. 
+
+
+
+(f) Using the interactive polynomial model, impute $Y(1)$s for the no runoff countries and $Y(0)$s for the runoff countries. Fill in your estimates in the table below, then calculate the ATE, ATT (average treatment effect on the treated), and ATC (average treatment effect on control) of runoff on presidential candidates.  How could you recover each average effect (ATE, ATT, ATC) using $\hat{APD}$?
+
+
+\begin{tabular}{|c|c|c|c|}
+\hline
+Country & Runoff? & Y(0) & Y(1) \\
+\hline 
+Argentina & 0 & & \\
+\hline
+Austria & 1 & & \\
+\hline
+Brazil & 1 & & \\
+\hline
+Colombia & 0 & & \\
+\hline
+Costa Rica & 1 & & \\
+\hline
+Dominican Republic & 0 & & \\
+\hline
+El Salvador & 1 & & \\
+\hline 
+Ecuador & 1 & & \\
+\hline
+Finland & 0 & & \\
+\hline
+France & 1 & & \\
+\hline
+Iceland & 0 & & \\
+\hline
+Korea & 0 & & \\
+\hline
+Peru & 1 & & \\
+\hline
+Portugal & 1 & & \\
+\hline
+USA & 0 & & \\
+\hline
+Venezuela & 0 & & \\
+\hline 
+\end{tabular}
+
+
+\subsection{Menopausal Hormone Therapy}
+
+Review the WHI/WHI(MS) studies as well as the Kim et al. 2021 study on neurodegenerative diseases. 
+
+(a) Fill in the following table comparing WHI and Kim et al. 
+
+\begin{tabular}{|c|c|c|}
+\hline
+& \ \ \ \ \ \ \ \ WHI Study \ \ \ \ \ \ \ \ \ & \ \ \ \ \ \ \ \ Kim et al. \ \ \ \ \ \ \ \ \ \  \\
+\hline 
+& & \\
+Method/approach used & & \\
+& & \\
+& & \\
+\hline 
+& & \\
+Population/participants & & \\
+& & \\
+& & \\
+\hline 
+& & \\
+Are there relevant populations not included? & & \\
+Who? & & \\
+& & \\
+\hline
+& & \\
+Treatment(s) & & \\
+& & \\
+& & \\
+\hline 
+& & \\
+Outcome(s) & & \\
+& & \\
+& & \\
+\hline 
+\end{tabular}
+
+(b) What is a potential omitted variable from the Kim et al. study? Does omitting that variable bias their estimate of the treatment effect of hormone therapy? Use the formulae from class to discuss whether your think their estimate might be too high, too low, or accurate. 
+
+
+
+(c) Is there a concern about omitted variable bias in the WHI? Why or why not? Use the formulae from class to discuss whether your think their estimate might be too high, too low, or accurate. 
+
+
+
+\bigskip 
+
+(d) Review the Estrogens General Statement clinical reference and read the recent NYT magazine piece about menopausal hormone therapy, the WHI's response to the NYT piece, and JoAnn Manson (WHI Principal Investigator) and Andrew M. Kaunitz's perspective on menopause management (posted on Canvas). Write a 1-2 paragraph reflection on what your major takeaways from the case study have been. Some questions are listed below to guide you, but you do not need to answer them all. 
+
+Questions to consider: 
+\begin{itemize}
+\item How do you assess the medical guidelines? Are the certainties and uncertainties of the body of research communicated effectively?
+\item What information might a doctor need to decide whether their patient should be prescribed menopausal hormone therapy? 
+\item What aspects of our readings/case study did you find most convincing and why? 
+\item What incentives do researchers and pharmaceutical companies have in research on hormone therapy medications? 
+\item What incentives do doctors/providers have when making recommendations to their patients? 
+\item How do you think these incentives affect the accumulation of knowledge and patient outcomes? 
+\end{itemize}
+

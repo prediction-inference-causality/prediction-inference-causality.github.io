@@ -1,0 +1,854 @@
+---
+title: "QTM 220: Lectures 17"
+subtitle: "Least Squares Regression in Linear Models: Part 2"
+format: 
+  clean-revealjs:
+    height: 1000
+    width: 1290
+    theme: [default, "class.scss"]
+    smaller: true
+    slide-number: true
+    pdf-separate-fragments: true
+    fig-format: svg
+    default-image-extension: svg
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
+---
+
+
+```{r load-libraries}
+library(purrr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(ggplot2)
+library(htmltools)
+library(kableExtra)
+library(scales)
+library(cpsR)
+library(maps)
+
+options(knitr.kable.NA = '')
+
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+```
+
+```{r ggplot-themes}
+fontsize = 16
+textcolor = "#888888"
+
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+        panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = textcolor, size=fontsize),
+        axis.text.y  = element_text(colour = textcolor, size=fontsize),
+        axis.title.x  = element_text(colour = textcolor),
+        axis.title.y  = element_text(colour = textcolor, angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+              axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(class.theme)
+```
+
+
+```{r table-styling}
+ellipsis <- function(df, nhead=5L, ntail=2) {
+    rownames(df) = as.character(1:nrow(df))
+    stopifnot("data.frame" %in% class(df))
+    els <- rep(NA, ncol(df)) %>% 
+        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
+        data.frame(stringsAsFactors=FALSE) %>% 
+        tibble::as_tibble()
+    rownames(els) = "⋮"
+    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
+}
+```
+
+```{r get-data}
+#| cache: true
+#| 
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+cps.sampling.ratio = 1/25 # Not true. 1/2500 households are surveyed. But for the sake of plotting, it's ok.
+
+years = c(2019,2020,2021,2022)
+cps.data = purrr::map(years, function(year) { 
+  data=get_asec(year=year, vars=c('pearnval', 'a_age', 'a_hga', 'gestfips', 'gtco', 'gtcbsasz'), key=census.api.key)
+  data$year=year
+  data
+}) %>% bind_rows()
+```
+
+```{r transform-data}
+#| cache: false
+#| 
+all.earnings = data.frame(state.code = cps.data$gestfips,
+                          county.code = cps.data$gtco,
+                          year=cps.data$year,
+                          age=cps.data$a_age,
+                          income=cps.data$pearnval,
+                          education.code=cps.data$a_hga,
+                          education=case_match(cps.data$a_hga,
+                                           0  ~ 0,   # child
+                                           31 ~ 0,   # < grade 1
+                                           32 ~ 4,   #  grade 1-4
+                                           33 ~ 6,   #  grade 5-6
+                                           34 ~ 8,   #  grade 7-8 
+                                           35 ~ 9,   #  grade 9
+                                           36 ~ 10,  #  grade 10
+                                           37 ~ 11,  #  grade 11
+                                           38 ~ 11,  #  grade 12 no diploma
+                                           39 ~ 12,  #  high school grad
+                                           40 ~ 13,  #  some college
+                                           41 ~ 14,  #  associate degree (vocational)
+                                           42 ~ 14,  #  associate degree (academic)
+                                           43 ~ 16,  #  bachelors degree
+                                           44 ~ 18,  #  masters degree
+                                           45 ~ 20,  #  professional school degree
+                                           46 ~ 20)) #  doctorate
+
+all.earnings$degree = factor(all.earnings$education >= 16, 
+                     levels=c(FALSE, TRUE), 
+                     labels=c('no 4-year degree','4-year degree')) 
+
+coarsen = function(x, group, seed=0) {
+  current.seed = .Random.seed
+  set.seed(seed)
+  x.coarsened = rep(NA, length(x))
+  for(gg in unique(group)) {
+    x.coarsened[group==gg] = runif(sum(group==gg), min(x[group==gg]), max(x[group==gg]))
+  }
+  set.seed(current.seed)
+  x.coarsened
+} 
+```
+
+# Linear Regression Models 
+
+::: {.hidden}
+$$
+\newcommand{\alert}[1]{\textcolor{red}{#1}}
+\newcommand{\model}{\mathcal{M}}
+\newcommand{\R}{\mathbb{R}}
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\V}{V}
+\DeclareMathOperator{\Var}{\V}
+\newcommand{\inred}[1]{\textcolor{red}{#1}}
+\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
+\newcommand{X}{\mathbf{X}}
+\newcommand{Y}{\mathbf{Y}}
+$$ 
+:::
+
+
+## Least Squares Regression with Linear Models {.smaller}
+
+$$
+\hat \mu = \argmin_{m \in \model} \frac{1}{n}\sum_{i=1}^n \qty{ m(\textbf{X}_i) - Y_i}^2 \qqtext{ for } \model = \qty{ m(x) = \sum_k b_k \phi_k(x) : b \in \R^{K+1} }
+$$
+
+- In this class, we focus on fitting **linear models** via least squares.
+- You can think of linear models, generally speaking, as the set of **all linear combinations** of a set of **features**.
+- We've been doing this for a while, but it was only last class that we talked about it in general.
+- Let's go through a few familiar examples.
+
+
+## The Saturated Model
+```{r}
+#| out-height: 400px
+ 
+earnings = all.earnings %>% filter(education >= 8 & state.code==36 & county.code==61)
+group.summaries = earnings %>% group_by(year, degree) %>% summarize(mean=mean(income), sd=sd(income), n=n())
+summaries = earnings %>% group_by(year) %>% summarize(mean=mean(income), sd=sd(income), n=n())
+
+saturated.model.plot = ggplot(earnings) + 
+  geom_point(aes(x=year, y=income, color=degree), alpha=.4, size=.5, position=position_jitter(width=.1)) +
+  geom_pointrange(aes(x=year, y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n), color=degree), data=group.summaries) +
+  scale_y_continuous(labels=dollar_format(), limits=c(0, 200000)) 
+saturated.model.plot
+```
+
+- This is the model we've worked with most.
+- In this model, we have a feature for every level of $x$.
+- That feature is just a binary indicator that $X_i$ takes on that value.
+- The least squares curve in this model is just the **subsample mean** of $Y_i$ at each level of $x$
+
+$$
+\small{
+\hat \mu(x) = \frac{1}{N_x}\sum_{i:X_i=x} Y_i \qqtext{ for } \model = \qty{ m(x) = \sum_j b_k 1_{x_k}(x) : b_k \in \R } 
+}
+$$    
+
+
+## Lines and Polynomials {.smaller}
+
+```{r}
+#| out-height: 400px
+ 
+line.fit = lm(income ~ year, data=earnings)
+quad.fit = lm(income ~ poly(year,2), data=earnings)
+cube.fit = lm(income ~ poly(year,3), data=earnings)
+x = seq(min(earnings$year), max(earnings$year), by=.01)
+newdata = data.frame(year = x)
+newdata$muhat.line  =  predict(line.fit, newdata)
+newdata$muhat.quad  =  predict(quad.fit, newdata)
+newdata$muhat.cube  =  predict(cube.fit, newdata)
+
+saturated.model.plot +
+ geom_pointrange(aes(x=year, y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n)), data=summaries) +
+ geom_line(aes(x=year, y=muhat.line), data=newdata, alpha=.6, color='blue') +
+ geom_line(aes(x=year, y=muhat.quad), data=newdata, alpha=.8, color='red') + 
+ geom_line(aes(x=year, y=muhat.cube), data=newdata, alpha=.6, color='magenta') 
+```
+
+- We've also worked with the set of **lines**.
+- But with many-valued $x$, we started having to worry about **misspecification**.
+- To reduce misspecification, people often use higher-order **polynomials** instead.
+
+$$\small{
+\begin{aligned}
+\model &= \qty{ m(x) = b_0 + b_1 x : b \in \R^2 } && \textcolor{blue}{\text{lines}} \\
+\model &= \qty{ m(x) = b_0 + b_1 x + b_2 x^2: b \in \R^3 } && \textcolor{red}{\text{quadratic polynomials}} \\
+\model &= \qty{ m(x) = b_0 + b_1 x + b_2 x^2 + b_3 x^3 : b \in \R^4 } && \textcolor{magenta}{\text{cubic polynomials}}
+\end{aligned}
+}
+$$
+
+## Bivariate Line-Based Models Models {.smaller}
+
+```{r}
+#| out-height: 400px
+ 
+additive.line.fit   = lm(income ~ degree+poly(year,1), data=earnings)
+interacted.line.fit = lm(income ~ degree*poly(year,1), data=earnings)
+newdata = expand.grid(year = x, degree=unique(earnings$degree))
+newdata$muhat.additive    =  predict(additive.line.fit, newdata)
+newdata$muhat.interacted  =  predict(interacted.line.fit, newdata)
+
+saturated.model.plot +
+ geom_pointrange(aes(x=year, y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n)), data=summaries) +
+ geom_line(aes(x=year, y=muhat.additive, color=degree), data=newdata, size=.5, alpha=.6, linetype='solid') +
+ geom_line(aes(x=year, y=muhat.interacted, color=degree), data=newdata, size=.5, alpha=.6, linetype='dashed')
+```
+
+- In the last two classes, we've talked about two *bivariate models*.
+- In additive models, we get *parallel lines* for each level of $z$.
+- In interacted models, we get *totally different lines* for each level of $z$.
+- In this case, they look very similar.
+
+$$\small{
+\begin{aligned}
+\model &= \qty{ m(x,z) = b_0 + b_1x + b_2 z : b \in \R^3 }                 &&\text{additive bivariate lines} \\
+\model &= \qty{ m(x,z) = b_0 + b_1x + b_2 z + b_3 x z: b \in \R^4 }      &&\text{interacted bivariate lines} \\
+\end{aligned}
+}
+$$
+
+
+
+## Bivariate Polynomial Models {.smaller}
+
+```{r}
+#| out-height: 400px
+ 
+additive.line.fit   = lm(income ~ degree+poly(year,3), data=earnings)
+interacted.line.fit = lm(income ~ degree*poly(year,3), data=earnings)
+newdata = expand.grid(year = x, degree=unique(earnings$degree))
+newdata$muhat.additive    =  predict(additive.line.fit, newdata)
+newdata$muhat.interacted  =  predict(interacted.line.fit, newdata)
+
+saturated.model.plot +
+ geom_pointrange(aes(x=year, y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n)), data=summaries) +
+ geom_line(aes(x=year, y=muhat.additive, color=degree), data=newdata, size=.5, alpha=.6, linetype='solid') +
+ geom_line(aes(x=year, y=muhat.interacted, color=degree), data=newdata, size=.5, alpha=.6, linetype='dashed')
+```
+
+
+- We can also do this with *polynomials*. Here we're doing cubics.
+- In additive models, we get *parallel polynomials* for each level of $z$. They differ by a constant.
+- In interacted models, we get *totally different polynomials* for each level of $z$.
+- These are different. With different cubics, we can go through the subsample means. But with parallel ones, we can't.
+
+$$\small{
+\begin{aligned}
+\model &= \qty{ m(x,z) = b_0 + b_1x + b_2 x^2 + b_3 x^3 + b_4 z : b \in \R^5 }                 &&\text{additive bivariate cubics} \\
+\model &= \qty{ m(x,z) = b_0 + b_1x + b_2 x^2 + b_3 x^3 + b_4 z + b_5 x^2z + b_6 x^2 z + b_7 x^3 z: b \in \R^8 } &&\text{interacted bivariate cubics} \\
+\end{aligned}
+}
+$$
+
+
+## Saturated Models Can Be Too Big {.smaller}
+
+```{r}
+#| out-height: 400px
+ 
+earnings = all.earnings %>% filter(education >= 8 & state.code==36 & county.code==61)
+group.summaries = earnings %>% group_by(education, year) %>% summarize(mean=mean(income), sd=sd(income), n=n())
+summaries = earnings %>% group_by(education) %>% summarize(mean=mean(income), sd=sd(income), n=n())
+mean.year = mean(unique(earnings$year))
+
+
+additive.line.fit   = lm(income ~ factor(year)+poly(education,8), data=earnings)
+interacted.line.fit = lm(income ~ factor(year)*poly(education,8), data=earnings)
+small.interacted.fit = lm(income ~ factor(year)*poly(education,3), data=earnings)
+piecewise.fit = lm(income ~ factor(year)*(I(education > 12) + I(education > 16)), data=earnings)
+newdata = expand.grid(year = factor(unique(earnings$year)), education = seq(7.5,20.5, by=.01))
+newdata$muhat.additive    =  predict(additive.line.fit, newdata)
+newdata$muhat.interacted  =  predict(interacted.line.fit, newdata)
+newdata$muhat.smallinteracted  =  predict(small.interacted.fit, newdata)
+newdata$muhat.piecewise   = predict(piecewise.fit, newdata)
+
+edandyear.plot = ggplot(earnings) + 
+  geom_point(aes(x=education, y=income, color=factor(year)), alpha=.4, size=.5, position=position_jitter(width=.3)) +
+  geom_pointrange(aes(x=education+.1*(2*(year-mean.year)-1), y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n), color=factor(year)), data=group.summaries) +
+  scale_y_continuous(labels=dollar_format(), limits=c(-1500, 300000)) 
+edandyear.plot
+```
+
+- So far, we've had relatively few levels of the covariates.
+  - This meant we could usually get away with using saturated models. 
+  - And it seemed like a good idea because the consequences of misspeccification are pretty bad.
+- But when we use more covariates---or covariates with more levels---we get noisy estimates.
+- Here we're plotting income (y) against education level (x) and year (z) for surveyed Manhattan residents.
+  
+
+## Saturated Models Can Be Too Big {.smaller}
+```{r}
+#| out-height: 400px
+
+edandyear.plot
+``` 
+- There are 10 levels of education and 4 years, so we have 40 levels of the covariates---40 subsamples.
+  - Some of these are very small. As a result, who happens to get surveyed has a big effect on the subsample mean.
+  - And we see that they jump around a lot. That's probably not what's going on in the population.
+- It's even possible that we get 'subsamples' of zero people. 
+  - i.e., possible levels of the covariates that we don't get in the sample.
+- To get around this, *we have to use models with fewer features*. 
+
+
+## Smaller Models {.smaller}
+
+```{r}
+#| out-height: 400px
+ 
+edandyear.plot + 
+geom_line(aes(x=education, y=muhat.interacted, color=year), data=newdata, size=.5, alpha=.6)
+```
+
+- Here's an interacted model with 8th-order polynomials.
+  - This has $4 \times 9 = 36$ features.
+  - That's almost as big as the saturated model.
+- And we see it's similarly messy.
+
+## Smaller Models {.smaller}
+
+```{r}
+#| out-height: 400px
+ 
+edandyear.plot + 
+geom_line(aes(x=education, y=muhat.smallinteracted, color=year), data=newdata, size=.5, alpha=.6)
+```
+
+- Here's an interacted model with 3rd-order polynomials.
+  - This has $4 \times 4 = 16$ features.
+  - That's much smaller. And it's less noisy.
+
+## Smaller Models {.smaller}
+
+```{r}
+#| out-height: 400px
+ 
+edandyear.plot + 
+geom_line(aes(x=education, y=muhat.additive, color=year), data=newdata, size=.5, alpha=.6)
+```
+
+- Here's an additive model with 8th-order polynomials.
+  - This has $4 + 8 = 12$ features.
+  - That's even smaller. And it's not too noisy either.
+- Note that it looks ok *at observed levels of the covariate* but does weird stuff *in between.*
+- High-order polynomials do that. Be careful if you want predictions at unobserved levels of the covariate.
+
+## Smaller Models {.smaller}
+
+```{r}
+#| out-height: 400px
+
+edandyear.plot + 
+geom_line(aes(x=education, y=muhat.piecewise, color=year), data=newdata, size=.5, alpha=.6)
+```
+
+- An alternative to polynomials is *piecewise-constant models*.
+- These are sets of curves that are constant between specified levels of the covariate---where they jump.
+- We have seen this already.
+  - We spoke for a while about using 4-year degree status instead of education.
+  - This is a piecewise-constant model with a jump at $x=16$.
+
+## Summary
+
+```{r}
+edandyear.plot + 
+geom_line(aes(x=education, y=muhat.piecewise, color=year), data=newdata, size=.5, alpha=.6)
+```
+
+- When you have many covariates or many-valued covariates, you may not want a saturated model.
+- There are lots of models you can choose from.
+- We'll talk about *how to choose* in a few weeks.
+- But before we get there, we'll talk about the *consequences of our choice*.
+
+# Least Squares with Linear Models
+
+
+## Orthogonality of Residuals to Features
+
+- The residuals $\hat\varepsilon_i = Y_i - \hat\mu(X_i)$ are **orthogonal** to the every feature $\phi_k(X_i)$.
+- That is, the dot product between the [**vector of residuals**]{.fg style="color:orange"} and the [**vector of feature observations**]{.fg style="color:blue"} is zero.
+$$
+\small{
+\begin{aligned}
+\hat\varepsilon^T \phi_k(X) 
+= \begin{pmatrix} \hat\varepsilon_1 & \hat\varepsilon_2 & \ldots & \hat\varepsilon_n \end{pmatrix} 
+\begin{pmatrix} \phi_k(X_1) \\ \phi_k(X_2) \\ \vdots \\ \phi_k(X_n) \end{pmatrix} 
+= \sum_{i=1}^n \hat\varepsilon_i \phi_k(X_i) = 0 \qfor k=0,1,\ldots,K 
+\end{aligned}
+}
+$$
+
+- This is what that looks like in 2D, i.e., when we have two observations. 
+  - We plot the feature and residual for one observation on the $x$-axis and the other on the $y$-axis.
+  - We've used only one feature in each regression. 
+  - If we used more, our plot would be less interesting. Why?
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2
+ 
+Y = c(3/4, 3/2)
+X = c(1,1)
+residuals = lm(Y~X-1)$residuals
+ggplot() + 
+  geom_segment(aes(x=0, xend=residuals[1], y=0, yend=residuals[2]), color='orange') +
+  geom_point(aes(x=residuals[1], y=residuals[2]), color='orange') +
+  geom_segment(aes(x=0, xend=X[1], y=0, yend=X[2]), color='blue')  +
+  geom_point(aes(x=X[1], y=X[2]), color='blue') + 
+  geom_point(aes(x=0, y=0), color='gray') +
+  coord_fixed() + xlab('i=1') + ylab('i=2') 
+
+Y = c(1,  1)
+X = c(1, 0)
+residuals = lm(Y~X-1)$residuals
+ggplot() + 
+  geom_segment(aes(x=0, xend=residuals[1], y=0, yend=residuals[2]), color='orange') +
+  geom_point(aes(x=residuals[1], y=residuals[2]), color='orange') +
+  geom_segment(aes(x=0, xend=X[1], y=0, yend=X[2]), color='blue')  +
+  geom_point(aes(x=X[1], y=X[2]), color='blue') + 
+  geom_point(aes(x=0, y=0), color='gray') + 
+  coord_fixed() + xlab('i=1') + ylab('i=2')
+```
+
+## Orthogonality of Residuals to Curves
+
+- This means they're **orthogonal** to every curve $m(x)$ in the model.
+$$
+\small{
+\begin{aligned}
+\hat\varepsilon^T \phi_k(X) 
+= \begin{pmatrix} \hat\varepsilon_1 & \hat\varepsilon_2 & \ldots & \hat\varepsilon_n \end{pmatrix} 
+\begin{pmatrix} m(X_1) \\ m(X_2) \\ \vdots \\ m(X_n) \end{pmatrix} 
+= \sum_{i=1}^n \hat\varepsilon_i m(X_i) = 0 \qfor m \in \model.
+\end{aligned}
+}
+$$
+
+- That's because curves in the models are linear combinations of features.
+- And linear combinations of zeros are zero.
+
+$$
+\small{
+\begin{aligned}
+\sum_{i=1}^n \hat\varepsilon_i m(X_i) 
+&= \sum_{i=1}^n \hat\varepsilon_i \qty{ \sum_k b_k \phi_k(X_i) } && \text{ for some $b_0,b_1,\ldots$ for any $m \in \model$ } \\
+&= \sum_{i=1}^n \sum_k b_k \hat\varepsilon_i \phi_k(X_i) && \text{ distributing } \\
+&= \sum_{k} b_k \sum_{i=1}^n \hat\varepsilon_i \phi_k(X_i) && \text{ re-ordering sums and pulling out constants } \\
+&= \sum_{k} b_k \times 0 = 0                               && \text{ because residuals are orthogonal to features}. 
+\end{aligned}
+}
+$$
+
+## Uncorrelatedness of Residuals
+
+- If the constant $1$ is in the model, this means they're **uncorrelated** with every curve in the model. Why?
+
+::: fragment
+- Because the *covariance* of the residuals and $m$ is the dot product of the residuals and another function $m-\bar m$.
+$$
+\sum_{i=1}^n \qty{m(X_i) - \bar m} \hat\varepsilon_i = \sum_{i=1}^n \tilde m(X_i) \hat\varepsilon_i \qfor \tilde m(x) = m(x)-\bar m.
+$$
+
+- And that function is in the model too, as it's a linear combination of two curves in the model.
+$$
+\small{
+m \in \model \qqtext{ and } 1 \in \model \implies m - \bar m \times 1 \in \model \qqtext{ for the `coefficient' } \bar m = \frac{1}{n}\sum_{i=1}^n m(X_i)
+}
+$$
+
+:::
+
+
+## Residual Plots
+[ TODO: incoporate old plots]
+
+- When we have more than two observations, we can't plot one observation on each axis.
+- Instead, we plot residuals on the $y$-axis and features on the $x$.
+- It's a bit harder to see orthogonality/uncorrelatedness, as we don't actually get a right angle in the plot.
+- This is what it looks like.
+
+
+## Orthogonality Proof
+
+$$
+\small{
+\qqtext{Let's prove that } \sum_{i=1}^n \hat\varepsilon_i \phi_k(X_i) = 0 \qfor k=0,1,\ldots,K
+}
+$$
+
+::: fragment
+$$
+\begin{aligned}
+0 &= \frac{\partial}{\partial b_k}\mid_{b=\hat\beta}  \frac{1}{n}\sum_{i=1}^n \qty{ \sum_{j=0}^K b_j \phi_j(X_i) - Y_i}^2 \\
+&= \frac{1}{n}\sum_{i=1}^n 2 \qty{ \sum_{k=0}^K \beta_k \phi_k(X_i) - Y_i } \phi_k(X_i) \\
+&= \frac{1}{n}\sum_{i=1}^n 2 \qty{ \hat\mu(X_i) - Y_i } \phi_k(X_i)  \\
+&= \frac{1}{n}\sum_{i=1}^n 2 \qty{ -\hat\varepsilon_i } \phi_k(X_i)  \\ 
+&= -\frac{2}{n}\sum_{i=1}^n \hat\varepsilon_i \phi_k(X_i)  
+\end{aligned}
+$$
+
+- Versions of this proof come up *a lot*. It's an important one to remember.
+- You can work out almost everything there is to know about least squares from it.
+
+:::
+
+
+## Limits
+
+-  Suppose our observations $(X_1,Y_1) \ldots (X_n,Y_n)$ are sampled with replacement from a population $(x_1, y_1) \ldots (x_m,y_m)$.
+- The **law of large numbers** tells you that, for any curve $m$, ... 
+  - Mean squared error in the sample approximates its expected value.
+  - And that expected value is mean squared error in the population.
+$$
+\frac{1}{n}\sum_{i=1}^n \qty{ m(X_i) - Y_i }^2 \approx \E\qty{ m(X_i) - Y_i}^2 = \frac{1}{m}\sum_{j=1}^m \qty{ m(x_j) - y_j }^2 
+$$
+
+- That suggests that if we minimize these two errors over curves in the same model, we should get similar curves.
+- i.e., our least squares estimator approximates the population least squares curve.
+$$
+\hat\mu = \argmin_{m \in \model} \frac{1}{n}\sum_{i=1}^n \qty{ m(X_i) - Y_i }^2
+\qqtext{approximates}
+\tilde\mu = \argmin_{m \in \model} \frac{1}{m}\sum_{j=1}^m \qty{ m(x_j) - y_j }^2.
+$$ 
+
+- This is --- roughly speaking --- what actually happens.
+- For the models we'll use in this class, this approximation is very good.
+- There are some subtleties here that come up when you use very large models. 
+- You can learn about them, e.g. in my Machine Learning Theory class.
+
+## Population Least Squares
+
+- We can say all this residual orthogonality stuff for **least squares in the whole population**.
+- All curves in the model are **orthogonal** to the **population residuals**.
+
+$$
+\begin{aligned}
+\tilde \mu &= \argmin_{m \in \model} \frac{1}{m}\sum_{j=1}^m \qty{ m(x_j) - y_j }^2 
+&& \text{the population least squares curve} \\
+\tilde \varepsilon_j &= y_j - \tilde \mu(x_j) 
+&& \text{the population residuals} \\
+0 &= \sum_{j=1}^m  \tilde \varepsilon_j m(x_j) 
+&& \text{ for all $m \in \model$ }
+\end{aligned}
+$$
+
+- We can see something interesting when we write this in terms of random variables and expectations.
+- The **errors** our population least squares estimator makes---as an estimator of the conditional mean $\mu(x)$---are orthogonal to all curves in the model.
+
+::: fragment
+
+$$
+\small{
+\begin{aligned}
+\tilde \mu = \argmin_{m \in \model} \E[ \qty{ m(X_i) - Y_i }^2 ]
+\qqtext{ satisfies }
+0 &= \E\qty[ \qty{Y_i - \tilde \mu(X_i)} m(X_i) ] && \text{for all} \quad m \in \model \\
+  &= \E\qty[ \E\qty[ \qty{Y_i - \tilde \mu(X_i)} m(X_i) \mid X_i ]]  &&\text{via iterated expectations} \\
+  &= \E\qty[ \qty{\E\qty[Y_i \mid X_i] - \tilde\mu(X_i)} m(X_i)  ]  &&\text{via linearity of cond. expectations} \\
+  &= \E\qty[ \qty{\mu(X_i) - \tilde\mu(X_i)} m(X_i)  ]              &&\text{by definition of $\mu$}
+\end{aligned}
+}
+$$
+
+:::
+
+- This suggests that the population least squares estimator *doesn't depend on variation* $Y_i-\mu(X_i)$ around the subsample means.
+- It's the curve in the model that *best fits* the subpopulation means. We can see that more directly, too.
+
+## Proof: Population Least Squares as **Noiseless** 
+
+$$
+\text{Our claim: }
+\tilde\mu 
+= \underset{\text{\color{gray}'noisy' population least squares}}{\argmin_{m \in \model} \E[ \qty{ m(X_i) - Y_i }^2 ]} 
+= \underset{\text{\color{gray}'noiseless' population least squares}}{\argmin_{m \in \model} \E[ \qty{ m(X_i) - \mu(X_i) }^2]}
+$$
+
+
+::: fragment
+$$
+\small{
+\begin{aligned}
+&\E\qty[ \qty( m(X_i) - Y_i )^2 ] \\ 
+&= \E\qty[ \qty( \qty{m(X_i) - \mu(X_i)} + \qty{\mu(X_i) - Y_i} )^2 ] 
+&& \text{ adding and subtracting }\\
+&= \E\qty[ \qty{m(X_i) - \mu(X_i)}^2 + 2\qty{m(X_i) - \mu(X_i)} \qty{\mu(X_i) - Y_i} + \qty{\mu(X_i) - Y_i}^2 ] 
+&& \text{ via FOIL } \\
+&= \E \qty{m(X_i) - \mu(X_i)}^2 + 2\textcolor{blue}{\E\qty{m(X_i) - \mu(X_i)} \qty{\mu(X_i) - Y_i}} + \textcolor{red}{\E\qty{\mu(X_i) - Y_i}^2}  
+&& \text{ via linearity of expectations } 
+\end{aligned}
+}
+$$
+
+
+- Here the [third term]{.fg style="color:red"} doesn't depend on $m$, so it doesn't change the minimizer. 
+- And the [second term]{.fg style="color:blue"} is zero.
+$$
+\small{
+\begin{aligned}
+&\textcolor{blue}{\E \qty{m(X_i) - \mu(X_i)} \qty{\mu(X_i) - Y_i}} \\
+&= \E\qty[ \E\qty[ \qty{m(X_i) - \mu(X_i)} \qty{\mu(X_i) - Y_i}  \mid X_i]] && \text{ via iterated expectations} \\
+&=  \E\qty[ \qty{m(X_i) - \mu(X_i)} \qty{\mu(X_i) - \E[Y_i \mid X_i]}] && \text{ via linearity } \\
+&= \E \qty{m(X_i) - \mu(X_i)} \E\qty{\mu(X_i) - \mu(X_i)} = 0 &&.
+\end{aligned}
+}
+$$
+
+:::
+
+## Example
+
+
+
+```{r}
+#| cache: true
+#| out-height: 400px
+#| layout-ncol: 2
+ 
+scale_y = function(limits=c(-.3e5, 3e5)) { 
+  scale_y_continuous(labels=label_dollar(), limits=limits)
+}
+
+years = 8:20
+scale_x = function(limits=c(min(years)-.5, max(years)+.5)) { 
+  scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=limits)
+}
+default.dot.size = 2
+
+
+# make a fake population by sampling with replacement from the sample then adding fuzz to incomes
+# the actual sampled proportion in CPS is about 1/2500, so by doing 25x more dots,
+# we're letting each dot  stand in for 100 people in the population
+earnings.pop = earnings[sample(1:nrow(earnings), nrow(earnings)*25, replace=TRUE),]
+earnings.pop$income = earnings.pop$income + .3*earnings.pop$income*runif(nrow(earnings.pop), min=-1,max=1)
+earnings.pop = earnings.pop[earnings.pop$education <= 12,]
+
+n = 1000
+theme_set(simplified.theme)
+set.seed(2)
+earnings.samp = earnings.pop[sample(1:n, n, replace=TRUE), ]
+
+plot.earnings = function(earnings, dot.size=default.dot.size, formula=NULL) {
+  summaries = earnings %>% group_by(education) %>% summarize(mean=mean(income), sd=sd(income), n=n())
+  p = ggplot(earnings) + 
+    geom_point(aes(x=education, y=income), color='#F7766D',
+               size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.15) +
+    geom_pointrange(aes(x=education, y=mean, ymin=mean-2*sd/sqrt(n), ymax=mean+2*sd/sqrt(n)), data=summaries) +
+    scale_x(c(7.5, 12.5)) + scale_y(c(-.3e5, 1.5e5)) + guides(color=FALSE)
+
+  if(!is.null(formula)) {
+    model = lm(formula, data=earnings)
+    x = seq(min(earnings$education), max(earnings$education), by=.01)
+    linedata = data.frame(education=x, income=predict(model, data.frame(education=x)))
+    p = p + geom_line(aes(x=education, y=income), data=linedata, color='blue', alpha=.5)
+  }
+
+  p
+}
+
+plot.earnings(earnings.pop, dot.size=default.dot.size/10)
+plot.earnings(earnings.samp[1:1000,])
+```
+
+
+
+- Let's look at this stuff in the context of some data. 
+- We'll use fake data so we have the population. That's what we're showing here.
+- We'll base it on the California CPS data we've used to talk about education.
+- We'll focus on residents with no more than 12 years of education.
+- And we'll look --- starting on the next slide---at samples of three sizes: 50, 200, and 1000.
+
+## Our Data
+```{r}
+#| out-height: 150px
+#| layout-ncol: 2
+#| layout-nrow: 2
+
+formula = NULL
+plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
+plot.earnings(earnings.samp[1:1000,], formula=formula)
+plot.earnings(earnings.samp[1:50,], formula=formula)
+plot.earnings(earnings.samp[1:200,], formula=formula)
+```
+
+- We're plotting the subsample means +- 2 standard errors in black.
+
+## Fitting Lines
+```{r}
+#| out-height: 150px
+#| layout-ncol: 2
+#| layout-nrow: 2
+
+formula = income~education
+plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
+plot.earnings(earnings.samp[1:1000,], formula=formula)
+plot.earnings(earnings.samp[1:50,], formula=formula)
+plot.earnings(earnings.samp[1:200,], formula=formula)
+```
+
+- As sample size increases, our least squares lines get close to the population least squares line.
+- But the population least squares line is not all that close to some of the subpopulation means.
+
+## Fitting A Piecewise-Constant Model
+
+```{r}
+#| out-height: 150px
+#| layout-ncol: 2
+#| layout-nrow: 2
+
+formula = income~I(education>=11) 
+plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
+plot.earnings(earnings.samp[1:1000,], formula=formula)
+plot.earnings(earnings.samp[1:50,], formula=formula)
+plot.earnings(earnings.samp[1:200,], formula=formula)
+```
+
+- This is a piecewise-constant model with a jump at $x=11$.
+- It's a bit better than the line in that it never predicts *negative income*.
+
+## Fitting A Cubic Polynomial
+
+```{r}
+#| out-height: 150px
+#| layout-ncol: 2
+#| layout-nrow: 2
+
+formula = income~poly(education,3)
+plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
+plot.earnings(earnings.samp[1:1000,], formula=formula)
+plot.earnings(earnings.samp[1:50,], formula=formula)
+plot.earnings(earnings.samp[1:200,], formula=formula)
+```
+
+- This gets close to the subsample means. 
+- But it has some weird wiggles in our smallest sample
+
+## Fitting A Quartic Polynomial
+
+```{r}
+#| out-height: 150px
+#| layout-ncol: 2
+#| layout-nrow: 2
+
+formula = income~poly(education,4)
+plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
+plot.earnings(earnings.samp[1:1000,], formula=formula)
+plot.earnings(earnings.samp[1:50,], formula=formula)
+plot.earnings(earnings.samp[1:200,], formula=formula)
+```
+
+- This *goes through* the subsample means.
+- There's a 4th-order polynomial through any 5 points.
+
+## Bias
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2
+formula = income~education
+plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
+plot.earnings(earnings.samp[1:1000,], formula=formula)
+```
+
+- As sample size increases, the least squares line gets increasingly close to the population least squares line.
+- But the population least squares line is not close to all the subpopulation means.
+- As a result, no matter what sample size we use, we'll get bias.
+- It's useful to think of our error at having two pieces.
+  - *estimation error*. This is random. It depends on the sample.
+  - *modeling error*.  This isn't. It depends only on the model and the population.
+- Estimation error goes away in large samples. Modeling error doesn't.
+
+$$
+\hat\mu(x) - \mu(x) = \underset{\text{estimation error}}{\qty{ \hat\mu(x) - \tilde\mu(x) }} + 
+  \underset{\text{modeling error}}{\qty{ \tilde\mu(x) - \mu(x) }}
+$$
+
+- All this passes through to summaries. What are the two parts of the average-over-years summary?
+
+
+## Inference
+
+$$
+\hat\mu(x) - \mu(x) = \underset{\text{estimation error}}{\qty{ \hat\mu(x) - \tilde\mu(x) }} + 
+  \underset{\text{modeling error}}{\qty{ \tilde\mu(x) - \mu(x) }}
+$$
+
+- The estimation error has mean zero and is approximately normal with variance proportional to $1/\sqrt{n}$.
+- And the modeling error does not depend on the sample at all---it's constant. It's the bias.
+- This is exactly the scenario we looked at on the last question on Midterm 2. 
+- That, fundamentally, is what happens when you do least squares with linear models.
+- In homework, we'll look into ... 
+  - how to get a sense of what modeling error will be.
+  - the tradeoff between modeling error and estimation error and its impact on inference.
+
+
