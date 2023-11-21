@@ -1,0 +1,612 @@
+---
+title: "QTM 220: Lecture 18"
+subtitle: "Inverse Probability Weighting"
+format: 
+  clean-revealjs:
+    height: 1000
+    width: 1290
+    theme: [default, "class.scss"]
+    smaller: true
+    slide-number: true
+    pdf-separate-fragments: true
+    fig-format: svg
+    default-image-extension: png
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
+---
+
+
+```{r load-libraries}
+library(purrr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(ggplot2)
+library(htmltools)
+library(kableExtra)
+library(scales)
+library(cpsR)
+library(maps)
+
+options(knitr.kable.NA = '')
+
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+```
+
+```{r ggplot-themes}
+fontsize = 16
+textcolor = "#888888"
+
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+        panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = textcolor, size=fontsize),
+        axis.text.y  = element_text(colour = textcolor, size=fontsize),
+        axis.title.x  = element_text(colour = textcolor),
+        axis.title.y  = element_text(colour = textcolor, angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+              axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+
+```{r table-styling}
+ellipsis <- function(df, nhead=5L, ntail=2) {
+    rownames(df) = as.character(1:nrow(df))
+    stopifnot("data.frame" %in% class(df))
+    els <- rep(NA, ncol(df)) %>% 
+        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
+        data.frame(stringsAsFactors=FALSE) %>% 
+        tibble::as_tibble()
+    rownames(els) = "⋮"
+    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
+}
+```
+
+# Today
+
+## An Example
+::: {.hidden}
+$$
+\newcommand{\alert}[1]{\textcolor{red}{#1}}
+\newcommand{\model}{\mathcal{M}}
+\newcommand{\R}{\mathbb{R}}
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator{\V}{V}
+\DeclareMathOperator{\Var}{\V}
+\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
+\newcommand{\inred}[1]{\textcolor[RGB]{248,118,109}{#1}}
+\newcommand{\ingreen}[1]{\textcolor[RGB]{0,191,196}{#1}}
+\newcommand{X}{\mathbf{X}}
+\newcommand{Y}{\mathbf{Y}}
+$$ 
+:::
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+ 
+set.seed(1) 
+m = 2e4
+pi = function(x) { 1/(1+exp(-(x-60)/8 )) }
+mu = function(w, x) { 2 - 2*((x-50)/30)^3/3 + w*((x-50)/30)^2 }  
+
+X = 50+round(30*runif(m))
+W = rbinom(m, 1, pi(X))
+Y = mu(W,X) + .5*rnorm(m)
+pop = data.frame(X=X, W=W, Y=Y, Y.counterfactual=Y-mu(W,X)+mu(1-W,X))
+
+n = 1000
+data = pop[sample(nrow(pop), n, replace=TRUE),]
+
+plotX = function(X,W) { X + .15*(2*W-1) }
+scaleY = scale_y_continuous(limits=c(0,4), breaks=seq(0,4,by=1))
+
+pop.scatter = ggplot(pop) + 
+  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.1, position=position_jitter(w=.15, h=0), size=.1) + 
+  guides(color=FALSE) + scaleY
+counterfactual.pop.scatter = ggplot(pop) +
+  geom_point(aes(x=plotX(X,!W), y=Y.counterfactual, color=factor(W)), alpha=.1, position=position_jitter(w=.15, h=0), size=.1) + 
+  guides(color=FALSE) + scaleY
+
+scatter = ggplot(data) + 
+  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.1, position=position_jitter(w=.15, h=0)) + 
+  guides(color=FALSE) + scaleY
+pop.scatter
+```
+
+
+- Researchers hypothesize that MHT increases bone density. 
+- We'll think about how to look into this. We'll be working with fake data.
+- Above, we've got a population of `r approx(m)` people eligible for some form of MHT.
+  - Their age at the time the study begins is on the $x$-axis.
+  - Bone density, measured 2 years later, is on the $y$-axis.
+  - Color indicates whether they [did]{.twocolor-green} or [didn't]{.twocolor-red} do MHT.
+- What we want to know is how well MHT works, on average, for the people who take it.
+- That means comparing green folks---people who take MHT---to versions of themselves who didn't.
+
+::: aside
+To make things easier to look at, I'm drawing people who did and didn't receive treatment side-by-side. 
+This shift isn't meaningful. Age is a round number: 60, 61, ...
+:::
+
+## Counterfactuals
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+pop.scatter
+counterfactual.pop.scatter
+```
+
+- We can't observe these *counterfactual* versions of people.
+- But we can think about what the data would look like if we did.
+  - On the left, we've got our real population.
+  - On the right, we've got a hypothetical one where everyone who did MHT didn't and vice versa.
+  - Note we're keeping the colors the same---counterfactual green people are still green.
+- We can think of the average difference as the *average effect of MHT for those who took it*.
+
+$$
+\begin{aligned}
+\frac{\sum_{j:d_j=1} y_j(1) - y_j(0)}{\sum_{j:d_j=1} 1} = 
+\frac{\sum_{j:d_j=1} y_j}{\sum_{j:d_j=1} 1} - \textcolor{blue}{\frac{\sum_{j:d_j=1} y_j(0)}{\sum_{j:d_j=1} 1}}
+\end{aligned}
+$$
+
+- We call this the *average treatment effect on the treated* (ATT). It's a difference of two means. 
+- One is observable (if we have the population). [The other isn't]{.fg style="color:blue"}.
+
+## Summarizing these Populations
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+#| 
+pop.summary = pop %>% group_by(X, W) %>% summarize(mean=mean(Y), counterfactual.mean = mean(Y.counterfactual), n=n())
+summarized.pop = pop.scatter + 
+  geom_point(aes(x=plotX(X,W), y=mean, color=factor(W)), data=pop.summary) + 
+  geom_line(aes(x=plotX(X,W), y=mean, color=factor(W)), data=pop.summary) + 
+  geom_histogram(aes(x=X, y=30*after_stat(density), fill=factor(W)), 
+    position='identity', alpha=.1, data=pop, bins=length(unique(pop$X))) + 
+  guides(fill=FALSE, color=FALSE)
+
+summarized.counterfactual.pop = counterfactual.pop.scatter + 
+  geom_point(aes(x=plotX(X,!W), y=counterfactual.mean, color=factor(W)), data=pop.summary) + 
+  geom_line(aes(x=plotX(X,!W),  y=counterfactual.mean, color=factor(W)),  data=pop.summary) + 
+  geom_histogram(aes(x=X, y=30*after_stat(density), fill=factor(W)), 
+    position='identity', alpha=.1, data=pop, bins=length(unique(pop$X))) + 
+  guides(fill=FALSE, color=FALSE)
+
+summarized.pop
+summarized.counterfactual.pop
+```
+
+- The scatter plot is hard to read. To help, I've overlaid some summaries.
+  - Mean bone density for each age and treatment group.
+  - Histograms of age for each treatment group.
+- We can think of what we're doing in terms of these summaries. Here's the observable mean.
+
+$$
+\begin{aligned}
+\text{observable mean} 
+= \frac{\sum_{j:d_j=1} y_j}{\sum_{j:d_j=1} 1} 
+= \sum_x \frac{\sum_{j:d_j=1, x_j=x} 1}{\sum_{j:d_j=1} 1} \frac{\sum_{j:d_j=1, x_j=x} y_j}{\sum_{j:d_j=1, x_j=x} 1} 
+= \sum_x \ingreen{p(1,x)}\ingreen{\mu(1,x)}
+\end{aligned}
+$$
+
+- It's the average of the green curve over the distribution of the green points---i.e., the green histogram.
+- The counterfactual mean is the same thing, but in the counterfactual plot.
+
+## Working With Summaries
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+summarized.pop
+summarized.counterfactual.pop
+```
+
+
+- This seems like it'd be a problem, since we don't actually see the counterfactual plot. 
+- But, comparing our plots, we see something helpful: the green curve on the left looks like the red curve on the left.
+- In other words, we can use *what actually happened to the red people* to estimate *what would have happened to the green people*.
+
+$$
+\begin{aligned}
+\text{observable mean} &= \sum_x \ingreen{p(1,x)}\ingreen{\mu(1,x)} \\
+\text{counterfactual mean} &= \ingreen{\sum_x p(1,x)}\inred{\mu(0,x)}
+\end{aligned}
+$$
+
+- In real data, there's no counterfactual plot, so we can't do this comparison visually.
+- But *we've proven* that these curves look the same *in conditionally randomized experiments*.
+
+## Working With Summaries
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+summarized.pop
+summarized.counterfactual.pop
+```
+
+### Summary
+
+
+
+- To calculate the ATT in a conditionally randomized experiment, we ...
+  - average the green curve over the distribution of the green points
+  - average the red curve over the distribution of the green distribution
+  - and subtract 
+
+$$
+ATT = \sum_x \ingreen{p(1,x)}\ingreen{\mu(1,x)} - \sum_x \ingreen{p(1,x)}\inred{\mu(0,x)}
+$$
+
+- That's what we'd do if we had the population.
+- But we have a sample from it, so we'll do the same with *estimates*.
+
+## Working With A Sample
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+#| fig-subcap:
+#|   - "A Sample from the Population" 
+#|   - "A Population: Green People Did MHT, Red People Didn't"
+summary = data %>% group_by(X, W) %>% summarize(mean=mean(Y), sd=sd(Y), n=n())
+summarized.scatter = scatter + 
+  geom_pointrange(aes(x=plotX(X,W), y=mean, ymin=mean-2*sd/sqrt(n), ymax=mean+2*sd/sqrt(n), color=factor(W)), data=summary) + 
+  geom_histogram(aes(x=X, y=30*after_stat(density), fill=factor(W)), 
+    position='identity', alpha=.2, data=data, bins=length(unique(data$X))) + 
+  guides(fill=FALSE, color=FALSE) 
+summarized.scatter
+summarized.pop
+```
+
+- This is what we actually have. It's a sample of `r approx(n)` people. 
+- To give you a sense of the uncertainty, I've added 95% confidence intervals for each subpopulation mean.
+
+$$
+\widehat{ATT} = \sum_x \ingreen{\hat p(1,x)}\ingreen{\hat\mu(1,x)} - \sum_x \ingreen{\hat p(1,x)}\inred{\hat\mu(0,x)}
+$$
+
+- The problematic part is the second term---averaging the red means over the green distribution. 
+    - The green distribution weights the means on the right --- older folks --- heavily.
+    - And that's where our red subsample means have large standard errors.
+- To reduce variance, we often use other estimates of the subpopulation means $\inred{\mu(0,x)}$.
+
+## Working With A Sample
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+
+sample.model = lm(Y ~ W*X, data=data)
+pop.model = lm(Y ~ W*X, data=pop)
+grid = expand.grid(X=seq(50,80,by=.1), W=c(0,1))
+grid$muhat = predict(sample.model, newdata=grid)
+grid$mutilde = predict(pop.model, newdata=grid)
+
+summarized.scatter + geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') + 
+                     geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dotted')
+#summarized.pop + geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dotted') 
+```
+
+- Here we've fit separately to each group, i.e., the interacted bivariate model.
+    - The dashed line is what we'd really use---the model fit on the sample.
+    - The dotted line is its large-sample limit---the model fit on the population.
+
+$$ \hat \mu = \argmin_{m \in \model} \frac{1}{n}\sum_{i=1}^n \qty{ m(D_i, X_i) - Y_i }^2 \quad \approx \quad
+   \tilde \mu = \argmin_{m \in \model} \E \qty{ m(D_i, X_i) - Y_i }^2 
+$$
+
+- I'm showing both because it's useful to think of our error in two parts.
+
+
+## Bias 
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+summarized.scatter + geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') + 
+                     geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dotted')
+```
+
+$$
+\hat\mu(d,x) - \mu(d,x) = \underset{\text{estimation error}}{\qty{ \hat\mu(d,x) - \tilde\mu(d,x) }} + 
+  \underset{\text{modeling error}}{\qty{ \tilde\mu(d,x) - \mu(d,x) }}
+$$
+
+- The first part is the difference between our predictions and those we'd get in the large-sample limit.
+    - It's the difference between the dashed and dotted lines. 
+    - This has mean zero and we have techniques to understand it---confidence intervals.
+- The second part is the difference between the predictions we'd get in the large-sample limit and the ones we want.
+    - This is the bias of our prediction. It depends on the population and the model, but not the sample.
+    - This is what we're going to focus on today.
+- All this passes through to summaries like the CATE and ATT
+
+
+## Bias and Summaries
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+summarized.scatter + geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid)
+```
+
+
+$$
+\begin{aligned}
+\widehat{CATE}(x) - CATE(x) &=  \qty{\hat\mu(1, x) - \tilde\mu(1, x)} - \qty{\hat\mu(0,x) - \tilde\mu(0,x)} && \text{estimation error} \\
+                            &+  \qty{\tilde\mu(1, x) - \mu(1, x)} - \qty{\tilde\mu(0,x) - \mu(0,x)}  && \text{modeling error} \\ 
+\widehat{ATT} - ATT &=   \sum_x p(1,x) \qty{\hat\mu(1, x) - \tilde\mu(1, x)} - \sum_x p(1,x) \qty{\hat\mu(0,x) - \tilde\mu(0,x)} &&\text{estimation error}  \\
+                    &+ \sum_x p(1,x) \qty{\tilde\mu(1, x) - \mu(1, x)} - \sum_x p(1,x) \qty{\tilde\mu(0,x) - \mu(0,x)} &&\text{modeling error}
+\end{aligned}
+$$
+
+
+## Bias and The Population Regression 
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+
+summarized.pop + geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dotted') 
+```
+
+$$
+\begin{aligned}
+\text{modeling error} &= \sum_x \ingreen{p(1,x)} \qty{\ingreen{\tilde\mu(1, x) - \mu(1, x)}} - \sum_x \ingreen{p(1,x)} \qty{\inred{\tilde\mu(0,x) - \mu(0,x)}} \\
+\qfor \tilde \mu &= \argmin_{m \in \model} \E \qty{ m(D_i, X_i) - Y_i }^2 
+\end{aligned}
+$$
+
+- Because we're thinking about bias, let's look at the population regression.
+- The curve $\inred{\mu(0,x)}$ we want to estimate is curved---it's not a line.
+- And the line we fit to it is a decent approximation *on the left side of the plot*.
+    - That's what least squares is telling it to do. It's where most of our red points are.
+    - But it's not what we want. We're averaging it over the distribution of the green points, which are mostly on the right.
+- We can improve things by using a *weighted least squares regression* that prioritizes fit on the right.
+- In fact, if we use the right weights, **we can make the modeling error zero**.
+
+## Bias and The Population Regression 
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+
+summarized.pop + geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dotted') 
+```
+
+- Let's think about what's going on in our second term.
+- We're averaging the red curve over the green distribution.
+- But we can rewrite that as a *weighted average* of the red curve over the red distribution.
+
+$$
+\begin{aligned}
+\E[ \inred{\tilde\mu(0,X)} \mid \ingreen{D=1}] 
+&= \sum_x \inred{\mu(0,x)}\ingreen{p(1,x)} \\
+&= \sum_x \inred{\mu(0,x)}\frac{\ingreen{p(1,x)}}{\inred{p(0,x)}}\inred{p(0,x)} \\
+&=\E[\inred{\tilde\mu(0,X)} \frac{\ingreen{p(1,X)}}{\inred{p(0,X)}}\mid \inred{D=0}]
+\end{aligned}
+$$
+
+- To see why that's helpful, let's look at the first term.
+- We'll see that modeling error doesn't really matter if we're averaging over a curve over its own distribution.
+
+## Warm-Up
+
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+
+summarized.pop + geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dotted') 
+```
+
+$$
+\text{modeling error} = \sum_x \ingreen{p(1,x)} \qty{\ingreen{\tilde\mu(1, x) - \mu(1, x)}} - \sum_x \ingreen{p(1,x)} \qty{\inred{\tilde\mu(0,x) - \mu(0,x)}}
+$$
+
+- Let's think about the first term. We can show that it's zero *for any model that uses a constant*.
+- We'll show that this is a consequence of a property of the population residuals $\tilde \varepsilon = Y - \tilde\mu(D,X)$.
+    - We'll use the property that the population residuals are orthogonal to every curve in the model.
+    - And the property that the constant---the curve $m(x)=1$---is in the model.
+- When we fit the interacted model, we're effectively fitting a line to each group.
+- So, to keep things simple, let's just think of what we're doing as least squares on the $D=1$ subpopulation.
+
+$$
+\begin{aligned}
+0 &= \E[ (Y-\tilde\mu(X)) \cdot 1 \mid D=1] && \text{orthogonality} \\
+  &= \E[ (\mu(X) - \tilde\mu(X)) \mid D=1 ] && \text{iterated expectations} \\
+  &= \sum_x p(1,x) \qty{\mu(x) - \tilde\mu(x)} &&\text{calculating expectations}
+\end{aligned}
+$$
+
+## The Second Term
+
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+
+summarized.pop + geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dotted') 
+```
+
+
+$$
+\text{modeling error} = \sum_x \ingreen{p(1,x)} \qty{\ingreen{\tilde\mu(1, x) - \mu(1, x)}} - \sum_x \ingreen{p(1,x)} \qty{\inred{\tilde\mu(0,x) - \mu(0,x)}}
+$$
+
+- If we repeat this argument as-is, replacing $D=1$ with $D=0$, we won't get what we want.
+$$
+\begin{aligned}
+0 &= \E[ (Y-\tilde\mu(X)) \cdot 1 \mid D=0] && \text{orthogonality} \\
+  &= \E[ (\mu(X) - \tilde\mu(X)) \mid D=0 ] && \text{iterated expectations} \\
+  &= \sum_x p(0,x) \qty{\mu(x) - \tilde\mu(x)} &&\text{calculating expectations}
+\end{aligned}
+$$
+
+- That says the red curve's modeling error would be zero if we were averaging it over the red distribution.
+
+## The Second Term
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+
+summarized.pop + geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dotted') 
+```
+
+$$
+\text{modeling error} = \sum_x \ingreen{p(1,x)} \qty{\ingreen{\tilde\mu(1, x) - \mu(1, x)}} - \sum_x \ingreen{p(1,x)} \qty{\inred{\tilde\mu(0,x) - \mu(0,x)}}
+$$
+
+- What we'll do instead is a version for *weighted least squares regression*.
+- The residuals have an analogous orthogonality property in terms of a *weighted* average.
+$$
+\begin{aligned}
+0 &= \E[ w(X) (Y-\tilde\mu(X)) \cdot 1 \mid D=0] && \text{weighted orthogonality} \\
+  &= \E[ w(X) (\mu(X) - \tilde\mu(X)) \mid D=0 ] && \text{iterated expectations} \\
+  &= \sum_x p(0,x) w(x) \qty{\mu(x) - \tilde\mu(x)} &&\text{calculating expectations}
+\end{aligned}
+$$
+
+- To get the what we want, we'll use weights $w(x) = \ingreen{p(1,x)}/\inred{p(0,x)}$.
+
+## Summary
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+
+summarized.pop + geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dotted') 
+```
+
+- If we use least squares to fit a model to the green points...
+- And this weighted least squares to fit a model to the red points...
+- Then modeling error is zero --- we estimate the ATT with no bias.
+- As long as those models include an intercept.
+
+$$
+\begin{aligned}
+\hat\mu(1,x) &= \argmin_{m \in \model} \sum_{i:D_i=1} \qty{ m(D_i, X_i) - Y_i }^2 \\
+\hat\mu(0,x) &= \argmin_{m \in \model} \sum_{i:D_i=0} \frac{\ingreen{p(1,x)}}{\inred{p(0,x)}}\qty{ m(D_i, X_i) - Y_i }^2
+\end{aligned}
+$$
+
+## Summary
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+
+wmodel = lm(Y ~ W*X, data=pop, weights=pop$W + (1-pop$W)*pi(pop$X)/(1-pi(pop$X)))
+grid$mutildew = predict(wmodel, newdata=grid)
+
+summarized.pop + geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dotted') +
+                 geom_line(aes(x=X, y=mutildew, color=factor(W)), data=grid, linetype='dashed') 
+```
+
+
+- It may be inobvious that we can do this because we don't know these densities $p(1,x)$ and $p(0,x)$.
+- But --- in a conditionally randomized experiment --- we do know their ratio. 
+- It's proportional to a function of the within-group assignment probability $\pi(x)$.
+- And we don't need to know the constant of proportionality to do weighted least squares.
+
+$$
+\begin{aligned}
+\frac{p(1,x)}{p(0,x)} 
+&= \frac{P(X=x \mid D=1)}{P(X=x \mid D=0)} 
+= \frac{P(X=x, D=1) / P(D=1)}{ P(X=x, D=0) / P(D=0)} \\
+&= \frac{P(D=1 \mid X=x) P(X=x) / P(D=1)}{ P(D=0 \mid X=x) P(X=x) / P(D=0)}
+= \frac{\pi(x)}{1-\pi(x)} \cdot \frac{P(D=1)}{P(D=0)}
+\end{aligned}
+$$
+
+- The dashed line above is the weighted least squares fit to the population.
+- You can see that it's a better fit to the red curve *where it matters*.
+
+## A Performance Comparison
+
+```{r}
+ns = c(100, 500, 2500, 10000, 25000)
+estimand = mean(mu(1, pop$X) - mu(0, pop$X))
+grid = expand.grid(n=ns, rep=1:100, type=c('unweighted', 'weighted')) 
+
+estimates = purrr::pmap(grid, function(n, rep, type) {
+    set.seed(rep)
+    data = pop[sample(1:nrow(pop), n, replace=TRUE), ]
+    if(type=='unweighted') { model = lm(Y ~ W*X, data=data) } 
+    else { model = lm(Y ~ W*X, data=data, weights=data$W + (1-data$W)*pi(data$X)/(1-pi(data$X))) }
+    estimate = mean(predict(model, newdata=data.frame(X=data$X, W=1)) - 
+                    predict(model, newdata=data.frame(X=data$X, W=0)))
+    data.frame(n=n, rep=rep, type=type, estimate=estimate)
+}) %>% bind_rows()
+
+summaries = estimates %>% group_by(n, type) %>% summarize(bias=mean(estimate)-estimand, se=sd(estimate)) 
+ggplot(summaries) + geom_line(aes(x=n, y=bias, color=type)) + 
+                    geom_pointrange(aes(x=n, y=bias, ymin=bias-2*se, ymax=bias+2*se, color=type)) + 
+                    geom_hline(aes(yintercept=0), alpha=.5, size=2)  
+```
+
+- Here's a simulation study comparing the performance of the two estimators.
+- I'm plotting the mean and standard deviation of 100 estimates at increasing sample sizes.
+- We can see that, except in very small samples, the weighted estimator performs substantially better.
+
+
+
+
+
+
+
