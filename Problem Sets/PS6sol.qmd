@@ -58,6 +58,10 @@ rplot<- ggplot(df, aes(x=pred,y=resid)) + geom_point(alpha=.2)
 rplot
 ```
 
+The residuals are not equally dispersed across the predicted values of y. For high incomes, the residuals are much more spread out than the residuals for lower incomes. This suggests the errors are not constant (we use the residuals to make inferences about errors), suggesting heteroskedasticity. We shouldn't use the standard errors R gives us automatically because lm assumes homoskedastic errors. 
+
+
+
 (d) Install the sandwich package and compute heteroskdasticity consistent standard errors for your model using sandwich(model name). 
 
 ```{r}
@@ -85,8 +89,44 @@ sqrt(diag(betavar))
 (f) Use a bootstrap to estimate the standard errors for each of the $\beta$s. 
 
 
+```{r}
+set.seed(220)
+B=10000
+betaint<- rep(NA,B)
+betaedu<- rep(NA,B)
+betaage<- rep(NA,B)
+n=length(cps$income)
+
+for( b in 1:B ){
+bootind = sample(1:n,size=n,replace=T)
+dfboot = cps[bootind,]
+mod<- lm(income ~ education+age, data=dfboot)
+betaint[b]<- mod$coef[1]
+betaedu[b]<- mod$coef[2]
+betaage[b]<- mod$coef[3]
+}
+
+hist(betaint)
+
+hist(betaedu)
+
+hist(betaage)
+
+sd(betaint)
+
+sd(betaedu)
+
+sd(betaage)
+
+quantile(betaedu,prob =c(.025,.975))
+
+```
+
 
 (g) Compare the standard errors you got from R in part (a) to the robust (sandwich) you calculated in parts (e) and (f). Why are they different? How do these compare to what you estimated from the bootstrap?
+
+The R standard errors that lm automatically gives us assume homoskedasticity, which we don't think is appropriate. Our bootstrapped errors are very similar to our hetroskedasticity-consistent sandwich standard errors. Note that the homoskedastic standard errors are lower, so we would be reporting greater precision/confidence than we ought to! Bad! 
+
 
 \subsection{Causal Warm Up: Bone Density }
 
@@ -134,15 +174,44 @@ Old: $\frac{3}{8}$; Young: $\frac{1}{2}$
 
 (b) Using simple difference in means, what is the treatment effect of the calcium supplement on bone density among the young? What is the treatment effect of the calcium supplement among the old? 
 
+Young: $\frac{1+1.5}{2} - \frac{0 + -1 }{2} = 1.75$
+
+Old: $\frac{-2+-2+-1}{3} - \frac{-3+0+0+-2+0}{5} = \frac{-2}{3} = -0.667$
+
 
 (c) What is the average of these treatment effects, weighting by the number of participants in each category? 
 
+There are 4 young participants, so we weight the treatment effect of the calcium supplement on the young by 4/12; there are 8 old participants, so we weight the treatment effect of the calcium supplement on the old by 8/12 
+
+$\frac{4}{12}*1.75 + \frac{8}{12}(-0.667) = 0.13889$
 
 
 (d) If you ignored the blocked randomization and calculated the ATE using the difference in means in treated and control, what would your estimate be? 
 
+$\frac{-2+-2+-1 + 1 + 1.5}{5} - \frac{-3+0+0+-2+0+0+-1}{7} = -0.5 - -0.8571 = 0.3571$
+
+We would over estimate effect of a calcium supplement on bone density if we didn't take the blocking on age into account. 
+
 
 (e) Input the data in R, creating a binary variable for age classification. Run two regressions: a simple additive of treatment on bone density score, and an interactive with age, treatment, and age*treatment. Write the equations for your two models using $\beta$s. Report your results in a table. Which model corresponds with which estimate of the treatment effect? Fill in the table below with the $\beta$s notation from your equations and the estimates from your model. 
+
+I am going to code old as 1, young as 0
+
+```{r}
+age<- c(rep(1,8),rep(0,4))
+treatment<- c(1,0,1,0,1,0,0,0,0,1,0,1)
+bonedensity<- c(-2,-3,-2,0,-1,0,-2,0,0,1,-1,1.5)
+df<- data.frame(age=age, treatment=treatment, bonedensity=bonedensity)
+
+bonemod1<- lm(bonedensity~treatment,data=df)
+summary(bonemod1)
+
+bonemod2<- lm(bonedensity~treatment+ age + treatment:age,data=df)
+summary(bonemod2)
+
+```
+
+
 
 
 \begin{tabular}{|c|c|}
@@ -162,6 +231,8 @@ $\hat{ATE}_{Old}$ & \\
 $\hat{ATE}_{Young}$ & \\
 \hline
 \end{tabular}
+
+
 
 
 \subsection{Neto and Cox}
