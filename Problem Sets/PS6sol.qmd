@@ -58,11 +58,9 @@ rplot<- ggplot(df, aes(x=pred,y=resid)) + geom_point(alpha=.2)
 rplot
 ```
 
-The residuals are not equally dispersed across the predicted values of y. For high incomes, the residuals are much more spread out than the residuals for lower incomes. This suggests the errors are not constant (we use the residuals to make inferences about errors), suggesting heteroskedasticity. We shouldn't use the standard errors R gives us automatically because lm assumes homoskedastic errors. 
+The residuals are not equally dispersed across the predicted values of y. For high incomes, the residuals are much more spread out than the residuals for lower incomes. This suggests the errors are not constant (we use the residuals to make inferences about errors), suggesting heteroskedasticity. We shouldn't use the standard errors R gives us automatically because lm assumes homoskedastic errors.
 
-
-
-(d) Install the sandwich package and compute heteroskdasticity consistent standard errors for your model using sandwich(model name). 
+(d) Install the sandwich package and compute heteroskdasticity consistent standard errors for your model using sandwich(model name).
 
 ```{r}
 sandwich(mod1)
@@ -72,8 +70,8 @@ sqrt(diag(sandwich(mod1)))
 ```
 
 (e) Compute the same HC standard errors for your model using your matrix $X$ and our sandwich estimator, $$\hat V\left[\hat{ \beta}\right]  = \left[X^T X \right]^{-1}  X^T
- {\text{diag}} \left[ (Y - X\hat{\beta})^2 \right]
-  X \left[X^T X \right]^{-1}.$$
+     {\text{diag}} \left[ (Y - X\hat{\beta})^2 \right]
+      X \left[X^T X \right]^{-1}.$$
 
 ```{r}
 D<- diag(resid^2)
@@ -86,8 +84,7 @@ sqrt(diag(betavar))
 
 ```
 
-(f) Use a bootstrap to estimate the standard errors for each of the $\beta$s. 
-
+(f) Use a bootstrap to estimate the standard errors for each of the $\beta$s.
 
 ```{r}
 set.seed(220)
@@ -122,18 +119,17 @@ quantile(betaedu,prob =c(.025,.975))
 
 ```
 
-
 (g) Compare the standard errors you got from R in part (a) to the robust (sandwich) you calculated in parts (e) and (f). Why are they different? How do these compare to what you estimated from the bootstrap?
 
-The R standard errors that lm automatically gives us assume homoskedasticity, which we don't think is appropriate. Our bootstrapped errors are very similar to our hetroskedasticity-consistent sandwich standard errors. Note that the homoskedastic standard errors are lower, so we would be reporting greater precision/confidence than we ought to! Bad! 
-
+The R standard errors that lm automatically gives us assume homoskedasticity, which we don't think is appropriate. Our bootstrapped errors are very similar to our hetroskedasticity-consistent sandwich standard errors. Note that the homoskedastic standard errors are lower, so we would be reporting greater precision/confidence than we ought to! Bad!
 
 \subsection{Causal Warm Up: Bone Density }
 
-Doctors (and researchers) hypothesize that higher calcium intake causes greater bone density (stronger bones).  To test this, a clinic runs an experiment where patients are treated with a calcium supplement or a placebo for 1 year, after which their bone density is measured. Patients are first classified as old or young, then treatment assignment is randomized within the groups. Bone Density T-Scores indicate how “normal” someone’s bone density is—0 is typical, positive numbers are better, negative numbers are worse (a threshold score of -2.5 is used to diagnose osteoporosis). 
+Doctors (and researchers) hypothesize that higher calcium intake causes greater bone density (stronger bones). To test this, a clinic runs an experiment where patients are treated with a calcium supplement or a placebo for 1 year, after which their bone density is measured. Patients are first classified as old or young, then treatment assignment is randomized within the groups. Bone Density T-Scores indicate how "normal" someone's bone density is---0 is typical, positive numbers are better, negative numbers are worse (a threshold score of -2.5 is used to diagnose osteoporosis).
 
-The resulting (fake) data is below. 
+The resulting (fake) data is below.
 
+```{=tex}
 \begin{tabular}{|c|c|c|}
 \hline
 Age Classification & Calcium Supplement & Bone Density T-Score \\
@@ -163,37 +159,34 @@ Young & 0 & -1 \\
 Young & 1 & 1.5 \\
 \hline
 \end{tabular}
-
-(a) What is the probability of receiving treatment for the young? What is the probability of receiving treatment for the old? 
+```
+(a) What is the probability of receiving treatment for the young? What is the probability of receiving treatment for the old?
 
 \bigskip
 
 Old: $\frac{3}{8}$; Young: $\frac{1}{2}$
 
-\bigskip 
+\bigskip
 
-(b) Using simple difference in means, what is the treatment effect of the calcium supplement on bone density among the young? What is the treatment effect of the calcium supplement among the old? 
+(b) Using simple difference in means, what is the treatment effect of the calcium supplement on bone density among the young? What is the treatment effect of the calcium supplement among the old?
 
 Young: $\frac{1+1.5}{2} - \frac{0 + -1 }{2} = 1.75$
 
 Old: $\frac{-2+-2+-1}{3} - \frac{-3+0+0+-2+0}{5} = \frac{-2}{3} = -0.667$
 
+(c) What is the average of these treatment effects, weighting by the number of participants in each category?
 
-(c) What is the average of these treatment effects, weighting by the number of participants in each category? 
-
-There are 4 young participants, so we weight the treatment effect of the calcium supplement on the young by 4/12; there are 8 old participants, so we weight the treatment effect of the calcium supplement on the old by 8/12 
+There are 4 young participants, so we weight the treatment effect of the calcium supplement on the young by 4/12; there are 8 old participants, so we weight the treatment effect of the calcium supplement on the old by 8/12
 
 $\frac{4}{12}*1.75 + \frac{8}{12}(-0.667) = 0.13889$
 
-
-(d) If you ignored the blocked randomization and calculated the ATE using the difference in means in treated and control, what would your estimate be? 
+(d) If you ignored the blocked randomization and calculated the ATE using the difference in means in treated and control, what would your estimate be?
 
 $\frac{-2+-2+-1 + 1 + 1.5}{5} - \frac{-3+0+0+-2+0+0+-1}{7} = -0.5 - -0.8571 = 0.3571$
 
-We would over estimate effect of a calcium supplement on bone density if we didn't take the blocking on age into account. 
+We would over estimate effect of a calcium supplement on bone density if we didn't take the blocking on age into account.
 
-
-(e) Input the data in R, creating a binary variable for age classification. Run two regressions: a simple additive of treatment on bone density score, and an interactive with age, treatment, and age*treatment. Write the equations for your two models using $\beta$s. Report your results in a table. Which model corresponds with which estimate of the treatment effect? Fill in the table below with the $\beta$s notation from your equations and the estimates from your model. 
+(e) Input the data in R, creating a binary variable for age classification. Run two regressions: a simple additive of treatment on bone density score, and an interactive with age, treatment, and age\*treatment. Write the equations for your two models using $\beta$s. Report your results in a table. Which model corresponds with which estimate of the treatment effect? Fill in the table below with the $\beta$s notation from your equations and the estimates from your model.
 
 I am going to code old as 1, young as 0
 
@@ -206,45 +199,58 @@ df<- data.frame(age=age, treatment=treatment, bonedensity=bonedensity)
 bonemod1<- lm(bonedensity~treatment,data=df)
 summary(bonemod1)
 
+```
+
+$BoneDensity_i = \beta_0 + \beta_1 Treatment_i$ 
+
+This model corresponds to ignoring the conditional randomization and just comparing treated and control without accounting for age. 
+
+
+```{r}
+
 bonemod2<- lm(bonedensity~treatment+ age + treatment:age,data=df)
 summary(bonemod2)
 
 ```
 
+$BoneDensity_i = \beta_0 + \beta_1 Treatment_i + \beta_2 Age_i + \beta_3 Treatment_i*Age_i$ 
 
 
-
+```{=tex}
 \begin{tabular}{|c|c|}
 \hline
 & $\beta$s \\
 \hline 
-Avg Bone Density [Treated, Old] & \\
+Avg Bone Density [Treated, Old] & $\beta_0 + \beta_1 + \beta_2 + \beta_3$  \\
 \hline 
-Avg Bone Density [Control, Old] & \\
+Avg Bone Density [Control, Old] & $\beta_0 + \beta_2$ \\
 \hline 
-Avg Bone Density [Treated, Young] & \\
+Avg Bone Density [Treated, Young] & $\beta_0 + \beta_1$ \\
 \hline 
-Avg Bone Density [Control, Young] & \\
+Avg Bone Density [Control, Young] & $\beta_0$ \\
 \hline 
-$\hat{ATE}_{Old}$ & \\
+$\hat{ATE}_{Old}$ & $\beta_1 + \beta_3$\\
 \hline 
-$\hat{ATE}_{Young}$ & \\
+$\hat{ATE}_{Young}$ & $\beta_1$ \\
 \hline
 \end{tabular}
+```
 
-
+The interactive model corresponds with the conditional average treatment effects-- we can recover the ATE among the old and among the young with our $\beta$ estimates from that model. 
 
 
 \subsection{Neto and Cox}
 
-Use netocox.csv for Neto and Cox's 1997 data on the effect of runoff elections on the number of effective presidential candidates. The following variables are included: 
+Use netocox.csv for Neto and Cox's 1997 data on the effect of runoff elections on the number of effective presidential candidates. The following variables are included:
+
+```{=tex}
 \begin{itemize}
 \item RUNOFF : whether the country has a runoff electoral system (treatment)
 \item ENPRES : the effective number of presidential candidates (outcome)
 \item ENETH : the effective number of ethnic groups 
 \end{itemize}
-
-For the purposes of this exercise, let's assume that runoff systems are randomly assigned such that we can interpret estimates causally. 
+```
+For the purposes of this exercise, let's assume that runoff systems are randomly assigned such that we can interpret estimates causally.
 
 ```{r}
 #| echo: false
@@ -257,165 +263,277 @@ attach(netocox)
 
 ```
 
-(a) Are the number of effective ethnic groups balanced across treatment and control countries? Make a (small) balance table reporting the means of the pre-treatment covariate. 
+(a) Are the number of effective ethnic groups balanced across treatment and control countries? Make a (small) balance table reporting the means of the pre-treatment covariate.
 
 
+```{r}
+mean(eneth[RUNOFF==1])
 
+mean(eneth[RUNOFF==0])
+```
 
+\begin{tabular}{|c|c|c|}
+\hline
+& Treated (Runoff) & Control (No Runoff) \\
+\hline
+Mean Effective Ethnic Groups & 1.639 & 1.517 \\
+\hline
+\end{tabular}
 
-(b) Fit an additive linear model of runoff and ethnic groups on number of presidential candidates. Calculate the Average Partial Derivative ($\hat{APD}$) of this model. 
+(b) Fit an additive linear model of number of presidential candidates on runoff and ethnic groups. Calculate the Average Partial Derivative ($\hat{APD}$) of this model.
 
 ```{r}
 mod2<- lm(netocox$ENPRES~netocox$RUNOFF+netocox$ENETH)
 summary(mod2)
+```
+
+$Pres_i = \beta_0 + \beta_1 Runoff_i + \beta_2 Ethnic_i$ 
+
+$\frac{\partial}{\partial Runoff} = \beta_1 = 0.63$ 
+
+
+(c) Fit an interactive linear model of number of presidential candidates on runoff and ethnic groups. Calculate the Average Partial Derivative ($\hat{APD}$) of this model.
+
+```{r}
+mod3<- lm(netocox$ENPRES~netocox$RUNOFF+netocox$ENETH+netocox$RUNOFF:netocox$ENETH)
+summary(mod3)
+```
+
+$Pres_i = \beta_0 + \beta_1 Runoff_i + \beta_2 Ethnic_i + \beta_3 Runoff_i * Ethnic_i$ 
+
+$\frac{\partial}{\partial Runoff} = \beta_1 + \beta_3 Ethnic_i$ 
+
+```{r}
+mean(mod3$coef[2] + mod3$coef[4]*netocox$eneth)
 
 ```
-(c) Fit an interactive linear model of runoff and ethnic groups on number of presidential candidates. Calculate the Average Partial Derivative ($\hat{APD}$) of this model. 
 
 
+(d) Using the interactive model, impute $Y(1)$s for the no runoff countries and $Y(0)$s for the runoff countries. Fill in your estimates in the table below, then calculate the ATE, ATT (average treatment effect on the treated), and ATC (average treatment effect on control) of runoff on presidential candidates. How could you recover each average effect (ATE, ATT, ATC) using $\hat{APD}$?
 
-(d) Using the interactive model, impute $Y(1)$s for the no runoff countries and $Y(0)$s for the runoff countries. Fill in your estimates in the table below, then calculate the ATE of runoff on presidential candidates. 
+```{r}
+#Y1s for no runoff countries 
+mod3$coef[1] + mod3$coef[2]*1 + mod3$coef[3]*netocox$eneth[netocox$RUNOFF==0] + mod3$coef[4]*netocox$eneth[netocox$RUNOFF==0]*1
 
+#Y0s for runoff countries 
+mod3$coef[1] + mod3$coef[2]*0 + mod3$coef[3]*netocox$eneth[netocox$RUNOFF==1] + mod3$coef[4]*netocox$eneth[netocox$RUNOFF==1]*0
+
+```
+
+
+```{=tex}
 \begin{tabular}{|c|c|c|c|}
 \hline
 Country & Runoff? & Y(0) & Y(1) \\
 \hline 
-Argentina & 0 & & \\
+Argentina & 0 & 2.5130 & 3.189675 \\
 \hline
-Austria & 1 & & \\
+Austria & 1 & 3.312292 & 2.2720 \\
 \hline
-Brazil & 1 & & \\
+Brazil & 1 & 2.129983 & 5.6890\\
 \hline
-Colombia & 0 & & \\
+Colombia & 0 & 2.1320 & 4.386684 \\
 \hline
-Costa Rica & 1 & & \\
+Costa Rica & 1 & 3.241494 & 2.0690 \\
 \hline
-Dominican Republic & 0 & & \\
+Dominican Republic & 0 & 2.8 & 3.61063 \\
 \hline
-El Salvador & 1 & & \\
+El Salvador & 1 & 3.082763 & 3.1630\\
 \hline 
-Ecuador & 1 & & \\
+Ecuador & 1 & 1.759936 & 5.1780 \\
 \hline
-Finland & 0 & & \\
+Finland & 0 & 3.792 & 2.968889\\
 \hline
-France & 1 & & \\
+France & 1 & 3.155127 & 4.8640 \\
 \hline
-Iceland & 0 & & \\
+Iceland & 0 & 3.6020 &  2.901835\\
 \hline
-Korea & 0 & & \\
+Korea & 0 & 3.5537 & 2.838422 \\
 \hline
-Peru & 1 & & \\
+Peru & 1 & 1.604338 & 2.7570 \\
 \hline
-Portugal & 1 & & \\
+Portugal & 1 & 3.304360 & 1.9580 \\
 \hline
-USA & 0 & & \\
+USA & 0 & 1.9580 & 3.203118\\
 \hline
-Venezuela & 0 & & \\
+Venezuela & 0 & 2.1940 & 3.850621\\
 \hline 
 \end{tabular}
+```
+
+```{r}
+#ATC Y(1)-Y(0) among no runoff countries 
+mean((mod3$coef[1] + mod3$coef[2]*1 + mod3$coef[3]*netocox$eneth[netocox$RUNOFF==0] + mod3$coef[4]*netocox$eneth[netocox$RUNOFF==0]*1) - netocox$ENPRES[netocox$RUNOFF==0]) 
+
+mean(mod3$coef[2] + mod3$coef[4]*netocox$eneth[netocox$RUNOFF==0]) #APD among non-runoff countries
+
+#ATT Y(1)-Y(0) among runoff countries 
+mean(netocox$ENPRES[netocox$RUNOFF==1] - (mod3$coef[1] + mod3$coef[2]*0 + mod3$coef[3]*netocox$eneth[netocox$RUNOFF==1] + mod3$coef[4]*netocox$eneth[netocox$RUNOFF==1]*0))
+
+mean(mod3$coef[2] + mod3$coef[4]*netocox$eneth[netocox$RUNOFF==1]) #APD among runoff countries 
 
 
-\bigskip 
+((3.189675-2.5130)+(2.2720-3.312292)+(5.6890-2.129983)+(4.386684-2.1320)+(2.0690-3.241494)+(3.61063-2.8)+(3.1630-3.082763)+(5.1780-1.759936)+(2.968889-3.792)+(4.8640-3.155127)+(2.901835-3.6020)+(2.838422-3.5537)+(2.7570-1.604338)+(1.9580-3.304360)+(3.203118-1.9580)+(3.850621-2.1940))/16
+#same as APD
+
+```
 
 
-(e) Fit an interactive polynomial model of runoff and ethnic groups (and ethnic groups squared) on number of presidential candidates. Calculate the Average Partial Derivative ($\hat{APD}$) of this model. 
+\bigskip
 
 
+(e) Fit an interactive polynomial model of number of presidential candidates on runoff and ethnic groups (and ethnic groups squared). Calculate the Average Partial Derivative ($\hat{APD}$) of this model.
 
-(f) Using the interactive polynomial model, impute $Y(1)$s for the no runoff countries and $Y(0)$s for the runoff countries. Fill in your estimates in the table below, then calculate the ATE of runoff on presidential candidates. 
+$Pres_i = \beta_0 + \beta_1 Runoff_i + \beta_2 Ethnic_i + \beta_3 Ethnic_i^2 + \beta_4 Runoff_i*Ethnic_i + \beta_5 Runoff_i *Ethnic_i^2$
 
+$\frac{\partial}{\partial Runoff} = \beta_1 + \beta_4 Ethnic_i + \beta_5 Ethnic_i^2$
+
+```{r}
+modpoly<- lm(netocox$ENPRES~netocox$RUNOFF + netocox$ENETH+I(netocox$ENETH^2) + netocox$RUNOFF:netocox$ENETH + netocox$RUNOFF:I(netocox$ENETH^2) , data=netocox)
+summary(modpoly)
+
+mean(modpoly$coef[2]+modpoly$coef[5]*netocox$eneth + modpoly$coef[6]*(netocox$eneth)^2)
+
+```
+
+
+(f) Using the interactive polynomial model, impute $Y(1)$s for the no runoff countries and $Y(0)$s for the runoff countries. Fill in your estimates in the table below, then calculate the ATE, ATT (average treatment effect on the treated), and ATC (average treatment effect on control) of runoff on presidential candidates. How could you recover each average effect (ATE, ATT, ATC) using $\hat{APD}$?
+
+
+```{r}
+#Y1s for no runoff countries 
+modpoly$coef[1] + modpoly$coef[2]*1 + modpoly$coef[3]*netocox$eneth[netocox$RUNOFF==0] + modpoly$coef[4]*(netocox$eneth[netocox$RUNOFF==0])^2+ modpoly$coef[5]*netocox$eneth[netocox$RUNOFF==0]*1 + modpoly$coef[6]*(netocox$eneth[netocox$RUNOFF==0])^2
+
+#Y0s for runoff countries 
+modpoly$coef[1] + modpoly$coef[2]*0 + modpoly$coef[3]*netocox$eneth[netocox$RUNOFF==1] + modpoly$coef[4]*(netocox$eneth[netocox$RUNOFF==1])^2+ modpoly$coef[5]*netocox$eneth[netocox$RUNOFF==1]*0 + modpoly$coef[6]*(netocox$eneth[netocox$RUNOFF==1])^2*0
+
+```
+
+```{=tex}
 \begin{tabular}{|c|c|c|c|}
 \hline
 Country & Runoff? & Y(0) & Y(1) \\
 \hline 
-Argentina & 0 & & \\
+Argentina & 0 & 2.5130 & 4.553363  \\
 \hline
-Austria & 1 & & \\
+Austria & 1 & 3.573105 & 2.2720 \\
 \hline
-Brazil & 1 & & \\
+Brazil & 1 & 2.087425 & 5.6890\\
 \hline
-Colombia & 0 & & \\
+Colombia & 0 & 2.1320 & 4.880312\\
 \hline
-Costa Rica & 1 & & \\
+Costa Rica & 1 & 3.385799  & 2.0690 \\
 \hline
-Dominican Republic & 0 & & \\
+Dominican Republic & 0 & 2.8 & 6.164001\\
 \hline
-El Salvador & 1 & & \\
+El Salvador & 1 & 3.011381 & 3.1630\\
 \hline 
-Ecuador & 1 & & \\
+Ecuador & 1 & 2.340317 & 5.1780 \\
 \hline
-Finland & 0 & & \\
+Finland & 0 & 3.792 & 3.059867 \\
 \hline
-France & 1 & & \\
+France & 1 & 3.174264 & 4.8640 \\
 \hline
-Iceland & 0 & & \\
+Iceland & 0 & 3.6020 & 2.517914 \\
 \hline
-Korea & 0 & & \\
+Korea & 0 & 3.5537 & 1.967512 \\
 \hline
-Peru & 1 & & \\
+Peru & 1 & 2.548866 & 2.7570 \\
 \hline
-Portugal & 1 & & \\
+Portugal & 1 & 3.551498 & 1.9580 \\
 \hline
-USA & 0 & & \\
+USA & 0 & 1.9580 & 4.629879\\
 \hline
-Venezuela & 0 & & \\
+Venezuela & 0 & 2.1940 &  6.356082 \\
 \hline 
 \end{tabular}
+```
+
+```{r}
+#ATC Y(1)-Y(0) among no runoff countries 
+ mean(modpoly$coef[1] + modpoly$coef[2]*1 + modpoly$coef[3]*netocox$eneth[netocox$RUNOFF==0] + modpoly$coef[4]*(netocox$eneth[netocox$RUNOFF==0])^2+ modpoly$coef[5]*netocox$eneth[netocox$RUNOFF==0]*1 + modpoly$coef[6]*(netocox$eneth[netocox$RUNOFF==0])^2- netocox$ENPRES[netocox$RUNOFF==0]) 
+
+mean(modpoly$coef[2]+modpoly$coef[5]*netocox$eneth[netocox$RUNOFF==0] + modpoly$coef[6]*(netocox$eneth[netocox$RUNOFF==0])^2) #APD among non-runoff countries
+
+#ATT Y(1)-Y(0) among runoff countries 
+mean(netocox$ENPRES[netocox$RUNOFF==1] - (modpoly$coef[1] + modpoly$coef[2]*0 + modpoly$coef[3]*netocox$eneth[netocox$RUNOFF==1] + modpoly$coef[4]*(netocox$eneth[netocox$RUNOFF==1])^2+ modpoly$coef[5]*netocox$eneth[netocox$RUNOFF==1]*0 + modpoly$coef[6]*(netocox$eneth[netocox$RUNOFF==1])^2*0))
+
+
+mean(modpoly$coef[2]+modpoly$coef[5]*netocox$eneth[netocox$RUNOFF==1] + modpoly$coef[6]*(netocox$eneth[netocox$RUNOFF==1])^2)  #APD among runoff countries
+
+((4.553363-2.5130) + (2.2720 -  3.573105)+(5.6890-2.087425)+(4.880312-2.1320)+(2.0690-3.385799) +(6.164001-2.8)+(3.1630-3.011381)+(5.1780-2.340317)+(3.059867-3.792)+(4.8640-3.174264)+(2.517914-3.6020)+(1.967512- 3.5537)+(2.7570-2.548866)+(1.9580-3.551498)+(4.629879-1.9580)+(6.356082- 2.1940))/16
+#same as APD
+```
 
 
 \subsection{Menopausal Hormone Therapy}
 
-Review the WHI/WHI(MS) studies as well as the Kim et al. 2021 study on neurodegenerative diseases. 
+Review the WHI/WHI(MS) studies as well as the Kim et al. 2021 study on neurodegenerative diseases.
 
-(a) Fill in the following table comparing WHI and Kim et al. 
 
+(a) Fill in the following table comparing WHI and Kim et al.
+
+```{=tex}
 \begin{tabular}{|c|c|c|}
 \hline
 & \ \ \ \ \ \ \ \ WHI Study \ \ \ \ \ \ \ \ \ & \ \ \ \ \ \ \ \ Kim et al. \ \ \ \ \ \ \ \ \ \  \\
 \hline 
-& & \\
-Method/approach used & & \\
-& & \\
-& & \\
-\hline 
-& & \\
-Population/participants & & \\
+& RCT & observational propensity \\
+Method/approach used & & score matching \\
 & & \\
 & & \\
 \hline 
-& & \\
-Are there relevant populations not included? & & \\
-Who? & & \\
+& post-menopausal women 50-79 & women 45 or older \\
+Population/participants & Healthy? higher blood & with insurance \\
+&  pressure, a lot of  & (Humana)\\
+& former smokers& \\
+\hline 
+& younger women & women without insurance,\\
+Are there relevant populations not & (peri-menopause) & women with NDDs\\
+ included? Who? & & \\
 & & \\
 \hline
-& & \\
-Treatment(s) & & \\
-& & \\
+& & prempro, other estrogen tablet \\
+Treatment(s) & CEE+MPA specific dose & formulations, transdermal   \\
+& (prempro) & patches, different durations \\
 & & \\
 \hline 
-& & \\
-Outcome(s) & & \\
-& & \\
-& & \\
+& breast cancer, NDDs, & \\
+Outcome(s) & coronary heart disease, & neurodegenerative  \\
+& stroke, other cancers, & diseases \\
+& fractures & \\
 \hline 
 \end{tabular}
-
-(b) What is a potential omitted variable from the Kim et al. study? Does omitting that variable bias their estimate of the treatment effect of hormone therapy? Use the formulae from class to discuss whether your think their estimate might be too high, too low, or accurate. 
-
-
-
-(c) Is there a concern about omitted variable bias in the WHI? Why or why not? Use the formulae from class to discuss whether your think their estimate might be too high, too low, or accurate. 
-
-
+```
+(b) What is a potential omitted variable from the Kim et al. study? Does omitting that variable bias their estimate of the treatment effect of hormone therapy? Use the formulae from class to discuss whether your think their estimate might be too high, too low, or accurate.
 
 \bigskip 
 
-Review the Estrogens General Statement clinical reference and read the recent NYT magazine piece about menopausal hormone therapy, the WHI's response to the NYT piece, and JoAnn Manson (WHI Principal Investigator) and Andrew M. Kaunitz's perspective on menopause management (posted on Canvas). 
+Anything is fine here, as long as there is engagement with the omitted variable formula from class. Sign the relationship between potential omitted variable and treatment (taking hormone therapy), sign the relationship between potential omitted variable and neurodegenerative disease. Sign of bias is determined by the product of those. 
 
-(a) How do you assess the medical guidelines? Are the certainties and uncertainties of the body of research communicated effectively? Based on what you have read and our class discussions, who should be prescribed hormone therapy? Who should not be prescribed hormone therapy? Discuss patient characteristics including age, pre-existing conditions, vasomotor symptoms, and whatever else you deem relevant, citing the studies we have worked with this semester as needed. 
+\bigskip
 
+(c) Is there a concern about omitted variable bias in the WHI? Why or why not? Use the formulae from class to discuss whether your think their estimate might be too high, too low, or accurate.
 
-(b) How did making patient recommendations in the previous part feel? What aspects of our readings/case study did you find most convincing and why? What incentives do researchers and pharmaceutical companies have in research on hormone therapy medications? What incentives do doctors/providers have when making recommendations to their patients? How do you think these incentives affect the accumulation of knowledge and patient outcomes? 
+\bigskip
 
+There should not be omitted variable bias because treatment assignment is randomized. Even if there is a variable not accounted for that is related to one of the outcomes (like breast cancer), it should not be correlated with treatment assignment due to the randomization. (there might be concerns about external valdity/generalizability, but that does not fall under the omitted variable bias umbrella)
 
+\bigskip
 
+(d) Review the Estrogens General Statement clinical reference and read the recent NYT magazine piece about menopausal hormone therapy, the WHI's response to the NYT piece, and JoAnn Manson (WHI Principal Investigator) and Andrew M. Kaunitz's perspective on menopause management (posted on Canvas). Write a 1-2 paragraph reflection on what your major takeaways from the case study have been. Some questions are listed below to guide you, but you do not need to answer them all.
+
+Questions to consider:
+
+```{=tex}
+\begin{itemize}
+\item How do you assess the medical guidelines? Are the certainties and uncertainties of the body of research communicated effectively?
+\item What information might a doctor need to decide whether their patient should be prescribed menopausal hormone therapy? 
+\item What aspects of our readings/case study did you find most convincing and why? 
+\item What incentives do researchers and pharmaceutical companies have in research on hormone therapy medications? 
+\item What incentives do doctors/providers have when making recommendations to their patients? 
+\item How do you think these incentives affect the accumulation of knowledge and patient outcomes? 
+\end{itemize}
+```
+
+Anything coherent is acceptable! 
