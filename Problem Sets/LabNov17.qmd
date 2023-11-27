@@ -4,9 +4,9 @@ format: pdf
 editor: visual
 ---
 
-## Matrices in R 
+## Matrices in R
 
-Let's use our WHI experiment data 
+Let's use our WHI experiment data
 
 ```{r}
 whi<- read.csv("whidata.csv")
@@ -16,7 +16,7 @@ whi$age70s<- ifelse(whi$age=="70-79",1,0)
 
 ```
 
-Start with simple additive model 
+Start with simple additive model
 
 ```{r}
 whimod1<- lm(breastcancer ~ treat + age60s + age70s, data=whi)
@@ -24,8 +24,7 @@ whimod1<- lm(breastcancer ~ treat + age60s + age70s, data=whi)
 summary(whimod1)
 ```
 
-
-How can we get the same thing using matrices? We want $(X'X)^{-1}X'Y$, so we need a matrix $X$ that has our covariates in it and a column of 1s so we can estimate an intercept. 
+How can we get the same thing using matrices? We want $(X'X)^{-1}X'Y$, so we need a matrix $X$ that has our covariates in it and a column of 1s so we can estimate an intercept.
 
 ```{r}
 df.mat<- data.frame(constant=rep(1,length(whi$breastcancer)), treat=whi$treat, age60s=whi$age60s, age70s=whi$age70s)
@@ -51,9 +50,9 @@ t(A)%*%A
 solve(t(A)%*%A)
 
 solve(t(A)%*%A)%*%t(A)%*%C
-``` 
+```
 
-Let's go back to our WHI data 
+Let's go back to our WHI data
 
 ```{r}
 betas<- solve(t(X)%*%X)%*%t(X)%*%whi$breastcancer
@@ -61,9 +60,9 @@ dim(betas)
 betas
 ```
 
-We got the same answer as lm! 
+We got the same answer as lm!
 
-optional: make a new version of $X$ that includes all three age variables. What happens? 
+optional: make a new version of $X$ that includes all three age variables. What happens?
 
 ```{r}
 df.mat2<- data.frame(constant=rep(1,length(whi$breastcancer)), treat=whi$treat, age50s=whi$age50s ,age60s=whi$age60s, age70s=whi$age70s)
@@ -75,21 +74,19 @@ dim(X2)
 #solve(t(X2)%*%X2)
 ```
 
-
-How do we use matrices to estimate standard errors for our betas? What is the sandwich estimator? 
+How do we use matrices to estimate standard errors for our betas? What is the sandwich estimator?
 
 $$\hat V\left[\hat{ \beta}\right]  = \left[X^T X \right]^{-1}  X^T
      {\text{diag}} \left[ (Y - X\hat{\beta})^2 \right]
       X \left[X^T X \right]^{-1}.$$
 
-We know we can deal with $X$ now, but what is the thing in the middle of the sandwich? A diagonal matrix of the residuals squared. 
-
+We know we can deal with $X$ now, but what is the thing in the middle of the sandwich? A diagonal matrix of the residuals squared.
 
 ```{r}
 resid<- residuals(whimod1)
 ```
 
-so we have our residuals and we can square them, but how do we make a diagonal matrix? 
+so we have our residuals and we can square them, but how do we make a diagonal matrix?
 
 ```{r}
 test<- c(4,5,6,7,8)
@@ -98,7 +95,7 @@ diag(test)
 
 ```
 
-So we can make a diagonal matrix of our squared residuals the same way. What should the dimensions of the matrix be? 
+So we can make a diagonal matrix of our squared residuals the same way. What should the dimensions of the matrix be?
 
 ```{r}
 D<- diag(resid^2)
@@ -107,21 +104,19 @@ dim(D)
 
 ```
 
-Let's use our sandwich estimator 
+Let's use our sandwich estimator
 
 ```{r}
 betavar<- solve(t(X)%*%X)%*%t(X)%*%D%*%X%*%solve(t(X)%*%X)
 ```
 
-
-Are we done? The diagonal is the variance of our betas and we need to take the squareroot to get the standard error. 
+Are we done? The diagonal is the variance of our betas and we need to take the squareroot to get the standard error.
 
 ```{r}
 sqrt(diag(betavar))
 ```
 
-
-That was complicated. Big matrices. Is there an easier way to do it? The sandwich package 
+That was complicated. Big matrices. Is there an easier way to do it? The sandwich package
 
 ```{r}
 library(sandwich)
@@ -129,5 +124,8 @@ sandwich(whimod1)
 
 sqrt(diag(sandwich(whimod1)))
 
-```
+sqrt(diag(vcovHC(whimod1, type="HC0")))
 
+
+#you can change type with different corrections, etc. 
+```
