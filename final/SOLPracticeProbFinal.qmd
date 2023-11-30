@@ -1,6 +1,9 @@
 ---
 title: "QTM 220 Final Practice Problems"
 format: pdf
+execute:
+  echo: false
+  warning: false
 editor: visual
 ---
 
@@ -14,30 +17,29 @@ Consider the following estimator for $\mu$: $\tilde{Y} = \frac{1}{n+2}\sum_{i=1}
 
 What is $E[\tilde{Y}]$?
 
-\bigskip 
+\bigskip
 
 \color{red}
 
-$$E[\tilde{Y}] = E[\frac{1}{n+2}\sum_{i=1}^n Y_i]$$
-$$= \frac{1}{n+2} E[\sum_{i=1}^n Y_i]$$ 
+$$E[\tilde{Y}] = E[\frac{1}{n+2}\sum_{i=1}^n Y_i]$$ $$= \frac{1}{n+2} E[\sum_{i=1}^n Y_i]$$
 
-$$= \frac{1}{n+2} \sum_{i=1}^n E[Y_i]$$ by linearity of expectations 
+$$= \frac{1}{n+2} \sum_{i=1}^n E[Y_i]$$ by linearity of expectations
 
-$$= \frac{1}{n+2} \sum_{i=1}^n E[Y]$$ by IID  
+$$= \frac{1}{n+2} \sum_{i=1}^n E[Y]$$ by IID
 
-$$= \frac{1}{n+2} \sum_{i=1}^n \mu$$ by definition 
+$$= \frac{1}{n+2} \sum_{i=1}^n \mu$$ by definition
 
 $$= \frac{1}{n+2} n \mu$$
 
-$$= \frac{n}{n+2} \mu$$
-\color{black}
+$$= \frac{n}{n+2} \mu$$ \color{black}
+
 \subsubsection*{Part B}
 
 How does $E[\tilde{Y}]$ compare to $E[\bar{Y}]$? (where $\bar{Y} = \frac{1}{n}\sum_{i=1}^n Y_i$)
 
-\bigskip 
+\bigskip
 
-\color{red} similar steps show that $E[\bar{Y}] = \mu$. $\bar{Y}$ is unbiased, $\tilde{Y}$ is biased, but $\lim_{n \rightarrow \infty} \frac{n}{n+2} =1$ so bias will decrease as $n$ increases. 
+\color{red} similar steps show that $E[\bar{Y}] = \mu$. $\bar{Y}$ is unbiased, $\tilde{Y}$ is biased, but $\lim_{n \rightarrow \infty} \frac{n}{n+2} =1$ so bias will decrease as $n$ increases.
 
 \color{black}
 
@@ -45,7 +47,7 @@ How does $E[\tilde{Y}]$ compare to $E[\bar{Y}]$? (where $\bar{Y} = \frac{1}{n}\s
 
 Showing your work, calculate $Var[\tilde{Y}]$.
 
-\bigskip 
+\bigskip
 
 \color{red}
 
@@ -53,17 +55,18 @@ $$Var[\tilde{Y}] = V[\frac{1}{n+2}\sum_{i=1}^n Y_i]$$
 
 $$ = (\frac{1}{n+2})^2 V[\sum_{i=1}^n Y_i]$$
 
-$$ = (\frac{1}{n+2})^2 \sum_{i=1}^n V[Y]$$ because IID, covariances are 0 
+$$ = (\frac{1}{n+2})^2 \sum_{i=1}^n V[Y]$$ because IID, covariances are 0
 
-$$ = (\frac{1}{n+2})^2 \sum_{i=1}^n \sigma^2$$ by definition 
+$$ = (\frac{1}{n+2})^2 \sum_{i=1}^n \sigma^2$$ by definition
 
-$$ = (\frac{1}{n+2})^2 n \sigma^2$$ 
+$$ = (\frac{1}{n+2})^2 n \sigma^2$$
 
-$$ = \frac{n}{(n+2)^2} \sigma^2$$ 
+$$ = \frac{n}{(n+2)^2} \sigma^2$$
 
+```{=tex}
 \color{black}
 \subsubsection*{Part D}
-
+```
 How does $Var[\tilde{Y}]$ compare to $Var[\bar{Y}]$?
 
 \bigskip
@@ -72,7 +75,164 @@ How does $Var[\tilde{Y}]$ compare to $Var[\bar{Y}]$?
 
 Similar steps show that $V[\bar{Y}] = \frac{\sigma^2}{n}$
 
-$\frac{1}{n} > \frac{n}{(n+2)^2}$ so our $\tilde{Y}$ estimator has a lower variance than the mean. But the estimator is biased, so we probably wouldn't want to use it over the mean. 
+$\frac{1}{n} > \frac{n}{(n+2)^2}$ so our $\tilde{Y}$ estimator has a lower variance than the mean. But the estimator is biased, so we probably wouldn't want to use it over the mean.
 
 \color{black}
 
+\subsection*{Problem 2}
+Suppose we have a sample of $Y_1 \ldots Y_n$ and $X_1 \ldots X_n$  stored in an \textbf{R} dataframe `df' with $n$ rows. We run this code.
+
+```{r}
+#| echo: false
+library(ggplot2)
+p3n <- 200
+z <- c(rep(0,p3n/2),rep(1,p3n/2))
+set.seed(220220)
+x <-   z + rnorm(p3n,mean=1,sd=1) + z*rnorm(p3n,mean=3,sd = 1)
+y <- (-0.5)*x + (.8)*x*z + rnorm(p3n)
+
+
+dfp3 <- data.frame(y,x,z)
+df<-dfp3
+
+
+q2<- ggplot(data = dfp3, aes(x = x, y = y)) +
+  geom_point() +
+  xlab("x") +
+  ylab("y") +
+  theme_bw() 
+n<-p3n
+
+
+modone<- lm(y~x,data=dfp3)
+
+```
+
+
+```{r}
+#| echo: true
+B=10000
+beta_0<- rep(NA,B)
+beta_1<- rep(NA,B)
+for( b in 1:B ){
+bootind = sample(1:n,size=n,replace=T)
+dfboot = df[bootind,]
+mod<- lm(y~x, data=dfboot)
+beta_0[b] = mod$coef[1]
+beta_1[b] = mod$coef[2]
+}
+```
+
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the vector Y's elements
+#|  -  Scatterplot of X and Y
+ggplot() + geom_histogram(aes(x=y,     y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(y)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(y)+c(-1,1)*sd(y)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(y), xmin=mean(y)-1.96*sd(y), xmax=mean(y)+1.96*sd(y), y=.025)) + theme_bw() + xlab('') + ylab('')
+
+q2 + geom_abline(slope=modone$coef[2], intercept=modone$coef[1])
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the beta_0's elements
+#|  -  Histogram of the beta_1's elements
+ggplot() + geom_histogram(aes(x=beta_0, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(beta_0)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(beta_0)+c(-1,1)*sd(beta_0)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(beta_0), xmin=mean(beta_0)-1.96*sd(beta_0), xmax=mean(beta_0)+1.96*sd(beta_0), y=.25)) + theme_bw() + xlab('') + ylab('')
+
+ggplot() + geom_histogram(aes(x=beta_1, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(beta_1)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(beta_1)+c(-1,1)*sd(beta_1)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(beta_1), xmin=mean(beta_1)-1.96*sd(beta_1), xmax=mean(beta_1)+1.96*sd(beta_1), y=1)) + theme_bw() + xlab('') + ylab('')
+
+```
+
+\subsection*{Part a}
+What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket
+if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mean(Y)
+```
+
+\color{red}
+The sample mean. It's indicated by the solid vertical line on the sample histogram.
+\color{black}
+
+\subsection*{Part b}
+What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(Y)
+```
+
+\color{red}
+The sample standard deviation of Y. It's the distance between the solid vertical and either dashed vertical line on the sample histogram.
+\color{black}
+
+
+\subsection*{Part c}
+What does this code calculate? State it in words and mark it with a 'c', and an arrow or bracket
+if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mod<- lm(y~x, data=df)
+mod$coef[1]
+```
+
+\color{red}
+The intercept of the simple regression of y on x. It is the intercept of the line on the scatterplot 
+\color{black}
+
+\subsection*{Part d}
+What does this code calculate? State it in words and mark it with a 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(beta_1)
+```
+
+\color{red}
+The bootstrap sampling distribution's standard deviation for the coefficient on x from the simple regression (slope). Estimated standard error. 
+It's the distance between the solid vertical and either dashed vertical line on the beta_1 sampling distribution histogram.
+\color{black}
+
+\subsection*{Part e}
+What does this code calculate? State it in words and mark it with a 'e', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mod$coef[2] + sqrt(diag(solve(t(X)%*%X)%*%t(X)%*%diag(resid^2)%*%X%*%solve(t(X)%*%X)))[2]
+
+mod$coef[2] - sqrt(diag(solve(t(X)%*%X)%*%t(X)%*%diag(resid^2)%*%X%*%solve(t(X)%*%X)))[2]
+```
+
+\color{red}
+A 95\% confidence interval --- based on normal approximation --- for the least squares slope from the simple regression of y on x for the population from which this sample was drawn. This is indicated by the horizontal segment (with a dot in the middle) on the sampling distribution histogram (beta_1).
+\color{black}
+
+\subsection*{Part f}
+How could you calculate roughly the same thing as in part e using 'sd(beta_1)'
+
+\color{red}
+
+We can use the standard deviation of the bootstrap sampling distribution as our estimate of standard error.
+
+\begin{verbatim}
+mod$coef[2]  - 1.96 * sd(beta_1)
+mod$coef[2]  + 1.96 * sd(beta_1)
+\end{verbatim}
+
+\color{black}

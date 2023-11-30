@@ -1,6 +1,9 @@
 ---
 title: "QTM 220 Final Practice Problems"
 format: pdf
+execute:
+  echo: false
+  warning: false
 editor: visual
 ---
 
@@ -28,3 +31,128 @@ How does $Var[\tilde{Y}]$ compare to $Var[\bar{Y}]$?
 
 
 
+\subsection*{Problem 2}
+Suppose we have a sample of $Y_1 \ldots Y_n$ and $X_1 \ldots X_n$  stored in an \textbf{R} dataframe `df' with $n$ rows. We run this code.
+
+```{r}
+#| echo: false
+library(ggplot2)
+p3n <- 200
+z <- c(rep(0,p3n/2),rep(1,p3n/2))
+set.seed(220220)
+x <-   z + rnorm(p3n,mean=1,sd=1) + z*rnorm(p3n,mean=3,sd = 1)
+y <- (-0.5)*x + (.8)*x*z + rnorm(p3n)
+
+
+dfp3 <- data.frame(y,x,z)
+df<-dfp3
+
+
+q2<- ggplot(data = dfp3, aes(x = x, y = y)) +
+  geom_point() +
+  xlab("x") +
+  ylab("y") +
+  theme_bw() 
+n<-p3n
+
+
+modone<- lm(y~x,data=dfp3)
+
+```
+
+
+```{r}
+#| echo: true
+B=10000
+beta_0<- rep(NA,B)
+beta_1<- rep(NA,B)
+for( b in 1:B ){
+bootind = sample(1:n,size=n,replace=T)
+dfboot = df[bootind,]
+mod<- lm(y~x, data=dfboot)
+beta_0[b] = mod$coef[1]
+beta_1[b] = mod$coef[2]
+}
+```
+
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the vector Y's elements
+#|  -  Scatterplot of X and Y
+ggplot() + geom_histogram(aes(x=y,     y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(y)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(y)+c(-1,1)*sd(y)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(y), xmin=mean(y)-1.96*sd(y), xmax=mean(y)+1.96*sd(y), y=.025)) + theme_bw() + xlab('') + ylab('')
+
+q2 + geom_abline(slope=modone$coef[2], intercept=modone$coef[1])
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the beta_0's elements
+#|  -  Histogram of the beta_1's elements
+ggplot() + geom_histogram(aes(x=beta_0, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(beta_0)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(beta_0)+c(-1,1)*sd(beta_0)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(beta_0), xmin=mean(beta_0)-1.96*sd(beta_0), xmax=mean(beta_0)+1.96*sd(beta_0), y=.25)) + theme_bw() + xlab('') + ylab('')
+
+ggplot() + geom_histogram(aes(x=beta_1, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(beta_1)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(beta_1)+c(-1,1)*sd(beta_1)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(beta_1), xmin=mean(beta_1)-1.96*sd(beta_1), xmax=mean(beta_1)+1.96*sd(beta_1), y=1)) + theme_bw() + xlab('') + ylab('')
+
+```
+
+\subsection*{Part a}
+What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket
+if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mean(Y)
+```
+
+\subsection*{Part b}
+What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(Y)
+```
+
+\subsection*{Part c}
+What does this code calculate? State it in words and mark it with a 'c', and an arrow or bracket
+if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mod<- lm(y~x, data=df)
+mod$coef[1]
+```
+
+
+\subsection*{Part d}
+What does this code calculate? State it in words and mark it with a 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(beta_1)
+```
+
+\subsection*{Part e}
+What does this code calculate? State it in words and mark it with a 'e', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mod$coef[2] + sqrt(diag(solve(t(X)%*%X)%*%t(X)%*%diag(resid^2)%*%X%*%solve(t(X)%*%X)))[2]
+
+mod$coef[2] - sqrt(diag(solve(t(X)%*%X)%*%t(X)%*%diag(resid^2)%*%X%*%solve(t(X)%*%X)))[2]
+```
+
+\subsection*{Part f}
+How could you calculate roughly the same thing as in part e using 'sd(beta_1)'
