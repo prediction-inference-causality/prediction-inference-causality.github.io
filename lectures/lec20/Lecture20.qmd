@@ -115,7 +115,8 @@ ATT = mean(mu(1,pop$X[pop$W==1]) - mu(0,pop$X[pop$W==1]))
 ```{r plot-population-ATT}
 
 plotX = function(X,W) { X + .15*(2*W-1) }
-scaleY = scale_y_continuous(limits=c(0,4), breaks=seq(0,4,by=1))
+scaleY = coord_cartesian(ylim=c(0,3.5))
+#scale_y_continuous(limits=c(0,4), breaks=seq(0,4,by=1))
 
 pop.scatter = ggplot(pop) + 
   geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.05, position=position_jitter(w=.15, h=0), size=.05) + 
@@ -142,7 +143,6 @@ summaries = data %>% group_by(X, W) %>% summarize(mu=mean(Y), sd=sd(Y), n=n()) %
 ```{r plot-sample-ATT}
 
 plotX = function(X,W) { X + .15*(2*W-1) }
-scaleY = scale_y_continuous(limits=c(0,4), breaks=seq(0,4,by=1))
 scatter.plot = function(data) { 
     ggplot(data) + 
         geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.1, size=1, position=position_jitter(w=.15, h=0)) + 
@@ -289,7 +289,7 @@ $$
 #| output-height: 400px 
 #| layout-nrow: 2
 #| layout-ncol: 3 
-#| fig-asp: .6 
+#| fig-asp: .7 
  
 plot.ATT.estimate(data, Y ~ W*factor(X))
 plot.ATT.estimate(data, Y ~ W*X)
@@ -312,7 +312,7 @@ $$
 ```{r}
 #| output-height: 400px 
 #| layout-ncol: 2
-#| fig-asp: .75
+#| fig-asp: .65
  
 mu.formula = Y~W*factor(X)
 plot.ATT.estimate(data, mu.formula)
@@ -341,7 +341,7 @@ $$
 ```{r}
 #| output-height: 400px 
 #| layout-ncol: 2
-#| fig-asp: .75
+#| fig-asp: .65
 
 plot.ATT.estimate(data, mu.formula)
 plot.ATT.estimate(data, mu.formula, pi.spec=pi)
@@ -391,7 +391,7 @@ plot.ATT.dist(pop, 4*nrow(data), mu.formula, pi.spec=pi) + scale_X
 ```{r}
 #| output-height: 400px 
 #| layout-ncol: 2
-#| fig-asp: .75
+#| fig-asp: .65
 
 mu.formula = Y~W*X
 plot.ATT.estimate(data, mu.formula)
@@ -415,7 +415,7 @@ $$
 :::
 
 
-## The Interacted Bivariate Linear Model's Sampling Distribution
+## The Interacted Model's Sampling Distribution
 
 ```{r}
 #| output-height: 300px
@@ -441,7 +441,7 @@ plot.ATT.dist(pop, 4*nrow(data), mu.formula, pi.spec=pi) + scale_X
 ```{r}
 #| output-height: 400px 
 #| layout-ncol: 2
-#| fig-asp: .75
+#| fig-asp: .65
 
 mu.formula = Y~W+X
 plot.ATT.estimate(data, mu.formula)
@@ -459,8 +459,7 @@ $$
 
 ::: fragment
 
-- We may not be able to fit the data at all.
-- And our slope will be some mix of ...
+- We may not be able to fit the data at all. And our slope will be some mix of ...
     - the slope of the [red folks]{.twocolor-fed} on the left, where they are.
     - the slope of the [green folks]{.twocolor-fed} on the right, where they are.
 - The distance between these lines is our estimate of the ATT.
@@ -470,7 +469,7 @@ $$
 :::
 
 
-## The Additive Bivariate Linear Model's Sampling Distribution
+## The Additive Model's Sampling Distribution
 
 ```{r}
 #| output-height: 300px
@@ -495,7 +494,7 @@ plot.ATT.dist(pop, 4*nrow(data), mu.formula, pi.spec=pi) + scale_X
 ```{r}
 #| output-height: 400px 
 #| layout-ncol: 2
-#| fig-asp: .75
+#| fig-asp: .65
 #| 
 weights.curve = geom_line(aes(x=X, y=pi(X)/(1-pi(X))), 
                     data=data.frame(X=unique(pop$X)),
@@ -526,7 +525,7 @@ $$
 ```{r}
 #| output-height: 400px 
 #| layout-ncol: 2
-#| fig-asp: .75
+#| fig-asp: .65
 #| 
 
 mu.formula = Y ~ W*(I(X>60) + I(X>70))
@@ -545,7 +544,8 @@ $$
 - The weighted least squares takes a weighted average within each bin.
     - But [the weights]{.fg style="color:purple"} don't vary much within bins.
     - So the weighted average is similar to the unweighted one.
-- This is the same as first coarsening the data --- forgetting age differences within bins --- then fitting a saturated model. But people do keep their (uncoarsened) weights.
+- This is the same as coarsening the data --- forgetting age differences within bins ...
+- ... then fitting a saturated model. But people do keep their (uncoarsened) weights.
 
 ## Piecewise-Constant's Model Sampling Distribution 
 ```{r}
@@ -595,7 +595,7 @@ plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=16+1)), pi.spec=pi) + w
 #| layout-nrow: 2
 #| layout-ncol: 2
 #| fig-asp: .5
-#| cache: true 
+#| cache: false
 
 mu.formula = pc.formula(seq(50,80, length.out=2+1))
 plot.ATT.estimate(data, mu.formula) + weights.curve
@@ -719,7 +719,7 @@ Piecewise-constant models fit via unweighted least squares.
 ```{r}
 #| output-height: 400px 
 #| layout-ncol: 2
-#| fig-asp: .6 
+#| fig-asp: .66 
 
 plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=2+1))) 
 plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=16+1)))
@@ -734,6 +734,23 @@ $$
 - What's happening is that this noise is averaging out. Let's start somewhere simple.
     - Suppose we pair up all our observations, average the pairs, and average the averages.
     - We get the same thing as if we just averaged all the observations without pairing.
+
+## Why Doesn't Going Big Increase Variance (Much)?
+
+```{r}
+#| output-height: 400px 
+#| layout-ncol: 2
+#| fig-asp: .66 
+
+plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=2+1))) 
+plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=16+1)))
+```
+
+$$
+\widehat{\text{ATT}} 
+= \sum_x \ingreen{\hat f_1(x)} \qty{\ingreen{\hat\mu(1,x)} - \inred{\hat\mu(0,x)}} 
+$$
+
 - That's essentially what's going on with the [easy part]{.twocolor-green} of the ATT formula.
 - If we have $1$ bin for each level of $X$, we get the same thing as if we have 1 bin outright.
 $$
@@ -742,12 +759,12 @@ $$
 = \frac{\sum_{i:D_i=1} Y_i}{\sum_{i:D_i=1} 1}
 $$
 
-## Why Does Going Big Not Increase Variance (Much)?
+## Why Doesn't Going Big Increase Variance (Much)?
 
 ```{r}
 #| output-height: 400px 
 #| layout-ncol: 2
-#| fig-asp: .6 
+#| fig-asp: .65 
 
 plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=2+1))) 
 plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=16+1)))
@@ -765,6 +782,21 @@ $$
 \end{aligned}
 $$
 
+## Why Doesn't Going Big Increase Variance (Much)?
+
+```{r}
+#| output-height: 400px 
+#| layout-ncol: 2
+#| fig-asp: .66 
+
+plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=2+1))) 
+plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=16+1)))
+```
+
+$$
+\sum_x \ingreen{\hat f_1(x)}  \inred{\hat\mu(0,x)} = \sum_{j} \hat\alpha_j \ \inred{\hat\mu(0,\text{bin}_j)} \qfor \hat\alpha_j = \sum_{x \in \text{bin}_j} \ingreen{\hat f_1(x)}  
+$$
+
 - We can use the variance formula we worked out earlier in the semester.
     - With [a few approximations and some clever arithmetic]{.fg style="color:blue"}, we can get something meaningful.
     - Variance is proportional to the average--over green folks--of the ratio of our *within-bin averaged* histograms.
@@ -777,10 +809,10 @@ $$
 \end{aligned}
 $$
 
-## Picture
+## A Picture
 
 ```{r}
-#| output-height: 500px
+#| fig-asp: .3
 
 smoothed = function(f, smooth.formula, w, x) {
     grid=expand.grid(X=unique(pop$X), W=c(0,1))
@@ -812,8 +844,10 @@ second.smoothed.ratio.avg = sum(f(1,x)*smoothed(f,smooth.formula.2,1,x)/smoothed
 ```
 
 $$
+\small{
 \Var\qty{\sum_x \ingreen{\hat f_1(x)} \times \inred{\hat\mu(0,x)}} 
 \approx \frac{\sigma^2}{n \ P(D=0)}\sum_x \ingreen{f_1(x)} \textcolor{purple}{\qty{\frac{ \ingreen{\sum_{x' \in \text{bin}(x)} f_1(x')} }{ \inred{\sum_{x' \in \text{bin}(x)} f_0(x')}}}}
+}
 $$
 
 - Above, the [purple lines]{.fg style="color:purple"} show the ratio of smoothed densities.
@@ -824,8 +858,8 @@ $$
 
 ## An Extreme-Case Picture
 ```{r}
-#| output-height: 500px
-
+#| fig-asp: .3
+#| 
 smoothed = function(f, smooth.formula, w, x) {
     grid=expand.grid(X=unique(pop$X), W=c(0,1))
     M.grid = model.matrix(smooth.formula, grid)
@@ -858,9 +892,10 @@ first.smoothed.ratio.avg = sum(g(1,x)*smoothed(g,smooth.formula.1,1,x)/smoothed(
 second.smoothed.ratio.avg = sum(g(1,x)*smoothed(g,smooth.formula.2,1,x)/smoothed(g,smooth.formula.2,0,x))
 ```
 
-$$
+$$ \small{
 \Var\qty{\sum_x \ingreen{\hat f_1(x)} \times \inred{\hat\mu(0,x)}} 
 \approx \frac{\sigma^2}{n \ P(D=0)}\sum_x \ingreen{f_1(x)} \textcolor{purple}{\qty{\frac{ \ingreen{\sum_{x' \in \text{bin}(x)} f_1(x')} }{ \inred{\sum_{x' \in \text{bin}(x)} f_0(x')}}}}
+}
 $$
 
 - Here's what we see when our densities are a lot rougher---there's more to smooth out.
@@ -875,9 +910,9 @@ $$
 ## Variance Formula Derivation
 
 ```{r}
-#| output-height: 400px 
+#| output-height: 300px 
 #| layout-ncol: 2
-#| fig-asp: .6 
+#| fig-asp: .65
 
 plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=2+1))) 
 plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=16+1)))
@@ -948,9 +983,9 @@ image.from.array = function(a) {
     im
 }
 plot.image = function(im) { 
-  im[1,1]=0
-  im[nrow(im), ncol(im)]=1  
-  ggplot(im) + geom_raster(aes(x=x, y=y, fill=z)) + xlim(0,1) + ylim(0,1)
+  #im[1,1]=0
+  #im[nrow(im), ncol(im)]=1  
+  ggplot(im) + geom_raster(aes(x=x, y=y, fill=z)) + xlim(0,1) + ylim(0,1) + scale_fill_gradient(limits=c(0,1))
 }
 sample.px = function(im, n, density=rep(1,nrow(im)), noise.level=.1) {
   im.sampled = im[sample(1:nrow(im), n, prob=density, replace=TRUE),]
@@ -968,17 +1003,13 @@ plot.predictions = function(im, mu.formula) {
     model = lm(mu.formula, data=im)
     im.hat = im
     im.hat$z = predict(model,  newdata = im)
-    blank = im; im$z=1 # try to work around some ggplot artifacts
-    plot.image(blank)  # no luck?
+    #blank = im; im$z=1 # try to work around some ggplot artifacts
+    #plot.image(blank)  # no luck?
     plot.image(im.hat)
 }
 ```
 
 ```{r}
-#| out-height: 300px
-#| fig-asp: 1
-#| layout-ncol: 2
- 
 # Create an image of an axis-aligned gaussian 'bump' at x=1/2,y=1/2 
 mu = c(1/2, 1/2)
 Sigma=diag(c(1/8^2, 1/16^2)) 
@@ -991,45 +1022,71 @@ density.im = image.from.function(function(x,y) {
 }, w=30, h=30) 
 
 set.seed(1)
-sampled.leak = sample.px(leak, 5000, density.im$z, noise.level=.1)
+sampled.leak = sample.px(leak, 2000, density.im$z, noise.level=.2)
+```
 
+```{r}
+#| out-height: 250px
+#| fig-asp: 1
+#| layout-ncol: 2
+ 
 plot.image(leak)
 plot.image(density.im)
 ```
 
-:::: r-stack
-::: {.fragment .fade-out data-fragment-index="0"}
-
 - Suppose we're interested in the health impacts of a chemical leak.
     - What we're looking at on the left is a map of the chemical concentration in the air. 
-    - Lighter colors mean higher concentrations.
-- That's our population. But we can't measure concentration everywhere.
-- We'll measure it a set of randomly chosen locations. 
+    - **Lighter colors on the left mean higher concentrations.**
+- Those are our supopulation means. But we can't measure concentration everywhere all the time.
+- We'll measure it a set of randomly chosen locations---**location density on the right**
 
-:::
-::: {.fragment .current-visible data-fragment-index="0"}
+## A 2D Example
+```{r}
+#| out-height: 250px
+#| fig-asp: 1
+#| layout-ncol: 2
+ 
+plot.image(leak)
+plot.image(density.im)
+```
 
 - Our sample is this set of measurements $(Z_i,X_i,Y_i)$.
     - $Z_i$ = concentration at measurement location i.
     - $X_i$ = longitude at location i
     - $Y_i$ = latitude  at location i 
-- We'll take them at random times, too---there are many observations $(z_j,x_j,y_j)$ at the same location $(x_j,y_j)$ in the population we're sampling from. We'll sample with replacement. 
-- The probability a sample is at a given location is shown on the right.
-:::
 
-::: {.fragment .current-visible data-fragment-index="1"}
+## A 2D Example
+```{r}
+#| out-height: 250px
+#| fig-asp: 1
+#| layout-ncol: 2
+ 
+plot.image(leak)
+plot.image(density.im)
+```
+
+
+- We'll take them at random times, too---there are many observations $(z_j,x_j,y_j)$ at the same location $(x_j,y_j)$ in the population we're sampling from. We'll sample with replacement. The probability a sample is at a given location is shown on the right.
+
+## A 2D Example
+```{r}
+#| out-height: 250px
+#| fig-asp: 1
+#| layout-ncol: 2
+ 
+plot.image(leak)
+plot.image(density.im)
+```
+
 
 - There are `r nrow(sampled.leak)` observations in our sample.
 - We want to estimate $\mu(x,y)=\E[Z_i \mid X_i=x, Y_i=y]$.
 - What we see on the right are the predictions $\hat\mu(x,y)$ of the saturated model.
 - i.e., the mean of the observations at each location. 
 
-:::
-::::
-
-## Fitting A Saturated Model
+# Fitting A Saturated Model
 ```{r}
-#| out-height: 300px
+#| out-height: 250px
 #| fig-asp: 1
 #| layout-ncol: 2
  
@@ -1045,7 +1102,7 @@ plot.predictions(sampled.leak, z~factor(x)*factor(y))
 ## Fitting A Plane Doesn't Work At All
 
 ```{r}
-#| out-height: 300px
+#| out-height: 250px
 #| fig-asp: 1
 #| layout-ncol: 2
  
@@ -1059,7 +1116,7 @@ plot.predictions(sampled.leak, z~x+y)
 ## Piecewise-Constant Models
 
 ```{r}
-#| out-height: 300px
+#| out-height: 250px
 #| fig-asp: 1
 #| layout-ncol: 2
 plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=4+1), seq(0,1, length.out=4+1)))
@@ -1072,7 +1129,7 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=8+1), seq(0,1, 
 ## A Piecewise-Constant Models
 
 ```{r}
-#| out-height: 300px
+#| out-height: 250px
 #| fig-asp: 1
 #| layout-ncol: 2
 #| cache: true 
@@ -1087,7 +1144,7 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
 ## Anisotropic Models
 
 ```{r}
-#| out-height: 300px
+#| out-height: 250px
 #| fig-asp: 1
 #| layout-ncol: 2
 #| cache: true 
@@ -1099,6 +1156,18 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
 - Both of these have $32 \times 8 = 256$.
 - But, fundamentally, there's no right rectangle-shape either.
 - We want smaller bins near the center of the data, where we have more observations and more variation in the outcomes. 
+
+## Anisotropic Models
+
+```{r}
+#| out-height: 250px
+#| fig-asp: 1
+#| layout-ncol: 2
+#| cache: true 
+plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=8+1), seq(0,1, length.out=32+1)))
+plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1, length.out=8+1)))
+```
+
 - There's no reason, statistically speaking, that our bins should be ...
     - all the same shape
     - all the same number of locations 
@@ -1106,7 +1175,9 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
 
 ## Any set of pixels can be a bin
 
-![](isl-fig8-3.png)
+![](isl-fig8-3.png){width=500px,height=500px}
+
+##
 
 - But we need some way to search for good partitions of the pixels into bins.
 - Trying all possible partitions is computationally infeasible. 
@@ -1114,9 +1185,7 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
 - To make things manageable computationally and statistically, we need to make some restrictions on the set of possible partitions.
 - People have, for the most part, settled on this: bins are *axis-aligned rectangles*.
 
-## Parititioning as Tree-Search
-
-![](isl-fig8-3.png)
+## Partioning as Tree-Search
 
 - We can describe any partition like this as the result of a tree of *splits* based on one covariate.
 - This aligns the problem naturally with *tree-search algorithms* from the AI/Optimization tradition in CS.
@@ -1139,6 +1208,8 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
 ```{r}
 #| layout-ncol: 2
 #| echo: true
+#| out-height: 250px
+#| fig-asp: 1 
 
 library(grf)
 model = regression_forest(X=cbind(sampled.leak$x, sampled.leak$y), Y=sampled.leak$z)
@@ -1156,6 +1227,9 @@ plot.image(im.hat)
 ```{r}
 #| layout-ncol: 2
 #| cache: true
+#| out-height: 250px
+#| fig-asp: 1
+ 
 library(imager)
 puffin.hires = load.image('https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Puffin_%28Fratercula_arctica%29.jpg/2560px-Puffin_%28Fratercula_arctica%29.jpg')
 rescale = function(hires) { 
