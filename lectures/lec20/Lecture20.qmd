@@ -968,6 +968,8 @@ plot.predictions = function(im, mu.formula) {
     model = lm(mu.formula, data=im)
     im.hat = im
     im.hat$z = predict(model,  newdata = im)
+    blank = im; im$z=1 # try to work around some ggplot artifacts
+    plot.image(blank)  # no luck?
     plot.image(im.hat)
 }
 ```
@@ -1060,8 +1062,8 @@ plot.predictions(sampled.leak, z~x+y)
 #| out-height: 300px
 #| fig-asp: 1
 #| layout-ncol: 2
-plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=3+1), seq(0,1, length.out=3+1)))
-plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=6+1), seq(0,1, length.out=6+1)))
+plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=4+1), seq(0,1, length.out=4+1)))
+plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=8+1), seq(0,1, length.out=8+1)))
 ```
 
 - Small piecewise-constant models work better.
@@ -1073,12 +1075,13 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=6+1), seq(0,1, 
 #| out-height: 300px
 #| fig-asp: 1
 #| layout-ncol: 2
-plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=9+1), seq(0,1, length.out=9+1)))
-plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=12+1), seq(0,1, length.out=12+1)))
+#| cache: true 
+plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=16+1), seq(0,1, length.out=16+1)))
+plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1, length.out=32+1)))
 ```
 
 - Larger ones resolve detail better, but they're huge.
-- On the left, we have $9 \times 9 = 81$ bins; on the right, $12 \times 12 = 144$.
+- On the left, we have $16 \times 16 = 256$ bins; on the right, $32 \times 32 = 1024$.
 - We only have `r nrow(sampled.leak)` observations. 
 
 ## Anisotropic Models
@@ -1087,13 +1090,62 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=12+1), seq(0,1,
 #| out-height: 300px
 #| fig-asp: 1
 #| layout-ncol: 2
-plot.predictions(leak, pc.formula.2d(seq(0,1, length.out=9+1), seq(0,1, length.out=3+1)))
-plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=3+1), seq(0,1, length.out=9+1)))
+#| cache: true 
+plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=8+1), seq(0,1, length.out=32+1)))
+plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1, length.out=8+1)))
 ```
 
 - We can try using rectangles, rather than squares, as bins.
-- Both of these have $9 \times 3 = 27$.
+- Both of these have $32 \times 8 = 256$.
 - But, fundamentally, there's no right rectangle-shape either.
-- We want 
+- We want smaller bins near the center of the data, where we have more observations and more variation in the outcomes. 
+- There's no reason, statistically speaking, that our bins should be ...
+    - all the same shape
+    - all the same number of locations 
+    - spatially contiguous locations
 
+## Any set of pixels can be a bin
 
+![](isl-fig8-3.png)
+
+- But we need some way to search for good partitions of the pixels into bins.
+- Trying all possible partitions is computationally infeasible. 
+- And it runs into a major statistical issue we haven't had time to address satisfactorily---overitting.
+- To make things manageable computationally and statistically, we need to make some restrictions on the set of possible partitions.
+- People have, for the most part, settled on this: bins are *axis-aligned rectangles*.
+
+## Parititioning as Tree-Search
+
+![](isl-fig8-3.png)
+
+- We can describe any partition like this as the result of a tree of *splits* based on one covariate.
+- This aligns the problem naturally with *tree-search algorithms* from the AI/Optimization tradition in CS.
+- All we need is a way to evaluate the quality of a partition. For that, we have...
+    - Heuristics, e.g. no small bins.^[Given our variance formula, this makes sense if we don't want to make assumptions about the density ratio $f_1/f_0$.]
+    - Cross-validation, e.g. minimize the mean squared error of predictions. This is standard.
+    - Fancier cross-validation, e.g. to minimize error in estimating the CATE. 
+
+## Parititioning as Tree-Search
+
+![](isl-fig8-3.png)
+
+- The fancy stuff is newer, but it's easy to use and getting popular.
+- It's implemented in the [Generalized Random Forest](https://grf-labs.github.io/grf/) package in **R**.
+- GRF includes a search procedure meant for estimating the CATE. 
+- And many generalizations, e.g. for Survival Analysis.
+
+## Back to the Chemical Leak
+
+```{r}
+#| echo: true
+
+library(grf)
+model = regression_forest(X=cbind(sampled.leak$x, sampled.leak$y), Y=sampled.leak$z)
+im.hat = leak; im.hat$z=predict(model, newdata=cbind(im.hat$x, im.hat$y))$predictions
+plot.image(leak)
+plot.image(im.hat)
+```
+
+- Here's what we get with GRF's default settings. 
+    - Left is the population means, right is the predictions from GRF. Not bad!
+    - We're not using any special features---just cross-validation on squared error.
