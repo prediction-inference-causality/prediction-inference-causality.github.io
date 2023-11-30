@@ -1137,6 +1137,7 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
 ## Back to the Chemical Leak
 
 ```{r}
+#| layout-ncol: 2
 #| echo: true
 
 library(grf)
@@ -1149,3 +1150,22 @@ plot.image(im.hat)
 - Here's what we get with GRF's default settings. 
     - Left is the population means, right is the predictions from GRF. Not bad!
     - We're not using any special features---just cross-validation on squared error.
+
+## And, For What It's Worth, A Bird
+
+```{r}
+#| layout-ncol: 2
+#| cache: true
+library(imager)
+puffin.hires = load.image('https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Puffin_%28Fratercula_arctica%29.jpg/2560px-Puffin_%28Fratercula_arctica%29.jpg')
+rescale = function(hires) { 
+  as.array(imresize(grayscale(hires), scale=100/max(dim(hires))))[,,1,1]
+}
+puffin = image.from.array(rescale(puffin.hires))
+
+plot.image(puffin)
+
+puffin.model = regression_forest(X=cbind(puffin$x, puffin$y), Y=puffin$z)
+im.hat = puffin; im.hat$z=predict(puffin.model, newdata=cbind(im.hat$x, im.hat$y))$predictions
+plot.image(im.hat)
+```
