@@ -5,6 +5,7 @@ format:
   clean-revealjs:
     height: 1000
     width: 1290
+    pdf-page-height-offset: -80
     theme: [default, "class.scss"]
     smaller: true
     slide-number: true
@@ -595,7 +596,7 @@ plot.ATT.estimate(data, pc.formula(seq(50,80, length.out=16+1)), pi.spec=pi) + w
 #| layout-nrow: 2
 #| layout-ncol: 2
 #| fig-asp: .5
-#| cache: false
+#| cache: true
 
 mu.formula = pc.formula(seq(50,80, length.out=2+1))
 plot.ATT.estimate(data, mu.formula) + weights.curve
@@ -1066,7 +1067,9 @@ plot.image(density.im)
 ```
 
 
-- We'll take them at random times, too---there are many observations $(z_j,x_j,y_j)$ at the same location $(x_j,y_j)$ in the population we're sampling from. We'll sample with replacement. The probability a sample is at a given location is shown on the right.
+- We'll take them at random times, too. In the population we're sampling from ...
+    - There are many observations $(z_j,x_j,y_j)$ at the same location $(x_j,y_j)$
+    - We'll sample with replacement. The probability a sample is at a given location is shown on the right.
 
 ## A 2D Example
 ```{r}
@@ -1084,7 +1087,7 @@ plot.image(density.im)
 - What we see on the right are the predictions $\hat\mu(x,y)$ of the saturated model.
 - i.e., the mean of the observations at each location. 
 
-# Fitting A Saturated Model
+## Fitting A Saturated Model
 ```{r}
 #| out-height: 250px
 #| fig-asp: 1
@@ -1175,17 +1178,18 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
 
 ## Any set of pixels can be a bin
 
-![](isl-fig8-3.png){width=500px,height=500px}
-
-##
+![](figures/isl-fig8-3.png){height=500px}
 
 - But we need some way to search for good partitions of the pixels into bins.
 - Trying all possible partitions is computationally infeasible. 
 - And it runs into a major statistical issue we haven't had time to address satisfactorily---overitting.
-- To make things manageable computationally and statistically, we need to make some restrictions on the set of possible partitions.
+- To make things manageable computationally and statistically...
+- we need to make some restrictions on the set of possible partitions.
 - People have, for the most part, settled on this: bins are *axis-aligned rectangles*.
 
 ## Partioning as Tree-Search
+
+![](figures/isl-fig8-3.png){height=500px}
 
 - We can describe any partition like this as the result of a tree of *splits* based on one covariate.
 - This aligns the problem naturally with *tree-search algorithms* from the AI/Optimization tradition in CS.
@@ -1194,9 +1198,9 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
     - Cross-validation, e.g. minimize the mean squared error of predictions. This is standard.
     - Fancier cross-validation, e.g. to minimize error in estimating the CATE. 
 
-## Parititioning as Tree-Search
+## Fancy Trees
 
-![](isl-fig8-3.png)
+![](figures/grf_logo_wbg_cropped.png){height=500px}
 
 - The fancy stuff is newer, but it's easy to use and getting popular.
 - It's implemented in the [Generalized Random Forest](https://grf-labs.github.io/grf/) package in **R**.
@@ -1209,7 +1213,7 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
 #| layout-ncol: 2
 #| echo: true
 #| out-height: 250px
-#| fig-asp: 1 
+#| fig-asp: 1  
 
 library(grf)
 model = regression_forest(X=cbind(sampled.leak$x, sampled.leak$y), Y=sampled.leak$z)
@@ -1225,21 +1229,27 @@ plot.image(im.hat)
 ## And, For What It's Worth, A Bird
 
 ```{r}
-#| layout-ncol: 2
 #| cache: true
-#| out-height: 250px
-#| fig-asp: 1
- 
 library(imager)
 puffin.hires = load.image('https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Puffin_%28Fratercula_arctica%29.jpg/2560px-Puffin_%28Fratercula_arctica%29.jpg')
 rescale = function(hires) { 
   as.array(imresize(grayscale(hires), scale=100/max(dim(hires))))[,,1,1]
 }
 puffin = image.from.array(rescale(puffin.hires))
+puffin.sampled = sample.px(puffin,5000, noise.level=.05)
 
+puffin.model = regression_forest(X=cbind(puffin.sampled$x, puffin.sampled$y), Y=puffin.sampled$z)
+im.hat = puffin
+im.hat$z=predict(puffin.model, newdata=cbind(im.hat$x, im.hat$y))$predictions
+```
+
+```{r}
+#| layout-ncol: 2
+#| out-height: 500px
+#| fig-asp: 1
+#| fig-cap:
+#| - left, the original image. Roughly 5000 pixels.
+#| - right, an estimate based on 5000 samples.
 plot.image(puffin)
-
-puffin.model = regression_forest(X=cbind(puffin$x, puffin$y), Y=puffin$z)
-im.hat = puffin; im.hat$z=predict(puffin.model, newdata=cbind(im.hat$x, im.hat$y))$predictions
 plot.image(im.hat)
 ```
