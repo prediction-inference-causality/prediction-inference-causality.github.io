@@ -1,6 +1,9 @@
 ---
 title: "QTM 220 Final Practice Problems"
 format: pdf
+execute:
+  echo: false
+  warning: false
 editor: visual
 ---
 
@@ -26,5 +29,401 @@ Showing your work, calculate $Var[\tilde{Y}]$.
 
 How does $Var[\tilde{Y}]$ compare to $Var[\bar{Y}]$?
 
+\subsection*{Problem 2}
 
+Suppose we have a sample of $Y_1 \ldots Y_n$ and $X_1 \ldots X_n$ stored in an \textbf{R} dataframe \`df' with $n$ rows. We run this code.
+
+```{r}
+#| echo: false
+library(ggplot2)
+p3n <- 200
+z <- c(rep(0,p3n/2),rep(1,p3n/2))
+set.seed(220220)
+x <-   z + rnorm(p3n,mean=1,sd=1) + z*rnorm(p3n,mean=3,sd = 1)
+y <- (-0.5)*x + (.8)*x*z + rnorm(p3n)
+
+
+dfp3 <- data.frame(y,x,z)
+df<-dfp3
+
+
+q2<- ggplot(data = dfp3, aes(x = x, y = y)) +
+  geom_point() +
+  xlab("x") +
+  ylab("y") +
+  theme_bw() 
+n<-p3n
+
+
+modone<- lm(y~x,data=dfp3)
+
+```
+
+```{r}
+#| echo: true
+mod<- lm(y~x, data=df)
+summary(mod)
+
+```
+
+```{r}
+#| echo: true
+B=10000
+beta_0<- rep(NA,B)
+beta_1<- rep(NA,B)
+for( b in 1:B ){
+bootind = sample(1:n,size=n,replace=T)
+dfboot = df[bootind,]
+mod<- lm(y~x, data=dfboot)
+beta_0[b] = mod$coef[1]
+beta_1[b] = mod$coef[2]
+}
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the vector Y's elements
+#|  -  Scatterplot of X and Y
+ggplot() + geom_histogram(aes(x=y,     y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(y)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(y)+c(-1,1)*sd(y)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(y), xmin=mean(y)-1.96*sd(y), xmax=mean(y)+1.96*sd(y), y=.025)) + theme_bw() + xlab('') + ylab('')
+
+q2 + geom_abline(slope=modone$coef[2], intercept=modone$coef[1])
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the beta_0's elements
+#|  -  Histogram of the beta_1's elements
+ggplot() + geom_histogram(aes(x=beta_0, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(beta_0)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(beta_0)+c(-1,1)*sd(beta_0)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(beta_0), xmin=mean(beta_0)-1.96*sd(beta_0), xmax=mean(beta_0)+1.96*sd(beta_0), y=.25)) + theme_bw() + xlab('') + ylab('')
+
+ggplot() + geom_histogram(aes(x=beta_1, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(beta_1)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(beta_1)+c(-1,1)*sd(beta_1)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(beta_1), xmin=mean(beta_1)-1.96*sd(beta_1), xmax=mean(beta_1)+1.96*sd(beta_1), y=1)) + theme_bw() + xlab('') + ylab('')
+
+```
+
+\subsection*{Part a}
+
+What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+mean(Y)
+```
+
+\subsection*{Part b}
+
+What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+sd(Y)
+```
+
+\subsection*{Part c}
+
+What does this code calculate? State it in words and mark it with a 'c', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+mod<- lm(y~x, data=df)
+mod$coef[1]
+```
+
+\subsection*{Part d}
+
+What does this code calculate? State it in words and mark it with a 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+sd(beta_1)
+```
+
+\subsection*{Part e}
+
+What does this code calculate? State it in words and mark it with a 'e', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+mod$coef[2] + sqrt(diag(solve(t(X)%*%X)%*%t(X)%*%diag(resid^2)%*%X%*%solve(t(X)%*%X)))[2]
+
+mod$coef[2] - sqrt(diag(solve(t(X)%*%X)%*%t(X)%*%diag(resid^2)%*%X%*%solve(t(X)%*%X)))[2]
+```
+
+\subsection*{Part f}
+
+How could you calculate roughly the same thing as in part e using 'sd(beta_1)'
+
+
+\subsection*{Problem 3}
+
+Consider the following data set with treatment $d$, covariate $x$, and outcome $y$, which has been fit with a linear interactive model. Note that the treated units with $d=1$ are denoted as solid points, while the control units with $d=0$ are denoted with open circles. The regression line for the treated units is solid, while the regression line for the control units is dashed.
+
+```{r}
+x <- c(1,1,1,2,3,3,3)
+y <- c(2/3,5/3,7/3,5/3,2/3,8/3,10/3)
+d <- c(0,1,1,0,0,1,1)
+plot(x,y,xlim=c(1.06,2.94),pch=c(1,19,19,1,1,19,19))
+abline(lm(y[d==0] ~x[d==0]),lty=2)
+abline(lm(y[d==1] ~x[d==1]))
+```
+
+\subsubsection{Part A}
+
+What is the $\widehat{ATE}$ based on this model and data? Show your calculations.
+
+\subsubsection{Part B}
+
+What is the $\widehat{ATT}$ based on this model and data? Show your calculations.
+
+\subsubsection{Part B}
+
+What is the $\widehat{ATC}$ based on this model and data? Show your calculations.
+
+\subsection*{Problem 4}
+
+Consider the following data with three observations.
+
+```{r}
+x <- c(1,2,3)
+y <- c(1,3,1)
+plot(x,y,pch=19)
+```
+
+Our goal is to use leave one out cross-validation to choose between a linear regression model and a constant model for this data. Below we have plotted these data three times. In the left panel, the left-most observation has been left out (denoted by an open circle). In the middle panel, the middle observation has been left out. In the right panel the right observation has been left out. 
+
+```{r}
+x <- c(1,2,3)
+y <- c(1,3,1)
+par(mfrow=c(1,3))
+plot(x,y,pch=c(1,19,19))
+plot(x,y,pch=c(19,1,19))
+plot(x,y,pch=c(19,19,1))
+```
+
+\subsubsection{Part A}
+
+On the figure above, draw a constant model (i.e., flat line) for each of the three plots based on the non-left-out data.
+
+\subsubsection{Part B}
+
+On the figure above, draw the residuals from the constant models to the left-out observation for each of the three plots.
+
+\subsubsection{Part C}
+
+On the figure above, draw a linear regression line (i.e., line that doesn't have to be flat) for each of the three plots based on the non-left-out data.
+
+\subsubsection{Part D}
+
+On the figure above, draw the residuals from the linear models to the left-out observation for each of the three plots.
+
+\subsubsection{Part E}
+
+Based on the residuals you calculated in parts B and D, which model is preferred?
+
+\subsection*{Problem 5}
+
+Consider the data below. In the left panel, it has been partitioned into two bins. In the right panel, it has been partitioned into four bins.
+
+```{r}
+x <- c(1,1,1,2,2,2,3,3,3,4,4,4)
+y <- c(1,2,3,3,4,5,5,6,7,7,8,9)
+par(mfrow=c(1,2))
+plot(x,y,pch=19)
+abline(v=2.5)
+plot(x,y,pch=19)
+abline(v=c(1.5,2.5,3.5))
+```
+
+\subsection{Part A}
+
+In the left panel, draw piece-wise constant models for the two bins.
+
+\subsection{Part B}
+
+Calculate the estimated standard error for each of the two bins in the left panel. Use the table below to organize your calculations. 
+
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+Observation $i$ & $y_i$ & bin constant & deviation & deviation$^2$ \\
+\hline 
+1 & & & & \\
+\hline 
+2 & & & & \\
+\hline 
+3 & & & &\\
+\hline 
+4 & & & &\\
+\hline 
+5 & & & &\\
+\hline 
+6 & & & & \\
+\hline 
+7 & & & & \\
+\hline 
+8 & & & &\\
+\hline 
+9 & & & &\\
+\hline 
+10 & & & & \\
+\hline 
+11 & & & &\\
+\hline 
+12 & & & & \\
+\hline 
+\end{tabular}
+
+\subsection{Part C}
+
+In the right panel, draw piece-wise constant models for the four bins.
+
+\subsection{Part D}
+
+Calculate the estimated standard error for each of the four bins in the right panel. Use the table below to organize your calculations. 
+
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+Observation $i$ & $y_i$ & bin constant & deviation & deviation$^2$ \\
+\hline 
+1 & & & & \\
+\hline 
+2 & & & & \\
+\hline 
+3 & & & &\\
+\hline 
+4 & & & &\\
+\hline 
+5 & & & &\\
+\hline 
+6 & & & & \\
+\hline 
+7 & & & & \\
+\hline 
+8 & & & &\\
+\hline 
+9 & & & &\\
+\hline 
+10 & & & & \\
+\hline 
+11 & & & &\\
+\hline 
+12 & & & & \\
+\hline 
+\end{tabular}
+
+\subsection{Part E} 
+Comment on the difference(s) between the two bin and four bin models. 
+
+\subsection*{Problem 5}
+
+\subsubsection*{Part A}
+Suppose we want $\beta_1$ from $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i + e_i$ but we run the regression $lm (y\sim x)$ without $z$. We have de-meaned our variables $x_i$ and $z_i$ such that $\bar{x}=\sum_{i=1}^n x_i =0$ and $\bar{z}=\sum_{i=1}^n z_i =0$. Under what condition(s) will the coefficient on $x$ from $lm (y\sim x)$, which is $\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$, be equal to $\beta_1$? Derive what your coefficient on $x$ will be in terms of $\beta$s and justify your steps.
+
+
+\subsubsection*{Part B}
+
+
+```{r}
+#| echo: false
+
+p5n <- 200
+z.5 <- c(rep(0,p5n/2),rep(1,p5n/2))
+set.seed(220220)
+x.5 <-   rnorm(p5n,mean=3,sd = 3) + runif(p5n,-4,2)
+y.5 <- (-0.5)*x.5 + (4)*z.5 + rnorm(p5n)
+
+
+dfp5 <- data.frame(y.5,x.5,z.5)
+
+q5a <- ggplot(data = dfp5, aes(x = x.5, y = y.5)) +
+  geom_point(aes(shape = factor(z.5)),size = 1,alpha=.5) +
+  scale_shape_manual(values = c(1,19), label = c("z=0","z=1")) +
+  xlab("x") +
+  ylab("y") +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        legend.box.just = "left",
+        legend.justification = c("left","top"),
+        legend.position = c(0,1),
+        legend.margin = margin(6,6,6,6),
+        legend.title = element_blank(),
+        legend.box.background = element_rect(color="black",size=1))
+
+q5b<- ggplot(data = dfp3, aes(x = x.5, y = z.5)) +
+  geom_jitter(height=.25) +  xlab("x") +
+  ylab("z") +
+  theme_bw()
+
+
+y<- y.5
+x<- x.5
+z<- z.5
+df <- data.frame(y,x,z)
+
+modone<- lm(y~x+z,data=df)
+modtwo<- lm(z ~ x, data=df)
+
+```
+
+We have collected $y$, $x$, and a binary variable $z$. The scatter plots below show our data. 
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Scatterplot 1
+#|  -  Scatterplot 2 (Jittered)
+q5a
+q5b
+
+```
+
+
+Do you expect the coefficient on $x$ from the simple regression of $y$ on $x$ ($lm(y\sim x)$) to be: 
+
+\begin{itemize}
+\item Positive
+\item Negative
+\item Zero 
+\end{itemize}
+
+
+\subsubsection*{Part C}
+
+We then run the regression $lm(y \sim x+ z)$ which gives us the following output: 
+
+```{r}
+summary(modone)
+
+```
+And we run the regression $lm(z \sim x)$ which gives us the following output: 
+```{r}
+summary(modtwo)
+```
+
+\bigskip 
+
+
+How would you use these outputs to calculate the coefficient on $x$ from the simple regression $lm(y\sim x)$? Explain your steps and define any notation you use. Plug in the estimates from your output (you can leave it as an equation). 
+
+
+
+\subsubsection*{Part D}
+
+How do you expect the standard errors of the simple regression of $y \sim x$ to differ from the standard errors of the multiple regression $y \sim x + z$? Why? 
 
