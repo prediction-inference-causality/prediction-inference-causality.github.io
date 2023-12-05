@@ -1,0 +1,404 @@
+---
+title: "QTM 220 Final Exam (12/7)"
+format: pdf
+execute:
+  echo: false
+  warning: false
+editor: visual
+---
+
+\subsection*{Problem 1}
+
+Suppose you have a sample $Y_1,Y_2...,Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma$.
+
+Consider the following estimator for $\mu$: $\tilde{Y} = \frac{1}{2n}\sum_{i=1}^n Y_i$
+
+\subsubsection*{Part A}
+
+What is $E[\tilde{Y}]$?
+
+\bigskip
+
+\color{red}
+
+$$E[\tilde{Y}] = E[\frac{1}{2n}\sum_{i=1}^n Y_i]$$ $$= \frac{1}{2n} E[\sum_{i=1}^n Y_i]$$
+
+$$= \frac{1}{2n} \sum_{i=1}^n E[Y_i]$$ by linearity of expectations
+
+$$= \frac{1}{2n} \sum_{i=1}^n E[Y]$$ by IID
+
+$$= \frac{1}{2n} \sum_{i=1}^n \mu$$ by definition
+
+$$= \frac{1}{2n} n \mu$$
+
+$$= \frac{n}{2n} \mu$$ 
+
+$$= \frac{1}{2} \mu$$
+
+\color{black}
+
+\subsubsection*{Part B}
+
+How does $E[\tilde{Y}]$ compare to $E[\bar{Y}]$? (where $\bar{Y} = \frac{1}{n}\sum_{i=1}^n Y_i$)
+
+\bigskip
+
+\color{red} similar steps show that $E[\bar{Y}] = \mu$. $\bar{Y}$ is unbiased, $\tilde{Y}$ is biased; bias does not change in $n$
+\color{black}
+
+\subsubsection*{Part C}
+
+Showing your work, calculate $Var[\tilde{Y}]$.
+
+\bigskip
+
+\color{red}
+
+$$Var[\tilde{Y}] = V[\frac{1}{2n}\sum_{i=1}^n Y_i]$$
+
+$$ = (\frac{1}{2n})^2 V[\sum_{i=1}^n Y_i]$$
+
+$$ = (\frac{1}{2n})^2 \sum_{i=1}^n V[Y]$$ because IID, covariances are 0
+
+$$ = (\frac{1}{2n})^2 \sum_{i=1}^n \sigma^2$$ by definition
+
+$$ = (\frac{1}{2n})^2 n \sigma^2$$
+
+$$ = \frac{n}{(2n)^2} \sigma^2$$
+
+$$ = \frac{1}{4n} \sigma^2$$
+
+```{=tex}
+\color{black}
+\subsubsection*{Part D}
+```
+How does $Var[\tilde{Y}]$ compare to $Var[\bar{Y}]$?
+
+\bigskip
+
+\color{red}
+
+Similar steps show that $V[\bar{Y}] = \frac{\sigma^2}{n}$
+
+$\frac{1}{n} > \frac{1}{4n}$ so our $\tilde{Y}$ estimator has a lower variance than the sample mean. But the estimator is biased, so we probably wouldn't want to use it over the mean.
+
+\color{black}
+
+
+
+\subsection*{Problem 2}
+
+Suppose we have a sample of $Y_1 \ldots Y_n$ and binary $X_1 \ldots X_n$ stored in an \textbf{R} dataframe \`df' with $n$ rows. We run this code.
+
+```{r}
+#| echo: false
+library(ggplot2)
+n <- 500
+x <- c(rep(0,n/2),rep(1,n/2))
+set.seed(220220)
+y <- 2.6*x +  rnorm(n) + runif(n,-1,1)
+
+
+df <- data.frame(y,x)
+
+
+
+q2<- ggplot(data = df, aes(x = x, y = y)) +
+  geom_jitter(width=.25) +
+  geom_hline(yintercept=mean(df$y[df$x==0]), linetype="dashed")+ 
+   geom_hline(yintercept=mean(df$y[df$x==1]), linetype="dashed")+ 
+  xlab("x") +
+  ylab("y") +
+  theme_bw() 
+
+```
+
+
+```{r}
+#| echo: true
+B=10000
+theta<- rep(NA,B)
+for( b in 1:B ){
+bootind = sample(1:n,size=n,replace=T)
+dfboot = df[bootind,]
+theta[b]<- (mean(dfboot$y[dfboot$x==1])-mean(dfboot$y[dfboot$x==0]))
+}
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the vector Y's elements
+#|  -  Jittered Scatterplot of X and Y
+ggplot() + geom_histogram(aes(x=y,     y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(y)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(y)+c(-1,1)*sd(y)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(y), xmin=mean(y)-1.96*sd(y), xmax=mean(y)+1.96*sd(y), y=.025)) + theme_bw() + xlab('') + ylab('')
+
+q2 
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the theta's elements
+
+ggplot() + geom_histogram(aes(x=theta, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(theta)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(theta)+c(-1,1)*sd(theta)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(theta), xmin=mean(theta)-1.96*sd(theta), xmax=mean(theta)+1.96*sd(theta), y=.25)) + theme_bw() + xlab('') + ylab('')
+
+```
+
+\subsection*{Part a}
+
+What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+mean(Y)
+```
+
+\color{red}
+
+The sample mean. It's indicated by the solid vertical line on the sample histogram. \color{black}
+
+\subsection*{Part b}
+
+What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+sd(Y)
+```
+
+\color{red}
+
+The sample standard deviation of Y. It's the distance between the solid vertical and either dashed vertical line on the sample histogram. \color{black}
+
+\subsection*{Part c}
+
+What does this code calculate? State it in words and mark it with a 'c', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+mean(Y[X==0])
+```
+
+\color{red}
+
+The conditional sample mean of Y among X=0. It is the lower dashed line on the scatterplot. \color{black}
+
+\subsection*{Part d}
+
+What does this code calculate? State it in words and mark it with a 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+sd(theta)
+```
+
+\color{red}
+
+The bootstrap sampling distribution's standard deviation for the difference in the mean of y between x=1 and x=0. Estimated standard error. It's the distance between the solid vertical and either dashed vertical line on the theta sampling distribution histogram. \color{black}
+
+\subsection*{Part e}
+
+What does this code calculate? State it in words and mark it with a 'e', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+(mean(y[x==1])-mean(y[x==0])) + 1.96*(sd(y[x==1])/sqrt(n1) + sd(y[x==0])/sqrt(n0))
+(mean(y[x==1])-mean(y[x==0])) - 1.96*(sd(y[x==1])/sqrt(n1) + sd(y[x==0])/sqrt(n0))
+
+```
+
+\color{red}
+
+A 95% confidence interval --- based on normal approximation --- for the difference in means for the population from which this sample was drawn. This is indicated by the horizontal segment (with a dot in the middle) on the sampling distribution histogram (theta). \color{black}
+
+\subsection*{Part f}
+
+How could you calculate roughly the same thing as in part e using 'sd(theta)'
+
+\color{red}
+
+We can use the standard deviation of the bootstrap sampling distribution as our estimate of standard error.
+
+```{=tex}
+\begin{verbatim}
+(mean(y[x==1])-mean(y[x==0]))  + 1.96 * sd(theta)
+(mean(y[x==1])-mean(y[x==0]))  - 1.96 * sd(theta)
+\end{verbatim}
+```
+\color{black}
+
+conceptual addition: why no n? What is standard error? talk through bootstrap in words? 
+
+\subsection*{Problem 3} 
+
+change to quadratic! 
+
+\subsection*{Problem 4}
+
+We run an experiment in which a treatment, $D$, is randomly assigned to participants conditional on sex. The table below shows our data, including our outcome of interest, $Y$. 
+
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+Sex & Treatment (D) & Outcome (Y) & Y(1) & Y(0) \\
+\hline
+Male & 1 & 20 & & \\
+\hline
+Male & 0 & 5 & & \\
+\hline
+Male & 0 & 10 & & \\
+\hline
+Male & 0 & 5 & & \\
+\hline
+Female & 1 & 10 & & \\
+\hline
+Female & 1 & 5 & & \\
+\hline
+Female & 0 & 5 & & \\
+\hline
+Female & 0 & 0 & & \\
+\hline
+Female & 0 & 5 & & \\
+\hline 
+Female & 1 & 10 & & \\
+\hline
+Female & 0 & 5 & & \\
+\hline 
+Female & 1 & 5 & & \\
+\hline
+\end{tabular}
+
+
+
+\subsubsection*{Part A}
+
+Fill in the table with potential outcomes based on the observed data. Put a question mark (?) in the cells for which you do not have data. 
+
+\subsubsection*{Part B}
+What is the probability of receiving treatment for males? What is the probability of receiving treatment for females? 
+
+\color{red}
+$P(D=1|Male) = \frac{1}{4}$
+
+$P(D=1|Female) = \frac{1}{2}$
+\color{black}
+
+\subsubsection*{Part C}
+What is the treatment effect among males? What is the treatment effect among females? 
+
+\color{red}
+Males: $20 - \frac{5+10+5}{3} = 20 - \frac{20}{3} = 13.333$
+
+Females: $\frac{10+5+10+5}{4} - \frac{5+0+5+5}{4} = \frac{30}{4} - \frac{15}{4} = 7.5 - 3.75 = 3.75$
+\color{black} 
+
+\subsubsection*{Part D}
+If you ignored the conditional randomization and calculated the average treatment effect without accounting for sex, what would your estimate be? 
+
+\color{red}
+$\frac{20+10+5+10+5}{5} - \frac{5+10+5+5+0+5+5}{7} = \frac{50}{5} - \frac{35}{7} = 10 - 5 = 5$
+\color{black}
+
+\subsubsection*{Part E}
+To analyze our data, we are interested in fitting the following model: $$Y_i = \beta_0 + \beta_1 D_i + \beta_2 Sex_i + \beta_3 D_i:Sex_i$$ where $Sex_i =1$ for males and $=0$ for females. Fill in the table below using $\beta$s
+
+\begin{tabular}{|c|c|}
+\hline
+& $\beta$s \\
+\hline 
+Avg Y [Treated, Male] & \color{red} $\beta_0 + \beta_1 + \beta_2 + \beta_3$ \color{black} \\
+\hline 
+Avg Y [Control, Male] & \color{red} $\beta_0 + \beta_2$ \color{black} \\
+\hline 
+Avg Y [Treated, Female] & \color{red} $\beta_0 + \beta_1$ \color{black}\\
+\hline 
+Avg Y [Control, Female] & \color{red}$\beta_0$ \color{black}\\
+\hline 
+$\hat{ATE}_{Male}$ & \color{red} $\beta_1 + \beta_3$ \color{black} \\
+\hline 
+$\hat{ATE}_{Female}$ & \color{red} $\beta_1$ \color{black} \\
+\hline
+\end{tabular}
+
+
+conceptual addition: when we run this regression in R, why might we be concerned about using the standard errors lm() gives us? [homoskedasticity assumption]
+
+\subsection*{Problem 5}
+
+leave one out cross-validation but with a quadratic
+
+\subsection*{Problem 6}
+
+piece-wise constant 
+
+
+\subsection*{Problem 7}
+omitted variable bias with interaction 
+
+\subsubsection*{Part A} 
+Suppose we want $\beta_1$ from $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i +  \beta_3 x_i:z_i + e_i$ but we run the regression $lm (y\sim x)$ without $z$ or the interaction term. We have de-meaned our variables $x_i$ and $z_i$ such that $\bar{x}=\sum_{i=1}^n x_i =0$ and $\bar{z}=\sum_{i=1}^n z_i =0$. Derive what your coefficient on $x$ from $lm (y\sim x)$, which is $\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$, will be in terms of $\beta$s and justify your steps. Hint: you can relabel $x_i:z_i$ as a different variable. 
+
+\bigskip
+
+\color{red}
+
+The coefficient on $x$ from $lm (y\sim x)$ is $$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$$
+
+Plug in $y_i$ defined by the multivariate regression: $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i +  \beta_3 x_i: z_i+ e_i$
+
+Let's redefine $x_i:z_i = w_i$ 
+
+$y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i +  \beta_3 w_i + e_i$
+
+$$\frac{\sum_{i=1}^n x_i (\beta_0 + \beta_1 x_i + \beta_2 z_i +  \beta_3 w_i + e_i)}{\sum_{i=1}^n x_i^2 }$$
+
+Distribute
+
+$$\frac{\sum_{i=1}^n x_i \beta_0 }{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_1 x_i}{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_2 z_i }{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_3 w_i }{\sum_{i=1}^n x_i^2 }+  \frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 }$$ Let's work through each term.
+
+$$\frac{\sum_{i=1}^n x_i \beta_0 }{\sum_{i=1}^n x_i^2 } = \frac{ \beta_0 \sum_{i=1}^n x_i }{\sum_{i=1}^n x_i^2 } = \frac{ \beta_0 *0 }{\sum_{i=1}^n x_i^2 } = 0$$ 
+
+as $x$ is demeaned, $\sum x_i =0$ 
+
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i \beta_1 x_i}{\sum_{i=1}^n x_i^2 } = \frac{  \beta_1 \sum_{i=1}^n x_i x_i}{\sum_{i=1}^n x_i^2 } = \beta_1$$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i \beta_2 z_i }{\sum_{i=1}^n x_i^2 } = \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 }$$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i \beta_3 w_i }{\sum_{i=1}^n x_i^2 } = \frac{\beta_3 \sum_{i=1}^n x_i w_i }{\sum_{i=1}^n x_i^2 }$$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 } = \frac{0}{\sum_{i=1}^n x_i^2 } =0$$ we know that $\sum_{i=1}^n x_i e_i =0$ from the first order conditions on our least squares estimator (we chose the intercept and coefficient(s) that minimize the sum of squared residuals)
+
+\bigskip
+
+Thus we have
+
+$$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 } = \beta_1 + \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 } + \frac{\beta_3 \sum_{i=1}^n x_i w_i }{\sum_{i=1}^n x_i^2 }$$ 
+Plugging back in for $w_i$, $$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 } = \beta_1 + \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 } + \frac{\beta_3 \sum_{i=1}^n x_i z_i x_i }{\sum_{i=1}^n x_i^2 }$$ 
+
+\color{black}
+
+
+
+conceptual question: what happens if x is randomized? 
+
