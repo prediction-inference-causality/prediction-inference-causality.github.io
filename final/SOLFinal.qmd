@@ -41,6 +41,8 @@ $$= \frac{1}{2} \mu$$
 
 How does $E[\tilde{Y}]$ compare to $E[\bar{Y}]$? (where $\bar{Y} = \frac{1}{n}\sum_{i=1}^n Y_i$)
 
+Should we just ask for bias calculation? 
+
 \bigskip
 
 \color{red} similar steps show that $E[\bar{Y}] = \mu$. $\bar{Y}$ is unbiased, $\tilde{Y}$ is biased; bias does not change in $n$ \color{black}
@@ -240,7 +242,52 @@ conceptual addition: why no n? What is standard error? talk through bootstrap in
 
 \subsection*{Problem 3}
 
-change to quadratic!
+Consider the following data set with treatment $d$, covariate $x$, and outcome $y$, which has been fit with a linear interactive model. Note that the treated units with $d=1$ are denoted as triangles, while the control units with $d=0$ are denoted with circles. The regression line for the treated units is solid, while the regression line for the control units is dashed.
+
+```{r}
+x <- c(0,2,4,0,0,2,4,4)
+y <- c(2,4,6,12.25,8,5.25,3.25,1)
+d <- c(1,1,1,0,0,0,0,0)
+#plot(x,y,pch=c(19,19,19,1,1,1,1,1))
+#abline(lm(y[d==0] ~x[d==0]),lty=2)
+#abline(lm(y[d==1] ~x[d==1]))
+
+df<- data.frame(x=x,y=y,d=d)
+m1<- lm(y[d==0] ~x[d==0],data=df)
+m2<- lm(y[d==1] ~x[d==1], data=df)
+plot<- ggplot(data = df, aes(x = x, y = y)) + geom_point(aes(shape=as.factor(d)),size=2) + scale_y_continuous(breaks = seq(0, 13, by = 1)) + geom_abline(slope=m1$coef[2], intercept=m1$coef[1], linetype="dashed")+geom_abline(slope=m2$coef[2], intercept=m2$coef[1])
+
+plot + theme(legend.position="none")
+```
+
+\subsubsection{Part A}
+
+What is the $\widehat{ATE}$ based on this model and data? Show your calculations.
+
+\color{red}
+
+$\frac{1}{8}[(2-10)+(2-10)+(2-10)+(4-6)+(4-6)+(6-2)+(6-2)+(6-2)] = -2$
+
+\color{black}
+
+\subsubsection{Part B}
+
+What is the $\widehat{ATT}$ based on this model and data? Show your calculations.
+
+\color{red}
+$\frac{1}{3}[(2-10)+(4-6)+(6-2)] = -2$
+ \color{black}
+
+\subsubsection{Part B}
+
+What is the $\widehat{ATC}$ based on this model and data? Show your calculations.
+
+\color{red}
+$\frac{1}{5}[(2-10)+(2-10)+(4-6)+(6-2)+(6-2)] = -2$
+ \color{black}
+ 
+ conceptual addition: give them IPW notation and choose whether that corresponds to ATT or ATC? something about tying to IPW?
+
 
 \subsection*{Problem 4}
 
@@ -335,6 +382,7 @@ $\hat{ATE}_{Female}$ & \color{red} $\beta_1$ \color{black} \\
 conceptual addition: when we run this regression in R, why might we be concerned about using the standard errors lm() gives us? \[homoskedasticity assumption\]
 
 \subsection*{Problem 5}
+
 Consider the following data with four observations.
 
 ```{r}
@@ -343,7 +391,7 @@ y <- c(2,4,1,3)
 plot(x,y,pch=19,xlim=c(0,5),ylim=c(-2,6))
 ```
 
-Our goal is to use leave one out cross-validation to choose between a linear regression model and a quadratic regression model for this data. Below we have plotted these data four times. In the top left panel, the left-most observation has been left out (denoted by an open circle). In the top right, the second observation has been left out. In the bottom left, the third observation has been left out. In the bottom right, the right-most observation has been left out. 
+Our goal is to use leave one out cross-validation to choose between a linear regression model and a quadratic regression model for this data. Below we have plotted these data four times. In the top left panel, the left-most observation has been left out (denoted by an open circle). In the top right, the second observation has been left out. In the bottom left, the third observation has been left out. In the bottom right, the right-most observation has been left out.
 
 ```{r}
 #| out-height: 3.5in
@@ -362,39 +410,30 @@ plot(x,y,pch=c(19,19,19,1),xlim=c(0,5),ylim=c(-2,6))
 
 On the figure above, draw a linear model for each of the plots based on the non-left-out data.
 
-
-
 \subsubsection{Part B}
 
 On the figure above, draw the residuals from the linear models to the left-out observation for each of the plots.
-
-
 
 \subsubsection{Part C}
 
 On the figure above, draw a quadratic regression line (i.e., line that can be parabolic) for each of the plots based on the non-left-out data.
 
-
 \subsubsection{Part D}
 
 On the figure above, draw the residuals from the quadratic models to the left-out observation for each of the three plots.
 
-
-
 \subsubsection{Part E}
 
-Based on the residuals you calculated in parts B and D, which model is preferred?
+Based on the residuals in parts B and D, which model is preferred?
 
-
-
-
+\color{red}
+the linear model is preferred; the quadratic yields much larger residuals for the left out data (it is overfit)
+\color{black}
 \subsection*{Problem 6}
 
-piece-wise constant
+piece-wise constant????
 
 \subsection*{Problem 7}
-
-omitted variable bias with interaction
 
 \subsubsection*{Part A}
 
@@ -446,4 +485,99 @@ $$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 } = \beta_1 + \frac{\beta_2 \su
 
 \color{black}
 
-conceptual question: what happens if x is randomized?
+
+\subsubsection*{Part A}
+
+```{r}
+#| echo: false
+
+p3n <- 200
+z <- c(rep(0,p3n/2),rep(1,p3n/2))
+set.seed(220220)
+x <-   rnorm(p3n,mean=1,sd=1) + z*rnorm(p3n,mean=3,sd = 1)
+y <- 12 + (-3)*x + (4)*z + 8*x*z + rnorm(p3n) + runif(p3n,-4,6)
+
+
+dfp3 <- data.frame(y,x,z)
+
+q1 <- ggplot(data = dfp3, aes(x = x, y = y)) +
+  geom_point(aes(shape = factor(z)),size = 1,alpha=.5) +
+  scale_shape_manual(values = c(1,19), label = c("z=0","z=1")) +
+  xlab("x") +
+  ylab("y") +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        legend.box.just = "left",
+        legend.justification = c("left","top"),
+        legend.position = c(0,1),
+        legend.margin = margin(6,6,6,6),
+        legend.title = element_blank(),
+        legend.box.background = element_rect(color="black",size=1))
+
+q2<- ggplot(data = dfp3, aes(x = x, y = z)) +
+  geom_jitter(height=.25) +  xlab("x") +
+  ylab("z") +
+  theme_bw()
+
+
+
+modone<- lm(y~x+z+x:z,data=dfp3)
+modtwo<- lm(z ~ x, data=dfp3)
+modthree<- lm(x*z ~ x,data=dfp3)
+modfour<- lm(y~x,data=dfp3)
+```
+
+
+We have collected $y$, $x$, and a binary variable $z$. The scatter plots below show our data. 
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Scatterplot 1
+#|  -  Scatterplot 2 (jittered)
+q1
+q2
+
+```
+
+Do you expect the coefficient on $x$ from the simple regression of $y$ on $x$ ($lm(y\sim x)$) to be: (choose one, no explanation needed)
+
+\begin{itemize}
+\item Positive
+\item Negative
+\item Zero 
+\end{itemize}
+
+
+\subsubsection*{Part B}
+
+We then run the regression $lm(y \sim x+ z+x:z)$ which gives us the following output: 
+
+```{r}
+summary(modone)
+
+```
+And we run the regression $lm(z \sim x)$ which gives us the following output: 
+```{r}
+summary(modtwo)
+```
+
+And we run the regression $lm(x:z \sim x)$ which gives us the following output: 
+```{r}
+summary(modthree)
+```
+
+
+
+\bigskip 
+
+
+Use these outputs to calculate the coefficient on $x$ from the simple regression $lm(y\sim x)$? Explain your steps and define any notation you use. Plug in the estimates from your output (you can leave it as an equation). 
+
+
+
+
+
+
+
