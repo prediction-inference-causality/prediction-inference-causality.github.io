@@ -412,6 +412,8 @@ We have collected a sample of $y$, $x$, and $z$.
 
 ```{r}
 #| echo: false
+
+set.seed(220)
 n=100
 z<- runif(n,-5,10)
 x<- rnorm(n,20,2) + (-2)*z
@@ -452,13 +454,13 @@ The following plots show our data:
 #|  -  Scatterplot of x and y
 #|  -  Scatterplot of residuals from lm(x~ z) and lm(y~ z)
 a1<- ggplot(data = df, aes(x = x, y = y)) +
-  geom_point() + xlim(-10,15)+ylim(-30,45) + xlab("x") +
-  ylab("y") +
+  geom_point() + xlim(-6,15)+ylim(-30,45) + xlab("x") +
+  ylab("y") + geom_abline(slope=modsimp$coef[2], intercept=modsimp$coef[1], linetype="dashed") +
   theme_bw()
 
 a2<- ggplot(data = rdf, aes(x = rxz, y = ryz)) +
-  geom_point() + xlim(-10,15)+ylim(-30,45) +  xlab("r_(x~z)") +
-  ylab("r_(y~z)") +
+  geom_point() + xlim(-6,15)+ylim(-30,45) +  xlab("r_(x~z)") +
+  ylab("r_(y~z)") + geom_abline(slope=modmulti$coef[2], intercept=modmulti$coef[1], linetype="dashed") +
   theme_bw()
 
 
@@ -469,17 +471,84 @@ a2
 
 What is the slope of the line in Figure 5? (write a number)
 
+\bigskip 
+
+\bigskip 
+
 \subsubsection*{Part B}
+We have collected a sample of $a$, $b$, and $c$. 
 
-covariatates uncorrelated: lm outputs 
+```{r}
+#| echo: false
 
-simple plot, residualized plot 
+set.seed(220)
+n=100
+a<- rnorm(n,-3,1) 
+b<- rnorm(n,5,2)
+c<- (-2)*a + (.33)*b + rnorm(n,0,5)
 
-what is the slope 
+df.2<- data.frame(a=a,b=b,c=c)
+
+modsimp.2<- lm(c~a,data=df.2)
+
+modmulti.2<- lm(c~a+b,data=df.2)
+
+modcb<- lm(c~b,data=df.2)
+residcb<- residuals(modcb)
+modab<- lm(a~b,data=df.2)
+residab<- residuals(modab)
+rdf.2<- data.frame(rcb=residcb,rab=residab)
+```
+
+We run a simple regression $lm(c \sim a)$ and get the following output: 
+
+```{r}
+#| echo: false
+summary(modsimp.2)
+```
+
+We run a multiple regression $lm(c \sim a+b)$ and get the following output: 
+
+```{r}
+#| echo: false
+summary(modmulti.2)
+```
+
+The following plots show our data: 
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Scatterplot of c and a
+#|  -  Scatterplot of residuals from lm(a~ b) and lm(c~ b)
+b1<- ggplot(data = df.2, aes(x = a, y = c)) +
+  geom_point() + xlim(-6,3) + ylim(-20,22) + xlab("a") +
+  ylab("c") + geom_abline(slope=modsimp.2$coef[2], intercept=modsimp.2$coef[1], linetype="dashed")  +
+  theme_bw()
+
+b2<- ggplot(data = rdf.2, aes(x = rab, y = rcb)) +
+  geom_point() + xlim(-6,3) + ylim(-20,22)+ xlab("r_(a~b)") +
+  ylab("r_(c~b)")  + geom_abline(slope=modmulti.2$coef[2], intercept=modmulti.2$coef[1], linetype="dashed")+
+  theme_bw()
+
+
+b1
+b2
+```
+
+
+What is the slope of the line in Figure 7? (write a number)
+
+\bigskip 
+
+\bigskip 
+
 
 \subsubsection*{Part C}
 
-relationship between standard errors 
+If we compare the multiple regression to the simple regression in parts A and B, which of the following characterizes the relationship between the standard errors? 
+
+
 
 \subsubsection*{BONUS: Part D}
 
