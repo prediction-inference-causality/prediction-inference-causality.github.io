@@ -39,7 +39,7 @@ How does $E[\tilde{Y}]$ compare to $E[\bar{Y}]$? (where $\bar{Y} = \frac{1}{n}\s
 
 \bigskip
 
-\color{red} similar steps show that $E[\bar{Y}] = \mu$. $\bar{Y}$ is unbiased, $\tilde{Y}$ is biased, but $\lim_{n \rightarrow \infty} \frac{n}{n+2} =1$ so bias will decrease as $n$ increases.
+\color{red} similar steps show that $E[\bar{Y}] = \mu$. $\bar{Y}$ is unbiased, $\tilde{Y}$ is biased, but $\lim_{n \rightarrow \infty} \frac{n}{n+2} =1$ so asymptotically unbiased.
 
 \color{black}
 
@@ -226,9 +226,11 @@ What does this code calculate? State it in words and mark it with a 'e', and an 
 ```{r}
 #| echo: true
 #| eval: false
-mod$coef[2] + sqrt(diag(solve(t(X)%*%X)%*%t(X)%*%diag(resid^2)%*%X%*%solve(t(X)%*%X)))[2]
+mod$coef[2] + 
+  1.96*sqrt(diag(solve(t(X)%*%X)%*%t(X)%*%diag(resid^2)%*%X%*%solve(t(X)%*%X)))[2]
 
-mod$coef[2] - sqrt(diag(solve(t(X)%*%X)%*%t(X)%*%diag(resid^2)%*%X%*%solve(t(X)%*%X)))[2]
+mod$coef[2] - 
+  1.96*sqrt(diag(solve(t(X)%*%X)%*%t(X)%*%diag(resid^2)%*%X%*%solve(t(X)%*%X)))[2]
 ```
 
 \color{red}
@@ -268,13 +270,27 @@ abline(lm(y[d==1] ~x[d==1]))
 
 What is the $\widehat{ATE}$ based on this model and data? Show your calculations.
 
+\color{red}
+
+$\frac{1}{7}[(2-1) + (2-1) + (2-1) + (2.5-1) + (3-1)+(3-1)+(3-1)] = 1.5$
+
+\color{black}
+
 \subsubsection{Part B}
 
 What is the $\widehat{ATT}$ based on this model and data? Show your calculations.
 
+\color{red}
+
+$\frac{1}{4}[(2-1)+(2-1)+(3-1)+(3-1)] = 1.5$ \color{black}
+
 \subsubsection{Part B}
 
 What is the $\widehat{ATC}$ based on this model and data? Show your calculations.
+
+\color{red}
+
+$\frac{1}{3}[(2-1) + (2.5-1)+ (3-1)]= 1.5$ \color{black}
 
 \subsection*{Problem 4}
 
@@ -286,7 +302,7 @@ y <- c(1,3,1)
 plot(x,y,pch=19)
 ```
 
-Our goal is to use leave one out cross-validation to choose between a linear regression model and a constant model for this data. Below we have plotted these data three times. In the left panel, the left-most observation has been left out (denoted by an open circle). In the middle panel, the middle observation has been left out. In the right panel the right observation has been left out. 
+Our goal is to use leave one out cross-validation to choose between a linear regression model and a constant model for this data. Below we have plotted these data three times. In the left panel, the left-most observation has been left out (denoted by an open circle). In the middle panel, the middle observation has been left out. In the right panel the right observation has been left out.
 
 ```{r}
 x <- c(1,2,3)
@@ -301,21 +317,53 @@ plot(x,y,pch=c(19,19,1))
 
 On the figure above, draw a constant model (i.e., flat line) for each of the three plots based on the non-left-out data.
 
+```{r}
+par(mfrow=c(1,3))
+plot(x,y,pch=c(1,19,19))
+abline(h=2, col="red")
+plot(x,y,pch=c(19,1,19))
+abline(h=1, col="red")
+plot(x,y,pch=c(19,19,1))
+abline(h=2, col="red")
+```
+
 \subsubsection{Part B}
 
 On the figure above, draw the residuals from the constant models to the left-out observation for each of the three plots.
+
+\color{red}
+
+Left residual = -1; middle residual = 2, right residual = -1 \color{black}
 
 \subsubsection{Part C}
 
 On the figure above, draw a linear regression line (i.e., line that doesn't have to be flat) for each of the three plots based on the non-left-out data.
 
+```{r}
+par(mfrow=c(1,3))
+plot(x,y,pch=c(1,19,19))
+segments(x0=2,y0=3,x1=3,y1=1,col="red")
+plot(x,y,pch=c(19,1,19))
+segments(x0=1,y0=1,x1=3,y1=1,col="red")
+plot(x,y,pch=c(19,19,1))
+segments(x0=1,y0=1,x1=2,y1=3,col="red")
+```
+
 \subsubsection{Part D}
 
 On the figure above, draw the residuals from the linear models to the left-out observation for each of the three plots.
 
+\color{red}
+
+Left residual = -4; middle residual = 2, right residual = -4 \color{black}
+
 \subsubsection{Part E}
 
 Based on the residuals you calculated in parts B and D, which model is preferred?
+
+\color{red}
+
+The constant model is preferred to the linear model \color{black}
 
 \subsection*{Problem 5}
 
@@ -335,89 +383,190 @@ abline(v=c(1.5,2.5,3.5))
 
 In the left panel, draw piece-wise constant models for the two bins.
 
+```{r}
+par(mfrow=c(1,2))
+plot(x,y,pch=19)
+abline(v=2.5)
+segments(x0=1, y0=3, x1=2.5, y1=3, col="red")
+segments(x0=2.5, y0=7, x1=4, y1=7, col="blue")
+```
+
 \subsection{Part B}
 
-Calculate the estimated standard error for each of the two bins in the left panel. Use the table below to organize your calculations. 
+Calculate the estimated standard error for each of the two bins in the left panel. Use the table below to organize your calculations.
 
+```{=tex}
 \begin{tabular}{|c|c|c|c|c|}
 \hline
 Observation $i$ & $y_i$ & bin constant & deviation & deviation$^2$ \\
 \hline 
-1 & & & & \\
+1 & 1 & 3 & -2 & 4 \\
 \hline 
-2 & & & & \\
+2 & 2 &3 &-1 &1 \\
 \hline 
-3 & & & &\\
+3 &3 &3 &0 & 0\\
 \hline 
-4 & & & &\\
+4 &3 &3 &0 &0\\
 \hline 
-5 & & & &\\
+5 & 4& 3& 1&1\\
 \hline 
-6 & & & & \\
+6 & 5& 3& 2& 4\\
 \hline 
-7 & & & & \\
+7 & 5& 7& -2& 4\\
 \hline 
-8 & & & &\\
+8 & 6& 7& -1&1\\
 \hline 
-9 & & & &\\
+9 & 7& 7& 0& 0\\
 \hline 
-10 & & & & \\
+10 & 7& 7& 0&0 \\
 \hline 
-11 & & & &\\
+11 & 8& 7& 1& 1\\
 \hline 
-12 & & & & \\
+12 & 9& 7& 2& 4\\
 \hline 
 \end{tabular}
+```
+\color{red}
+
+Bin 1 sample variance= $\frac{10}{6}=1.6667$
+
+Bin 1 sample standard deviation = $\sqrt{\frac{10}{6}}=1.20994$
+
+Bin 1 estimated standard error = $\frac{sd}{\sqrt{6}}$ = 0.5270
+
+Bin 2 sample variance= $\frac{10}{6}=1.6667$
+
+Bin 2 sample standard deviation = $\sqrt{\frac{10}{6}}=1.20994$
+
+Bin 2 estimated standard error = $\frac{sd}{\sqrt{6}}$ = 0.5270
+
+\color{black}
 
 \subsection{Part C}
 
 In the right panel, draw piece-wise constant models for the four bins.
 
+```{r}
+plot(x,y,pch=19)
+abline(v=c(1.5,2.5,3.5))
+segments(x0=.75, y0=2, x1=1.5, y1=2, col="red")
+segments(x0=1.5, y0=4, x1=2.5, y1=4, col="magenta")
+segments(x0=2.5, y0=6, x1=3.5, y1=6, col="cyan")
+segments(x0=3.5, y0=8, x1=4.5, y1=8, col="blue")
+```
+
 \subsection{Part D}
 
-Calculate the estimated standard error for each of the four bins in the right panel. Use the table below to organize your calculations. 
+Calculate the estimated standard error for each of the four bins in the right panel. Use the table below to organize your calculations.
 
+```{=tex}
 \begin{tabular}{|c|c|c|c|c|}
 \hline
 Observation $i$ & $y_i$ & bin constant & deviation & deviation$^2$ \\
 \hline 
-1 & & & & \\
+1 & 1 & 2& -1&1 \\
 \hline 
-2 & & & & \\
+2 & 2& 2& 0&0 \\
 \hline 
-3 & & & &\\
+3 & 3 & 2& 1&1\\
 \hline 
-4 & & & &\\
+4 & 3& 4& -1&1\\
 \hline 
-5 & & & &\\
+5 & 4& 4& 0& 0\\
 \hline 
-6 & & & & \\
+6 & 5& 4& 1& 1\\
 \hline 
-7 & & & & \\
+7 & 5& 6& -1& 1\\
 \hline 
-8 & & & &\\
+8 &6 & 6& 0& 0\\
 \hline 
-9 & & & &\\
+9 & 7& 6& 1&1\\
 \hline 
-10 & & & & \\
+10 &7 &8 &-1 &1 \\
 \hline 
-11 & & & &\\
+11 &8 &8 &0 &0\\
 \hline 
-12 & & & & \\
+12 & 9& 8& 1& 1\\
 \hline 
 \end{tabular}
+```
+\color{red}
 
-\subsection{Part E} 
-Comment on the difference(s) between the two bin and four bin models. 
+Bin 1 sample variance= $\frac{2}{3}=0.6667$
+
+Bin 1 sample standard deviation = $\sqrt{\frac{2}{3}}=0.8165$
+
+Bin 1 estimated standard error = $\frac{sd}{\sqrt{3}}$ = 0.4714
+
+Bin 2 sample variance= $\frac{2}{3}=0.6667$
+
+Bin 2 sample standard deviation = $\sqrt{\frac{2}{3}}=0.8165$
+
+Bin 2 estimated standard error = $\frac{sd}{\sqrt{3}}$ = 0.4714
+
+Bin 3 sample variance= $\frac{2}{3}=0.6667$
+
+Bin 3 sample standard deviation = $\sqrt{\frac{2}{3}}=0.8165$
+
+Bin 3 estimated standard error = $\frac{sd}{\sqrt{3}}$ = 0.4714
+
+Bin 4 sample variance= $\frac{2}{3}=0.6667$
+
+Bin 4 sample standard deviation = $\sqrt{\frac{2}{3}}=0.8165$
+
+Bin 4 estimated standard error = $\frac{sd}{\sqrt{3}}$ = 0.4714
+
+\color{black}
+
+\subsection{Part E}
+
+Comment on the difference(s) between the two bin and four bin models.
+
+\color{red}
+[see video for in-class discussion]
+\color{black}
 
 \subsection*{Problem 5}
 
 \subsubsection*{Part A}
+
 Suppose we want $\beta_1$ from $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i + e_i$ but we run the regression $lm (y\sim x)$ without $z$. We have de-meaned our variables $x_i$ and $z_i$ such that $\bar{x}=\sum_{i=1}^n x_i =0$ and $\bar{z}=\sum_{i=1}^n z_i =0$. Under what condition(s) will the coefficient on $x$ from $lm (y\sim x)$, which is $\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$, be equal to $\beta_1$? Derive what your coefficient on $x$ will be in terms of $\beta$s and justify your steps.
 
+\color{red}
+
+The coefficient on $x$ from $lm (y\sim x)$ is $$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$$
+
+Plug in $y_i$ defined by the multivariate regression: $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i + e_i$
+
+$$\frac{\sum_{i=1}^n x_i (\beta_0 + \beta_1 x_i + \beta_2 z_i + e_i)}{\sum_{i=1}^n x_i^2 }$$
+
+Distribute
+
+$$\frac{\sum_{i=1}^n x_i \beta_0 }{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_1 x_i}{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_2 z_i }{\sum_{i=1}^n x_i^2 } +  \frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 }$$ Let's work through each term.
+
+$$\frac{\sum_{i=1}^n x_i \beta_0 }{\sum_{i=1}^n x_i^2 } = \frac{ \beta_0 \sum_{i=1}^n x_i }{\sum_{i=1}^n x_i^2 } = \frac{ \beta_0 *0 }{\sum_{i=1}^n x_i^2 } = 0$$
+
+as $x$ is demeaned, $\sum x_i =0$; demeaning is not required for this term to be 0, it just makes it easier
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i \beta_1 x_i}{\sum_{i=1}^n x_i^2 } = \frac{  \beta_1 \sum_{i=1}^n x_i x_i}{\sum_{i=1}^n x_i^2 } = \beta_1$$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i \beta_2 z_i }{\sum_{i=1}^n x_i^2 } = \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 }$$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 } = \frac{0}{\sum_{i=1}^n x_i^2 } =0$$ we know that $\sum_{i=1}^n x_i e_i =0$ from the first order conditions on our least squares estimator (we chose the intercept and coefficient(s) that minimize the sum of squared residuals)
+
+\bigskip
+
+Thus we have
+
+$$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 } = \beta_1 + \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 }$$ The coefficient on $x$ from the simple regression of $y$ on $x$ will be equal to $\beta_1$ if: $\beta_2$ or the coefficient on $x$ from the simple regression from $z$ on $x$ is 0. If either of these terms is non-zero, our simple regression will not give us the same result as our regression that includes both $x$ and $z$. If $x$ is randomized (like a random treatment assignment), it should not be correlated with $z$, so our short regression coefficient should give us $\beta_1$. \color{black}
 
 \subsubsection*{Part B}
-
 
 ```{r}
 #| echo: false
@@ -461,7 +610,7 @@ modtwo<- lm(z ~ x, data=df)
 
 ```
 
-We have collected $y$, $x$, and a binary variable $z$. The scatter plots below show our data. 
+We have collected $y$, $x$, and a binary variable $z$. The scatter plots below show our data.
 
 ```{r}
 #| out-height: 3.5in
@@ -474,36 +623,58 @@ q5b
 
 ```
 
+Do you expect the coefficient on $x$ from the simple regression of $y$ on $x$ ($lm(y\sim x)$) to be:
 
-Do you expect the coefficient on $x$ from the simple regression of $y$ on $x$ ($lm(y\sim x)$) to be: 
-
+```{=tex}
 \begin{itemize}
 \item Positive
-\item Negative
+\item \color{red} Negative \color{black}
 \item Zero 
 \end{itemize}
-
-
+```
 \subsubsection*{Part C}
 
-We then run the regression $lm(y \sim x+ z)$ which gives us the following output: 
+We then run the regression $lm(y \sim x+ z)$ which gives us the following output:
 
 ```{r}
 summary(modone)
 
 ```
-And we run the regression $lm(z \sim x)$ which gives us the following output: 
+
+And we run the regression $lm(z \sim x)$ which gives us the following output:
+
 ```{r}
 summary(modtwo)
 ```
 
-\bigskip 
+\bigskip
 
+How would you use these outputs to calculate the coefficient on $x$ from the simple regression $lm(y\sim x)$? Explain your steps and define any notation you use. Plug in the estimates from your output (you can leave it as an equation).
 
-How would you use these outputs to calculate the coefficient on $x$ from the simple regression $lm(y\sim x)$? Explain your steps and define any notation you use. Plug in the estimates from your output (you can leave it as an equation). 
+\color{red}
 
+From our omitted variable formula (also what we derived in Part A), the coefficient on $x$ from the simple regression of $y$ on $x$ is $\beta_1 + \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 }$ where $\beta_1$ and $\beta_2$ are from our multiple regression and $\frac{\sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 }$ is the coefficient on $z$ from the simple regression of $z$ on $x$.
 
+From our outputs: $\beta_1 = -0.5099; \beta_2 = 3.87919; coef(z\sim x)= -0.01483$
+
+$(-0.5099) + (3.87919)*(-0.01483) = -0.5674$
+
+This is close to the $\beta_1$ from our multiple regression, as $x$ and $z$ are not strongly correlated, but not exactly the same.
+
+\color{black}
 
 \subsubsection*{Part D}
 
-How do you expect the standard errors of the simple regression of $y \sim x$ to differ from the standard errors of the multiple regression $y \sim x + z$? Why? 
+How do you expect the standard errors of the simple regression of $y \sim x$ to differ from the standard errors of the multiple regression $y \sim x + z$? Why?
+
+\color{red}
+
+Assuming homoskedasticity for simplicity, let $s$ indicate the simple regression of $y\sim x$ and $m$ indicate the multiple regression $y\sim x+z$. $\beta_1$ is the coefficient on $x$ in each model.
+
+$V[\hat{\beta_1^s}] = \frac{\sigma_s^2}{\sum_{i=1}^n(x_i - \bar{x})^2}$
+
+$V[\hat{\beta_1^m} ]= \frac{1}{1-R_{x\sim z}^2} \cdot \frac{\sigma_m^2}{\sum_{i=1}^n(x_i - \bar{x})^2}$
+
+The relationship between the variance of $\beta_1$ for the multiple regression and the simple regression depends on the relationship between $x$ and $z$. If $x$ and $z$ are strongly correlated, we are reducing the spread in the $x$ direction by controlling for $z$, which increases the variability of our estimator. In the formula, $R_{x\sim z}^2$ is close to 1 if $x$ and $z$ are highly correlated. If they are uncorrelated, as they are in this problem, $R_{x\sim z}^2$ is close to 0. Thus the variance inflation factor (left term of equation) is close to 1 and we would expect the standard errors from the multiple regression to be lower than the standard errors of the simple regression as $z$ is predictive of $y$, but uncorrelated with $x$.
+
+\color{black}
