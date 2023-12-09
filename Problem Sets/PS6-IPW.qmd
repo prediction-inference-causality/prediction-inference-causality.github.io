@@ -1,0 +1,532 @@
+---
+title: "QTM 220 PS6"
+subtitle: "Conditional Randomization and Inverse Probability Weighting"
+format: html
+execute:
+    warning: false
+engine: knitr
+knitr:
+  opts_chunk: 
+    class-output: hscroll
+---
+
+# Setup Stuff
+
+```{r load-libraries}
+#| include: false
+library(purrr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+```
+
+```{r ggplot-themes}
+#| include: false
+fontsize = 12
+textcolor = "#888888"
+
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+        panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = textcolor, size=fontsize),
+        axis.text.y  = element_text(colour = textcolor, size=fontsize),
+        axis.title.x  = element_text(colour = textcolor),
+        axis.title.y  = element_text(colour = textcolor, angle=90),
+        legend.position=c(.9,.9)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+              axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+# Defining the Population
+
+```{r define-population}
+set.seed(1) 
+m = 100000
+pi = function(x) { 1/(1+exp(-sinpi((x-60)/60))) }
+mu = function(w, x) { 2 - 2*((x-50)/30)^3/3 + w*((x-50)/30)^2 }  
+
+X = 50+round(30*runif(m))
+W = rbinom(m, 1, pi(X))
+eps0 = .5*rnorm(m)
+eps1 = .5*rnorm(m)
+
+pop = data.frame(X=X, W=W, Y0=mu(0,X)+eps1, Y1=mu(1,X)+eps1)
+```
+
+# Calculating the ATT using the Population
+
+```{r summarize-population}
+pop$Y = pop$Y0*(1-pop$W) + pop$Y1*pop$W
+
+pop.summaries.x = pop %>% group_by(X) %>% summarize(pi=mean(W))
+pi = function(x) { inner_join(data.frame(X=x), pop.summaries.x, by=c('X')) %>% pull(pi) }
+
+pop.summaries = pop %>% group_by(W,X) %>% summarize(mu=mean(Y), n = n()) %>%
+                        group_by(W) %>% mutate(f=n/sum(n))
+mu = function(w,x)  { inner_join(data.frame(W=w, X=x), pop.summaries, by=c('W','X')) %>% pull(mu) } 
+f  = function(w,x)  { inner_join(data.frame(W=w, X=x), pop.summaries, by=c('W','X')) %>% pull(f) }
+x = unique(pop$X)
+```
+
+```{r ATT}
+# Here we'll see two equivalent ways of calculating the ATT
+
+# Averaging over the treated population
+ATT = mean(mu(1,pop$X[pop$W==1]) - mu(0,pop$X[pop$W==1]))
+
+# Averaging over the covariate distribution of the treated population
+ATT.based.on.summaries = sum(f(1,x)*(mu(1,x) - mu(0,x)))
+
+# Check for equality (up to numerical precision)
+stopifnot(all.equal(ATT, ATT.based.on.summaries))
+```
+
+```{r plot-population-ATT}
+plotX = function(X,W) { X + .15*(2*W-1) }
+scaleY = scale_y_continuous(limits=c(0,4), breaks=seq(0,4,by=1))
+
+pop.scatter = ggplot(pop) + 
+  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.05, position=position_jitter(w=.15, h=0), size=.05) + 
+  guides(color="none") + scaleY
+
+summarized.pop.scatter = pop.scatter + 
+  geom_point(aes(x=plotX(X,W), y=mu, color=factor(W)), data=pop.summaries, alpha=.5) + 
+  geom_line(aes(x=plotX(X,W), y=mu, color=factor(W)),  data=pop.summaries, alpha=.5) + 
+  geom_col(aes(x=X, y=30*f, fill=factor(W)), position='identity', alpha=.15, data=pop.summaries) + 
+  guides(fill="none", color="none") 
+  
+summarized.pop.scatter
+```
+
+## Estimating the ATT from a Sample
+
+```{r sample}
+
+set.seed(1)
+n = 4000
+data = pop[sample(1:nrow(pop), n, replace=TRUE),]
+summaries = data %>% group_by(X, W) %>% summarize(mu=mean(Y), sd=sd(Y), n=n()) %>%
+                     group_by(W) %>% mutate(f=n/sum(n))
+```
+
+```{r plot-sample-ATT}
+
+plotX = function(X,W) { X + .15*(2*W-1) }
+scaleY = scale_y_continuous(limits=c(0,4), breaks=seq(0,4,by=1))
+scatter.plot = function(data) { 
+    ggplot(data) + 
+        geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.1, size=1, position=position_jitter(w=.15, h=0)) + 
+        guides(color="none") + scaleY
+}
+
+summarized.scatter.plot = function(data) { 
+  summaries = data %>% group_by(X, W) %>% summarize(mu=mean(Y), sd=sd(Y), n=n()) %>%
+                     group_by(W) %>% mutate(f=n/sum(n))
+  scatter.plot(data) + 
+    geom_pointrange(aes(x=plotX(X,W), y=mu, ymin=mu-2*sd/sqrt(n), ymax=mu+2*sd/sqrt(n), 
+                        color=factor(W)), data=summaries, alpha=.5) + 
+    geom_col(aes(x=X, y=30*f, fill=factor(W)), position='identity', alpha=.15, data=summaries) + 
+    guides(fill="none", color="none") 
+}
+  
+summarized.scatter = summarized.scatter.plot(data)
+```
+
+```{r estimate-ATT-sample-means}
+
+mu.hat = function(w,x)  { inner_join(data.frame(W=w, X=x),  summaries, by=c('W','X')) %>% pull(mu) } 
+f.hat  = function(w,x)  { inner_join(data.frame(W=w, X=x),  summaries, by=c('W','X')) %>% pull(f) }
+
+ATT.hat.means = mean(mu.hat(1,data$X[data$W==1]) - mu.hat(0,data$X[data$W==1]))
+ATT.hat.based.on.summaries = sum(f.hat(1,x)*(mu.hat(1,x) - mu.hat(0,x)))
+
+# Check for equality (up to numerical precision)
+stopifnot(all.equal(ATT.hat.means, ATT.hat.based.on.summaries))
+```
+
+```{r estimate-ATT-saturated}
+
+ATT.weights = function(pi,W,X) { W  + (1-W)*pi(X)/(1-pi(X)) }
+grid = expand.grid(W=c(0,1), X=unique(data$X))
+
+# Least Squares with Saturated Model
+saturated.model = lm(Y ~ W*factor(X), data=data) 
+ATT.hat.based.on.saturated.lm = 
+    mean(predict(saturated.model, newdata=data.frame(W=1, X=data$X[data$W==1])) -
+        predict(saturated.model, newdata=data.frame(W=0, X=data$X[data$W==1])))
+
+grid$muhat = predict(saturated.model, newdata=grid)
+summarized.scatter + geom_line(aes(x=plotX(X,W), y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+                     geom_point(aes(x=plotX(X,W), y=muhat), data=grid, color='black', shape=1)
+
+# IPW Least Squares with Saturated Model
+data$weights = ATT.weights(pi, data$W, data$X)
+saturated.model.ipw = lm(Y ~ W*factor(X), data=data, weights=weights)
+ATT.hat.based.on.saturated.lm.ipw = 
+    mean(predict(saturated.model.ipw, newdata=data.frame(W=1, X=data$X[data$W==1])) -
+         predict(saturated.model.ipw, newdata=data.frame(W=0, X=data$X[data$W==1])))
+
+grid$muhat = predict(saturated.model.ipw, newdata=grid)
+grid$weights = ATT.weights(pi, grid$W, grid$X)
+summarized.scatter + geom_line(aes(x=plotX(X,W), y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+                     geom_point(aes(x=plotX(X,W), y=muhat, size=weights), data=grid, color='black', shape=1) +
+                     scale_size_area() + theme_update(legend.position=c(.9,.9))
+
+# IPW Least Squares with Saturated Model using Estimated Assignment Probabilities
+
+## Estimate Assignment Probabilities 
+pi.formula = W~X
+pi.model = glm(pi.formula, family=binomial(), data=data)
+pi.hat = function(x) { predict(pi.model, newdata=data.frame(X=x), type='response') }
+
+pi.formula = W~X
+pi.model = lm(pi.formula, data=data)
+pi.hat = function(x) { predict(pi.model, newdata=data.frame(X=x), type='response') }
+ggplot()+geom_point(aes(x=X, y=W), data=data, position=position_jitter(w=.15, h=.15)) + 
+         geom_line(aes(x=X, y=pi.hat(X)), data=data)
+
+
+## Fit Model with IPW Least Squares
+data$weights = ATT.weights(pi.hat, data$W, data$X)
+saturated.model.ipw.estimated = lm(Y ~ W*factor(X), data=data, weights=weights)
+ATT.hat.based.on.saturated.lm.estimated.ipw = 
+    mean(predict(saturated.model.ipw, newdata=data.frame(W=1, X=data$X[data$W==1])) -
+         predict(saturated.model.ipw, newdata=data.frame(W=0, X=data$X[data$W==1])))
+
+
+
+grid$muhat = predict(saturated.model.ipw, newdata=grid)
+grid$weights = ATT.weights(pi, grid$W, grid$X)
+summarized.scatter + geom_line(aes(x=plotX(X,W), y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+                     geom_point(aes(x=plotX(X,W), y=muhat, size=weights), data=grid, color='black', shape=1) +
+                     scale_size_area() + theme_update(legend.position=c(.9,.9))
+
+# Check for equality (up to numerical precision) with sample means approach
+stopifnot(all.equal(ATT.hat.means, ATT.hat.based.on.saturated.lm))
+stopifnot(all.equal(ATT.hat.means, ATT.hat.based.on.saturated.lm.ipw))
+stopifnot(all.equal(ATT.hat.means, ATT.hat.based.on.saturated.lm.estimated.ipw))
+```
+
+```{r estimate-ATT-formula}
+
+mu.model.ATT = function(data, mu.formula, pi.spec) {
+    mu.model = if(is.null(pi.spec)) { 
+        lm(mu.formula, data=data)
+    } else if(is.function(pi.spec)) {
+        data$weights = ATT.weights(pi, data$W, data$X)
+        lm(mu.formula, data=data, weights=weights)
+    } else { # assume pi.spec is a formula 
+        pi.model = glm(pi.spec, family=binomial(), data=data)
+        pi.hat = function(x) { predict(pi.model, newdata=data.frame(X=x), type='response') }
+        data$weights = ATT.weights(pi.hat, data$W, data$X)
+        lm(mu.formula, data=data, weights=weights)
+    }
+}
+
+estimate.ATT = function(data, mu.formula, pi.spec=NULL) {
+    mu.model = mu.model.ATT(data, mu.formula, pi.spec)
+    mean(predict(mu.model, newdata=data.frame(W=1, X=data$X[data$W==1])) -
+         predict(mu.model, newdata=data.frame(W=0, X=data$X[data$W==1])))
+}
+
+stopifnot(all.equal(ATT.hat.means, estimate.ATT(data, Y ~ W*factor(X))))
+stopifnot(all.equal(ATT.hat.means, estimate.ATT(data, Y ~ W*factor(X)),  pi.spec=pi))
+stopifnot(all.equal(ATT.hat.means, estimate.ATT(data, Y ~ W*factor(X)),  pi.spec=W~X))
+stopifnot(all.equal(ATT.hat.means, estimate.ATT(data, Y ~ W*factor(X)),  pi.spec=W~poly(X,3)))
+```
+
+```{r plot-ATT-formula}
+
+plot.ATT.estimate = function(data, mu.formula, pi.spec=NULL) { 
+    grid = expand.grid(W=c(0,1), X=unique(data$X))
+    mu.model = mu.model.ATT(data, mu.formula, pi.spec)
+    grid$muhat = predict(mu.model, newdata=grid)
+    grid$weights = 
+        if(is.null(pi.spec)) { 
+            1 
+        } else if(is.function(pi.spec)) { 
+            ATT.weights(pi, grid$W, grid$X)
+        } else { # assume pi.spec is a formula 
+            pi.model = glm(pi.spec, family=binomial(), data=data)
+            pi.hat = function(x) { predict(pi.model, newdata=data.frame(X=x), type='response') }
+            ATT.weights(pi.hat, grid$W, grid$X)
+        } 
+    summarized.scatter.plot(data) + 
+        geom_line(aes(x=plotX(X,W), y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+        geom_point(aes(x=plotX(X,W), y=muhat, size=weights),   data=grid, color='black', shape=1) +
+        scale_size_area() 
+}
+```
+
+```{r}
+#| layout-nrow: 3
+#| layout-ncol: 3 
+ 
+plot.ATT.estimate(data, Y ~ W*factor(X))
+plot.ATT.estimate(data, Y ~ W*factor(X), pi.spec=pi)
+plot.ATT.estimate(data, Y ~ W*factor(X), pi.spec=W~X)
+
+plot.ATT.estimate(data, Y ~ W*X)
+plot.ATT.estimate(data, Y ~ W*X, pi.spec=pi)
+plot.ATT.estimate(data, Y ~ W*X, pi.spec=W~X)
+
+plot.ATT.estimate(data[1:1000,],  Y ~ W*X)
+plot.ATT.estimate(data[1:1000,], Y ~ W*X, pi.spec=pi)
+plot.ATT.estimate(data[1:1000,],   Y ~ W*X, pi.spec=W~X)
+```
+
+```{r bootstrap-ATT}
+#| cache: true
+bootstrap.replications = 500
+
+mu.formula = Y ~ W+X
+pi.spec = pi
+
+plot.ATT.bootstrap = function(data, mu.formula, pi.spec=NULL, bootstrap.replications=100) {
+    ATT.hat = estimate.ATT(data, mu.formula, pi.spec)
+    bootstrap.estimates = replicate(bootstrap.replications, {
+        data.boot = data[sample(1:nrow(data), nrow(data), replace=TRUE),]
+        estimate.ATT(data.boot, mu.formula, pi.spec)
+    })
+    bootstrap.dist.plot = ggplot() + 
+        geom_histogram(aes(x=bootstrap.estimates, y=after_stat(density)), alpha=.2) + 
+        geom_pointrange(aes(y=2, x=ATT.hat, 
+                                 xmin=ATT.hat-2*sd(bootstrap.estimates), 
+                                 xmax=ATT.hat+2*sd(bootstrap.estimates)), color='purple') +
+        geom_vline(aes(xintercept=ATT), size=2, alpha=.5) 
+    bootstrap.dist.plot
+}
+```
+
+```{r}
+#| layout-nrow: 3
+#| layout-ncol: 3 
+scale_X = scale_x_continuous(limits=c(.25, .55))
+plot.ATT.bootstrap(data, Y ~ W*factor(X)) + scale_X
+plot.ATT.bootstrap(data, Y ~ W*factor(X), pi.spec=pi) + scale_X
+plot.ATT.bootstrap(data, Y ~ W*factor(X), pi.spec=W~X) + scale_X
+
+plot.ATT.bootstrap(data, Y ~ W*X) + scale_X
+plot.ATT.bootstrap(data, Y ~ W*X, pi.spec=pi) + scale_X
+plot.ATT.bootstrap(data, Y ~ W*X, pi.spec=W~X) + scale_X
+
+plot.ATT.bootstrap(data[1:1000,],  Y ~ W*X) + scale_X
+plot.ATT.bootstrap(data[1:1000,], Y ~ W*X, pi.spec=pi) + scale_X
+plot.ATT.bootstrap(data[1:1000,],   Y ~ W*X, pi.spec=W~X) + scale_X
+```
+
+# Estimating the ATE using the Sample
+
+```{r ATE}
+# Here we'll see two equivalent ways of calculating the ATE
+
+# Averaging over the whole population
+ATE = mean(mu(1,pop$X) - mu(0,pop$X))
+
+# Averaging over the covariate distribution of the whole population
+# This distribution is a weighted average of the treatment-specific covariate distributions
+f.wholepop = function(x) { 
+    p1 = mean(pop$W)
+    p1*f(1,x) + (1-p1)*f(0,x)
+}
+ATE.based.on.summaries = sum(f.wholepop(x)*(mu(1,x) - mu(0,x)))
+
+# Check for equality (up to numerical precision)
+stopifnot(all.equal(ATE, ATE.based.on.summaries))
+```
+
+```{r plot-population-ATE}
+summarized.pop.scatter + geom_col(aes(x=x, y=30*fx), data=data.frame(x=x, fx=f.wholepop(x)), fill='purple', alpha=.2)
+```
+
+## For You
+
+-   Estimate the ATE using the interacted bivariate model three ways
+    1.  Fitting the unweighted model
+    2.  Fitting a weighted model using weights based on our known randomization probability $\pi$
+        -   You'll have to work out what the weights should be. I'll give you three options below, one of which is correct.
+        -   Try to work out which is right with pen and paper. To do this, you'll want to modify the argument used in lecture 19 to apply to the ATE.
+        -   You can check your answer by fitting a very bad model for Y, e.g. $\hat\mu(w,x)=\hat\beta_0 + \hat\beta_1 w$.
+        -   If you've got the right weightsm you should still get a good estimate of the ATE.
+    3.  Fitting a weighted model using weights based on an estimated randomization probability $\hat{\pi}$
+        -   Estimate $\pi$ using a logistic regression model as we did for the ATT.
+        -   Plug it into your formula from part 2.
+-   Compare your three estimates of the ATE --- and your confidence intervals --- to the true ATE.
+-   If you like ...
+    -   See what changes when happens when you vary sample size.
+    -   See what happens when you change your model for Y to, e.g., an additive model or a polynomial model
+    -   Calculate the sampling distribution of your point estimates, and the coverage probability of your confidence intervals, by repeatedly sampling from the population as in the 'sample' block above.
+-   Here are the options for the weights.
+    -   They are all inverse probability weights for estimating some intesting summary.
+    -   Only one is right for the ATE.
+
+$$
+\begin{aligned}
+\text{weights}_a(W,X) &= \frac{(1-W) \pi(X)}{1-\pi(X)} + W \\
+\text{weights}_b(W,X) &= (1-W)\pi(X) + W \{ 1-\pi(X) \} \\
+\text{weights}_c(W,X) &= \frac{1-W}{1-\pi(X)} + \frac{W}{\pi(X)} 
+\end{aligned}
+$$
+
+
+### Part 1: Unweighted Least Squares
+```{r}
+model = lm(Y ~ W*X, data=data)
+mu.hat = function(w,x) { predict(model, newdata=data.frame(W=w, X=x)) }
+ATE.hat.unweighted = mean(mu.hat(1,data$X) - mu.hat(0,data$X))
+```
+
+### Part 2. IPW Least Squares
+
+```{r}
+# see weight derivation video
+ATE.weights = function(pi,W,X) { W/pi(X)  + (1-W)/(1-pi(X)) }
+
+data$weights = ATE.weights(pi, data$W, data$X)
+model = lm(Y ~ W*X, data=data, weights=weights)
+mu.hat = function(w,x) { predict(model, newdata=data.frame(W=w, X=x)) }
+ATE.hat.ipw = mean(mu.hat(1,data$X) - mu.hat(0,data$X))
+```
+
+## Part 3. IPW Least Squares with Estimated Assignment Probabilities
+
+```{r}
+## Estimate Assignment Probabilities. Copy-paste from the ATT section.
+pi.formula = W~X
+pi.model = glm(pi.formula, family=binomial(), data=data)
+pi.hat = function(x) { predict(pi.model, newdata=data.frame(X=x), type='response') }
+
+## Fit Model with IPW Least Squares. Copy-past from Part 2, but use pi.hat instead of pi.
+data$weights = ATE.weights(pi.hat, data$W, data$X)
+model = lm(Y ~ W*X, data=data, weights=weights)
+mu.hat = function(w,x) { predict(model, newdata=data.frame(W=w, X=x)) }
+ATE.hat.estimated.ipw = mean(mu.hat(1,data$X) - mu.hat(0,data$X))
+```
+
+## Now let's see what we got.
+```{r}
+ATE.hat.unweighted
+ATE.hat.ipw
+ATE.hat.estimated.ipw
+ATE
+```
+
+These are all pretty close to the true ATE. We can go back to our plots to see why.
+
+
+
+But the confidence intervals are not.
+
+```{r}
+
+
+# Estimating Effects in Some New Data
+
+## Getting and Pre-Processing the Data
+
+-   For an interpretation of the variables included in the CPS data, see [this document](https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf).
+
+```{r get-data}
+#| cache: true
+#| 
+
+library(cpsR)
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+california.state.code = 6
+year = 2020
+cps.data = results=get_asec(year=year, vars=c('pearnval', 'a_age', 'a_sex', 'a_hga', 'gestfips', 'gtco', 'gtcbsasz'), key=census.api.key)
+```
+
+```{r transform-data}
+#| cache: false
+
+sex = factor(c('male', 'female'))
+male   = sex[1]
+female = sex[2]
+
+all.earnings = data.frame(state.code = cps.data$gestfips,
+                          county.code = cps.data$gtco,
+                          age=cps.data$a_age,
+                          income=cps.data$pearnval,
+                          education.code=cps.data$a_hga,
+                          sex = case_match(cps.data$a_sex, 
+                            1 ~ male, 
+                            2 ~ female),
+                          education=case_match(cps.data$a_hga,
+                                           0  ~ 0,   # child
+                                           31 ~ 0,   # < grade 1
+                                           32 ~ 4,   #  grade 1-4
+                                           33 ~ 6,   #  grade 5-6
+                                           34 ~ 8,   #  grade 7-8 
+                                           35 ~ 9,   #  grade 9
+                                           36 ~ 10,  #  grade 10
+                                           37 ~ 11,  #  grade 11
+                                           38 ~ 11,  #  grade 12 no diploma
+                                           39 ~ 12,  #  high school grad
+                                           40 ~ 13,  #  some college
+                                           41 ~ 14,  #  associate degree (vocational)
+                                           42 ~ 14,  #  associate degree (academic)
+                                           43 ~ 16,  #  bachelors degree
+                                           44 ~ 18,  #  masters degree
+                                           45 ~ 20,  #  professional school degree
+                                           46 ~ 20)) #  doctorate
+
+all.earnings$degree = factor(all.earnings$education >= 16, 
+                     levels=c(FALSE, TRUE), 
+                     labels=c('no 4-year degree','4-year degree')) 
+
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+earnings = filter(all.earnings, education >= 8 & 
+              state.code == california.state.code & 
+              age %>% in.interval(c(25,35)))
+```
+
+## For You
+
+-   Estimate the 'ATT' and 'ATE' of 'being female' on income using the CPS data ...
+    -   acting as if gender were randomized conditional on education level.
+    -   i.e., as if it were randomized within subpopulations with the same education level.
+-   Scare quotes are because 'being female' and 'being male' aren't really treatments.
+    -   But we can follow the same procedure and get something that isn't really a causal effect.
+    -   It gives us an education-difference-adjusted measure of the income gap.
+    -   See Issa Kohler Hausmann's paper [*Eddie Murphy and the Dangers of Counterfactual Causal Thinking About Detecting Racial Discrimination*](https://scholarlycommons.law.northwestern.edu/nulr/vol113/iss5/6) for a discussion of what it means to do something like this, acting as if race were a treatment.
+-   Report confidence intervals for the ATE and ATT.
+-   Briefly discuss your results.
+    -   What, in a substantive sense, do they mean?
+    -   Are you seeing a meaningful difference between the ATE and ATT? If so, what might that mean?
+-   I'll get you started with an annotated scatter plot.
+
+```{r cps-data}
+data = data.frame(W=earnings$sex=='female', 
+                  X=earnings$education, 
+                  Y=earnings$income)
+```
+
+```{r plot cps-data}
+
+theme_set(class.theme)
+scatter.plot = summarized.scatter.plot(data) + 
+    xlab('income (in dollars)') + 
+    ylab('education (in years of schooling)') +
+    ylim(c(0,200000)) 
+scatter.plot
+```
