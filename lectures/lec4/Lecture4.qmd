@@ -1,0 +1,1090 @@
+---
+format:
+  clean-revealjs:
+    height: 1000
+    width: 1290
+    theme: [default, "class.scss"]
+    smaller: true
+    slide-number: true
+    pdf-separate-fragments: true
+    fig-format: svg
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
+---
+
+```{r setup}
+library(usmap)
+library(sf)
+
+library(ggplot2)
+
+library(scales)
+library(knitr)
+
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+```
+
+```{r ggplot-themes}
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+		    panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+		    axis.ticks.x = element_blank(),
+		    axis.ticks.y = element_blank(),
+		    axis.text.x  = element_text(colour = "#aaaaaa"),
+		    axis.text.y  = element_text(colour = "#aaaaaa"),
+		    axis.title.x  = element_text(colour = "#aaaaaa"),
+		    axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+   	         axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+	         panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+```{r population-and-sample}
+#| echo: false 
+our.seed = 220
+set.seed(our.seed)
+N = 7233584
+n = 625
+
+b0 = floor(.7*N)
+b1 = ceiling(.3*N)
+y0 = rbinom(n=b0,size=1,prob=.68)
+y1 = rbinom(n=b1,size=1,prob=.74)
+dfpop = data.frame(y=c(y0,y1), x=c(rep(0,b0),rep(1,b1)))
+dfpop = dfpop[sample(1:N),] # shuffle the rows
+x = dfpop$x
+y = dfpop$y
+
+
+# Generate Sample Data for us (J1) and three friends (J2,J3,JM)
+J1 = sample(1:N,size=n,replace=T)
+J2 = sample(1:N,size=n,replace=T)
+J3 = sample(1:N,size=n,replace=T)
+JM = sample(1:N,size=n,replace=T)
+
+J = J1
+dfsam = dfpop[J,]
+Y = dfsam$y
+X = dfsam$x
+
+# Generate Sampling Distribution
+S = 10000
+subsamMean = rep(NA,S)
+diffMean = rep(NA,S)
+for( s in 1:S ){
+	ind = sample(1:N,size=625,replace=T)
+	dfind = dfpop[ind,]
+	subsamMean[s] = mean(dfind$y[dfind$x==1])
+	diffMean[s] = mean(dfind$y[dfind$x==1])-mean(dfind$y[dfind$x==0])	
+}
+
+B = 10000
+bootsubsamMean = rep(NA,B)
+bootdiffsamMean = rep(NA,B)
+for( b in 1:B ){
+bootind = sample(1:625,size=625,replace=T)
+dfboot = dfsam[bootind,]
+bootsubsamMean[b] = mean(dfboot$y[dfboot$x==1])
+bootdiffsamMean[b] = mean(dfboot$y[dfboot$x==1]) - mean(dfboot$y[dfboot$x==0])
+}
+```
+
+```{r mapping}
+# Create fake locations for the people in our population
+# by taking random convex combinations of state vertices
+set.seed(0)
+ga.shape = us_map(include = c("GA"))
+
+# To keep all this from being overwhelming, we'll have 10000 fake locations
+# The jth person is at the (j %% M + 1)st location
+M = 10000 
+V = nrow(ga.shape)
+weights = abs(rt(M*V,1))
+dim(weights) = c(M,V)
+weights = (1/rowSums(weights)) * weights
+locations = data.frame(x=weights %*% ga.shape$x, y=weights %*% ga.shape$y, 
+                       black=factor(x[1:M], levels=c(0,1), labels=c('non-Black', 'Black')), 
+                       black.numeric = x[1:M])
+
+ga = ggplot() + geom_polygon(data=ga.shape, aes(x = x, y = y), fill="white", color="black") + coord_fixed() + blank.theme
+```
+
+# Review
+
+## Point and Interval Estimation
+
+```{r}
+#| out-height: 400px
+
+meanY.samples = rbinom(1000000, size=n, prob=mean(y)) / n
+width = function(Y, alpha=.05) {
+  covg.dif = function(w) { 
+    actual = pbinom(n*(mean(Y)+w/2), size=n, prob=mean(Y)) - pbinom(n*(mean(Y)-w/2), size=n, prob=mean(Y)) 
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0,1))$root
+}
+
+annotated.histogram = ggplot() + geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.1) +
+           geom_vline(aes(xintercept=mean(y) + c(-1,1)*width(y, alpha=.33)/2), color="blue", linetype="dashed") + 
+           geom_vline(aes(xintercept=mean(y) + c(-1,1)*width(y, alpha=.05)/2), color="blue", linetype="dotted") + 
+           geom_vline(aes(xintercept=mean(y)), color='green', size=1, alpha=.7) +
+           scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) + 
+           scale_y_continuous(breaks=seq(0,40,  by=10), limits=c(0, 40)) 
+
+Y2 = y[J2]
+Y3 = y[J3]
+K = 97
+widths = sapply(1:K, function(k) { width(meanY.samples[k], alpha=.05) })
+
+interval.plot = annotated.histogram + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], 
+                                                        xmin=meanY.samples[1:K]-widths/2, 
+                                                        xmax=meanY.samples[1:K]+widths/2), color='purple', alpha=.1) +
+                      geom_pointrange(aes(y=5, x=mean(Y),   xmin=mean(Y)-width(Y)/2,   xmax=mean(Y)+width(Y)/2)) + 
+                      geom_pointrange(aes(y=15, x=mean(Y2), xmin=mean(Y2)-width(Y2)/2, xmax=mean(Y2)+width(Y2)/2), color='magenta') +   
+                      geom_pointrange(aes(y=25, x=mean(Y3), xmin=mean(Y3)-width(Y3)/2, xmax=mean(Y3)+width(Y3)/2), color='cyan') 
+interval.plot      
+```
+
+- In previous lectures, we discussed learning about population proportions and means.
+- Our estimates were proportions/means of a random sample (with replacement) from the population. 
+- We saw that for large enough sample sizes, these estimates were likely to be accurate.
+- We demonstrated that we could predict how accurate we'd be using confidence intervals. 
+  - To get these intervals, we add 'arms' of equal length to our estimate.
+  - We choose the arm length so that, approximately 95% of the time, the population value is within them.
+
+## Calibration of Interval Estimates
+```{r}
+#| out-height: 400px
+interval.plot
+```
+
+- If we had access to the sampling distribution, we could choose so we'd be right exactly 95% of the time.
+  - We'd draw arms from the mean of the sampling distribution that span 95% of point estimates.
+  - We can see that this is the right length by a shift of perspective.
+    - A point estimate can touch the mean with its arms iff^[if and only if] the mean can touch it with equally long arms.
+    - So 95% of intervals cover if and only if 95% of point estimates are within the mean's arms.
+- We can't do this in practice because we don't know the sampling distribution.
+- What we can do is use an *estimate* of the sampling distribution in its place. For example ...
+  1. The Bootstrap Sampling Distribution
+  2. A 'Plug-in' Normal Approximation using an Estimated Standard Error
+
+## Implementation
+
+```{r}
+#| echo: true
+width = function(samples, alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( mean(samples) - w/2 <= samples & samples <= mean(samples) + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
+}
+```
+
+- It's easy to find this width if we have samples from (an approximation to) the sampling distribution.
+- We can just search for the arm length that covers the right proportion of the samples.
+  - As implemented above, that proportion is $1-\alpha$.
+  - The default, $\alpha=.05$, gives us a 95% confidence interval.
+- We use **R**'s built-in root-finder **uniroot** to do this search.
+  - It finds a point $w$ where a function $f(w)=0$.
+  - The function we want to zero is the difference between ...
+    - Actual coverage---the proportion of samples within the mean's arms---at the arm length $w/2$.
+    - Nominal coverage---the proportion of samples we want within the arms.
+
+## An Approximate Implementation
+
+- If our sampling distribution estimate is symmetric, this is a bit easier.
+  - 95% of samples lie between its 2.5th and 97.5th percentiles. That doesn't require symmetry.
+  - But with symmetry those percentiles re equidistant from its mean.
+  - This distance should be the length of our interval's arms.
+- There's an even simpler interpretation of this interval.
+- It *is* the interval between the 2.5th and 97.5th percentiles of our sampling distribution estimate.
+  - Assuming our point estimate is the mean of our sampling distribution estimate.
+  - Because adding those arms to its mean takes us back to those percentiles.
+- Absent symmetry, these 3 approaches give us different intervals. Usually ... 
+  - The first (last slide) works.
+  - The second (percentile width) works less well.
+  - The third (percentile range) works even less well.
+- But it hasn't really come up in a big way.
+   - The sampling distributions we've seeen have been approximately symmetric. They're approximately normal.
+   - That's why we've gotten away with being inconsistent about how, exactly, we've constructed our interval.
+
+::: aside
+Don't worry about being tested on this. You won't be.
+I just thought that, after some time being vague and/or inconsistent 
+from Lecture to Lecture to Homework, it'd be good to offer clarification.
+:::
+
+# Today
+
+## Summary
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2
+
+sample.locations = locations[J %% M + 1, ]
+sample.locations$label = 1:nrow(sample.locations)
+# Fix blackness indicator at sampled locations to align with sample
+# We can't actually use the location's because multiple people 'live' at a location 
+# and the blackness of a location is inherited from an arbitrarily-chosen one of them
+sample.locations$black = factor(x[J], levels=c(0,1), labels=c('non-Black', 'Black'))
+sample.locations$black.numeric = x[J]
+
+ga + geom_text(aes(x = x, y = y, color=black, label=label), alpha=.5, data=sample.locations) + guides(color=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black), alpha=.2, size=.1, data=locations) + guides(color=FALSE)
+```
+
+- We'll expand the scope of what we can estimate.
+- We'll discuss learning subpopulation proportions and differences between them.
+- As before, we'll work with a random sample (with replacement) from the population. 
+- We'll revisit turnout in the 2020 Georgia presidential election.
+- We'll consider the estimation of two quantities.
+  1. The turnout rate of [Black voters]{.twocolor-green}.
+  2. The difference in turnout between [Black]{.twocolor-green} and [non-Black voters]{.twocolor-red}.
+- This is a little more complicated than what we've done before.
+  - The number of [Black]{.twocolor-green} and [non-Black voters]{.twocolor-red} varies from sample to sample.
+  - To deal with this, we'll need some new calculational tools. 
+  - But we'll be able to defer that stuff to next lecture.
+
+## Context: 2020 Presidential Election Turnout in Georgia
+
+- Recall that ... 
+  - Based on a poll of `r n` registered voters a week before the election, we estimated a turnout rate of `r approx(mean(Y))` 
+  - After the election, we found that the turnout rate among all registered voters was `r approx(mean(y))`
+- Let's suppose we asked for a little more new information. 
+- We know from the voter file that `r percent(mean(x==1))` of registered voters are Black.
+- In our poll, we found that...
+  - `r sum(X==1)` of the people we called (`r percent(mean(X==1))`) were Black with a turnout rate of `r approx(mean(Y[X==1]))`
+  - `r sum(X==0)` of the people we called (`r percent(mean(X==0))`) were non-Black with a turnout rate of `r approx(mean(Y[X==0]))`   
+- After the election, we found that ...
+  - Turnout among Black registered voters was `r approx(mean(y[x==1]))` 
+  - Turnout among non-Black registered voters was `r approx(mean(y[x==0]))`.
+
+## Our Sampling Scheme
+
+:::: {.r-stack}
+::: {.fragment .fade-out data-fragment-index="0"}
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2
+ga + geom_text(aes(x = x, y = y, color=black, label=label), alpha=.5, data=sample.locations[c(1,2,n),]) + guides(color=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black), alpha=.2, size=.1, data=locations) + guides(color=FALSE)
+```
+:::
+
+::: {.fragment .current-visible data-fragment-index="0"}
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2
+ga + geom_text(aes(x = x, y = y, color=black, label=label), alpha=.5, data=sample.locations[1:10,]) + guides(color=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black), alpha=.2, size=.1, data=locations) + guides(color=FALSE)
+```
+:::
+
+::: {.fragment .current-visible data-fragment-index="1"}
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2
+ga + geom_text(aes(x = x, y = y, color=black, label=label), alpha=.5, data=sample.locations) + guides(color=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black), alpha=.2, size=.1, data=locations) + guides(color=FALSE)
+```
+:::
+
+::::
+
+$$
+\small{
+\begin{array}{r|rrr|rrr|r|rrr|rr}
+\text{call} &  1 & & & 2 & & & \dots & `r n` & & & & & \\
+\text{question}  & J_1 & X_1 & Y_1 & J_2 & X_2 & Y_2 & \dots & J_{`r n`} & X_{`r n`} & Y_{`r n`} & \overline{X}_{`r n`} & \overline{Y}_{`r n`} \\
+\text{outcome}    & `r J[1]` & \underset{\textcolor{gray}{x_{`r J[1]`}}}{`r X[1]`} & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
+                  & `r J[2]` & \underset{\textcolor{gray}{x_{`r J[2]`}}}{`r X[2]`} & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`}
+                  & \dots 
+                  & `r J[n]` & \underset{\textcolor{gray}{x_{`r J[n]`}}}{`r X[n]`} & \underset{\textcolor{gray}{y_{`r J[n]`}}}{`r Y[n]`}
+                  & `r approx(mean(X))` & `r approx(mean(Y))` \\
+\end{array}
+}
+$$
+
+
+- For each call $i$, we randomly select a voter with an id we'll call $J_i$.
+- And we record two things.
+    - Our outcome $Y_i=y_{J_i}$, an indicator for turnout: 1 if they actually vote; 0 if they don't.
+    - Our covariate $X_i=x_{J_i}$, an indicator for Blackness: 1 if they identify as Black; 0 if they don't.
+    - In our plots, we use color to indicate [Black]{.twocolor-green} and [non-Black]{.twocolor-red} voters.
+- On each call, each registered voter has the same probability of being called: $1/`r approx(N)`$.
+    - As a result, the sample is roughly representative of the population.
+    - In particular, the sample is roughly `r percent(mean(x))` Black, just like the population of Georgia's registered voters.
+
+
+## 4+1 Questions 
+
+1. Our estimate of the Black turnout rate, `r approx(mean(Y[X==1]), accuracy=.001)`, is close to the actual rate of `r approx(mean(y[x==1]), accuracy=.001)`. Did we get lucky?  
+2. Could we have predicted how close we would get before the election?  
+3. The survey turnout gap of `r approx(mean(Y[X==1])-mean(Y[X==0]))` is close to the population turnout gap of `r approx(mean(y[x==1]) - mean(y[x==0]))`. Did we get lucky? 
+4. Could we have predicted how close we would get before the election? 
+ 
++1: Can we do better using a different sampling scheme?
+
+# Alternative Sampling Schemes
+
+## Reinterpreting Sampling with Replacement
+
+- We'll start by reinterpreting the scheme we've been using.
+- Our sampling scheme is equivalent to a two-step process.
+    1. We flip a weighted coin to decide whether to call a [Black]{.twocolor-green} or [non-Black voter]{.twocolor-red}.
+    2. We choose a voter uniformly at random from the group we've selected.
+- Our coin is weighted so we select a Black voter with probability equal to the proportion in our population.
+- That makes sampling representative: each registered voter has the same probability of being selected.
+  
+$$
+P(J_i=j) = 
+\begin{cases}
+   \frac{N_{black}}{N} \ \ \ \ \ \times \frac{1}{N_{black}} \ \ \ \ \ =\ \frac{1}{N} & \text{if the $j$th voter in our population is black ($x_j=1$) } \\
+    \frac{N-N_{black}}{N} \times \frac{1}{N-N_{black}} \ = \ \frac{1}{N} & \text{otherwise}
+\end{cases}
+$$
+
+```{r}
+#| out-height: 400px
+ga + geom_text(aes(x = x, y = y, color=black, label=label), alpha=.5, data=sample.locations[1:10,]) + guides(color=FALSE)
+```
+
+**Check your understanding**. Which of our first 10 coin flips were 'heads'---i.e., selected a black voter?
+
+## Visualizing the Two-Step Process
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2
+#| layout-nrow: 2
+
+ga + geom_text(aes(x = x, y = y, color=black, label=label, alpha=black.numeric), data=sample.locations[1:10,]) + 
+    scale_alpha(range=.5*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black, alpha=black.numeric), size=.1, data=locations) + 
+    scale_alpha(range=.2*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+
+ga + geom_text(aes(x = x, y = y, color=black, label=label, alpha=1-black.numeric), data=sample.locations[1:10,]) +
+    scale_alpha(range=.5*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black, alpha=1-black.numeric), size=.1, data=locations) +
+    scale_alpha(range=.2*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+```
+
+- `r sum(X[1:10])` of the voters we spoke to in our first 10 calls were [Black]{.twocolor-green}.
+- `r percent(mean(X))` of the voters we spoke to in our `r n` calls were [Black]{.twocolor-green}.
+
+## Repeating it: a Friend's Poll
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2
+#| layout-nrow: 2
+
+
+sample.locations = locations[J2 %% M + 1, ]
+sample.locations$label = 1:nrow(sample.locations)
+sample.locations$black = factor(x[J2], levels=c(0,1), labels=c('non-Black', 'Black'))
+sample.locations$black.numeric = x[J2]
+X2 = x[J2]
+
+ga + geom_text(aes(x = x, y = y, color=black, label=label, alpha=black.numeric), data=sample.locations[1:10,]) + 
+    scale_alpha(range=.5*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black, alpha=black.numeric), size=.1, data=locations) + 
+    scale_alpha(range=.2*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+
+ga + geom_text(aes(x = x, y = y, color=black, label=label, alpha=1-black.numeric), data=sample.locations[1:10,]) +
+    scale_alpha(range=.5*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black, alpha=1-black.numeric), size=.1, data=locations) +
+    scale_alpha(range=.2*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+```
+
+- `r sum(X2[1:10])` of the voters they spoke to in their first 10 calls were [Black]{.twocolor-green}.
+- `r percent(mean(X2))` of the voters they spoke to in their `r n` calls were [Black]{.twocolor-green}.
+
+## Non-Representative Sampling with Replacement
+
+
+## Nonrepresentative Sampling with Replacement
+
+- We can use a differently-weighted coin to get a nonrepresentative sample.
+- e.g., a sample in which approximately half of our call recipients are Black.
+- In this sample, we select voters independently with *unequal* probability.
+
+$$
+P(J_i=j) = 
+\begin{cases}
+   \frac{1}{2} \times \frac{1}{N_{Black}} \ \ \ \ \ =\ \frac{1}{2N_{Black}} & \text{if the $j$th voter in our population is black ($x_j=1$) } \\
+   \frac{1}{2} \times \frac{1}{N-N_{Black}} \ = \ \frac{1}{2(N-N_{Black})} & \text{otherwise}
+\end{cases}
+$$
+
+## Sampling Voters --- Our Nonrepresentative Poll
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2
+#| layout-nrow: 2
+
+set.seed(our.seed)
+Jnr = sample(N, n, replace=TRUE, prob=ifelse(x==1, 1/(2*sum(x)), 1/(2*sum(1-x))))
+Xnr = x[Jnr]
+sample.locations = locations[Jnr %% M + 1, ]
+sample.locations$label = 1:nrow(sample.locations)
+sample.locations$black = factor(x[Jnr], levels=c(0,1), labels=c('non-Black', 'Black'))
+sample.locations$black.numeric = x[Jnr]
+
+ga + geom_text(aes(x = x, y = y, color=black, label=label, alpha=black.numeric), data=sample.locations[1:10,]) + 
+    scale_alpha(range=.5*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black, alpha=black.numeric), size=.1, data=locations) + 
+    scale_alpha(range=.2*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+
+ga + geom_text(aes(x = x, y = y, color=black, label=label, alpha=1-black.numeric), data=sample.locations[1:10,]) +
+    scale_alpha(range=.5*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black, alpha=1-black.numeric), size=.1, data=locations) +
+    scale_alpha(range=.2*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+```
+
+- `r sum(Xnr[1:10])` of the voters we spoke to in our first 10 calls were [Black]{.twocolor-green}.
+- `r percent(mean(Xnr))` of the voters we spoke to in our `r n` calls were [Black]{.twocolor-green}.
+
+## Sampling Voters --- A Friend's Nonrepresentative Poll
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2
+#| layout-nrow: 2
+
+Jnr = sample(N, n, replace=TRUE, prob=ifelse(x==1, 1/(2*sum(x)), 1/(2*sum(1-x))))
+Xnr = x[Jnr]
+sample.locations = locations[Jnr %% M + 1, ]
+sample.locations$label = 1:nrow(sample.locations)
+sample.locations$black = factor(x[Jnr], levels=c(0,1), labels=c('non-Black', 'Black'))
+sample.locations$black.numeric = x[Jnr]
+
+
+ga + geom_text(aes(x = x, y = y, color=black, label=label, alpha=black.numeric), data=sample.locations[1:10,]) + 
+    scale_alpha(range=.5*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black, alpha=black.numeric), size=.1, data=locations) + 
+    scale_alpha(range=.2*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+
+ga + geom_text(aes(x = x, y = y, color=black, label=label, alpha=1-black.numeric), data=sample.locations[1:10,]) +
+    scale_alpha(range=.5*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+ga + geom_point(aes(x=x, y=y, color=black, alpha=1-black.numeric), size=.1, data=locations) +
+    scale_alpha(range=.2*c(0,1)) + guides(color=FALSE, alpha=FALSE)
+```
+
+- `r sum(Xnr[1:10])` of the voters they spoke to in their first 10 calls were [Black]{.twocolor-green}.
+- `r percent(mean(Xnr))` of the voters they spoke to in their `r n` calls were [Black]{.twocolor-green}.
+
+## Stratified Sampling
+
+- Nonrepresentative sampling with replacement gives us roughly the proportion of Black voters we specify.
+- But we can also dispense with the coin flips to get the *exact proportion* we choose.
+    - e.g. 50%
+    - e.g. `r percent(mean(x))`, the exact proportion in our population.
+    - e.g. 100%
+- We can simply sample $n_{Black}$ Black voters and $n_{non-Black}$ non-Black voters with replacement from those groups.
+    - This gives us two independent samples, one of each group.
+    - We can then combine them to get a single sample of size $n=n_{Black}+n_{non-Black}$.
+- When we do this, observations are not identically distributed, which makes calculations a bit more complicated.
+  - It's not a big challenge. The complexity is more a matter of notation than anything.
+  - But to keep things simple, we won't talk more about stratified sampling in this class.
+
+
+# Estimating the Turnout Rate among Black Registered Voters
+
+## The Sampling Distribution Table and Black Turnout
+$$
+\small{
+\begin{array}{r|rrr|rrr|r|rrr|rrr}
+\text{call} &  1 & & & 2 & & & \dots & `r n` & & & & & & \\
+\text{pollster} & J_1 & X_1 & Y_1 & J_2 & X_2 & Y_2   & \dots & J_{`r n`} & X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  & \overline{XY} \\
+\hline
+\color{black}   1   
+    & \color{black}   `r J=J1; Y=y[J]; X=x[J]; J[1]`    & \color{black}  `r X[1]`      & \color{black} `r Y[1]` 
+    & \color{black}   `r J[2]`                          & \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
+                                                        & \color{black}   \dots 
+    & \color{black}   `r J[n]`                          & \color{black}   `r X[n]`     & \color{black} `r Y[n]`       
+    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(X*Y))` \\
+\color{magenta}   2   
+    & \color{magenta}   `r J=J2; Y=y[J]; X=x[J]; J[1]`  & \color{magenta}  `r X[1]`      & \color{magenta} `r Y[1]` 
+    & \color{magenta}   `r J[2]`                        & \color{magenta}  `r X[2]`      & \color{magenta} `r Y[2]`      
+                                                        & \color{magenta}   \dots 
+    & \color{magenta}   `r J[n]`                        & \color{magenta}   `r X[n]`     & \color{magenta} `r Y[n]`       
+    & \color{magenta}   `r approx(mean(X))` & \color{magenta} `r approx(mean(Y))` &  \color{magenta} `r approx(mean(X*Y))` \\
+\color{cyan}    3   
+    & \color{cyan}    `r J=J3; Y=y[J]; X=x[J]; J[1]`    & \color{cyan}   `r X[1]`      & \color{cyan}  `r Y[1]` 
+    & \color{cyan}    `r J[2]`                          & \color{cyan}   `r X[2]`      & \color{cyan}  `r Y[2]`      
+                                                        & \color{cyan}    \dots 
+    & \color{cyan}    `r J[n]`                          & \color{cyan}    `r X[n]`     & \color{cyan}  `r Y[n]`       
+    & \color{cyan}    `r approx(mean(X))`   & \color{cyan}  `r approx(mean(Y))`   &  \color{cyan}    `r approx(mean(X*Y))` \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{gray}    1M   
+    & \color{gray}    `r J=JM; Y=y[J]; X=x[J]; J[1]`    & \color{gray}   `r X[1]`      & \color{gray}  `r Y[1]` 
+    & \color{gray}    `r J[2]`                          & \color{gray}   `r X[2]`      & \color{gray}  `r Y[2]`      
+                                                        & \color{gray}    \dots 
+    & \color{gray}    `r J[n]`                          & \color{gray}    `r X[n]`     & \color{gray}  `r Y[n]`       
+    & \color{gray}    `r approx(mean(X))`   & \color{gray}  `r approx(mean(Y))`   &  \color{gray}    `r approx(mean(X*Y))` \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
+$$
+
+:::: r-stack
+
+::: {.fragment .fade-out data-fragment-index="0"}
+$$
+\text{Let's think about} \ \ \sum_{i=1}^{`r n`}X_i Y_i=n\overline{XY}
+$$
+
+- That's the number of polled Black voters who turn out. 
+  - It's a sum of `r n` independent and identically distributed Bernoulli random variables with mean $p=`r approx(mean(x*y))`$.
+  - That's the proportion of registered voters who both identify as Black and turn out.
+  - As a result, it's Binomial: $n\overline{XY} \sim Bin(n,p)$  and $\overline{XY}=Bin(n,p)/n$.
+- This proportion is something we could do inference for exactly as we did for the overall turnout rate.
+- But it's not the quantity we're interested in. We're interested in the proportion of Black voters who turn out. 
+- Using the quantities in our table, how do we calculate that?
+
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+
+$$ 
+\text{It's} \ \
+\frac{\sum_{i=1}^{`r n`} X_i Y_i}{\sum_{i=1}^{`r n`}} = \frac{n\overline{XY}}{n\overline{X}} = \frac{\overline{XY}}{\overline{X}}.
+$$ 
+
+- It's the number of polled Black voters who turn out divided by the number of polled Black voters.
+  - That ratio *doesn't* have a Binomial distribution---or a scaled Binomial distribution.
+  - The problem is that the denominator is not a constant. It's a random variable.
+- To simulate its sampling distribution, we'll repeatedly sample with replacement from the population and compute this quantity $\overline{XY}/\overline{X}$. 
+- To estimate its sampling distribution, we'll repeatedly sample with replacement from the sample and do the same. That is, we'll bootstrap.
+
+:::
+::::
+
+## Simulating the Sampling Distribution of Black Turnout
+
+```{r}
+plot.samples = function(samples) { 
+	ggplot() + geom_histogram(aes(x=samples, y=after_stat(density)), binwidth=.001, alpha=.2) +
+           geom_vline(aes(xintercept=mean(samples)), color="blue") +
+           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*width(samples, alpha=.33)/2), color="blue", linetype='dashed') +
+           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*width(samples, alpha=.05)/2), color="blue", linetype='dotted') +
+           geom_vline(aes(xintercept=mean(y[x==1])), color='green', size=3, alpha=.7) +
+           scale_x_continuous(breaks=seq(.5,.9, by=.025), limits=c(.5, .9)) +
+           scale_y_continuous(breaks=seq(0,40,  by=10), limits=c(0, 40))
+}
+```
+
+```{r}
+set.seed(111)
+```
+
+```{r}
+#| echo: true
+turnout.samples = replicate(10000, {
+  Js = sample(1:N,size=n,replace=TRUE)
+  Xs = x[Js]
+  Ys = y[Js]
+  mean(Xs*Ys)/mean(Xs)
+})
+```
+
+```{r}
+#| out-height: 400px
+plot.samples(turnout.samples)
+```
+
+- There are a few features we may want to highlight.
+  - The *mean of the sampling distribution* is the solid blue line.
+  - The middle 2/3 of the sampling distribution lies between the dashed blue lines.
+  - The middle 95\% of the sampling distribution lies between the dotted blue lines. 
+- I've also drawn the *subpopulation proportion* as a wide green line.
+  - We see that it appears as a kind of highlight on the solid blue line. 
+  - It's in exactly the same place. What does this mean? 
+
+
+## Estimating the Sampling Distribution of Black Turnout
+
+```{r}
+#| echo: true
+turnout.bootstrap.samples = replicate(10000, {
+  Jb = sample(1:n,size=n,replace=TRUE)
+  Xb = X[Jb]
+  Yb = Y[Jb]
+  mean(Xb*Yb)/mean(Xb)
+})
+```
+
+```{r}
+#| out-height: 400px
+plot.samples(turnout.bootstrap.samples)
+```
+
+- There are a few features we may want to highlight.
+  - The *mean of the bootstrap sampling distribution* is the solid blue line.
+  - The middle 2/3 of the sampling distribution lies between the dashed blue lines.
+  - The middle 95\% of the sampling distribution lies between the dotted blue lines. 
+- I've also drawn the *subpopulation proportion* as a wide green line.
+  - We see that it's not quite equal to the bootstrap sampling distribution's mean.
+  - Why is this?
+
+
+## A Comparison
+```{r}
+#| fig-nrow: 2
+#| fig-asp: .5
+#| out-height: 400px
+plot.samples(turnout.samples)
+plot.samples(turnout.bootstrap.samples)
+```
+
+## A Post-Centering Comparison
+```{r}
+#| fig-nrow: 2
+#| fig-asp: .5
+#| out-height: 400px
+plot.samples(turnout.samples)
+plot.samples(turnout.bootstrap.samples + mean(turnout.samples)-mean(turnout.bootstrap.samples))
+```
+
+## A Bootstrap Confidence Interval
+
+```{r}
+#| echo: true
+w = width(turnout.bootstrap.samples, alpha=.05)
+c(mean(X*Y)/mean(X) - w/2, mean(X*Y)/mean(X) + w/2)
+```
+
+```{r}
+interval.plot = plot.samples(turnout.samples) + geom_pointrange(aes(y=10, x=mean(X*Y)/mean(X), xmin=mean(X*Y)/mean(X)-w/2, xmax=mean(X*Y)/mean(X)+w/2)) 
+interval.plot
+```
+
+## Coverage
+
+```{r}
+#| echo: true
+#| cache: true
+S = 100
+intervals = array(dim=c(S, 2))
+for(ss in 1:S) {
+  J = sample(1:N,size=n,replace=TRUE)
+  Xs = x[J]
+  Ys = y[J]
+  
+  bootstrap.samples = replicate(1000, {
+    Jb = sample(1:n,size=n,replace=TRUE)
+    Xb = Xs[Jb]
+    Yb = Ys[Jb]
+    mean(Xb*Yb)/mean(Xb)
+  })
+
+  w = width(bootstrap.samples, alpha=.05)
+  intervals[ss,] = c(mean(Xs*Ys)/mean(Xs) - w/2, mean(Xs*Ys)/mean(Xs) + w/2)
+}
+coverage = mean( intervals[,1] <= mean(x*y)/mean(x) & mean(x*y)/mean(x) <= intervals[,2] )
+width.mean = mean(intervals[,2]-intervals[,1])
+```
+
+```{r}
+#| out-height: 400px
+K = 99
+interval.plot + geom_pointrange(aes(y=20*(1:K)/K, xmin=intervals[1:K,1], xmax=intervals[1:K,2], x=(intervals[1:K,1]+intervals[1:K,2])/2), alpha=.1, color='purple')
+```
+
+- `r S*coverage`/`r S`  intervals (`r percent(coverage)`) cover the true proportion of Black voters who turn out.
+  - Pretty close to the nominal 95% coverage rate.
+- Their mean width is 2 x `r approx(width.mean/2)`.
+  - We talk about widths as twice something because our interval has two arms.
+  - The width is twice the length of an arm---twice the distance from point-estimate to endpoint.
+
+
+## Questions 1-2  
+```{r}
+as.good = mean(abs(turnout.samples - mean(y[x==1])) <=abs(mean(Y[X==1]) - mean(y[x==1])))
+width.66 = width(turnout.samples, alpha=1/3)
+width.95 = width(turnout.samples, alpha=.05)
+```
+
+1. Our estimate of the Black turnout rate, `r approx(mean(X*Y)/mean(X), accuracy=.001)` is very close to the actual rate of `r approx(mean(x*y)/mean(x), accuracy=.001)`. Did we get lucky?  
+    - Maybe a litte.  We come this close in only `r percent(as.good)` of polls.
+    - But in 2/3 of polls (i.e. draws from the sampling distribution), we're within `r approx(width.66/2)` of the true proportion.
+    - And in 95% of polls (i.e. draws from the sampling distribution), we're within `r approx(width.95/2)` of the true proportion.
+  
+2. Could we have predicted how close we would get before the election? 
+    - Luck aside, yes. We can use the bootstrap to construct at 95% confidence interval.
+    - This interval has `r percent(coverage)` coverage and average width of 2 x `r approx(width.mean/2)`.
+
++1: Can we do better using a different sampling scheme?
+
+# +1. Redo with New Sampling Scheme
+
+## How and Why
+
+- Polling non-Black voters isn't useful for estimating Black turnout.
+- So it makes sense to reduce the proportion of non-Black voters in our sample.
+- We can use non-respresentative sampling with replacement to do this.
+- How should we weight our coin?
+
+::: fragment
+
+- We should weight it so it *always* lands heads, i.e., always selects a black voter.
+- By doing this, we are in effect sampling with replacement from the subpopulation of Black voters.
+
+:::
+
+
+## Relative Performance: Accuracy
+
+```{r}
+#| echo: true
+j.black = which(x==1) 
+nonrep.turnout.samples = replicate(10000, {
+  Js = sample(j.black,size=n,replace=TRUE)
+  Xs = x[Js]
+  Ys = y[Js]
+  mean(Xs*Ys)/mean(Xs)
+})
+```
+
+```{r}
+#| fig-nrow: 2
+#| fig-asp: .5
+#| out-height: 300px
+#| fig-subcap: 
+#|   - "Sampling Distribution with Nonrepresentative Sampling with Replacement"
+#|   - "Sampling Distribution with Representative Sampling with Replacement"
+plot.samples(nonrep.turnout.samples)
+plot.samples(turnout.samples)
+```
+
+
+## Relative Performance: Intervals
+
+
+```{r}
+#| cache: true
+S = 100
+nonrep.intervals = array(dim=c(S, 2))
+for(ss in 1:S) { 
+  J = sample(j.black, size=n, replace=TRUE)
+  Xs = x[J]
+  Ys = y[J]
+  
+  bootstrap.samples = replicate(1000, {
+    Jb = sample(1:n,size=n,replace=TRUE)
+    Xb = Xs[Jb]
+    Yb = Ys[Jb]
+    mean(Xb*Yb)/mean(Xb)
+  })
+
+  w = width(bootstrap.samples, alpha=.05)
+  nonrep.intervals[ss,] = c(mean(Xs*Ys)/mean(Xs) - w/2, mean(Xs*Ys)/mean(Xs) + w/2)
+}
+nonrep.coverage = mean( nonrep.intervals[,1] <= mean(x*y)/mean(x) & mean(x*y)/mean(x) <= nonrep.intervals[,2] )
+```
+
+```{r}
+#| fig-nrow: 2
+#| fig-asp: .5
+#| out-height: 300px
+#| fig-subcap: 
+#|   - "Sampling Distribution with Nonrepresentative Sampling with Replacement"
+#|   - "Sampling Distribution with Representative Sampling with Replacement"
+K = 100
+plot.samples(nonrep.turnout.samples) + 
+   geom_pointrange(aes(y=40*(1:K)/K, xmin=nonrep.intervals[1:K,1], xmax=nonrep.intervals[1:K,2], x=(nonrep.intervals[1:K,1]+nonrep.intervals[1:K,2])/2), alpha=.1, color='purple')
+plot.samples(turnout.samples) + geom_pointrange(aes(y=40*(1:K)/K, xmin=intervals[1:K,1], xmax=intervals[1:K,2], x=(intervals[1:K,1]+intervals[1:K,2])/2), alpha=.1, color='purple') 
+```
+
+
+- When we use this new approach to sampling ...
+  - `r percent(nonrep.coverage)` of intervals cover the true proportion.
+  - The average width of our intervals is 2 x `r approx(mean(nonrep.intervals[,2]-nonrep.intervals[,1])/2)`.
+- This compares favorably to what we got with representative sampling.
+  - `r percent(nonrep.coverage)` of intervals covered the true proportion.
+  - The average width of our intervals was 2 x `r approx(mean(intervals[,2]-intervals[,1])/2)`.
+
+
+# Estimating the Difference in Turnout Rates
+
+## The Sampling Distribution Table and the Difference in Turnout
+
+$$
+\small{
+\begin{array}{r|rrr|rrr|r|rrr|rrr}
+\text{call} &  1 & & & 2 & & & \dots & `r n` & & & & & & \\
+\text{pollster} & J_1 & X_1 & Y_1 & J_2 & X_2 & Y_2   & \dots & J_{`r n`} & X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  & \overline{XY} \\
+\hline
+\color{black}   1   
+    & \color{black}   `r J=J1; Y=y[J]; X=x[J]; J[1]`    & \color{black}  `r X[1]`      & \color{black} `r Y[1]` 
+    & \color{black}   `r J[2]`                          & \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
+                                                        & \color{black}   \dots 
+    & \color{black}   `r J[n]`                          & \color{black}   `r X[n]`     & \color{black} `r Y[n]`       
+    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(X*Y))` \\
+\color{magenta}   2   
+    & \color{magenta}   `r J=J2; Y=y[J]; X=x[J]; J[1]`  & \color{magenta}  `r X[1]`      & \color{magenta} `r Y[1]` 
+    & \color{magenta}   `r J[2]`                        & \color{magenta}  `r X[2]`      & \color{magenta} `r Y[2]`      
+                                                        & \color{magenta}   \dots 
+    & \color{magenta}   `r J[n]`                        & \color{magenta}   `r X[n]`     & \color{magenta} `r Y[n]`       
+    & \color{magenta}   `r approx(mean(X))` & \color{magenta} `r approx(mean(Y))` &  \color{magenta} `r approx(mean(X*Y))` \\
+\color{cyan}    3   
+    & \color{cyan}    `r J=J3; Y=y[J]; X=x[J]; J[1]`    & \color{cyan}   `r X[1]`      & \color{cyan}  `r Y[1]` 
+    & \color{cyan}    `r J[2]`                          & \color{cyan}   `r X[2]`      & \color{cyan}  `r Y[2]`      
+                                                        & \color{cyan}    \dots 
+    & \color{cyan}    `r J[n]`                          & \color{cyan}    `r X[n]`     & \color{cyan}  `r Y[n]`       
+    & \color{cyan}    `r approx(mean(X))`   & \color{cyan}  `r approx(mean(Y))`   &  \color{cyan}    `r approx(mean(X*Y))` \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{gray}    1M   
+    & \color{gray}    `r J=JM; Y=y[J]; X=x[J]; J[1]`    & \color{gray}   `r X[1]`      & \color{gray}  `r Y[1]` 
+    & \color{gray}    `r J[2]`                          & \color{gray}   `r X[2]`      & \color{gray}  `r Y[2]`      
+                                                        & \color{gray}    \dots 
+    & \color{gray}    `r J[n]`                          & \color{gray}    `r X[n]`     & \color{gray}  `r Y[n]`       
+    & \color{gray}    `r approx(mean(X))`   & \color{gray}  `r approx(mean(Y))`   &  \color{gray}    `r approx(mean(X*Y))` \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
+$$
+
+- We know how to calculate Black turnout. 
+
+$$ 
+\frac{\sum_{i=1}^{`r n`} X_i Y_i}{\sum_{i=1}^{`r n`} X_i} = 
+\frac{n\overline{XY}}{n\overline{X}} = 
+\frac{\overline{XY}}{\overline{X}}
+$$
+
+- What about non-Black turnout? 
+
+::: fragment
+
+$$
+\frac{\sum_{i=1}^{`r n`} (1-X_i) Y_i}{\sum_{i=1}^{`r n`} (1-X_i)} = 
+\frac{\sum_{i=1}^{`r n`} Y_i- \sum_{i=1}^{`r n`} X_i Y_i}{\sum_{i=1}^{`r n`} 1 - \sum_{i=1}^{`r n`} X_i} =
+\frac{n\overline{Y} - n\overline{XY}}{n - n\overline{X}} = 
+\frac{\overline{Y}-\overline{XY}}{1-\overline{X}}
+$$
+
+:::
+
+- The difference doesn't have a simple distribution, so we simulate/bootstrap.
+
+## Sampling Dist: Black Turnout Minus non-Black Turnout
+
+$$ 
+\begin{aligned}
+\text{Black Turnout}     &= \frac{\overline{XY}}{\overline{X}} \\
+\text{non-Black Turnout} &= \frac{\overline{Y}-\overline{XY}}{1-\overline{X}} 
+\end{aligned}
+$$
+
+Here's our code for the sampling distribution of black turnout.
+
+```{r}
+#| echo: true
+turnout.samples = replicate(10000, {
+  Js = sample(1:N,size=n,replace=TRUE)
+  Xs = x[Js]
+  Ys = y[Js]
+  mean(Xs*Ys)/mean(Xs)
+})
+```
+
+How do we modify it to get the sampling distribution of the difference?
+
+::: fragment
+
+```{r}
+#| echo: true
+turnout.dif.samples = replicate(10000, {
+  Js = sample(1:N,size=n,replace=TRUE)
+  Xs = x[Js]
+  Ys = y[Js]
+  mean(Xs*Ys)/mean(Xs) - mean(Ys*(1-Xs))/(1-mean(Xs))
+})
+```
+
+```{r}
+plot.samples = function(samples) { 
+	ggplot() + geom_histogram(aes(x=samples, y=after_stat(density)), binwidth=.001, alpha=.2) +
+           geom_vline(aes(xintercept=mean(samples)), color="blue") +
+           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*width(samples, alpha=.33)/2), color="blue", linetype='dashed') +
+           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*width(samples, alpha=.05)/2), color="blue", linetype='dotted') +
+           geom_vline(aes(xintercept=mean(y[x==1])-mean(y[x==0])), color='green', size=3, alpha=.7) +
+           scale_x_continuous(breaks=seq(-.2,.2, by=.025), limits=c(-.2, .2)) +
+           scale_y_continuous(breaks=seq(0,40,  by=10), limits=c(0, 40))
+}
+plot.samples(turnout.dif.samples)
+```
+
+:::
+
+
+## Bootstrapping the Turnout Difference
+
+ Here's our code for sampling from the sampling distribution.
+
+```{r}
+#| echo: true
+turnout.dif.samples = replicate(10000, {
+  Js = sample(1:N,size=n,replace=TRUE)
+  Xs = x[Js]
+  Ys = y[Js]
+  mean(Xs*Ys)/mean(Xs) - mean(Ys*(1-Xs))/(1-mean(Xs))
+})
+```
+
+How do we modify it to give us a sample from the bootstrap sampling distribution?
+
+::: fragment
+
+```{r}
+#| echo: true
+turnout.dif.bootstrap.samples = replicate(10000, {
+  Jb = sample(1:n,size=n,replace=TRUE)
+  Xb = X[Jb]
+  Yb = Y[Jb]
+  mean(Xb*Yb)/mean(Xb) - mean(Yb*(1-Xb))/(1-mean(Xb))
+})
+```
+
+```{r}
+plot.samples(turnout.dif.bootstrap.samples)
+```
+
+:::
+
+## A Post-Centering Comparison
+
+```{r}
+#| fig-nrow: 2
+#| out-height: 400px
+plot.samples(turnout.dif.samples)
+plot.samples(turnout.dif.bootstrap.samples + mean(turnout.dif.samples)-mean(turnout.dif.bootstrap.samples))
+```
+
+
+## A Bootstrap Confidence Interval
+
+```{r}
+#| echo: true
+w = width(turnout.dif.bootstrap.samples, alpha=.05)
+c(mean(X*Y)/mean(X) - w/2, mean(X*Y)/mean(X) + w/2)
+```
+
+
+```{r}
+estimated.dif = mean(X*Y)/mean(X) - mean(Y*(1-X))/(1-mean(X))
+interval.plot = plot.samples(turnout.dif.samples) + 
+  geom_pointrange(aes(y=10, x=estimated.dif, xmin=estimated.dif-w/2, xmax=estimated.dif + w/2))
+interval.plot
+```
+
+## Coverage
+
+```{r}
+#| echo: true
+#| cache: true
+S = 100
+intervals = array(dim=c(S, 2))
+for(ss in 1:S) {
+  J = sample(1:N,size=n,replace=TRUE)
+  Xs = x[J]
+  Ys = y[J]
+  
+  bootstrap.samples = replicate(1000, {
+    Jb = sample(1:n,size=n,replace=TRUE)
+    Xb = Xs[Jb]
+    Yb = Ys[Jb]
+    mean(Xb*Yb)/mean(Xb) - mean(Yb*(1-Xb))/(1-mean(Xb))
+  })
+
+  w = width(bootstrap.samples, alpha=.05)
+  estimated.dif.s = mean(Xs*Ys)/mean(Xs) - mean(Ys*(1-Xs))/(1-mean(Xs))
+  intervals[ss,] = c(estimated.dif.s - w/2, estimated.dif.s + w/2)
+}
+pop.dif = mean(x*y)/mean(x) - mean((1-x)*y)/mean(1-x)
+coverage = mean( intervals[,1] <= pop.dif & pop.dif <= intervals[,2] )
+mean.width = mean( intervals[,2] - intervals[,1] )
+```
+
+```{r}
+#| out-height: 400px
+K = 99
+interval.plot + geom_pointrange(aes(y=20*(1:K)/K, xmin=intervals[1:K,1], xmax=intervals[1:K,2], x=(intervals[1:K,1]+intervals[1:K,2])/2), alpha=.1, color='purple')
+```
+
+- `r S*coverage`/`r S`  intervals (`r percent(coverage)`) cover the true difference in turnout.
+  - Pretty close to the intended 95% coverage rate.
+- Their mean width is 2 x `r approx(mean.width/2)`.
+  - Remember: we use this phrasing because widths are twice the distance from point-estimate to endpoint.
+
+
+## Questions 3-4  
+```{r}
+as.good = mean(abs(turnout.dif.bootstrap.samples - pop.dif) <= abs(estimated.dif - pop.dif))
+width.66 = width(turnout.samples, alpha=1/3)
+width.95 = width(turnout.samples, alpha=.05)
+```
+
+3. Our estimate of the turnout rate difference, `r approx(estimated.dif)`, is close to the actual rate of `r approx(pop.dif)`. Did we get lucky?  
+    - Maybe a little. We come this close in only `r percent(as.good)` of polls.
+    - But in 2/3 of polls (i.e. draws from the sampling distribution), we're within `r approx(width.66/2)` of the population difference.
+    - And in 95% of polls (i.e. draws from the sampling distribution), we're within `r approx(width.95/2)` of the population difference.
+  
+4. Could we have predicted how close we would get before the election? 
+    - Luck aside, yes. 
+    - Bootstrap confidence intervals have `r percent(coverage)` coverage and average width of 2 x `r approx(width.mean/2)`.
+
+
++1: Can we do better using a different sampling scheme? 
+
+# +1: Redo with New Sampling Scheme
+
+## What should it be?
+
+- We'll use non-representative sampling with replacement.
+- Your poll will decide the probability that, on each call, we select a Black voter. 
+- Which will it be?
+    - 30% 
+    - 50%
+    - 80%
+    - 100%
+

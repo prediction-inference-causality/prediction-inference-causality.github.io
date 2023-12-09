@@ -2,305 +2,955 @@
 title: "QTM 220: Lecture 3"
 subtitle: "Population Inference for Means"
 format: 
-  beamer:
-     header-includes: |
-       \setbeamertemplate{navigation symbols}{}
-       \setbeamertemplate{footline}[page number]
-editor: visual
+  clean-revealjs:
+    height: 1000
+    width: 1290
+    theme: [default, "class.scss"]
+    smaller: true
+    slide-number: true
+    pdf-separate-fragments: true
+    fig-format: svg
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
 ---
 
+```{r load-libraries}
+library(purrr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(ggplot2)
+library(htmltools)
+library(kableExtra)
+library(scales)
+library(cpsR)
+library(mapdata)
+
+options(knitr.kable.NA = '')
+
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+
+library(cpsR)
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+```
+
+```{r ggplot-themes}
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+		    panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+		    axis.ticks.x = element_blank(),
+		    axis.ticks.y = element_blank(),
+		    axis.text.x  = element_text(colour = "#aaaaaa"),
+		    axis.text.y  = element_text(colour = "#aaaaaa"),
+		    axis.title.x  = element_text(colour = "#aaaaaa"),
+		    axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+   	         axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+	         panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+```{r table-styling}
+ellipsis <- function(df, nhead=5L, ntail=2) {
+    rownames(df) = as.character(1:nrow(df))
+    stopifnot("data.frame" %in% class(df))
+    els <- rep(NA, ncol(df)) %>% 
+        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
+        data.frame(stringsAsFactors=FALSE) %>% 
+        tibble::as_tibble()
+    rownames(els) = "⋮"
+    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
+}
+```
+
+
+```{r get-california-data}
+#| cache: true
+
+california.state.code = 6
+cps.data = cpsR::get_asec(year=2022, vars=c('pearnval', 'gestfips', 'h_numper', 'htotval', 'a_age', 'a_hga','gereg', 'a_maritl', 'a_sex','peafever','a_wkstat','gtco'), key=census.api.key)
+```
+
+```{r process-california-data}
+all.earnings = data.frame(age=cps.data$a_age,
+                          state.code = cps.data$gestfips,
+						  county.code = cps.data$gtco,
+                          income=cps.data$htotval, 
+                          education=case_match(cps.data$a_hga,
+                                          0  ~ 0,   # child
+                                          31 ~ 0,   # < grade 1
+                                          32 ~ 4,   #  grade 1-4
+                                          33 ~ 6,   #  grade 5-6
+                                          34 ~ 8,   #  grade 7-8 
+                                          35 ~ 9,   #  grade 9
+                                          36 ~ 10,  #  grade 10
+                                          37 ~ 11,  #  grade 11
+                                          38 ~ 11,  #  grade 12 no diploma
+                                          39 ~ 12,  #  high school grad
+                                          40 ~ 13,  #  some college
+                                          41 ~ 14,  #  associate degree(vocational)
+                                          42 ~ 14,  #  associate degree (academic)
+                                          43 ~ 16,  #  bachelors degree
+                                          44 ~ 18,  #  masters degree
+                                          45 ~ 20,  #  professional school degree
+                                          46 ~ 20)) #  doctorate
+
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+all.earnings$employed<- ifelse(cps.data$a_wkstat >5, 0,ifelse(cps.data$a_wkstat<2,NA,1))
+all.earnings$degree = factor(all.earnings$education >= 16,
+                    levels=c(FALSE, TRUE), 
+                    labels=c('no 4-year degree','4-year degree')) 
+
+earnings = all.earnings[all.earnings$age %>% in.interval(c(25,35)) & 
+                        all.earnings$state.code == california.state.code &
+                        all.earnings$education > 8, ]
+
+rownames(earnings)=NULL
+earnings$person = 1:nrow(earnings)
+n = nrow(earnings)
+```
+
+
+
+```{r maps}
+#| cache: true
+
+## All of this is just to make maps showing the sample and population.
+## And this code will be used later, so some of what's written here isn't 
+## used in the lecture. I wouldn't read it unless you're interested in drawing maps in R.
+
+# county info from https://en.wikipedia.org/wiki/List_of_counties_in_California
+# converted to csv using https://wikitable2csv.ggor.de
+to.number = function(s) { as.numeric(str_trim(gsub(",", "", s))) }
+ca_county_info = read.csv('california_county_info.csv') %>%
+  mutate(subregion = tolower(sub(' County', '', County))) %>%
+  mutate(pop = to.number(Population..2022.)) %>%
+  mutate(area = to.number(sub('sq.*', '', Area))) 
+
+earnings.county = left_join(earnings, ca_county_info[,c('FIPS.code', 'subregion')], by=c('county.code' = 'FIPS.code'))
+earnings$county = earnings.county$subregion
+earnings$county[is.na(earnings$county)]='unknown'
+	
+# To give our survey recipients a bit more reality, we'll give them fake locations on a map
+# And we'll make up a population of California residents that they're sampled from
+# maps are based on code from https://eriqande.github.io/rep-res-eeb-2017/map-making-in-R.html
+
+cps.sampling.ratio = 1/2500
+counties = map_data("county")
+ca_county = counties %>%
+  filter(region == "california")
+ca_county_centers = ca_county %>%
+  group_by(subregion) %>%
+  summarize(county.lat = mean(lat), county.long=mean(long))
+
+ca_county_more = left_join(ca_county_centers, ca_county_info, by="subregion")
+ca_all = left_join(ca_county, ca_county_more, by="subregion")
+
+
+ca.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(fill='gray', color = "white", alpha=.4) +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+
+ca.pop.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(aes(fill = pop/area), color = "white") +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+
+## we'll make up a population as follows
+# 1. choose the number of people to be the number of people in our sample scaled up to account for the cps sampling ratio
+# 2. for each, sample a county with probability proportional to its finite.population
+# 3. for each, sample a latitude and longitude by taking a randomly weighted combination of the    
+#    county's vertices. As long as the county is convex, these points will be inside the county.
+# 4. we'll give them a degree too, chosen independently of all else from the empirical distribution on the sample
+npop = nrow(earnings) / cps.sampling.ratio
+
+# takes a list of subregions, possibly with duplicates
+# for each element, chooses random lat/long coordinates within the sample.subregion
+# by taking a random convex combination of the subregion's vertices
+sample.within.subregion = function(subregions) {
+  output = data.frame(subregion=subregions, lat=NA, long=NA)
+  for(subregion in unique(subregions)) { 
+      vertices = ca_county[ca_county$subregion==subregion, c('lat','long')]
+      U = sum(subregions==subregion)
+      V = nrow(vertices)
+      weights = abs(rt(U*V, 1))
+      dim(weights) = c(U,V)
+      weights = (1/rowSums(weights)) * weights
+      output[subregions==subregion, c('lat', 'long')] = 
+                 cbind(weights %*% vertices$lat, weights %*% vertices$long)
+    }
+    output
+}
+
+finite.population.subregion = sample(ca_county_more$subregion, size=npop, replace=TRUE, prob=ca_county_more$pop)
+finite.population = sample.within.subregion(finite.population.subregion)
+finite.population$degree = sample(earnings$degree, nrow(finite.population), replace=TRUE)
+finite.population$group=1 # for plotting
+
+display.population = sample_n(finite.population, min(100000, nrow(finite.population)))
+
+# and we'll force the degree-distribution in the sample to match our survey responses
+our.sample = sample_n(finite.population, nrow(earnings))
+our.sample$degree=earnings$degree
+
+pop.plot = ca.plot + geom_point(aes(x=long, y=lat), data=display.population, size=.02, alpha=.1) 
+sample.plot = ca.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
+pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.population, size=.01, alpha=.1)  
+sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
+```
+
+# Introduction
+
 ## Review
+::: {.hidden}
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\V}{V}
+\DeclareMathOperator{\Var}{\V}
+\newcommand{\inred}[1]{\textcolor{red}{#1}}
+\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
+$$ 
 
-```{=tex}
-\begin{itemize}
-\item Last lecture, we discussed learning about population proportions based on a random sample (with replacement) from the population. \pause
-\item We saw that for large enough sample sizes, our sample proportion was likely to be close to the population proportion. \pause
-\item We also demonstrated that we could predict how close we might by using confidence intervals. \pause
-\item We explored a bootstrapping approach to producing confidence intervals.  
-\end{itemize}
+:::
+
+-  Last lecture, we discussed learning about population proportions.
+-  Our polling strategy gave us independent observations from our population of registered voters.
+  - Our outcomes were binary, so these were independent Bernoulli-distributed random variables.
+  - And the probability of voting was the proportion of registered voters who turned out to vote.
+-  We saw that the sample proportion was a good estimate of population proportion.
+-  And that we could characterize the accuracy of our prediction using a confidence interval. 
+-  We used the bootstrap sampling distribution to calibrate the intervals.
+  
+## Today
+
+- In this one, we'll consider an outcome that isn't binary---it'll be income.
+- Our goal will be to learn about the population mean from a random sample.
+	- We'll use---or act as if we've used---the same polling strategy as before.
+	- This means that as, before, we'll think of our observations as being independent draws from same distribution.
+	- In particular, the distribution of outcomes in the population.
+	- But we will not have a simple way to characterize that distribution (e.g., Bernoulli in the binary case).
+- Not knowing the distribution isn't a problem when the sample is large.
+- But understanding why it isn't a problem is subtle. 
+
+
+## Context: 2022 CPS Wage Data
+
+- The Current Population Survey is a survey run by Census Bureau and Bureau of Labor Statistics
+    - Each year, about 1/2500 US residents is surveyed.
+    - Think of our survey responses like our poll responses from last lecture.
+		- Each one comes from a resident chosen independently from the set of all residents.
+		- With each resident having equal probability of being chosen.
+    - This is an approximation, but it gets better if you focus on a single state.
+- We'll look at surveyed California residents 
+    - between the ages of 25 and 35
+    - with at least an 8th-grade education
+- This sample includes `r nrow(earnings)` people. Here's a partial view of their responses.
+
+```{r}
+earnings[, c('age','income','education','county')] %>% ellipsis(nhead=4, ntail=2) %>% kable()
 ```
-## In this lecture
 
-```{=tex}
-\begin{itemize}
-\item In this lecture, we consider variables that are not binary and our goal is to learn about the population mean (not just a proportion) from a random sample (with replacement) from the population. \pause
-\item Because the variables we will consider may take on many values, we will not know the type of probability distribution underlying our data (e.g., the Bernoulli distribution in the binary variable case).  \pause
-\item Not knowing the distribution isn't a problem when the sample is large enough, but understanding why it isn't a problem is subtle. 
-\end{itemize}
+## Sample and Population
+
+:::: columns
+::: column
+
+```{r}
+sample.plot
 ```
-## The Current Population Survey
 
-Something about the CPS sampling here...
+:::
+::: column
 
-Recall that our sample mean based on 2,258 working age Californians is \$135,406
+```{r}
+pop.plot
+```
+
+:::
+::::
+
+- We're using the sample on the left to learn about the population on the right.
+- And we'll think of the sample as being drawn, with replacement, from the population.
+- As if each dot on the left were chosen, from those on the right, by rolling a huge die.
+
 
 ## Two Questions
+ 
+- The mean income in our sample is \$`r approx(mean(earnings$income))`.
+- Unlike the turnout example, we'll never see the whole population.
+	- We won't ever know the population mean. But we'll give it a name: $\mu$.
+	- We won't ever know population standard deviation. We'll call that  $\sigma$.
+	- And we definitely won't ever know the sampling distribution of our sample mean.
+- But we still want to answer our two questions. 
 
-Unlike the turnout example, we will never know the true population income mean, which we will denote with $\mu$. \pause 
+$$
+$$
 
-We will also never know the population income standard deviation, which we will denote $\sigma$, or the population variance which we denote with $\sigma^2$. \pause 
+1. Is `r approx(mean(earnings$income))` likely to be close to the population mean $\mu$?  
+2. Can we say how close? 
 
-We also will not be able to generate a sampling distribution. \pause But we still want to answer the two questions. \pause
 
-```{=tex}
-\begin{enumerate}
-\item Is \$135,406 likely to be close to the population mean $\mu$?  
-\item What can we say about how close? 
-\end{enumerate}
+## Answers
+
+- The answers are the same as before: Yes and Yes.
+- And we don't need to change anything about what we actually do.
+	- We can use an interval estimate centered on our sample mean.
+	- And choose the interval's width using the bootstrap sampling distribution.
+- But we do need to understand why the answers are the same.
+	- Our justification for all of this last lecture required binary outcomes.
+	- It was based on the sampling distribution and bootstrap sampling distributions being Binomial.
+	- That meant that if we got the vote proportion $p$ approximately correct, \
+	  we'd also get the sampling distribution approximately correct.
+- Now we'll need to understand why the same is true more generally.
+
+## Parts of This Will Be Dry
+
+- Last lecture, we managed to avoid doing any calculations.
+- Today, and from here on, we won't be able to do that.
+- Let's take a few minutes to review some of the math we'll need.
+
+# Probability Review
+
+## Approach
+
+- One thing I struggle with is thinking at multiple levels of abstraction at once.
+	- I know the 'rules' --- how I'm allowed to manipulate symbols on the page.
+	- And I know why the rules are the rules --- I can explain them and I can prove them.
+	- But when I try to use the rules and explain them at the same time, I get lost.
+- To avoid this, I'll do my best not to mix levels of abstraction.
+	- If you're like me, that's probably a good thing.
+	- And if you aren't, it still is---it doesn't help anybody for me to get lost.
+- What I'm going to do now is state the rules and explain them.
+- Later, when we're doing more substantive stuff, I'll just use them without explanation.
+- There will be a section like this in a lot of lectures.
+
+## Rule 1: Expectations are Linear
+
+$$ 
+\begin{aligned}
+\E\qty( a Y + b Z ) 
+&= \E\qty(aY) + \E\qty(bZ) \\
+&= a\E(Y) + b\E(Z)  \quad \text{ for any random variables $Y, Z$ and numbers $a,b$ }
+\end{aligned}
+$$
+
+- There are two things going on here.
+  1. To average a sum of two things, we can take two averages and sum.
+  2. To average a constant times a random variable, we can multiply the random variable's average by the constant.
+- In other words, we can *distribute* expectations and can pull constants out of them.
+- We can do this when we're summing more random variables too.
+
+$$
+\begin{aligned}
+\E \sum_i a_i Y_i 
+&= \sum_i \E a_i Y_i && \text{ distributing expectations} \\
+&= \sum_i a_i \E Y_i && \text{ pulling constants out} \\
+\end{aligned}
+$$
+
+
+
+## Rule 1: Proof
+
+- In essence, it comes down to the fact that all we're doing is summing.
+	- Expectations are probability-weighted sums.
+	- And we're looking at the expectation of a sum.
+- And we can change the order we sum in without changing what we get.
+
+$$
+\small{
+\begin{aligned}
+\E\qty( a Y + b Z ) 
+&= \sum_{y}\sum_z (a y + b z) \ P(Y=y, Z=z) && \text{ by definition of expectation} \\
+&= \sum_{y}\sum_z a y \ P(Y=y, Z=z) + \sum_{z}\sum_y b z \ P(Y=y, Z=z) && \text{changing the order in which we sum} \\
+&= \sum_{y} a y \ \sum_z P(Y=y,Z=z) + \sum_{z} b z \ \sum_y P(Y=y,Z=z) && \text{pulling constants out of the inner sums} \\
+&= \sum_{y} a y \ P(Y=y) + \sum_{z} b z \ \sum_y P(Z=z)  && \text{summing to get marginal probabilities from our joint } \\
+&= a\sum_{y} y \ P(Y=y) + b\sum_{z} z \ \sum_y P(Z=z)  && \text{ pulling constants out of the remaining sum } \\
+&= a\E Y + b \E Z  && \text{by definition}
+\end{aligned}
+}
+$$
+
+## Rule 2: Independence implies Expectation of Product = Expectation Product.
+
+$$
+\begin{aligned}
+\E Y Z  = \E Y \E Z \quad \text{ if $Y$ and $Z$ are independent}.
+\end{aligned}
+$$
+
+- This says you can distribute expections into products *of independent random variables*.
+- It's not true in general. 
+- For example, $Y^2$ is the product of $Y$ and $Y$.
+	- And this is usually positive even if $\E Y=0$.
+	- e.g. $\E Y^2=1$ if $Y=\pm 1$ each with probability $1/2$.
+- But it has a very useful consequence when we're talking about mean-zero random variables.
+- If two random variables are independent, and *either* has mean zero, their product has mean-zero too.
+$$ \E Y Z = \E Y \E Z = 0 \quad \text{ if $Y$ and $Z$ are independent and } \quad \E Y = 0 \quad \text{ or } \quad \E Z = 0 $$
+
+
+## Rule 2: Proof
+
+- Recall that independence means that the joint distribution is the product of the marginals.
+$$ 
+P(Y=y,Z=z) = P(Y=y)P(Z=z)  \quad \text{ if and only if } \quad Y \text{ and } Z \ \text{ are independent }.
+$$
+
+- We can use this to nest one sum inside the other when calculating our expectation.
+  
+$$
+\begin{aligned}
+\E\qty( Y Z )  
+&= \sum_{y}\sum_z y z \ P(Y=y, Z=z)   && \text{ by definition of expectation} \\
+&= \sum_{y}\sum_z yz \ P(Y=y)P(Z=z)   && \text{ as a result of independence } \\
+&= \sum_{y} y \ P(Y=y) \ \sum z P(Z=z)  && \text{pulling constants out of the inner sums} \\
+&= \E Y \ \E Z && \text{ by definition }
+\end{aligned}
+$$
+
+## Practice: Variance of a Sum of Independent Random Variables
+
+Prove this.
+$$
+\Var(Y + Z) = \Var(Y)+ \Var(Z) \quad \text{ if $Y$ and $Z$ are independent}.
+$$
+
+- This is a straightforward consequence of Rules 1 and 2.
+- And the 'FOIL' calculation from high school algebra: $(a+b)^2 = a^2 + 2ab + b^2$.
+- Recall the definition of variance: $\Var(X) = \E(X-\E X)^2$.
+
+::: fragment
+$$
+\small{
+\begin{aligned}
+\Var (Y + Z) 
+&= \E \qty{ Y + Z - \E (Y + Z) }^2 && \text{ by definition } \\
+&= \E\qty{ (Y-\E Y) + (Z-\E Z) }^2 && \text{ using Rule 1 }\\
+&=  \E\qty{(Y-\E Y)^2 +  2 (Y-\E Y)(Z-\E Z)  + (Z-\E Z)^2} && \text{ using FOIL} \\
+&=  \E (Y-\E Y)^2 +  2 \E (Y-\E Y)(Z-\E Z)  + \E (Z-\E Z) && \text{ using Rule 1 } \\
+&= \Var(Y) + 2 \times 0 + \Var(Z) && \text{ using Rule 2 on the middle term}
+\end{aligned}
+}
+$$
+
+:::
+
+## Where Are All These Expectations Coming From?
+
+- We haven't really been talking about expected values in past lectures.
+- We have, on the other hand, been talking about population means.
+- There is a connection between the two---*sampling uniformly at random* from the population.
+	- Suppose we have $N$ balls in an urn and we've written the numbers $y_1 \ldots y_N$ on them.
+	- And when we draw a ball from the urn, each has probability $1/N$ of being chosen.
+	- If we let the random variable $Y$ be what's written on the ball we draw, 
+	  then $\E Y$ is the mean of the numbers on the balls.	
+
+$$ 
+\E[Y] = \sum_{j=1}^N y_j \ P(Y=j) = \sum_{j=1}^N y_j \ \frac{1}{N} = \frac{1}{N}\sum_{i=1}^N y_j 
+$$
+
+::: aside
+We talk about a population of balls with numbers on them instead of a population of numbers because it makes it easier
+to talk about populations with duplicates. When talking about a population of numbers directly, 
+it's hard to make sense of the statement 'each of the numbers $y_1 \ldots y_N$ has probability $1/N$ of being chosen'
+when there are duplicates. But it's easy to understand that different balls can have the same number written on them.
+:::
+
+## Sampling with Replacement
+
+- Statisticians talk a lot about independent and identically distributed (i.i.d.) random variables.
+- There's basically only one way to get them---by *sampling with replacement*.
+- That means sampling uniformly at random from a population over and over.
+- It's another urn reference---it says we replace our balls after we draw them so that...
+	1. The population doesn't change from draw to draw.
+	2. No draw influences any other.
+- Same as rolling a die over and over.
+- That's the kind of sampling we were doing in our hypothetical poll last lecture.
+- And it'll be what we talk about most, if not all, of the time in this class.
+
+# Estimating a Population Mean
+
+## Context
+
+- We're interested in estimating the mean household income of a population of California residents. 
+- In particular, the population of residents
+    - between the ages of 25 and 35
+    - with at least an 8th-grade education
+- We have this income information for a sample of `r nrow(earnings)` of such residents.
+- And we'll think of this sample as being drawn, with replacement, from the population.
+- We'll be using the mean of income in the sample to estimate the mean in the population.
+
+```{r}
+earnings[, c('age','income','education','county')] %>% ellipsis(nhead=4, ntail=2) %>% kable()
 ```
+
 ## Sampling Distribution for the Sample Mean
 
-```{=tex}
-\begin{table}[h]
-\begin{center}
-{\scriptsize
-\begin{tabular}{r|r|r|r|r|r} %cc
-$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{r|}{2258} & \\ % & \multicolumn{1}{c}{$MoE$}& \multicolumn{1}{c}{95\% CI}  \\
-$s$  & $Y_1$  & $Y_2$   & $\dots$  & $Y_{2258}$  & $\overline{Y}_{2258}$ \\ % & $2\cdot\sqrt{\frac{\overline{Y}_{625}(1-\overline{Y}_{625})}{625}}$ & $\overline{Y}_{625} \pm MoE$ \\
-\hline
-1 & 37,006 & 108,811   & $\dots$  &  49,001  & 135,406   \\ %& \visible<2->{.037} & \visible<3->{[.643,.717]}\\
-\visible<2->{2} & \visible<2->{?} & \visible<2->{?}   & \visible<2->{$\dots$}  & \visible<2->{?} & \visible<2->{?} \\ %& \visible<2->{.037}  & \visible<3->{[.663,.737]}\\
-\visible<2->{3} & \visible<2->{?} & \visible<2->{?}  & \visible<2->{$\dots$}  & \visible<2->{?} & \visible<2->{?} \\ %& \visible<2->{.035} & \visible<3->{[.715,.785]}\\
-\visible<2->{4} & \visible<2->{$\vdots$} & \visible<2->{$\vdots$} & \visible<2->{$\dots$}  & \visible<2->{$\vdots$} & \visible<2->{$\vdots$} \\ %& \visible<2->{.036} & \visible<3->{[.694,.766]}\\
-\visible<2->{5} & \visible<2->{$\vdots$} & \visible<2->{$\vdots$}  & \visible<2->{$\dots$}  & \visible<2->{$\vdots$} & \visible<2->{$\vdots$} \\ %& \visible<2->{.037} & \visible<3->{[.653,.727]}\\
-\visible<2->{$\vdots$} & \visible<2->{$\vdots$}  & \visible<2->{$\vdots$} & \visible<2->{$\vdots$} & \visible<2->{$\vdots$}  & \visible<2->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}  \\
-\visible<2->{1 mil}  & \visible<2->{?} & \visible<2->{?} & \visible<2->{$\dots$}  & \visible<2->{?} & \visible<2->{?} \\ %& \visible<2->{.035}& \visible<3->{[.705,.775]}\\
- \visible<2->{$\vdots$}  & \visible<2->{$\vdots$}  & \visible<2->{$\vdots$} & \visible<2->{$\vdots$} & \visible<2->{$\vdots$}  & \visible<2->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}\\
-\hline
-\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{?}} & \multicolumn{1}{r|}{\visible<1->{?}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{?}} & \visible<1->{?} \\
-\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \multicolumn{1}{r|}{\visible<1->{$\mu$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \visible<1->{?} \\
-\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \visible<1->{?} \\
-\end{tabular}}
-\end{center}
-\end{table}
+```{r}
+Y = earnings$income
 ```
-```{=tex}
-\begin{itemize}
-\item Recall that we can think of $Y_1,...,Y_n$ as $i.i.d.$ RVs.
-\item Although we don't know the distribution $f_Y(y)$ of these RVs, their expected value $E[Y]$ is the population mean $\mu$ and their variance $V[Y]$ is the population variance $\sigma^2$.
-\end{itemize}
-```
-## What can we learn?
 
-```{=tex}
-\begin{table}[h]
-\begin{center}
-{\scriptsize
-\begin{tabular}{r|r|r|r|r|r} %cc
-$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{r|}{2258} & \\ % & \multicolumn{1}{c}{$MoE$}& \multicolumn{1}{c}{95\% CI}  \\
-$s$  & $Y_1$  & $Y_2$   & $\dots$  & $Y_{2258}$  & $\overline{Y}_{2258}$ \\ % & $2\cdot\sqrt{\frac{\overline{Y}_{625}(1-\overline{Y}_{625})}{625}}$ & $\overline{Y}_{625} \pm MoE$ \\
+$$
+\begin{array}{r|rrrr|r}
+i  &  1   &  2         &     \dots  & `r n`      & & \\ 
+s  & Y_1  & Y_2        &     \dots  & Y_{`r n`}  &  \overline{Y}_{`r n`} \\ 
 \hline
-1 & 37,006 & 108,811   & $\dots$  &  49,001  & 135,406   \\ %& \visible<2->{.037} & \visible<3->{[.643,.717]}\\
-\visible<1->{2} & \visible<1->{?} & \visible<1->{?}   & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.037}  & \visible<3->{[.663,.737]}\\
-\visible<1->{3} & \visible<1->{?} & \visible<1->{?}  & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035} & \visible<3->{[.715,.785]}\\
-\visible<1->{4} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.036} & \visible<3->{[.694,.766]}\\
-\visible<1->{5} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.037} & \visible<3->{[.653,.727]}\\
-\visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}  \\
-\visible<1->{1 mil}  & \visible<1->{?} & \visible<1->{?} & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035}& \visible<3->{[.705,.775]}\\
- \visible<1->{$\vdots$}  & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}\\
+1    & `r Y[1]` & `r Y[2]`  & \dots  & `r Y[n]`  & `r approx(mean(Y))` \\
+2    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+3    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
+1M   &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
 \hline
-\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{?}} & \multicolumn{1}{r|}{\visible<1->{?}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{?}} & \visible<1->{\textcolor{red}{?}} \\
-\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \multicolumn{1}{r|}{\visible<1->{$\mu$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \visible<1->{\textcolor{red}{?}} \\
-\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \visible<1->{\textcolor{red}{?}} \\
-\end{tabular}}
-\end{center}
-\end{table}
-```
-```{=tex}
-\begin{itemize}
-\item Although we can't observe the population or the sampling distribution, we can mathematically derive certain facts about the sampling distribution. 
-\item We will focus on the three red question marks.
-\end{itemize}
-```
-## The Type of Distribution
+\E_{\cdot}(\cdot) & ?  & ?     & \dots & ?      & ?? \\
+\V_{\cdot}(\cdot) & ?  & ?     & \dots & ?      & ?? \\
+f_{\cdot}(\cdot) & ??? & ??? & \dots & ??? & ???? \\
+\end{array}
+$$
 
-```{=tex}
-\begin{table}[h]
-\begin{center}
-{\scriptsize
-\begin{tabular}{r|r|r|r|r|r} %cc
-$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{r|}{2258} & \\ % & \multicolumn{1}{c}{$MoE$}& \multicolumn{1}{c}{95\% CI}  \\
-$s$  & $Y_1$  & $Y_2$   & $\dots$  & $Y_{2258}$  & $\overline{Y}_{2258}$ \\ % & $2\cdot\sqrt{\frac{\overline{Y}_{625}(1-\overline{Y}_{625})}{625}}$ & $\overline{Y}_{625} \pm MoE$ \\
+- This is a table like the one we used to show our sampling distribution as in last lecture.
+  - The first row shows our actual sample---the outcomes from our survey.
+  - Last class, we were able to add additional rows for 'our friends polls'.
+  - We used our (post-election) knowledge of the population to fake these polls.
+- This time, this is really all we've got. We'll never see the population.
+- But when we talk about the probability that $Y_i$ or $\bar Y$ takes on a value $y$, 
+  we're talking about how often it takes on the value $y$ in those never-to-be-seen rows.
+- It's impossible to *know* these probabilities, but we can *reason about* them mathematically.
+
+
+## Sampling Distribution for the Sample Mean
+$$
+\begin{array}{r|rrrr|r}
+i  &  1   &  2         &     \dots  & `r n`      & & \\ 
+s  & Y_1  & Y_2        &     \dots  & Y_{`r n`}  &  \overline{Y}_{`r n`} \\ 
 \hline
-1 & 37,006 & 108,811   & $\dots$  &  49,001  & 135,406   \\ %& \visible<2->{.037} & \visible<3->{[.643,.717]}\\
-\visible<1->{2} & \visible<1->{?} & \visible<1->{?}   & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.037}  & \visible<3->{[.663,.737]}\\
-\visible<1->{3} & \visible<1->{?} & \visible<1->{?}  & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035} & \visible<3->{[.715,.785]}\\
-\visible<1->{4} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.036} & \visible<3->{[.694,.766]}\\
-\visible<1->{5} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.037} & \visible<3->{[.653,.727]}\\
-\visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}  \\
-\visible<1->{1 mil}  & \visible<1->{?} & \visible<1->{?} & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035}& \visible<3->{[.705,.775]}\\
- \visible<1->{$\vdots$}  & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}\\
+1    & `r Y[1]` & `r Y[2]`  & \dots  & `r Y[n]`  & `r approx(mean(Y))` \\
+2    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+3    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
+1M   &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
 \hline
-\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{?}} & \multicolumn{1}{r|}{\visible<1->{?}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{?}} & \visible<1->{\textcolor{red}{N(?,?)}} \\
-\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \multicolumn{1}{r|}{\visible<1->{$\mu$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \visible<1->{\textcolor{red}{?}} \\
-\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \visible<1->{\textcolor{red}{?}} \\
-\end{tabular}}
-\end{center}
-\end{table}
-```
-```{=tex}
-\begin{itemize}
-\item The central limit theorem says the sampling distribution for the sample mean will be normally distributed. 
-\item We know that $\overline{Y}_{2258} \sim N(?,?)$, but still don't know the mean or the variance of this distribution. 
-\end{itemize}
-```
-## What is the $E[\overline{Y}_{n}]$?
+\E_{\cdot}(\cdot) & \inblue{\mu}      & \inblue{\mu}      & \dots & \inblue{\mu}      & ?? \\
+\V_{\cdot}(\cdot) & \inblue{\sigma^2} & \inblue{\sigma^2} & \dots & \inblue{\sigma^2} & ?? \\
+f_{\cdot}(\cdot) & ??? & ??? & \dots & ??? & ???? \\
+\end{array}
+$$
 
-```{=tex}
-\begin{table}[h]
-\begin{center}
-{\scriptsize
-\begin{tabular}{r|r|r|r|r|r} %cc
-$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{r|}{2258} & \\ % & \multicolumn{1}{c}{$MoE$}& \multicolumn{1}{c}{95\% CI}  \\
-$s$  & $Y_1$  & $Y_2$   & $\dots$  & $Y_{2258}$  & $\overline{Y}_{2258}$ \\ % & $2\cdot\sqrt{\frac{\overline{Y}_{625}(1-\overline{Y}_{625})}{625}}$ & $\overline{Y}_{625} \pm MoE$ \\
+
+- Our starting point is what we know about our income observations $Y_1 \ldots Y_n$.
+- Because we're sampling with replacement, they're iid random variables.
+- And although we don't know their distribution $f_Y(y)$ ...
+  - We know their expected value $\E[Y]$ is the population mean $\inblue{\mu}$
+  - And their variance $\Var[Y]$ is the population variance $\inblue{\sigma^2}$.
+- Let's use this to characterize the sampling distribution of the mean $\overline{Y}$.
+	- We'll calculate its expected value.
+	- Then its variance.
+	- Then *approximate* its distribution
+
+
+## The Mean
+This one's easy. What is the expected value of the sample mean?
+
+$$
+\E\qty[\frac1n\sum_{i=1}^n Y_i] \ = \  ?
+$$
+
+## The Mean: Answered
+The expected value of the sample mean is the population mean.
+
+$$
+\begin{aligned}
+\E\qty[\frac1n\sum_{i=1}^n Y_i] 
+&= \frac1n\sum_{i=1}^n \E[Y_i] && \text{ via linearity (Rule 1)} \\
+&= \frac1n\sum_{i=1}^n \mu     && \text{ via uniform sampling } \\
+&= \frac1n \times n \times \mu = \mu.
+\end{aligned}
+$$
+
+## The Variance
+
+This one's a bit harder.  Let me get you started.
+
+$$
+\begin{aligned}
+\Var[\bar Y] 
+&= \E\qty[ \qty{ \frac{1}{n}\sum_i Y_i - \E \qty( \frac{1}{n}\sum_i Y_i ) }^2 ] && \text{definition}\\
+&= \E\qty[ \qty{ \frac{1}{n}\sum_i (Y_i - \E Y_i) }^2 ]  && \text{Rule 2: Linearity} \\
+&= \E\qty[ \qty{ \frac{1}{n}\sum_i Z_i }^2 ] && \text{for} \ \ Z_i = Y_i - \E Y_i \\
+&= \E\qty[ \frac{1}{n^2}\sum_i \sum_j Z_i Z_j ]   && \text{via FOIL}
+\end{aligned}
+$$
+
+### FOIL?
+
+- Remember FOIL from high school algebra? 
+- When we square a sum, we get *all products* of terms in the sum.
+  
+$$ 
+(a+b)^2 = \inblue{(a+b)}\inred{(a+b)} 
+= \inblue{a}\inred{a} + \inblue{a}\inred{b} + \inblue{b}\inred{a} + \inblue{b}\inred{b}
+= a^2 + 2ab + b^2
+$$
+
+- Same deal for bigger sums.
+
+$$ 
+\qty{ \sum_i Z_i }^2 = \inblue{\sum_i Z_i}\inred{\sum_j Z_j} = \sum_i \sum_j \inblue{Z_i}\inred{Z_j}
+$$
+
+## Completing the Calculation
+
+$$
+\begin{aligned}
+\Var[\bar Y] &= \E\qty[ \frac{1}{n^2}\sum_i \sum_j Z_i Z_j ]  \quad \text{ for } \quad Z_i = Y_i - \E Y_i \quad && \text{via FOIL}
+\end{aligned}
+$$
+
+**Activity**. Complete the calculation to get a simple expression. 
+
+:::: columns
+::: column
+ **Hints**.
+
+  1. Use Rule 1 to push the expectation inside the sum.
+  2. Think about what $\E Z_i Z_j$ is when $i=j$ and $i\neq j$.
+  3. Is Rule 2 useful here?
+  4. What is $\E Z_i^2$  
+:::
+::: column
+**Rules**.
+$$
+\small{
+\begin{aligned}
+\text{1.} \quad & \E\qty[ \sum_i a_i Y_i] =  \sum_i a_i \E Y_i \quad \text{ for RVs $Y_i$ and constants $a_i$.} \\
+\text{2.} \quad & \E\qty[ Z_i Z_j] = \E[Z_i] \E[ Z_j]  \quad \text{if $Z_i$ and $Z_j$ are independent.} \\
+\end{aligned}
+}
+$$
+
+:::
+::::
+
+## The Variance: Answered
+$$
+\begin{aligned}
+\Var[\bar Y] 
+&= \E\qty[ \frac{1}{n^2}\sum_i \sum_j Z_i Z_j ]  && \text{via FOIL} \\
+&= \frac{1}{n^2} \sum_i \sum_j \E Z_i Z_j    && \text{via Rule 1: Linearity } \\
+&= \frac{1}{n^2} \sum_i \qty( \sum_{j : j\neq i} \E Z_i Z_j + \E Z_i^2  )  && \text{Taking out the term with $i=j$ term from the inner sum}  \\
+&= \frac{1}{n^2} \sum_i \qty( \sum_{j : j\neq i} 0 + \E Z_i^2  )  && \text{via Rule 2} \\
+&= \frac{1}{n^2} \sum_i \E\qty(Y_i-\E Y_i)^2  && \text{using the definition of $Z_i$} \\
+&= \frac{1}{n^2} \sum_i \Var(Y_i)             && \text{using the definition of variance} \\
+&= \frac{1}{n^2} \times n \times \Var(Y_i) = \frac{\Var(Y_i)}{n} = \frac{\sigma^2}{n}.   && \text{counting the copies of $\Var(Y_i)$ in the sum} \\
+\end{aligned}
+$$
+
+## The State of Our Sampling Distribution Table.
+
+$$
+\begin{array}{r|rrrr|r}
+i  &  1   &  2         &     \dots  & `r n`      & & \\ 
+s  & Y_1  & Y_2        &     \dots  & Y_{`r n`}  &  \overline{Y}_{`r n`} \\ 
 \hline
-1 & 37,006 & 108,811   & $\dots$  &  49,001  & 135,406   \\ %& \visible<2->{.037} & \visible<3->{[.643,.717]}\\
-\visible<1->{2} & \visible<1->{?} & \visible<1->{?}   & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.037}  & \visible<3->{[.663,.737]}\\
-\visible<1->{3} & \visible<1->{?} & \visible<1->{?}  & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035} & \visible<3->{[.715,.785]}\\
-\visible<1->{4} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.036} & \visible<3->{[.694,.766]}\\
-\visible<1->{5} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.037} & \visible<3->{[.653,.727]}\\
-\visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}  \\
-\visible<1->{1 mil}  & \visible<1->{?} & \visible<1->{?} & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035}& \visible<3->{[.705,.775]}\\
- \visible<1->{$\vdots$}  & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}\\
+1    & `r Y[1]` & `r Y[2]`  & \dots  & `r Y[n]`  & `r approx(mean(Y))` \\
+2    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+3    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
+1M   &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
 \hline
-\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{?}} & \multicolumn{1}{r|}{\visible<1->{?}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{?}} & \visible<1->{$N(\textcolor{red}{?},?)$} \\
-\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \multicolumn{1}{r|}{\visible<1->{$\mu$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \visible<1-1>{?}\hspace{-.17cm}\visible<2->{\textcolor{red}{?}} \\
-\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \visible<1->{?} \\
-\end{tabular}}
-\end{center}
-\end{table}
+\E_{\cdot}(\cdot) & \mu & \mu & \dots & \mu & \inblue{\mu} \\
+\V_{\cdot}(\cdot) & \sigma^2 & \sigma^2 & \dots & \sigma^2 & \inblue{\frac{\sigma^2}{n}} \\
+f_{\cdot}(\cdot) & ??? & ??? & \dots & ??? & ???? \\
+\end{array}
+$$
+
+- We've been able to fill in the mean and variance of our sample mean.
+  - The mean is the mean of an individual observation.
+  - The variance is $1/n$ times the variance of an individual observation.
+    - We call its square root, the corresponding standard deviation, the *standard error*.
+    - That's what we tend to call the standard deviation of an estimator.
+- These two pieces of information are somewhat useful on their own.
+ - We can use Chebyshev's Inequality to say something about how close our estimator $\overline{Y}$ is to the sample mean $\mu$
+- But having a good approximation to the *distribution* of $\overline{Y}$ would be nicer.
+
+## Approximate Normality 
+
+- The central limit theorem says the distribution of the sample mean will be approximately normal.
+  - We'll get into the precise meaning of this statement later in the semester.
+  - But for now, it's reasonable to *act as if* the distribution of $\overline{Y}$ were normal.
+ 
+$$
+\overline{Y} \sim N\qty( \E \overline{Y},\ \Var \overline{Y} ) = N\qty(\mu,\ \frac{\sigma^2}{n})
+$$
+
+- This is what our approximation to the distribution of the estimator $\overline{Y}$ looks like.
+```{r}
+x=seq(-4,4,by=.01)
+ggplot() + geom_area(aes(x=x,y=dnorm(x)), alpha=.1, color='black', fill='green') + 
+       geom_vline(aes(xintercept=qnorm(c(.16,.84))), linetype='dashed', color='blue') +
+       geom_vline(aes(xintercept=qnorm(c(.025,.975))), linetype='dotted', color='blue') +
+       scale_x_continuous(breaks=seq(-4,4), 
+                          labels=ifelse(seq(-4,4)==0, 'µ', sprintf("µ+%dσ/√n",seq(-4,4))),
+                          guide=guide_axis(angle = 90))
 ```
-## Sample Means
 
-Property #1: \textit{The sample mean is unbiased for the population mean.} The expected value of the sample mean, $\text{E}[\overline Y] = \mu$.
+- 2/3 of samples will be within .96 standard error of zero (dashed lines above).
+- 95% of samples will be within 1.96 standard errors of zero (dotted lines above).
 
-Proof: \begin{align*}
-\text{E}[\overline Y] &= \text{E} \left[ \frac{1}{n} \left( Y_1 + ... + Y_n \right) \right] \\
-& =  \frac{1}{n} \text{E} \left[ Y_1 + ... + Y_n  \right] \\
-& =  \frac{1}{n} \left( \text{E} [ Y_1] + ... + \text{E} [Y_n]  \right) \\
-& =  \frac{1}{n} \left( \text{E} [ Y] + ... + \text{E} [Y]  \right) \\
-& =  \frac{1}{n} n \text{E} [ Y] \\
-& = \mu.
-\end{align*}
+## Central Limit Theorem Review 
+```{r}
+sigma = 50/sqrt(12)
+mu = 25
+x = seq(-25,75,by=.1)
 
-## Sample mean is unbiased for the population mean
+unif.clt.plot = function(n.clt) {
+  a<- runif(n.clt*100000,0,50)
+  dim(a) = c(n.clt,100000)
+  a.bar = apply(a,2,mean)
+  ggplot() + geom_histogram(aes(x=a.bar, y=after_stat(density)), bins=100) + 
+             geom_area(aes(x=x,y=dnorm(x, mu, sigma/sqrt(n.clt))), alpha=.1, color='black', fill='green') +
+             scale_x_continuous(breaks=mu + seq(-4,4)*sigma/sqrt(n.clt), 
+                                limits=mu + c(-4,4)*sigma/sqrt(n.clt), 
+                                labels=ifelse(seq(-4,4)==0, 'µ', sprintf("µ+%dσ/√n",seq(-4,4))),
+                                guide=guide_axis(angle = 90)) 
+}
 
-```{=tex}
-\begin{table}[h]
-\begin{center}
-{\scriptsize
-\begin{tabular}{r|r|r|r|r|r} %cc
-$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{r|}{2258} & \\ % & \multicolumn{1}{c}{$MoE$}& \multicolumn{1}{c}{95\% CI}  \\
-$s$  & $Y_1$  & $Y_2$   & $\dots$  & $Y_{2258}$  & $\overline{Y}_{2258}$ \\ % & $2\cdot\sqrt{\frac{\overline{Y}_{625}(1-\overline{Y}_{625})}{625}}$ & $\overline{Y}_{625} \pm MoE$ \\
-\hline
-1 & 37,006 & 108,811   & $\dots$  &  49,001  & 135,406   \\ %& \visible<2->{.037} & \visible<3->{[.643,.717]}\\
-\visible<1->{2} & \visible<1->{?} & \visible<1->{?}   & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.037}  & \visible<3->{[.663,.737]}\\
-\visible<1->{3} & \visible<1->{?} & \visible<1->{?}  & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035} & \visible<3->{[.715,.785]}\\
-\visible<1->{4} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.036} & \visible<3->{[.694,.766]}\\
-\visible<1->{5} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.037} & \visible<3->{[.653,.727]}\\
-\visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}  \\
-\visible<1->{1 mil}  & \visible<1->{?} & \visible<1->{?} & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035}& \visible<3->{[.705,.775]}\\
- \visible<1->{$\vdots$}  & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}\\
-\hline
-\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{?}} & \multicolumn{1}{r|}{\visible<1->{?}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{?}} & \visible<1->{$N(\textcolor{red}{\mu},?)$} \\
-\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \multicolumn{1}{r|}{\visible<1->{$\mu$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \visible<1->{\textcolor{red}{$\mu$}} \\
-\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \visible<1->{?} \\
-\end{tabular}}
-\end{center}
-\end{table}
+unif.clt.plot(2)
 ```
-## What is the $V[\overline{Y}_{n}]$?
+- What is the mean of a uniform random variable with a range from 0 to 50? 
+- How "normal" the sampling distribution is depends on the sample size! 
+- Let's compare our sampling distribution to a normal approximation.
+- Here they are at the sample size of 2.
 
-```{=tex}
-\begin{table}[h]
-\begin{center}
-{\scriptsize
-\begin{tabular}{r|r|r|r|r|r} %cc
-$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{r|}{2258} & \\ % & \multicolumn{1}{c}{$MoE$}& \multicolumn{1}{c}{95\% CI}  \\
-$s$  & $Y_1$  & $Y_2$   & $\dots$  & $Y_{2258}$  & $\overline{Y}_{2258}$ \\ % & $2\cdot\sqrt{\frac{\overline{Y}_{625}(1-\overline{Y}_{625})}{625}}$ & $\overline{Y}_{625} \pm MoE$ \\
-\hline
-1 & 37,006 & 108,811   & $\dots$  &  49,001  & 135,406   \\ %& \visible<2->{.037} & \visible<3->{[.643,.717]}\\
-\visible<1->{2} & \visible<1->{?} & \visible<1->{?}   & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.037}  & \visible<3->{[.663,.737]}\\
-\visible<1->{3} & \visible<1->{?} & \visible<1->{?}  & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035} & \visible<3->{[.715,.785]}\\
-\visible<1->{4} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.036} & \visible<3->{[.694,.766]}\\
-\visible<1->{5} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.037} & \visible<3->{[.653,.727]}\\
-\visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}  \\
-\visible<1->{1 mil}  & \visible<1->{?} & \visible<1->{?} & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035}& \visible<3->{[.705,.775]}\\
- \visible<1->{$\vdots$}  & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}\\
-\hline
-\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{?}} & \multicolumn{1}{r|}{\visible<1->{?}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{?}} & N(\textcolor{black}{$\mu$},\textcolor{red}{?}) \\
-\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \multicolumn{1}{r|}{\visible<1->{$\mu$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & $\mu$ \\
-\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \visible<1->{\textcolor{red}{?}} \\
-\end{tabular}}
-\end{center}
-\end{table}
+
+## Central Limit Theorem Review 
+```{r}
+unif.clt.plot(10)
 ```
-## 
+- Here they are at the sample size of 10.
 
-Property #2: The \textit{sampling variance} of the sample mean, $$V[\overline Y] = \frac{\sigma^2}{n}$$
-
-Proof: \begin{align*}
-V[\overline Y] &= V \left[ \left(  \frac{1}{n} Y_1 + ...  + \frac{1}{n} Y_n \right) \right] \\
-&= \frac{1}{n^2}  V \left[ Y_1 + ...  + Y_n \right] \\
-& =  \frac{1}{n^2}   \left( V[Y_1] + ...  + V[Y_n] \right) \\
-& =  \frac{1}{n^2}   \left( V[Y] + ...  + V[Y] \right) \\
-& =  \frac{1}{n^2}   n V[Y] \\
-& =  \frac{\sigma^2}{n}  .
-\end{align*}
-
-## How much does $\overline{Y}_{2258}$ vary from sample to sample?
-
-```{=tex}
-\begin{table}[h]
-\begin{center}
-{\scriptsize
-\begin{tabular}{r|r|r|r|r|r} %cc
-$i$ & \multicolumn{1}{r|}{1} & \multicolumn{1}{r|}{2}   & $\dots$ & \multicolumn{1}{r|}{2258} & \\ % & \multicolumn{1}{c}{$MoE$}& \multicolumn{1}{c}{95\% CI}  \\
-$s$  & $Y_1$  & $Y_2$   & $\dots$  & $Y_{2258}$  & $\overline{Y}_{2258}$ \\ % & $2\cdot\sqrt{\frac{\overline{Y}_{625}(1-\overline{Y}_{625})}{625}}$ & $\overline{Y}_{625} \pm MoE$ \\
-\hline
-1 & 37,006 & 108,811   & $\dots$  &  49,001  & 135,406   \\ %& \visible<2->{.037} & \visible<3->{[.643,.717]}\\
-\visible<1->{2} & \visible<1->{?} & \visible<1->{?}   & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.037}  & \visible<3->{[.663,.737]}\\
-\visible<1->{3} & \visible<1->{?} & \visible<1->{?}  & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035} & \visible<3->{[.715,.785]}\\
-\visible<1->{4} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.036} & \visible<3->{[.694,.766]}\\
-\visible<1->{5} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\dots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} \\ %& \visible<2->{.037} & \visible<3->{[.653,.727]}\\
-\visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}  \\
-\visible<1->{1 mil}  & \visible<1->{?} & \visible<1->{?} & \visible<1->{$\dots$}  & \visible<1->{?} & \visible<1->{?} \\ %& \visible<2->{.035}& \visible<3->{[.705,.775]}\\
- \visible<1->{$\vdots$}  & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} & \visible<1->{$\vdots$} & \visible<1->{$\vdots$}  & \visible<1->{$\vdots$} \\ % & \visible<2->{$\vdots$} & \visible<3->{$\vdots$}\\
-\hline
-\visible<1->{$f_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{?}} & \multicolumn{1}{r|}{\visible<1->{?}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{?}} &N(\textcolor{black}{$\mu$},\textcolor{red}{$\frac{\sigma^2}{n}$}) \\
-\visible<1->{$E_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \multicolumn{1}{r|}{\visible<1->{$\mu$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\mu$}} & \visible<1->{$\mu$} \\
-\visible<1->{$V_{\cdot}(\cdot)$} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}}  &$\dots$ & \multicolumn{1}{r|}{\visible<1->{$\sigma^2$}} & \visible<1->{\textcolor{red}{$\frac{\sigma^2}{n}$}} \\
-\end{tabular}}
-\end{center}
-\end{table}
+## Central Limit Theorem Review 
+```{r}
+unif.clt.plot(50)
 ```
-## Facts about the sampling distribution of $\overline{Y}_n$
+- Here they are at the sample size of 50.
 
-What we know about the sampling distribution of $\overline{Y}_n$:
-
-```{=tex}
-\begin{enumerate}
-\item Approxiamtely normally distributed
-\item Centered at $\mu$.
-\item Variance of $\frac{\sigma^2}{n}$
-\end{enumerate}
-\bigskip
+## Central Limit Theorem Review 
+```{r}
+unif.clt.plot(250)
 ```
-These facts imply that the middle 95% of the distribution lies approximately between $\mu - 1.96 \cdot \frac{\sigma}{\sqrt{n}}$ and $\mu + 1.96 \cdot \frac{\sigma}{\sqrt{n}}$. As long as $\sqrt{n}$ is big in relation to $\sigma$, $\overline{Y}_n$ will likely be close to $\mu$. \bigskip 
+- Here they are at the sample size of 250. Pretty close, right?
+- This works for almost all distributions, not just the uniform distribution.
 
-We still don't know:
 
-```{=tex}
-\begin{enumerate}
-\item The value of $\mu$.
-\item The value of $\sigma$.
-\end{enumerate}
+## Implications of Normality
+
+```{r}
+#| out-height: 400px
+x=seq(-4,4,by=.01)
+ggplot() + geom_area(aes(x=x,y=dnorm(x)), alpha=.1, color='black', fill='green') + 
+       geom_vline(aes(xintercept=qnorm(c(.16,.84))), linetype='dashed', color='blue') +
+       geom_vline(aes(xintercept=qnorm(c(.025,.975))), linetype='dotted', color='blue') +
+       scale_x_continuous(breaks=seq(-4,4), labels=ifelse(seq(-4,4)==0, 0, sprintf("%dσ/√n",seq(-4,4))))
 ```
-## Two Questions
 
-```{=tex}
-\begin{enumerate}
-\item Is \$135,406 close to the population mean $\mu$? \pause Yes! \pause
-\item Can we say something about how close? \pause Let's use a confidence interval
-\end{enumerate}
+$$
+\left[\mu - 1.96 \cdot \frac{\sigma}{\sqrt{n}} \quad \ldots \quad \mu + 1.96 \cdot \frac{\sigma}{\sqrt{n}} \right] 
+$$  
+
+- If our sampling distribution were exactly normal, 95% of the time our mean would lie in this interval.
+- One thing this tells us: as long as $\sqrt{n}$ is big in relation to $\sigma$, our sample mean $\overline{Y}_n$ will likely be close to our population mean $\mu$. 
+- This quantifies our answer to Question 1.
+
+## Two Questions 
+
+1. Is \$135,406 close to the population mean $\mu$?  Yes! 
+2. Can we say something about how close?  Let's use a confidence interval.  
+	- For calibration, we'll try to estimates of the sampling distribution.
+		- One based directly on our normal approximation.
+		- One based on the bootstrap as before.
+	- Approximate normality *justifies* the bootstrap here.
+	- Just like the (exact) binomial distribution justified it for the proportion.
+
+## Bootstrapped Sampling Distribution of a Sample Mean
+
+- We don't observe the population so we cannot construct the sampling distribution. 
+- However, we can approximate the sampling distribution.
+  - To do this, we take repeated random samples *from our sample*. 
+  - That's the bootstrap idea.
+
+$$
+\begin{array}{r|rrrr|r}
+i &  1 & 2  & \dots & `r n` & \bar{Y}_{`r n`}  \\
+Y_i & `r Y[1]` & `r Y[2]`  & \dots & `r Y[n]` & `r approx(mean(Y))`
+\end{array}
+$$
+
+- With the data stored in this table, we can calculate the mean of a bootstrap sample like this.
+
+```{r}
+#| echo: true
+mean(sample(Y, size=n, replace=TRUE)) 
 ```
+
+## Bootstrapped CIs for a Population Mean
+
+```{r}
+#| echo: true
+B=10000
+Y.bar <- rep(NA, B)
+
+for(b in 1:B){
+	Y.bar[b]= mean(sample(Y, size=n, replace=TRUE))	
+}
+quantile(Y.bar,probs=c(.025,.975)) 
+
+ggplot() + geom_histogram(aes(x=Y.bar, y=after_stat(density)), bins=100) +
+           geom_vline(aes(xintercept=quantile(Y.bar, probs=c(.025, .975))), 
+                      linetype='dotted', color='blue')
+```
+
+## Bootstrapped Sampling Distribution vs Sampling Distribution
+
+1. CLT says the sampling distribution is approximately normal.
+2. We see that the bootstrapped distribution is approximately normal.
+3. Remaining question is whether they're the same normal.
+	- Does the bootstrapped CI have approximately the same size 
+	   as the middle 95% of the sampling distribution.
+
+Let's table the remaining question for now while we look at another approach to CIs.
+
+## Normal-Approximation CI
+
+-  Another way to get a 95\% CI is to use our normal approximation directly.
+-  We can use the fact that the middle 95\% of the distribution lies approximately in the interval
+ $$
+ \left[\mu - 1.96 \cdot \frac{\sigma}{\sqrt{n}} \ \ldots \ \mu + 1.96 \cdot \frac{\sigma}{\sqrt{n}} \right]
+ $$
+ 
+- If we plug in the sample standard deviation $\hat\sigma$ for $\sigma$,  then we get something we can calculate.
+a real interval.
+$$
+ \left[\mu - 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}} \ ...\ \mu + 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}} \right] = [129,720 \ \ldots \ 141,091]
+ $$
+
+-  Pretty close to our bootstrap interval.
+
+
+
+## Why does this work?
+
+- The facts we've derived about the sampling distribution of the sample mean tell us that 
+
+$$
+\begin{aligned}
+&P\qty(\mu - 1.96 \cdot \frac{\sigma}{\sqrt{n}} \leq \overline Y \leq \mu + 1.96 \cdot \frac{\sigma}{\sqrt{n}}\qty) \approx .95
+\end{aligned} 
+$$
+
+- Some algebra (left as an exercise) shows that this implies 
+  
+$$
+\begin{aligned}
+&P\qty(\overline Y - 1.96 \cdot \frac{\sigma}{\sqrt{n}} \leq \mu \leq \overline Y + 1.96 \cdot \frac{\sigma}{\sqrt{n}}) \approx .95
+\end{aligned}
+$$
+
+- We don't know $\sigma$, so we can't do this exactly. 
+- But we can use the sample standard deviation in its place.
+
+$$
+\begin{aligned}
+&P\qty(\overline Y - 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}} \leq \mu \leq \overline Y + 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}}) \approx .95
+\end{aligned}
+$$
+
+- The remaining question is to what degree this substitution is justified.
+- i.e., are the following two things close?
+	- $\sigma$, the population standard deviation
+	- $\hat\sigma$, our sample standard deviation 
+- Or, to keep the right scale in mind,
+	- $\sigma/\sqrt{n}$, which we call the (population) standard error.
+	- $\hat\sigma/\sqrt{n}$, which we call the estimated standard error.
+
+## Something Like an Answer 
+
+- To get a sense of how variable the estimated standard error is, we can bootstrap it.
+
+```{r}
+#| out-height: 400px
+B=10000
+s.boot <- rep(NA,B)
+for(b in 1:B){
+	s.boot[b]= sd(sample(Y,size=n,replace=TRUE))	
+}
+ggplot() + geom_histogram(aes(x=s.boot/sqrt(n), y=after_stat(density)))
+```
+
+- Does variation on this scale have much of an impact on our interval?
+$$
+\qty[\overline Y - 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}} \quad \ldots \quad \overline Y + 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}} ] = 
+\qty[`r approx(mean(Y) - 1.96*sd(Y)/sqrt(n))` \quad \ldots \quad `r approx(mean(Y) + 1.96*sd(Y)/sqrt(n))`]
+$$
+
+::: fragment
+- Yes, but not too much. 
+  - We're seeing that we're almost always within about $1000$ of the population standard error.
+  - If we're off by $1000$ in the standard error, we're off by $1000 \times 1.96 \approx 2000$ on the interval's bounds.
+  - That's about 20% off on each side. We'll ignore it for now. 
+:::
+
+
+## CI Wrap Up
+
+- We got the following 95% CIs for the population income mean.
+  - Bootstrap: \$`r approx(quantile(Y.bar,.025))` to \$`r approx(quantile(Y.bar,.975))`
+  - Normal Approx: \$`r approx(mean(Y) - 1.96*sd(Y)/sqrt(n))` to \$`r approx(mean(Y) + 1.96*sd(Y)/sqrt(n))`
+- They're more or less the same. 
+  - We can think of that as evidence that they're valid, although it's not proof.
+  - We'll have higher standards  later in the semester. I promise.
+
+### Our Two Questions
+
+1.	Is \$135,406 close to the population mean $\mu$?  Yes! 
+2. Can say something about how close? Yes! Likely within \$5000 or so.
+
+- We can say this after observing only a tiny fraction of the population. 
+  - About $1/2500$ people. 
+  - That's pretty cool. 
+
