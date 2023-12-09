@@ -1,2 +1,128 @@
 # qtm220
 Materials for QTM220
+
+# Old Ideas for Next Semester
+- 1 class on descriptive stuff in one and two-sample problems
+- 3.5 classes on 1-sample problems
+- 1.5 classes on 2-sample problems (non-causal)
+- 1 class on causal interpretations in 2-sample problems
+
+Class 1. Summaries [see some other notes]
+Class 2. Sampling
+         - Polling voters / turnout
+         - Doing a poll [sampling uniformly at random w/ replacement]
+               - Show with incremental table/map w/ ref to population table/map: 4 panes stepping
+               - Execute w/ actual dice roll.
+          - Reasoning about Polls (ahead of time)
+               - Outcomes of calls as iid RVs
+               - Implication: Summaries are also RVs
+               - Sampling distributions (e.g. binomial in polling case)
+               - Standard errors (binomial case)
+          - What's the point?
+               - To know whether it's worth doing/calibrate your design so it is
+                     - is your standard error large enough your result is going to uninteresting?
+               - To express that to other people (e.g. people paying for polling, who want to pay as little as possible)
+
+Class 3. Interval estimation 
+        - Review relationship between RVs and sampling 
+             + why sampling uniformly at random from a pop leads to Binomial result.
+        - Idea of interval estimate/calibration w/ sampling distn stuff as-is 
+             - emphasize that our interval estimator is an 'oracle estimate'; real estimates in a minute
+              - code/pseudocode for finding interval width given sampling distribution
+        - Sampling distribution vs. (parametric) estimate of sampling distn.
+             + Explain why we know it's binomial (by sampling design) but don't know p
+             + Explain why we know p is close (use actual sampling distn)
+             + Show how width varies with p
+                  (in plot of of distn vs. p)
+                  (in terms of intervals) 
+         - About calibration
+             - Not just about what happens if you were to do the same thing repeatedly.
+             - It's the probability you're correct in that instance.
+            -  about 950 of 1000 correctly calibrated intervals (in whatever context) will contain what you're estimating
+            - It's ultimately about your/your org/your tradition's reputation. 
+                - Nobody can be correct all the time
+                - But you can be correct almost *as frequently as you say you'll be*
+            - e.g. as a pollster, pilot studies, etc.
+Older notes:
+  - Highlight arbitariness of .1
+  - Emphasize the interval arms -> mean arms is a counting technique
+  - Clarify how we find the middle 
+  - Emphasize the 'oracular' nature of calibration using the sampling distribution
+  - Expand on bootstrap
+      - Sampling from pop, unlikely to call same person twice
+      - Sampling from sample, likely to call some people 2+ times and others 0
+          - Variation comes from who is included/excluded
+          - e.g. SF and Zuckerberg
+          - die roll example: 6 rolls of d6 vs 6 rolls of d20
+          - do d20/d6 bootstrap exercise.
+
+Class 4. Broadening the Scope
+        - Bootstrap interpretation (equivalent)
+            - Bootstrap Sample : Sample :: Sample : Population
+            - A *generalization* of the binomial idea to not-necessarily binomial outcomes
+            - Mean and variance of bootstrap mean vs. sample mean in general
+            - Emphasize where variation in the bootstrap comes from
+                     - who you call multiple times, who you don't
+                     - e.g. Harvard getting-donations department calling dropouts 
+                     - Gates, Zuckerberg, some normal people who got sick/had to take care of family/etc
+        - Normal approximation
+             - CLT picture seq [note decrease in width (on axes); plot and recognize as 1/sqrt(n)]
+             - Interval in terms of standard error
+             - standard Errors in general [w/ prob background---Linearity, Products]
+             - the bias/variance of estimated standard errors [why substitution is ok]
+                       - Do pictorially (using sampling distn at different sample sizes)
+                       - Do
+      
+Class 5. CPS/Income
+       - Premise: Review in new context
+            - We already have techniques, so results immediately
+            - intervals based on normal approx/bootstrap standard errors
+       - Interpretation of interval w/ no (eventual) access to pop
+       - Set up for 2-sample problems
+             - Two-stage interp of sampling uniformly at random
+            - Presented as Calculational/Table-Reading Technique
+                - Law of Total Expectation
+                - Law of Total Variance
+             - Nonrepresentative sampling as an exercise in using the calculational tools
+
+Class 6. Two-Sample Problems I
+          - Example: Black vs. Non-Black turnout
+          - As-is, w/ bootstrap + normal approx intervals
+          - Use Law of Total Variance to Calculate (binomial specific) Variance
+          - Do contrasts
+          - Nonrepresentative Sampling
+
+Class 7. Two-sample Problems II
+          - Example. CPS
+          - Do intervals using bootstrap/normal aprpox
+          - Law of Total Variance to Calculate Variance [generally]
+          - Normal approx for subpop means and contrasts
+          - Meaning of Contrasts / Randomization / NSW comparison.
+
+Class 8. Causality [as is]
+
+Class 9. Stuff you've heard of [new/cobbled together from pieces]
+           - Regression lines (though means)
+           - Significance
+           - Incorrect Variance Estimation in R, etc. (e.g. binomial example)
+           - One-sided interval estimation
+Class 10. Multivalued Covariates (Descriptive)
+Class 11. Multivalued Covariates (Pop-Level)
+Class 12. Multivalued Causality [incremental effects] 
+Class 13. Misspecification and CIs
+Class 14. Intro to 2D: Additive + Fully-Interacted Models. Simpson's Paradox Qualitative
+Class 15. Simpson's Paradox Quantitative: Residual Plot Stuff + Omitted Variable Bias 
+Class 16. Regression in Matrix Form
+Class 18. Least Squares: Descriptive
+Class 19. Least Squares: Population (Bias)
+Class 20. Least Squares: Inferential
+Class 21. Modeling Options
+
+Resolve: 
+Confusing jump to continuous covariates w/o explanation
+Matrices before any idea about what we want to do?
+
+
+
+
+ 
