@@ -1,0 +1,506 @@
+---
+title: "QTM 220 Final Practice Problems"
+format: 
+  pdf:
+    include-in-header:
+      text: |
+        \usepackage{physics}
+        \usepackage{mathtools}
+        \DeclareMathOperator{\argmin}{argmin}
+        \DeclareMathOperator{\E}{E}
+        \newcommand{\model}{\mathcal{M}}
+        \newcommand{\R}{\mathbb{R}}
+execute:
+  echo: false
+  warning: false
+editor: visual
+---
+
+```{r}
+library(purrr)
+library(tibble)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+theme_set(theme_bw())
+```
+
+\paragraph{Summary.} 
+Whether you're in academia or industry, you'll run into people who are analyzing data badly. 
+Often, what they're doing is both the established common practice and obviously wrong. In this practice exam,
+I'm going to run you through some examples in which this is happening. I'm going to ask you how to do better;
+explain what's going wrong; and, in some cases, deal with what happens when you've convinced someone to do better
+but they haven't entirely understood you. Obviously, in real life not everything that happens can be explained
+using the concepts we've learned in this class, and often the problems are a bit better-hidden than they are here.
+But it's surprising---at least to me---how often these things come up in a relatively obvious way. 
+
+Aside from giving you some practice recognizing and dealing with this stuff, what I hope to do here is give you some examples to help you explain what's going on. Often, if someone's making a mistake in a subtler form or a more complex problem, you may be able to point out that the situation in analogous to one here where the problem is very obvious. One of my favorite short papers, a [commentary by Jamie Robins and coauthors](https://arxiv.org/pdf/0804.2965.pdf), does exactly this to address a dangerous recommendation against inverse probability weighting that you'd hear from causal inference folks until the last couple years. The recommendation, which people attributed to [Kang and Schafer](https://arxiv.org/abs/0804.2958), is one that'll come up in Problem 3.
+
+Enough about my intentions. I hope you find this useful.  For the exam, expect questions fairly similar to these --- probably a bit easier --- with less text around them. And perhaps some like questions you've seen on previous exams that don't appear here.
+
+
+\subsection*{Problem 0}
+This one isn't part of the story. It's just a warm-up. Expect to see a greater proportion of questions like this on the final than you do here.
+
+\subsubsection*{Part A}
+The three plots below show a least squares estimator, $\hat \mu$, for a simple regression model based on larger and larger draws, with replacement, from a population. It's getting closer and closer to a gray line and---if you had even more data---it'd get even closer. What's the gray line? 
+
+```{r}
+#| layout-ncol: 3
+set.seed(1)
+mu = function(x){.2 + x + .5*sinpi(x)}
+n = c(10, 20, 40, 1000000)
+X = round(runif(max(n)), 1)
+Y = mu(X) + .5*rnorm(max(n))
+data = data.frame(X=X, Y=Y)
+pop.model = lm(Y~X, data=data)
+for(ii in 1:3) { 
+  model = lm(Y~X, data=data[1:n[ii], ])
+  grid = expand.grid(X=seq(0,1,by=.01))
+  plot = ggplot(grid) + geom_line(aes(x=X, y=predict(model, newdata=grid)), color='blue') + 
+    geom_line(aes(x=X, y=predict(pop.model, newdata=grid)), color='gray') + 
+    geom_point(aes(x=X, y=Y), data=data[1:n[ii], ], color='red', alpha=.3) + 
+    scale_x_continuous(breaks=seq(0,1,by=.1)) + xlab('') + ylab('') + theme_bw()
+  print(plot)
+}
+```
+
+\subsubsection*{Part B}
+
+In both of the plots below, I've fit a line by least squares. In which --- if any --- is the estimate of $\hat\mu(0)$, indicated by the height of the line at $x=0$, an unbiased estimate of the subpopulation mean $\mu(0)$? 
+
+```{r}
+#| layout-ncol: 3
+n = 100
+model1 = lm(Y~X, data=data[1:n, ])
+grid = expand.grid(X=seq(0,1,by=.01))
+ggplot(data[1:n,]) + geom_point(aes(x=X, y=Y), color='red', alpha=.3) + 
+  geom_line(aes(x=X, y=predict(model1, newdata=data.frame(X=X))), data=grid, color='blue') +
+  coord_cartesian(ylim=c(-3,3), xlim=c(0,1))
+
+model2 = lm(Y~X, data=data[data$X %in% c(0,.2) & 1:nrow(data) <= 500, ])
+ggplot(data[data$X %in% c(0,.2) & 1:nrow(data) <= 500, ]) +
+ geom_point(aes(x=X, y=Y), color='red', alpha=.3) + 
+  geom_line(aes(x=X, y=predict(model2, newdata=data.frame(X=X))), data=grid, color='blue') +
+  coord_cartesian(ylim=c(-3,3), xlim=c(0,1)) 
+
+model3 = lm(Y~X, data=data[data$X %in% c(0,1) & 1:nrow(data) <= 500, ])
+ggplot(data[data$X %in% c(0,1) & 1:nrow(data) <= 500, ]) +
+ geom_point(aes(x=X, y=Y), color='red', alpha=.3) + 
+  geom_line(aes(x=X, y=predict(model3, newdata=data.frame(X=X))), data=grid, color='blue') +
+  coord_cartesian(ylim=c(-3,3), xlim=c(0,1)) 
+```
+
+\subsubsection*{Part C}
+At least one of the estimators $\hat\mu(0)$ in Part B is biased. Below is a plot of its sampling distribution at sample size $n=13$. As usual, I've plotted its mean, mean plus or minus one standard deviation, and mean plus or minus two standard errors as solid, dashed, and dotted blue lines respectively. I've also plotted the true value of $\mu(0)$ as a black line. At which of these three samples sizes --- 25, 50, or 100 --- would you expect the coverage of the usual 95\% confidence interval $\hat\mu(0) \pm 1.96\ \text{se}$ to be closest to 50\%?
+```{r} 
+sampdist = replicate(1000, {
+  samp = data[sample(1:nrow(data), 13, replace=TRUE), ]
+  model = lm(Y~X, data=samp)
+  c(coef(model)[1])
+})
+ggplot() + geom_histogram(aes(x=X, y=after_stat(density)), 
+  data=data.frame(X=sampdist), bins=50, alpha=.3) +
+  geom_vline(aes(xintercept=mu(0)), color='black') +
+  geom_vline(aes(xintercept=mean(sampdist)), color='blue') +
+  geom_vline(aes(xintercept=mean(sampdist)+c(-1,1)*sd(sampdist)), color='blue', linetype='dashed') + 
+  geom_vline(aes(xintercept=mean(sampdist)+c(-2,2)*sd(sampdist)), color='blue', linetype='dotted') 
+```
+
+
+\subsection*{Problem 1}
+
+You have a sample $Y_1,Y_2...,Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma$.
+The usual estimate for $\mu$ is the sample mean $\bar{Y} = \frac{1}{n}\sum_{i=1}^n Y_i$. But one of your coworkers has a clever idea to reduce variance---instead of dividing by $n$, they divide by $n+10$. This is their estimator: $\tilde{Y}_{10} = \frac{1}{n+10}\sum_{i=1}^n Y_i$. You try to convince them it's a bad idea by being a bit hyperbolic---you argue that if that's a good idea, then why not divide by $n+100$? They, unfortunately, \emph{love} this idea.  You now have to explain why this is a bad idea.
+
+\subsubsection*{Part A}
+
+Calculate the bias and standard error of the three estimators $\bar{Y}$, $\tilde Y_{2}$, and $\tilde Y_{100} = \frac{1}{n+100}\sum_{i=1}^n Y_i$.  
+
+\subsection*{Part B}
+
+For $\mu=0$ and $\sigma=1$, draw a picture of the sampling distribution of $\bar{Y}$, $\tilde Y_{2}$, and $\tilde Y_{100}$ at 
+sample sizes $n=100$ and $n=10,000$. Clearly label (i) $\mu$, (ii) the center of your sampling distribution,
+and (iii) the standard error of your sampling distribution. Repeat for $\mu=1$ and $\sigma=1$.
+
+\subsection*{Part C}
+
+Using your drawings from part B, explain why both your coworker's proposal and your hyperbolic proposal to use $\tilde Y_{100}$ to estimate $\mu$ is a bad idea. 
+
+\subsection*{Part D}
+
+This coworker isn't going anywhere. Next time, it might be better to bite your tongue and  save time. If your sample size was $n=10,000$, maybe your coworker's idea to use $\tilde Y_{10}$ really wasn't creating much of a problem. What would you need to know about $\mu$ and $\sigma$ to justify this? The pictures you drew in part B might not really illustrate the potential problem. You may want to draw a new one.
+
+
+\subsection*{Problem 2}
+
+```{r}
+library(ggplot2)
+mu = function(d, x){.2 + (1-d)*sinpi(x/2) + d*x}
+pi = function(x){ 1 - (.1 + .8*abs(cospi(x))) }
+
+set.seed(1)
+n = 1000
+X = sample(seq(0,1,by=.333), n, replace=T)
+D = rbinom(n, 1, pi(X))
+Y = mu(D,X) + .02*rnorm(n)
+data = data.frame(X=X, D=D, Y=Y)
+summaries = data %>% group_by(D,X) %>% summarize(mu=mean(Y), n = n()) %>%
+                     group_by(D) %>% mutate(f=n/sum(n))
+
+scatter = ggplot(data) + 
+  geom_point(aes(x=X+.01*(2*D-1), y=Y, color=factor(D)), 
+             position=position_jitter(w=.1,h=0), alpha=.2) + 
+  scale_x_continuous(breaks=seq(0,1,by=.1)) + xlab('') + ylab('') + 
+  geom_col(aes(x=X, y=f, fill=factor(D), color=factor(D)), data=summaries, position='identity', alpha=.2, width=.25) +
+  guides(color='none', fill='none') + theme_bw()
+scatter 
+```
+
+We have a sample of $(D_1, X_1, Y_1) \ldots (D_n,X_n,Y_n)$ stored in an \textbf{R} dataframe \`data' with $n$ rows. I've plotted it above. The $X$ variable is on the horizontal axis, the $Y$ variable is on the vertical axis, and the $D$ variable, which is binary, is indicated by color---green for $D=1$, red for $D=0$. The sample is from a conditionally randomized study, in which $D$ is randomized conditional on $X$ with probability $\pi(x)=P(D=1 \mid X=x)$. The proportion of times that $X$ takes on each value $x$ when $D=0$ and when $D=1$, $\hat f_{0}(x)$ and $\hat f_1(x)$ respectively, are plotted as histograms in matching colors. Keep in mind that the grayish part of the histogram is where the red and green one overlap. $\hat f_0$ and $\hat f_1$ are also given, as numbers, in the table below.
+
+```{r}
+f0 = summaries %>% filter(D==0)
+f0 = f0[order(f0$X),]
+f1 = summaries %>% filter(D==1)
+f1 = f1[order(f1$X),]
+options(digits=2)
+```
+
+$$
+\begin{array}{lll}
+x & \hat f_0(x) & \hat f_1(x) \\
+\hline
+0 & `r f0$f[1]` & `r f1$f[1]` \\
+\frac13 & `r f0$f[2]` & `r f1$f[2]` \\
+\frac23 & `r f0$f[3]` & `r f1$f[3]` \\
+1 & `r f0$f[4]` & `r f1$f[4]` \\
+\end{array}
+$$
+
+
+\subsubsection*{Part A}
+
+Suppose your coworker runs the following code.
+
+```{r}
+#| echo: true
+additive.model = lm(Y~D+X, data=data) 
+summary(additive.model)
+```
+
+They claim that the coefficient on $D$, `r coef(additive.model)[2]`, is a pretty good estimate of the ATT. 
+You're not sure, so you plot their fitted model. Here's what you see.
+
+```{r}
+muhat.additive = function(d,x) { predict(additive.model, newdata=data.frame(X=x,D=d)) }
+grid = expand.grid(X=seq(0,1,by=.01), D=0:1)
+scatter + geom_line(aes(x=X, y=muhat.additive(D,X), color=factor(D)), data=grid)
+```
+
+Do you think their estimate is biased up or down? Referring to the plot, explain why. 
+
+\subsection*{Part B}
+
+Hearing your concerns, your coworker decides to try a different model. They fit the following model.
+
+```{r}
+#| echo: true
+
+quadratic.formula  = Y ~ D*(1+X+I(X^2))
+quadratic.model = lm(quadratic.formula, data=data) 
+summary(quadratic.model)
+```
+
+And they show it does a pretty good job of fitting the data.
+```{r}
+muhat.quadratic = function(d,x) { predict(quadratic.model, newdata=data.frame(X=x,D=d)) }
+grid = expand.grid(X=seq(0,1,by=.01), D=0:1)
+scatter + geom_line(aes(x=X, y=muhat.quadratic(D,X), color=factor(D)), data=grid)
+```
+
+
+They're confused. It looks to them like the model is fitting the data. But the coefficient on $D$ in this model, `r coef(quadratic.model)[2]`, doesn't seem to be a good estimate of the ATT. How would you propose to use their model to estimate the ATT? Give a formula for you estimator and then, using the information above, calculate an actual numerical value. I haven't tried to make the numbers nice, so you may want a calculator for this one.
+
+\subsubsection*{Part C}
+
+```{r}
+estimate.ATT = function(model, data) {
+  X = data$X
+  D = data$D
+  muhat = function(d,x) { predict(model, newdata=data.frame(X=x,D=d)) }
+  mean(muhat(1,X[D==1]) - muhat(0, X[D==1]))
+}
+```
+
+You've managed to convince your coworker that looking at the coefficient on $D$ is not the right way to estimate the ATT. You've got them estimating it correctly. For the sake of not spoiling Part B, let's say we've got a function 'estimate.ATT(model,data)' that does that.
+Your coworker wants use the bootstrap to estimate their estimator's standard error. They run the following code.
+
+```{r}
+set.seed(1)
+```
+
+```{r}
+#| echo: true  
+#| cache: true 
+B=1000
+ATT.boot = rep(NA,B)
+for( b in 1:B ){
+  bootind = sample(1:nrow(data),size=nrow(data),replace=TRUE)
+  data.boot = data[bootind,]
+  model.boot = lm(quadratic.formula, data=data.boot) 
+  ATT.boot[b] = estimate.ATT(model.boot, data.boot)
+}
+```
+
+This is their estimate of the standard error.
+```{r}
+#| echo: true
+sd(ATT.boot)/sqrt(n)
+```
+
+Is this a good estimate of the standard error of the ATT? Explain why or why not. To justify your answer, you may want to refer to the following plot of the bootstrap distribution they calculated.
+
+```{r}
+ggplot() + geom_histogram(aes(x=ATT.boot, y=after_stat(density)), alpha=.3, fill='orange') 
+```
+
+\subsubsection*{Part D}
+Your boss asks you to come up with your own estimate of the ATT. To keep things simple, you decide to use the additive bivariate model, but fit with inverse probability weights. Here's your code.
+
+```{r}
+ATTweights = function(d,x) { d + (1-d)*pi(x)/(1-pi(x)) }
+data$ATTweights = ATTweights(data$D, data$X)
+additive.model.ipw = lm(Y~D+X, data=data, weights=ATTweights) 
+summary(additive.model.ipw)
+```
+
+You report as your estimate of the coefficient on $D$, `r coef(additive.model.ipw)[2]`. Your coworker is confused. Reporting this coefficient is exactly what you told them not to do. And you're using a model that doesn't seem to fit the data any better than their did. Explain why it works, intuitively, with reference to the plot on the following page. In it, the dashed lines are the fitted values from your model, and the solid lines are the fitted values from your coworker's additive model from Part A. 
+
+```{r}
+#| layout-nrow: 2
+muhat.ipw.additive = function(d,x) { predict(additive.model.ipw, newdata=data.frame(X=x,D=d)) }
+scatter + 
+  geom_line(aes(x=X, y=muhat.additive(D, X), color=factor(D)), data=grid) +
+  geom_line(aes(x=X, y=muhat.ipw.additive(D,X), color=factor(D)), data=grid, linetype='dashed')
+```
+
+
+\subsubsection*{Part D}
+Your supervisor, seeing three estimates, needs convincing that they should use yours. You plot the bootstrap sampling distributions of three estimators of the ATT: one based on your coworker's unweighted fit of the additive model (orange); another on your coworker's unweighted fit of the quadratic model (magenta); and the last on your inverse probability weighted fit of the additive model (blue). You also plot the confidence intervals you'd report for each of these estimators. Explain what this plot tells you about the actual value of the ATT. 
+
+```{r}
+#| cache: true
+set.seed(1) 
+B=5000
+ATT.boot = data.frame(additive=rep(NA,B), additive.ipw=rep(NA,B), quadratic=rep(NA,B))
+for( b in 1:B ){
+  bootind = sample(1:nrow(data),size=nrow(data),replace=TRUE)
+  data.boot = data[bootind,]
+  boot.model.additive.ipw = lm(Y~D+X, data=data.boot, weights=ATTweights)
+  boot.model.quadratic = lm(quadratic.formula, data=data.boot)
+  boot.model.additive = lm(Y~D+X, data=data.boot)
+  ATT.boot$additive[b] = estimate.ATT(boot.model.additive, data.boot)
+  ATT.boot$additive.ipw[b] = estimate.ATT(boot.model.additive.ipw, data.boot)
+  ATT.boot$quadratic[b] = estimate.ATT(boot.model.quadratic, data.boot) 
+}
+```
+
+```{r}
+ATT.point = data.frame(additive.ipw = estimate.ATT(additive.model.ipw, data),
+                       additive = estimate.ATT(additive.model, data),
+                       quadratic = estimate.ATT(quadratic.model, data))
+```
+
+```{r}
+ggplot(ATT.boot) + 
+  geom_histogram(aes(x=additive, y=after_stat(density)), alpha=.3, fill='orange', bins=100) +
+  geom_histogram(aes(x=quadratic, y=after_stat(density)), alpha=.3,  fill='magenta', bins=100) + 
+  geom_histogram(aes(x=additive.ipw, y=after_stat(density)), alpha=.3,  fill='blue', bins=100) +
+  geom_pointrange(aes(y=20, x=ATT.point$additive, xmin=ATT.point$additive-2*sd(ATT.boot$additive), xmax=ATT.point$additive+2*sd(ATT.boot$additive)), color='orange') + 
+  geom_pointrange(aes(y=30, x=ATT.point$quadratic, xmin=ATT.point$quadratic-2*sd(ATT.boot$quadratic), xmax=ATT.point$quadratic+2*sd(ATT.boot$quadratic)), color='magenta') +
+  geom_pointrange(aes(y=40, x=ATT.point$additive.ipw, xmin=ATT.point$additive.ipw-2*sd(ATT.boot$additive.ipw), xmax=ATT.point$additive.ipw+2*sd(ATT.boot$additive.ipw)), color='blue') + xlab('') + ylab('')
+```
+
+
+\subsection*{Problem 3}
+
+\subsubsection*{Part A}
+```{r}
+set.seed(5)
+
+mu = function(d, x){.2 + x + (1-d) }
+pi = function(x){ 1 - .01 -.98*abs(cospi(x/2)) }
+
+m = 10000
+X = sample(seq(0,1,by=.3333), m, replace=T)
+D = rbinom(m, 1, pi(X))
+Y = mu(D,X) + .02*rnorm(m)
+pop = data.frame(X=X, D=D, Y=Y)
+
+pop.scatter = ggplot(pop) + 
+  geom_point(aes(x=X+.01*(2*D-1), y=Y, color=factor(D)), 
+             position=position_jitter(w=.1,h=0), alpha=.3, size=1) + 
+  scale_x_continuous(breaks=seq(0,1,by=.1)) + xlab('') + ylab('') + 
+  geom_histogram(aes(x=X, y=.4*after_stat(density), fill=factor(D), color=factor(D)), 
+    position='identity', bins=10, alpha=.2) +
+  guides(color='none', fill='none') + theme_bw()
+
+n = 1000
+set.seed(7)
+data = pop[sample(1:nrow(pop), n, replace=TRUE), ]
+summaries = data %>% group_by(D,X) %>% summarize(mu=mean(Y), n = n()) %>%
+                     group_by(D) %>% mutate(f=n/sum(n))
+
+grid = expand.grid(X=seq(0,1,by=.3333), D=0:1)
+sample.scatter = ggplot(data) + 
+  geom_point(aes(x=X+.01*(2*D-1), y=Y, color=factor(D)), 
+             position=position_jitter(w=.1,h=0), alpha=.2, size=2) + 
+  scale_x_continuous(breaks=seq(0,1,by=.1)) + xlab('') + ylab('') + 
+  geom_col(aes(x=X, y=f, fill=factor(D), color=factor(D)), data=summaries, position='identity', alpha=.2, width=.25) +
+  geom_line(aes(x=X, y=pi(X)), data=grid, size=1, color='purple') +
+  geom_point(aes(x=X, y=pi(X)), data=grid, color='purple') +
+  guides(color='none', fill='none') + theme_bw()
+
+#pop.scatter 
+sample.scatter
+```
+
+Some people don't like inverse probability weighting. What they say is that often, some observations get way more weight --- and therefore influence on the least squares fit --- than others. Suppose we're estimating the ATT. Above, I've plotted a sample in which this will happen. The probability of treatment, $\pi(x)=\E[D_i \mid X_i=x]$, is drawn in purple. 
+\begin{enumerate} 
+\item Indicate, in the plot above, which observations would ---if sampled---get huge weights.
+\item State a formula for the inverse probability weights. They should have the property that, if you were to fit the additive bivariate model and used it to estimate the ATT, it'd be an unbiased estimate. Prove it. The formula you give should be a function of $D$ and $X$ that you can calculate, at every $D$ and $X$, using information in the plot. But you might need a magnifying glass and a ruler to actually do that. 
+\item Suppose you instead fit the additive bivariate model via unweighted least squares and used it to estimate the ATT. 
+In terms of your estimator's limit $\tilde \mu(d,x)$ and the subpopulation means $\mu(d,x)$, what is the bias of your estimator?
+\end{enumerate}
+
+
+\subsubsection*{Part B}
+
+To argue against inverse probability weighting, a colleague of yours has produced the following plot. In it, we see the sampling distribution of ATT estimators based on the additive bivariate model, fit with (in blue) and without (in orange) inverse probability weights. And, as you can see, the two estimators have the same mean, but the inverse-probability-weighted version has a larger variance. To produce it, they've drawn `r B` samples of size n=`r n` with replacement from some population they've made up. The sample we looked at in Part A was, in fact, one of these samples. Many of your colleagues are convinced by this plot. Are you? Explain why or why not. Hint: Think about your answer to Problem 1 Part B.
+
+```{r}
+B = 5000
+estimates = data.frame(additive=rep(NA,B), additive.ipw=rep(NA,B)) 
+set.seed(7)
+for( b in 1:B ){
+  data = pop[sample(1:nrow(pop), n, replace=TRUE), ]
+  data$ATTweights = data$D + (1-data$D)*pi(data$X)/(1-pi(data$X)) 
+  additive.model.ipw = lm(Y~D+X, data=data, weights=ATTweights)
+  additive.model     = lm(Y~D+X, data=data)
+  estimates$additive[b]     = estimate.ATT(additive.model, data)
+  estimates$additive.ipw[b] = estimate.ATT(additive.model.ipw, data)
+}
+```
+
+```{r}
+ggplot(estimates) + 
+  geom_histogram(aes(x=additive, y=after_stat(density)), alpha=.3, fill='orange', bins=50) +
+  geom_histogram(aes(x=additive.ipw, y=after_stat(density)), alpha=.3, fill='blue', bins=50)
+```
+
+\subsection*{Problem 4}
+
+\subsubsection*{Part A}
+```{r}
+set.seed(7)
+data = pop[sample(1:nrow(pop), n, replace=TRUE), ]
+lm(Y~D, data=data)
+```
+
+
+One of your coworkers, confused by something you said about inverse probability weighting, has become convinced that they can fit any model with group-specific intercepts and get an unbiased estimate of the ATT. They didn't hear the bit about inverse probability weighting. So they've run the following simple regression.
+
+$$
+\hat\mu_{\text{simple}}(d,x) = \hat \beta_0 + \hat \beta_1 d \qfor \hat\beta = \argmin_{b \in \R^2} \sum_{i=1}^n \qty{b_0  + b_1 D_i  - Y_i}^2 
+$$
+
+The data they were working with was, fortunately, the fake data from Problem 3 (Part A). No real harm done. But they're confused by their effect estimate of `r coef(lm(Y~D, data=data))[2]`. It's nothing like the estimates they're seeing in the histograms from Problem 3 (Part B). Tell them how far off their estimate of the ATT is --- and in what direction --- from one based on the least squares estimate of the additive model using the same data.
+
+$$
+\hat\mu_{\text{add}}(d,x) = \hat\gamma_0 + \hat \gamma_1 d + \hat \gamma_2 d x \qfor \hat\gamma = \argmin_{b \in \R^3} \sum_{i=1}^n \qty{b_0 + b_1 D_i + b_2 X_i - Y_i}^2
+$$
+
+Explain how to use the plot from Problem 3 (Part A) to determine the direction of the difference. To determine the size, you'll probably want to use the balance table and regression summary below.
+
+
+$$
+\begin{array}{llll}
+\bar{X} & \bar{D} & \frac{\sum_{i}D_i X_i}{\sum_i D_i} & \frac{\sum_{i}(1-D_i) X_i}{\sum_i (1-D_i)} \\
+\hline
+`r mean(data$X)` & `r mean(data$D)` & `r mean(data$X[data$D==1])` & `r mean(data$X[data$D==0])` \\
+\end{array}
+$$
+
+```{r}
+additive.model = lm(Y~D+X, data=data)
+summary(additive.model)
+```
+
+\subsubsection*{Part B}
+Your coworker got the message about inverse probability weighting. They now use inverse probability weighting when they fit their simple univariate regression model. They're getting the same estimate of the ATT they expected.
+
+```{r}
+data$weights = data$D + (1-data$D)*pi(data$X)/(1-pi(data$X))
+univariate.model.ipw = lm(Y~D, data=data, weights=weights)
+summary(univariate.model.ipw)
+```
+
+But something confusing has come up. They know that they're supposed to average the CATE $\hat\mu(1,x) - \hat\mu(0,x)$ over the distribution of $X$ in the treated group to get the ATT and over the distribution of $X$ in the whole sample to get the ATE. But $\hat\mu(1,x)-\hat\mu(0,x)=\hat\beta_1$ is a constant---the average is the same in both cases. 
+How can they estimate the ATE by fitting this simple univariate model?  Give them a formula, but also explain the intuition behind it using the plot below of the model they've just fit to the data when they were estimating the ATT. The solid lines show $\hat\mu(d,x)$ for $d=0,1$ in the colors you'd expect.
+
+```{r}
+muhat.univariate.ipw = function(d,x) { predict(univariate.model.ipw, newdata=data.frame(X=x,D=d)) }
+sample.scatter + geom_line(aes(x=X, y=muhat.univariate.ipw(D,X), color=factor(D)), data=grid) + 
+                 geom_point(aes(x=X, y=muhat.univariate.ipw(D,X), color=factor(D)), data=grid)  
+```
+
+To simplify this one, I'm going to make this multiple choice. The curve they'll want is
+$$
+\hat \mu_{\text{univariate}}(d,x) = \hat \beta_0 + \hat \beta_1 d \qfor
+\hat \beta = \argmin_{b \in \R^2} \sum_{i=1}^n \text{weights}(D_i,X_i) \ \qty{b_0 + b_1 D_i - Y_i}^2
+$$
+for one of these three choices of $\text{weights}(d,x)$.
+$$
+\begin{aligned}
+\text{weights}_a(D,X) &= (1-D) + \frac{D \qty{1-\pi(X)}}{\pi(X)} \\
+\text{weights}_b(D,X) &= (1-D)\pi(X) + D \{ 1-\pi(X) \} \\
+\text{weights}_c(D,X) &= \frac{1-D}{1-\pi(X)} + \frac{D}{\pi(X)} 
+\end{aligned}
+$$
+
+Which one is it?  Prove that you've chosen the right one by showing that the resulting estimate of the ATE is unbiased.
+
+
+Here's a long hint for those who missed our review of PS6 on Friday. You can show, by looking at the partial derivatives of  the minimization problem that $\tilde \mu$ solves, that $\E[\text{weights}(D,X) \qty{\tilde\mu(D,X) - \mu(D,X)} m(D,X)] = 0$ for every curve $m(D,X)$ in the model we've just fit. By choosing $m(D,X)=D$ and $m(D,X)=1-D$, both of which are in our model, you can show things about $\text{weights}(d,X)\qty{\tilde\mu(d,X)-\mu(d,X)}$ for $d=0$ and $d=1$ using the indicator trick. That is, using the following equivalences.
+$$
+\begin{aligned}
+f(D,X)D &=\begin{cases} 
+  f(1,X)D & \text{if } D=1 \\
+  0 & \text{if } D=0  
+\end{cases} = f(1,X)D  && \text{ and analogously } \\
+f(1-D,X)(1-D) &= f(0,X)(1-D) 
+\end{aligned}
+$$
+
+For one of the options above, a little additional work will reveal that your estimator is unbiased. In particular, it'll show that $\E[\qty{\tilde\mu(1,X) - \mu(1,X)}]=0$ and $\E[\qty{\tilde\mu(0,X) - \mu(0,X)}]=0$.  You'll need the usual computational tools: the law of iterated expectations and linearity of conditional expectations. Note that, by definition, $\E[D \mid X]=\pi(X)$ and consequently --- via linearity --- $\E[1-D \mid X] = 1-\pi(X)$. 
+
+Write your proof in full, so it can be understood without reading this hint. That said, go ahead and use the property that $\E[\text{weights}(D,X) \qty{\tilde\mu(D,X) - \mu(D,X)} m(D,X)] = 0$ for all $m$ in the model without proving that.
+
+\subsubsection*{Part C}
+This coworker, troubled, revisits an estimates of the ATE and the ATT that they'd gotten without inverse probability weighting. 
+They'd just compared subsample means and then taken the natural-seeming averages. Nobody had complained about that. Here are their estimates.
+
+$$
+\begin{aligned}
+\widehat{ATE} &= \frac{1}{n}\sum_{i=1}^n \qty{\hat\mu(1,X_i) - \hat\mu(0,X_i)}  && \qqtext{ and } \\
+\widehat{ATT} &= \frac{1}{\sum_{i=1}^n D_i}\sum_{i:D_i=1} \qty{\hat\mu(1,X_i) - \hat\mu(0,X_i)} && \qfor \hat \mu(d,x) = \frac{\sum_{i:D_i=d,X_i=x}Y_i}{\sum_{i:D_i=d,X_i=x} 1}
+\end{aligned}
+$$
+
+Explain why there isn't a problem with either of them.
+
+
+\subsubsection*{Part D}
+This is a bonus question. Choose either of the weights that weren't your answer to Part B.
+Explain what you wind up estimating. You may want to draw something on top of the plot from Part B to illustrate your answer. Extra points if you do \emph{both} of the weights that weren't your answer to Part B.
