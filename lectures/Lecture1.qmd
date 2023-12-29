@@ -33,6 +33,7 @@ library(dplyr)
 library(magrittr)
 library(knitr)
 library(scales)
+options(knitr.kable.NA = '')
 
 library(cpsR)
 census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
@@ -143,10 +144,11 @@ earnings$person = 1:nrow(earnings)
  \ \
 
 ```{r}
-earnings %>% ellipsis(nhead=4, ntail=2) %>% kable() 
+cols = c('income', 'age', 'education')
+earnings[,cols] %>% ellipsis(nhead=4, ntail=2) %>% kable() 
 ```
 
-## Here is a Complete View of Their Responses
+## Here is a Complete View of Their Incomes
 
 ```{r}
 lims = c(-.5e5, 5e5)
@@ -190,9 +192,9 @@ scatter
 -  It should tell you what you want to know.
     -   This one's more context specific.
 -  Let's look at a couple common types of summary.
-        - Location
-        - Spread
-        - Distribution
+    - Location
+    - Spread
+    - Distribution
 
 ## Location
 
@@ -237,7 +239,7 @@ scatter + geom_pointrange(aes(x=x.mean, y=mean, ymin=mean-sd, ymax=mean+sd), col
 - Different measures of spread tend to be used with different measures of location.
     - the [Median Absolute Deviation]{.fg style="--col: orange"} is used with the Median.
     - the [Standard Deviation]{.fg style="--col: red"} is used with the Mean.
-- Stuff
+
 
 ## Spread and Residuals
 ```{r}
@@ -897,81 +899,3 @@ To give our dots a little space, we've added little vertical jitter here as well
 - Why is the SD smaller for those with four-year degrees than those without? 
     - Hint: look at the variance formula for binary variables.
   
-
-# Regression is Fitting A Line? => Review+Revise Part of Lec 2
-
-## When Our Covariate is Binary, You Can Think of it that Way
-
-```{r}
-#| layout-ncol: 2
-#| output-height: 600px
- 
-summaries = earnings %>% group_by(fouryrdegree) %>%
-                         summarize(mean=mean(income), sd=sd(income))
-
-ggplot(earnings) +  geom_point(aes(x=fouryrdegree, y=income, color=degree), 
-                                position=position_jitter(width=.3), alpha=.1) + 
-                   geom_pointrange(aes(x=fouryrdegree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) +
-                    geom_smooth(aes(x=fouryrdegree, y=income), method = "lm", se=FALSE, color='black', linetype="dotted") + 
-                   scale_y_continuous(limits=c(-.5e5,5e5)) + guides(color=FALSE)
-
-laborforce<- subset(earnings,!(is.na(employed)))
-summaries = laborforce %>% group_by(fouryrdegree) %>%
-                         summarize(mean=mean(employed), sd=sd(employed))
-
-ggplot(laborforce) +  geom_point(aes(x=fouryrdegree, y=employed, color=degree), 
-                                position=position_jitter(width=.3, height=.01), alpha=.1) + 
-                      geom_pointrange(aes(x=fouryrdegree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) +
-                      geom_smooth(aes(x=fouryrdegree, y=employed), method = "lm", se=FALSE, color='black', linetype="dotted") + 
-                    guides(color=FALSE)
-``` 
-
-- One interpretation of what we've been doing is that we're *fitting a line* $ax + b$.
-- And we're doing it by least squares, i.e., by  minimizing the sum of squared residuals.
-$$
-\hat a, \hat b = \operatorname*{argmin}_{a,b} \sum_{i=1}^n \qty( aX_i + b - Y_i )^2
-$$
-- This line *passes through* our subsample means at $x=0$ and $x=1$.
-
-
-## The Line Passes Through Subsample Means
-### A Proof
-
-- To prove it, we simply split the sum of squared errors into two sums.
-    - Our first sum will be over the subsample with $X_i=0$.
-    - Our second will be over the subsample with $X_i=1$.
-- What's useful about this is that our line is *constant* within each sum.
-$$ 
-\begin{aligned}
-&\sum_{i=1}^n  \qty( aX_i + b - Y_i )^2 = \sum_{i:X_i=0} \qty(b-Y_i)^2 + \sum_{i:X_=1} \qty(a+b-Y_i)^2 \\ 
-&\quad \text{ because } \quad aX_i + b = \begin{cases} b & \text{ when } X_i=0 \\ a+b & \text{ when } X_i=1 \end{cases}
-\end{aligned}
-$$
-
-- These two constant values, $a$ and $a+b$, can be any two different numbers.
-- That means we're free to choose them to minimize our two sums. And we know, from earlier today, how to do that.
-    - The first sum is minimized when $b$ is the mean of the subsample we're summing over: the subsample with $X_i=0$
-    - The second sum is minimized when $a+b$ is the mean of the subsample we're summing over: the subsample with $X_i=1$
-- This gives us a set of equations we can solve for the slope and intercept parameters $a$ and $b$.
-$$
-\begin{aligned}
-b   &= \bar Y_0 \\
-a+b &= \bar Y_1 \\
-\end{aligned}
-\implies 
-\begin{aligned} 
-b  &=\bar Y_0 \\
-a &=\bar Y_1 - \bar Y_0 
-\end{aligned}
-\quad \text{ where } \quad \bar Y_x = \frac{\sum_{i:X_i=x} Y_i}{\sum_{i:X_i=x} 1}.
-$$
-
-## This is not true in general
-
-TODO: Make this a real slide
-
-- And people use this interpretation because it is *compressive*.
-- It's easy to remember. 
-- Sometimes it's an accurate summary.
-- Sometimes not.
-
