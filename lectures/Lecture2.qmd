@@ -732,205 +732,11 @@ width = quantile(meanY.samples, probs=c(.975)) - quantile(meanY.samples, probs=c
 coverage = mean(mean(y)- width/2 <= meanY.samples & meanY.samples <= mean(y) + width/2)
 ```
 
-## A Problem 
-```{r}
-#| out-height: 500px
-
-width = quantile(meanY.samples, probs=c(.975)) - quantile(meanY.samples, probs=c(.025))
-coverage = mean(population.proportion - width/2 <= meanY.samples & meanY.samples <= population.proportion + width/2)
-annotated.histogram + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.samples[1:K]-width/2, xmax=meanY.samples[1:K]+width/2), alpha=.2, color='purple') 
-```
-
-- We can't calibrate intervals like this in real life.
-  - When we run our a poll, we get a single point estimate $\bar Y_{`r n`}$ based on our sample.
-  - We don't know the sampling distribution of this point estimate until election day.
-- But what we actually do is *almost* the same. 
-  - We *do* the same thing.
-  - But we use an *estimate* of the sampling distribution in place of the thing itself.
-- Today we'll talk about an estimate based on *the bootstrap*.
-
-## The Bootstrap Idea
-
-- Before the election, we don't observe the population or population proportion.
-  - But we do observe our sample and sample proportion. 
-  - And we can *sample from the sample* act as if it were the population.
-- We'll take repeated random samples of size `r n`, with replacement, from our sample of size `r n`.
-  - We call these *bootstrap samples*. 
-  - We use stars to distinguish them from our original sample---we write $Y_i^*$.
-
-```{r bootstrap.sample}
-J.star = sample(n, size=n, replace=TRUE)
-Y.star = Y[J.star]
-```
-
-:::: columns
-::: column
-The Sample
-$$
-\begin{array}{r|rrrr|r}
-i    &   1 & 2 & \dots & `r n` & \bar{Y}_{`r n`}  \\
-Y_i  &  `r Y[1]` & `r Y[2]` & \dots & `r Y[n]` & `r approx(mean(Y))` \\
-\end{array}
-$$
-
-The Bootstrap Sample
-
-$$
-\begin{array}{r|rrrr|r}
-i    &   1 & 2 & \dots & `r n` & \bar{Y}_{`r n`}^*  \\
-Y_i^*  &  `r Y.star[1]` & `r Y.star[2]` & \dots & `r Y.star[n]` & `r approx(mean(Y.star))` \\
-\end{array}
-$$
-:::
-
-::: column
-The Population
-
-$$
-\begin{array}{r|rrrr|r}
-j & 1 & 2 & \dots &   `r approx(N)` & \bar{y}_{`r approx(N)`}  \\
-y_{j} & `r y[1]` & `r y[2]` & \dots & `r y[N]`   & `r approx(mean(y))`  \\
-\end{array}
-$$
-
-The 'Bootstrap Population' --- The Sample
-$$
-\begin{array}{r|rrrr|r}
-j        &   1 & 2 & \dots & `r n` & \bar{y}^*_{`r n`}  \\
-y_j^*  &  `r Y[1]` & `r Y[2]` & \dots & `r Y[n]` & `r approx(mean(Y))` \\
-\end{array}
-$$
-
-:::
-::::
-
-## The Bootstrap Sampling Distribution
-
-- In this case, it's easy to work out the bootstrap sampling distribution.
-- Think about what happens we draw our sample from the population.
-- The distribution of our sample proportion is determined by two things.
-    - The number of draws we were taking, `r n`.
-    - The proportion of voters in the population, `r approx(mean(y))`.
-- It's Binomial(`r n`, `r approx(mean(y))`)/`r n`.
-
-```{r}
-#| echo: true
-#| execute: false
-meanY.samples = rbinom(1000000, size=n, prob=mean(y)) / n
-```  
-
-- What happens when we draw our bootstrap sample from the sample is analogous.
-    - The number of draws we were taking, `r n`.
-    - The proportion of voters in the sample, `r approx(mean(Y))`
-- It's Binomial(`r n`, `r approx(mean(Y))`)/`r n`.
-
-```{r}
-#| echo: true
-meanY.bootstrap.samples = rbinom(1000000, size=n, prob=mean(Y)) / n
-```
-
-
-## The Bootstrap Sampling Distribution 
-
-```{r}
-#| echo: true
-#| out-height: 400px
-
-ggplot() + geom_histogram(aes(x=meanY.bootstrap.samples, y=after_stat(density)), binwidth=.001, alpha=.2) +
-           geom_vline(aes(xintercept=mean(meanY.bootstrap.samples)), color="blue") +
-           geom_vline(aes(xintercept=quantile(meanY.bootstrap.samples, probs=c(.16, .84))), color="blue", linetype='dashed') + 
-           geom_vline(aes(xintercept=quantile(meanY.bootstrap.samples, probs=c(.025, .975))), color="blue", linetype='dotted') +
-           geom_vline(aes(xintercept=sample.proportion), color='green', size=3, alpha=.7) +
-           scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) +
-           scale_y_continuous(breaks=seq(0,40,  by=10), limits=c(0, 40))
-```
-
-- There are a few features we may want to highlight.
-  - The *mean of the bootstrap sampling distribution* is the solid blue line.
-  - The middle 2/3 of the bootstrap sampling distribution lies between the dashed blue lines.
-  - The middle 95\% of the bootstrap sampling distribution lies between the dotted blue lines. 
-- I've also drawn the *sample proportion* as a wide green line.
-  - We see that it appears as a kind of highlight on the solid blue line. 
-  - It's in exactly the same place. What does this mean? 
-
-
-## A Comparison
-
-```{r}
-#| out-height: 300px
-#| layout-nrow: 2
-#| fig-asp: .3
-#| fig-subcap: 
-#|  - "The Bootstrap Sampling Distribution"
-#|  - "The Sampling Distribution"
-annotated.bootstrap.histogram = ggplot() + geom_histogram(aes(x=meanY.bootstrap.samples, y=after_stat(density)), binwidth=.001, alpha=.2) +
-           geom_vline(aes(xintercept=mean(meanY.bootstrap.samples)), color="blue") +
-           geom_vline(aes(xintercept=quantile(meanY.bootstrap.samples, probs=c(.16, .84))), color="blue", linetype='dashed') + 
-           geom_vline(aes(xintercept=quantile(meanY.bootstrap.samples, probs=c(.025, .975))), color="blue", linetype='dotted') +
-           geom_vline(aes(xintercept=mean(Y)), color='green', size=3, alpha=.7) +
-           scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) +
-           scale_y_continuous(breaks=seq(0,40,  by=10), limits=c(0, 40))
-         
-annotated.bootstrap.histogram
-annotated.histogram
-```
-
-- We can see these two distributions are pretty similar. 
-- And we're only using the width, so we don't care about differences in the mean.
-- To do a visual comparison without worrying about the mean, we can center them.
-
-## A Comparison --- Centered
-
-```{r}
-#| out-height: 300px
-#| layout-nrow: 2
-#| fig-asp: .3
-#| fig-subcap: 
-#|  - "The Bootstrap Sampling Distribution"
-#|  - "The Sampling Distribution"
-
-cmeanY.bootstrap.samples = meanY.bootstrap.samples - mean(meanY.bootstrap.samples) + mean(meanY.samples)
-annotated.bootstrap.histogram = ggplot() + geom_histogram(aes(x=cmeanY.bootstrap.samples, y=after_stat(density)), binwidth=.001, alpha=.2) +
-           geom_vline(aes(xintercept=mean(cmeanY.bootstrap.samples)), color="blue") +
-           geom_vline(aes(xintercept=quantile(cmeanY.bootstrap.samples, probs=c(.16, .84))), color="blue", linetype='dashed') + 
-           geom_vline(aes(xintercept=quantile(cmeanY.bootstrap.samples, probs=c(.025, .975))), color="blue", linetype='dotted') +
-           geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7) +
-           scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) +
-           scale_y_continuous(breaks=seq(0,40,  by=10), limits=c(0, 40))
-         
-annotated.bootstrap.histogram
-annotated.histogram
-```
-
-- After centering, they look even more similar. 
-- But this is just *one* bootstrap based on one sample.
-- Maybe we got lucky? Lets look at some empirical evidence.
-- Let's suppose 1000 of our friends did the same thing.
-
-## Empirical Evidence for the Bootstrap
-
-```{r}
-K = 100
-ps = meanY.samples[1:K]
-
-ggplot() + geom_line(aes(x=x/n-p, y=n*dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n)) +
-           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n-mean(y)), linetype='dotted') +
-           geom_line(aes(x=x/n-p, y=n*dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.2) +
-           geom_pointrange(aes(x=0, xmin=qbinom(.025,n,p)/n-p, xmax=qbinom(.975,n,p)/n-p, y=20*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
-           xlim(-.1,.1) + guides(color=FALSE)
-```
-
-- Our friends' bootstrap sampling distributions are almost indistinguishable from the sampling distribution.
-- The resulting interval-widths are near-indistinguishable from the width we got using the sampling distribution.
-  - The former are shown as points with arms.
-  - That latter is the space between the dotted lines.
-- Not luck!  This works reliably.
 
 ## It Works. Why Does it Work?
 
-- Why is the bootstrap sampling distribution a good estimate of the sampling distribution?
 - Here's an argument specific to the binary-outcome case we've been talking about today.
-- We know the sampling distribution and bootstrap sampling distribution.
+- We know the sampling distribution
 - They're the distributions of means of `r n` independent Bernoullis---$\frac{Binomial(`r n`,p)}{`r n`}$---with different vote probabilities $p$.
   - In the first case, $p$ is the proportion of voters in the population.
   - In the second case, $p$ is the proportion of voters in the sample.
@@ -959,9 +765,26 @@ ggplot() + geom_line(aes(x=x/n-p, y=n*dbinom(x,n,p)), data=expand.grid(p=mean(y)
 ```
 
 ::: aside
-Bootstrap Sampling Distributions with Interval Showing Middle 95% for p at the 2.5th, 50th, and 95th percentiles of the sampling distribution. \
+Sampling Distributions with Interval Showing Middle 95% for p at the 2.5th, 50th, and 95th percentiles of the sampling distribution. \
 With centering (right) and without (left). 
 :::
+
+## A Problem 
+```{r}
+#| out-height: 500px
+
+width = quantile(meanY.samples, probs=c(.975)) - quantile(meanY.samples, probs=c(.025))
+coverage = mean(population.proportion - width/2 <= meanY.samples & meanY.samples <= population.proportion + width/2)
+annotated.histogram + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.samples[1:K]-width/2, xmax=meanY.samples[1:K]+width/2), alpha=.2, color='purple') 
+```
+
+- We can't calibrate intervals like this in real life.
+  - When we run our a poll, we get a single point estimate $\bar Y_{`r n`}$ based on our sample.
+  - We don't know the sampling distribution of this point estimate until election day.
+- But what we actually do is *almost* the same. 
+  - We *do* the same thing.
+  - But we use an *estimate* of the sampling distribution in place of the thing itself.
+- Today we'll talk about an estimate based on *the bootstrap*.
 
 ## Summary
 
