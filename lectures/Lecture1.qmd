@@ -105,7 +105,7 @@ cps.data = cpsR::get_asec(year=2022, vars=c('pearnval', 'gestfips', 'h_numper', 
 ```{r process-california-data}
 all.earnings = data.frame(age=cps.data$a_age,
                           state.code = cps.data$gestfips,
-                          income=cps.data$htotval, 
+                          income=cps.data$pearnval, 
                           education=case_match(cps.data$a_hga,
                                           0  ~ 0,   # child
                                           31 ~ 0,   # < grade 1
@@ -140,22 +140,119 @@ rownames(earnings)=NULL
 earnings$person = 1:nrow(earnings)
 ```
 
+```{r visualization-defaults}
+scale_y = function(limits=c(-.3e5, 3e5)) { 
+  scale_y_continuous(labels=label_dollar(), limits=limits)
+}
+
+years = 8:20
+scale_x = function(limits=c(min(years)-.5, max(years)+.5)) { 
+  scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=limits)
+}
+
+dot.size = 2
+```
+
+
+```{r define-colors}
+twocolor.red   = 'rgb(248,118,109)'
+twocolor.green = 'rgb(0,191,196)'
+```
+
+# What Regression Analysis Is 
+
+## 
+
+```{r}
+#| out-height: 600px
+
+theme_set(blank.theme)
+set.seed(0)
+n = 100
+X = round(runif(n), 1)
+Y = sin(pi*X/1.7) + rnorm(n, sd=.1)
+fake.data = data.frame(X=X, Y=Y)
+
+ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
+                    geom_smooth(aes(x=X, y=Y), method='lm', se=FALSE, size=1, alpha=.3) + 
+                    coord_cartesian(ylim=c(-.5,1.5)) 
+```                
+
+- You may have the impression that regression is about fitting lines to data.
+- That's what some regression analysis books focus on. And we'll talk about it.
+- But it's not what regression analysis is really about. And it's not what this class will focus on.
+
+## 
+
+```{r}
+#| out-height: 600px
+#| layout-ncol: 2
+summaries = fake.data %>% group_by(X) %>% summarize(mu=mean(Y))
+ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
+                    geom_smooth(aes(x=X, y=Y), method='lm', se=FALSE, size=1, alpha=.3) +
+                    coord_cartesian(ylim=c(-.5,1.5)) 
+ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
+                    geom_point(aes(x=X, y=mu), data=summaries, size=4, alpha=.2, color='blue') +
+                    coord_cartesian(ylim=c(-.5,1.5))
+```  
+
+- Regression analysis is about breaking one thing, $y$, into two parts.
+  - One part we can predict using another thing, $x$, and one part we can't.
+  - e.g. breaking income into a part we can predict using education and a part we can't. 
+- We can try to make those predictions by drawing a line, but it's usually not a good idea.
+  - There's a difference between what we can predict and what we can predict by drawing a line.
+  - And it's easy to do better. We can make predictions by averaging---averaging the $y$s at each $x$.
+
+## 
+
+```{r}
+#| out-height: 600px
+ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
+                    geom_point(aes(x=X, y=mu), data=summaries, size=4, alpha=.2, color='blue') + 
+                    coord_cartesian(ylim=c(-.5,1.5))
+```  
+
+- So, to be reductive, this is a class about looking at and comparing averages.
+- That works very well if you have a bunch of observations at each $x$.
+  - e.g., if you're using years of schooling to predict income.
+  - We'll focus on cases like this for the first half of the class.
+- It works less well if you don't.
+  - That's when things get a bit more complicated. 
+  - We'll get there later on in the class and talk about how to deal with it.
+  - Lines are an option, but there are usually better ones. 
+  
+##
+```{r}
+#| out-height: 600px
+ggplot(fake.data) + geom_point(aes(x=X, y=Y, alpha=X==.5), size=2) + 
+                    geom_point(aes(x=X, y=mu, alpha=X==.5), data=summaries, size=4, color='blue') + 
+                    coord_cartesian(ylim=c(-.5,1.5)) +
+                    scale_alpha_discrete(range=c(.03,.4)) + guides(alpha=FALSE)
+```  
+
+- For a few weeks, as a sort of warm-up, we'll focus on explaining what we see at a single $x$.
+- We can think of this as zooming in on part of the problem.
+- Or as the sort of regression analysis we do when we have no explanatory variable---no $x$. 
+
 ## Today
 
-- We'll talk majorly about two examples you'll be seeing a lot in this class ...
-  - 2022 CPS wage data 
-  - Sampling examples which would include sum of two dice and poling
-- Our goal for today is to understand and learn how to summarize the data
+- Let's put aside all that prefatory stuff about what regression analysis is.
+- We'll look at how to describe and summarize two datasets we'll work with a lot in this class.
+  - Data on wages from the 2022 Current Population Survey (CPS)
+  - Data from turnout polls in advance of the 2020 Presidential Election
+- We'll look at a few summaries of each. 
   - location
-  - spread
+  - spread 
   - distribution 
-- We'll also talk about (in relation to sampling) ...
-  - population means
-  - subpopulation means 
-  - differences in subpopulation means
+- We'll close with a few dice-rolling activities.
+  - These'll help us think about what summaries tell us about data we don't have.
+  - That's about how the observations we have are *sampled* from a larger population of possible observations.
+  - This is called *statistical inference*. It's the main topic of this class. 
+  - We'll really get into it next week.
 
-## Context: 2022 CPS Wage Data
-- Today, to stay grounded, I want to focus on some real survey data.
+# Example 1: 2022 CPS Wage Data
+
+## The Data 
 - The Current Population Survey is a survey run by Census Bureau and Bureau of Labor Statistics
     - Each year, about 1/2500 US residents is surveyed.
     - It's approximately correct to think of these residents as being chosen randomly 
@@ -176,6 +273,7 @@ earnings[,cols] %>% ellipsis(nhead=4, ntail=2) %>% kable()
 ## Here is a Complete View of Their Incomes
 
 ```{r}
+#| out-height: 500px
 lims = c(-.5e5, 5e5)
 scatter = ggplot(earnings) + 
             geom_point(aes(x=person, y=income), alpha=.05) +
@@ -192,419 +290,6 @@ scatter
     - standing as tall as their income.
 - The problem with this is that it's hard to make sense of by looking at it.
 - It often helps to look at *data summaries*, a.k.a. *descriptive statistics*.
-
-# Context: Sum of Two Dice and Odd Rolls
-
-::: {.hidden}
-
-```{r dice_simulation}
-set.seed(123)  # Setting seed for reproducibility
-
-# Simulating the sum of two dice rolls
-roll_two_dice <- function() {
-  die1 <- sample(1:6, 1, replace = TRUE)
-  die2 <- sample(1:6, 1, replace = TRUE)
-  return(die1 + die2)
-}
-
-# Generating a list of simulated dice sums for 10 runs
-num_rolls <- 10
-dice_sums <- replicate(num_rolls, roll_two_dice())
-
-# Counting the number of odd rolls
-num_odd_rolls <- sum(dice_sums %% 2 == 1)
-
-# Displaying the results
-cat("Results for Sum of Two Dice Rolls:\n")
-cat("List of Dice Sums:", dice_sums, "\n")
-cat("Number of Odd Rolls:", num_odd_rolls, "\n")
-```    
-
-:::
-- Let's consider a sum of two dice
-  - You use a list of simulated dice sums obtained by rolling two dice r num_rolls times.
-  - You also count the number of odd rolls in these 10 runs.
-
-## Context : Poling data
-
-::: {.hidden}
-
-```{r population}
-our.seed = 0
-set.seed(our.seed)
-N=7233584
-p=4999960/N
-y= c(rep(1,p*N), rep(0, (1-p)*N))
-y=sample(y) # shuffle the order 
-population.proportion = p
-```
-
-```{r sample}
-set.seed(our.seed)
-
-n = 625
-J = sample(N, n, replace=TRUE)
-Y = y[J]
-sample.proportion = mean(Y)
-```
-
-:::
-- Suppose that, week before the 2020 presidential election, you did some polling.
-  - You use a list of the $N \approx `r approx(N)`$ people registered to vote in Georgia.
-  - And you make $n=`r n`$ phone calls.
-  - Each call, you select a voter uniformly at random from the list, e.g. by rolling a `r approx(N)` -sided die.
-  - And then you ask the potential voter whether they plan to vote.
-- Suppose also that all these registered voters will
-  - Pick up the phone will called
-  - Respond honestly to your questions
-  - Not change their minds about voting
-
-## Polling Results
-
-- You put your polling results in a table.
-- It has one column for each call.
-- In that columns, you record ...
-  - the call number $i$---a number from $1 \ldots `r n`$.
-  - the response $Y_i$ of the person you called---$1$ for 'yes and $0$ for no'.
-
-$$
-\begin{array}{r|rrrr|r}
-i    &   1 & 2 & \dots & `r n` & \bar{Y}_{`r n`}  \\
-Y_i  &  `r Y[1]` & `r Y[2]` & \dots & `r Y[n]` & `r approx(mean(Y))` \\
-\end{array}
-$$ 
-
-- You summarize the results with an extra column: the mean of the responses.
-  - Remember that the mean of a binary variable is a proportion. 
-  - You found that `r percent(mean(Y))` of the people polled said they would vote.
-
-## Sample Versus Population
-
-- We want to estimate the proportion of *all registered voters* --- our population --- who will vote.
-- To do this, we use the proportion of *polled voters* --- our sample --- who said they would.
-- When the election occurs, we get to see who turns out to vote.
-  - `r approx(p*N)` people, or roughly `r percent(mean(Y))` of registered voters, actually vote.
- 
-\ \
-
-:::: columns
-::: column
-### Before the Election 
-
-$$
-\begin{array}{r|rrrr|r}
-i    &   1 & 2 & \dots & `r n` & \bar{Y}_{`r n`}  \\
-Y_i  &  `r Y[1]` & `r Y[2]` & \dots & `r Y[n]` & `r approx(mean(Y))` \\
-\end{array}
-$$
-
-Outcomes for our sample of polled voters. \
-To enumerate our sample, we ...
-
-- give each call a number $i \in 1 \ldots `r n`$.
-- write $Y_i$ for the turnout of the $i$th person we called.
-:::
-::: column
-### After the Election
-
-$$
-\begin{array}{r|rrrrrr|r}
-j & 1 & 2 & 3 & 4 & \dots &   `r approx(N)` & \bar{y}_{`r approx(N)`}  \\
-y_{j} & `r y[1]` & `r y[2]` & `r y[3]` & `r y[4]` & \dots & `r y[N]`   & `r approx(mean(y))`  \\
-\end{array}
-$$
-Outcomes for the population of registered voters. \
-To enumerate our population, we ... 
-
-- give each registered voter a # $j \in 1 \ldots `r approx(N)`$.
-- write $y_j$ for the turnout of the person with ID $j$.
-:::
-::::
-
-## Two Questions
-
-Our sample proportion $`r sum(Y)` / `r n` \approx `r approx(mean(Y))`$ 
-is close to the population proportion $`r approx(sum(y))` / `r approx(N)` \approx `r approx(mean(y))`$
-
-1. Did we get lucky?
-2. Could we have predicted how close we'd get before the election happened?
-
-
-::: fragment
-
-- Answers: No and Yes.
-- To get these answers, we'll think about what'd happen if our friends had run identical polls.
-  - Each friend will choose have a different random sample.
-  - And estimate the population proportion by a different sample proportion.
-- We'll see how close these estimates tend to be.
-
-:::
-
-## Connecting Sample and Population
-
-- For each call $i$, we randomly select a voter with an id we'll call $J_i$.
-- And we record as that call's outcome the turnout of that voter: $Y_i=y_{J_i}$.
-- On each call, each registered voter has a $1/`r approx(N)`$ chance of being called.
-  - This is called sampling with replacement because we could call the same person twice.
-  - In our poll, this is unlikely because we're making a small number of calls relative to population size.
-  
-
-
-
-```{r mapping}
-# Create fake locations for the people in our population
-# by taking random convex combinations of state vertices
-set.seed(0)
-ga.shape = us_map(include = c("GA"))
-
-# To keep all this from being overwhelming, we'll have 10000 fake locations
-# The jth person is at the (j %% M + 1)st location
-M = 10000 
-V = nrow(ga.shape)
-weights = abs(rt(M*V,1))
-dim(weights) = c(M,V)
-weights = (1/rowSums(weights)) * weights
-locations = data.frame(x=weights %*% ga.shape$x, y=weights %*% ga.shape$y)
-
-ga = ggplot() + geom_polygon(data=ga.shape, aes(x = x, y = y), fill="white", color="black") + coord_fixed() + blank.theme
-```
-`
-
-:::: {.r-stack}
-::: {.fragment .fade-out data-fragment-index="0"}
-
-```{r}
-#| out-height: 300px
-sample.locations = locations[J %% M + 1, ]
-sample.locations$label = J
-ga + geom_text(aes(x = x, y = y, label=label), alpha=.5, data=sample.locations[c(1,2,n),]) 
-```
-
-:::
-::: {.fragment .current-visible data-fragment-index="0"}
-
-```{r}
-#| out-height: 300px
-ga + geom_text(aes(x = x, y = y, label=label), alpha=.2, data=sample.locations) 
-```
-:::
-::: {.fragment .current-visible data-fragment-index="1"}
-```{r}
-#| out-height: 300px
-ga + geom_point(aes(x = x, y = y), alpha=.2, data=sample.locations) 
-```
-:::
-::::
-
-$$
-\begin{array}{r|rr|rr|r|rr|r}
-\text{call} &  1 & & 2 & & \dots & `r n` & &  \\
-\text{select/record}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
-\text{outcome}    & `r J[1]` & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
-                  & `r J[2]` & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`} 
-                  & \dots 
-                  & `r J[n]` & \underset{\textcolor{gray}{y_{`r J[n]`}}}{`r Y[n]`} 
-                  & `r approx(mean(Y))` \\
-\end{array}
-$$ 
-
-:::: aside
-Obviously these locations are fake. Most people in Georgia live near Atlanta, not where these dots are. This is just to illustrate the sampling scheme. 
-:::
-
-## Our Poll
-
-```{r}
-# Now we'll repeat our sampling so we have polls for a few friends
-set.seed(our.seed)
-J1 = sample(N, n, replace=TRUE)
-J2 = sample(N, n, replace=TRUE)
-J3 = sample(N, n, replace=TRUE)
-JM = sample(N, n, replace=TRUE)
-```
-
-```{r}
-J = J1
-Y = y[J1]
-
-sample.locations = locations[J %% M +1, ]
-sample.locations$label = J
-ga + geom_text(aes(x = x, y = y, label=label), alpha=.2, data=sample.locations) 
-```
-
-
-$$
-\begin{array}{r|rr|rr|r|rr|r}
-\text{call} &  1 & & 2 & & \dots & `r n` & &  \\
-\text{select/record}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
-\text{outcome}    & `r J[1]` & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
-                  & `r J[2]` & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`} 
-                  & \dots 
-                  & `r J[n]` & \underset{\textcolor{gray}{y_{`r J[n]`}}}{`r Y[n]`} 
-                  & `r approx(mean(Y))` \\
-\end{array}
-$$
-
-## Our First Friend's Poll
-
-```{r}
-J = J2
-Y = y[J2]
-
-sample.locations = locations[J %% M + 1, ]
-sample.locations$label = J
-ga + geom_text(aes(x = x, y = y, label=label), color='magenta', alpha=.2, data=sample.locations)
-```
-
-$$
-\begin{array}{r|rr|rr|r|rr|r}
-\text{call} &  1 & & 2 & & \dots & `r n` & &  \\
-\text{select/record}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
-\text{outcome}    & `r J[1]` & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
-                  & `r J[2]` & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`} 
-                  & \dots 
-                  & `r J[n]` & \underset{\textcolor{gray}{y_{`r J[n]`}}}{`r Y[n]`} 
-                  & `r approx(mean(Y))` \\
-\end{array}
-$$
-
-## Our Second Friend's Poll
-
-```{r}
-J = J3
-Y = y[J3]
-
-sample.locations = locations[J %% M + 1, ]
-sample.locations$label = J
-ga + geom_text(aes(x = x, y = y, label=label), color='cyan', alpha=.2, data=sample.locations)
-```
-
-$$
-\begin{array}{r|rr|rr|r|rr|r}
-\text{call} &  1 & & 2 & & \dots & `r n` & &  \\
-\text{select/record}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
-\text{outcome}    & `r J[1]` & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
-                  & `r J[2]` & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`} 
-                  & \dots 
-                  & `r J[n]` & \underset{\textcolor{gray}{y_{`r J[n]`}}}{`r Y[n]`} 
-                  & `r approx(mean(Y))` \\
-\end{array}
-$$
-
-## The Sampling Distribution of our Estimate
-
-\begin{array}{r|rr|rr|r|rr|r}
-\text{call} &  1 & & 2 & & \dots & `r n` & &  \\
-\text{pollster} & J_1 & Y_1 & J_2 & Y_2   & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
-\hline
-\color{black}   1   
-    & \color{black}   `r J=J1; Y=y[J]; J[1]`    & \color{black}  `r Y[1]` 
-    & \color{black}   `r J[2]`   & \color{black}   `r Y[2]`           & \color{black}   \dots 
-    & \color{black}   `r J[n]`   & \color{black}   `r Y[n]`           & \color{black}   `r approx(mean(Y))` \\
-\color{magenta} 2   
-    & \color{magenta} `r J=J2; Y=y[J]; J[1]`    & \color{magenta}  `r Y[1]` 
-    & \color{magenta} `r J[2]`   & \color{magenta}  `r Y[2]`          & \color{magenta} \dots 
-    & \color{magenta} `r J[n]`   & \color{magenta} `r Y[n]`           & \color{magenta} `r approx(mean(Y))` \\
-\color{cyan}    3   
-    & \color{cyan}    `r J=J3; Y=y[J]; J[1]`    & \color{cyan}     `r Y[1]` 
-    & \color{cyan}    `r J[2]`   & \color{cyan}    `r Y[2]`           & \color{cyan}    \dots 
-    & \color{cyan}    `r J[n]`   & \color{cyan}    `r Y[n]`           & \color{cyan}    `r approx(mean(Y))` \\
-{\vdots} & {\vdots} & {\vdots}  & {\vdots} & {\vdots}  & {\vdots} & {\vdots} & {\vdots} &  {\vdots} \\ 
-\color{gray}    1M   
-    & \color{gray}    `r J=JM; Y=y[J]; J[1]`    & \color{gray}     `r Y[1]` 
-    & \color{gray}    `r J[2]`   & \color{gray}    `r Y[2]`           & \color{gray}    \dots 
-    & \color{gray}    `r J[n]`   & \color{gray}    `r Y[n]`           & \color{gray}    `r approx(mean(Y))` \\
- {\vdots} & {\vdots} & {\vdots} & {\vdots} & {\vdots}  & {\vdots} & {\vdots} & {\vdots}  & {\vdots} \\ 
-\hline
-{f_{\cdot}(\cdot)} & \hphantom{Ber(`r approx(p)`)} & & \hphantom{Ber(`r approx(p)`)} &  & & \hphantom{Ber(`r approx(p)`)} & \hphantom{\frac{Bin(`r n`,`r approx(p)`)}{`r n`}} \\
-\end{array}
-
-- What is the distribution of $Y_1$?
-- What is the distribution of $\sum_{i}^{`r n`}Y_i$ \ ?
-
-## The Sampling Distribution of our Estimate
-
-$$
-\begin{array}{r|rr|rr|r|rr|r}
-\text{call} &  1 & & 2 & & \dots & `r n` & &  \\
-\text{pollster} & J_1 & Y_1 & J_2 & Y_2   & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
-\hline
-\color{black}   1   
-    & \color{black}   `r J=J1; Y=y[J]; J[1]`    & \color{black}    `r Y[1]` 
-    & \color{black}   `r J[2]`   & \color{black}   `r Y[2]`           & \color{black}   \dots 
-    & \color{black}   `r J[n]`   & \color{black}   `r Y[n]`           & \color{black}   `r approx(mean(Y))` \\
-\color{magenta} 2   
-    & \color{magenta} `r J=J2; Y=y[J]; J[1]`    & \color{magenta}  `r Y[1]` 
-    & \color{magenta} `r J[2]`   & \color{magenta}  `r Y[2]`          & \color{magenta} \dots 
-    & \color{magenta} `r J[n]`   & \color{magenta} `r Y[n]`           & \color{magenta} `r approx(mean(Y))` \\
-\color{cyan}    3   
-    & \color{cyan}    `r J=J3; Y=y[J]; J[1]`    & \color{cyan}     `r Y[1]` 
-    & \color{cyan}    `r J[2]`   & \color{cyan}    `r Y[2]`           & \color{cyan}    \dots 
-    & \color{cyan}    `r J[n]`   & \color{cyan}    `r Y[n]`           & \color{cyan}    `r approx(mean(Y))` \\
-{\vdots} & {\vdots} & {\vdots}  & {\vdots} & {\vdots}  & {\vdots} & {\vdots} & {\vdots} &  {\vdots} \\ 
-\color{gray}    1M   
-    & \color{gray}    `r J=JM; Y=y[J]; J[1]`    & \color{gray}     `r Y[1]` 
-    & \color{gray}    `r J[2]`   & \color{gray}    `r Y[2]`           & \color{gray}    \dots 
-    & \color{gray}    `r J[n]`   & \color{gray}    `r Y[n]`           & \color{gray}    `r approx(mean(Y))` \\
- {\vdots} & {\vdots} & {\vdots} & {\vdots} & {\vdots}  & {\vdots} & {\vdots} & {\vdots}  & {\vdots} \\ 
-\hline
-{f_{\cdot}(\cdot)} & Ber(`r approx(p)`) & & Ber(`r approx(p)`) &  & & Ber(`r approx(p)`) & \frac{Bin(`r n`,`r approx(p)`)}{`r n`} \\
-\end{array}
-$$
-
-- $Y_1$ has a Bernoulli distribution 
-- $\sum_{i}^{`r n`}Y_i$, a sum of *independent and identically distributed* Bernoullis, has a Binomial distribution.
-
-## Bernoulli and Binomial Distributions
-
-- Our individual responses $Y_1...Y_{`r n`}$ are Bernoulli Random Variables 
-$$
-\begin{aligned}
-f_{Y_1}(y) &= (`r approx(p)`)^{y} (`r approx(1-p)`)^{1-y} \qfor  y=0,1\\
-\vdots \quad  &=   \quad\quad\quad\quad\quad\quad \vdots  \\
-f_{Y_{`r n`}}(y) &= (`r approx(p)`)^{y} (`r approx(1-p)`)^{1-y} \qfor  y=0,1
-\end{aligned}
-$$
-
-- Our sum of responses, $S_{`r n`} = \sum_{i=1}^{`r n`} Y_i$, is a Binomial Random Variable
-$$
-\begin{aligned}
-f_{S_{`r n`}}(s) = {`r n` \choose s} 
-(`r approx(1-p)`)^{s} 
-(`r approx(1-p)`)^{`r n`-s} 
-\qfor  s=0 \ldots `r n`
-\end{aligned}
-$$
-
-- Our sample proportion, $\overline{Y}_{`r n`}$, has the distribution of this Binomial Random Variable divided by $`r n`$.
-
-## What are descriptive statistics?
-
--   Descriptive statistics are summaries of the data we have.
--   The data we have might be
-    -   a random sample (e.g. an exit poll) from a population (e.g. voters) we're interested in.
-    -   the whole population (e.g., administrative vote counts). Sometimes we call this a census.
--   Having the whole population is becoming more common in the era of Big Data.
-    -   In particular, companies like facebook, google, and amazon are mostly interested in their users.
-    -   And, for the most part, they don't have to poll them. They're always recording.
--   That said, if you are interested in the causal inference, that's impossible.
-    -   We tend to phrase causal questions in terms of multiple versions of the same person.
-    -   Versions who take different drugs, are exposed to different policies etc.
-    -   And you can never see all of them. There's only one real version of each person.
--   More on that in a few weeks.
-
-
-## What makes a good summary?
-
--  It should be brief
-    -   Maybe a number or two.
-    -   Or an-easy-to-understand plot.
--  It should tell you what you want to know.
-    -   This one's more context specific.
--  Let's look at a couple common types of summary.
-    - Location
-    - Spread
-    - Distribution
 
 ## Location
 
@@ -630,10 +315,9 @@ scatter + geom_point(aes(x=x.mean, y=mean), size=size.mean, color='red', data=su
 - It's about approximating the data by a *constant*.
 $$ Y_i \approx \mu \qfor i=1,\dots,n $$
 
-- Depending on your criteria, you may get different answers.
+- People use a few different summaries of location.
     - e.g. the [Median]{.fg style="--col: orange"}
     - e.g. the [Mean]{.fg style="--col: red"}
-- More on this later today.
 
 ## Spread
 
@@ -645,13 +329,13 @@ scatter + geom_pointrange(aes(x=x.mean, y=mean, ymin=mean-sd, ymax=mean+sd), col
           geom_hline(aes(yintercept=median), color='orange', data=summaries)
 ```
 
-- The **spread** of the data is how far it is from its location.
+- The **spread** of the data is how far it tends to be from its location.
 - Different measures of spread tend to be used with different measures of location.
     - the [Median Absolute Deviation]{.fg style="--col: orange"} is used with the Median.
     - the [Standard Deviation]{.fg style="--col: red"} is used with the Mean.
 
-
 ## Spread and Residuals
+
 ```{r}
 #| layout-ncol: 2
 #| layout-nrow: 2
@@ -670,11 +354,10 @@ ggplot(earnings) + geom_point(aes(x=person, y=income-mean(income), size=abs(inco
 
 - Spread summarizes the size of the *residuals* $\hat\varepsilon_i = Y_i - \hat\mu$ left over after constant approximation.
 - The median absolute deviation is the median size of the residuals.
-- The standard deviation is the root mean squared size of the residuals.
-  - variance
-  - think: size-weighted avg of size of the residuals.
-  - that's what we're showing in the plot: area of the dots is proportional to the size of the residuals
-  - so two dots at 100k count like ...?
+- The standard deviation is the square root of the mean squared size of the residuals.
+  - This is a sort of average in which big residuals count more than small ones.
+  - To give you a sense of what this means visually, I've scaled the red dots.
+  - I've made them bigger when they're further away from zero.
 
 ## Distribution
 
@@ -686,190 +369,58 @@ h
 scatter + ylim(0,5e5)
 ```
 
-- This is called a histogram
-- It tells us where ...
-    - This is California. There are people off the the right, but who cares.
-    - Mark Zuckerberg, Marc Benioff, etc. All the Marks.
-- You can more or less read location and spread off histogram
-    - It's instructive to try...
+- This is called a histogram. It's a way of summarizing the distribution of the data.
+- It tells us more than location and spread, but less than the dot plot.
+- It tells you how many people have roughly a given income, without telling you who those people are.
+- You see the same thing by looking at the darkness of the scatter plot at each height, but it's easier to use the histogram.
+- It's easier to use the histogram when calculating location and spread, too. We'll see that in lab this Friday.
 
-$$
+# Example 2: 2020 Election Turnout Polls
 
-# Subsample means and jitter plots
-
-## Subsample Means
-
--   In this class, we focus on a single 'outcome' variable. 
-    - We'll write $Y$ for this.
--   Typically, we'll look at the mean of this outcome $Y$ within subsamples.
--   We call this *Regression Analysis*
--   We define those subsamples in terms of our other variables called covariates. 
-    - We'll write $X$ for this.
-    - Often, we'll work with several covariates, so we'll have to think of $X$ as a vector.
-    - But to keep things simple early in the semester, we'll use only one, so $X$ is a scalar.
--   Today we'll consider *binary* covariate $X$ that indicates whether a person has a 4-year degree.
-    - $X_i=0$ if person $i$ doesn't have a 4-year degree.
-    - $X_i=1$ if they do.
-    
-## Our Data as A Table
-
-:::: columns
-::: column
-### In English
-$$
-\begin{array}{r|r r}
-\text{person} & \text{household income} & \text{4-year degree}   \\
-\hline
-1 & \$250000  & \text{yes} \\
-2 & \$32086   & \text{yes} \\
-\vdots & \vdots & \vdots   \\
-11 & \$300640  & \text{no} \\
-\vdots & \vdots  & \vdots\\
-2258 & \$24000     & \text{yes} \\
-\hline
-\end{array}
-$$
-:::
-
-::: column
-### In Mathematical Notation
-$$
-\begin{array}{r|r r}
-i & Y_i & X_i \\
-\hline
-1 & 250000  & 1  \\
-2 & 32086   & 1  \\
-\vdots & \vdots & \vdots \\
-11 & 300640  & 0 \\
-\vdots & \vdots  & \vdots\\
-2258 & 24000 & 1  \\
-\hline
-\end{array}
-$$
-
-:::
-::::
-
-## A Scatter Plot of Our Data [Handled more or less above, but fix/explain jitter vs person-index stuff]
-```{r}
-attach(earnings)
-summaries = earnings %>% group_by(degree) %>%
-                         summarize(mean=mean(income), sd=sd(income))
-
-ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), shape=1, alpha=.1) +
-                   geom_point(aes(x=degree, y=mean), data=summaries) +
-                   scale_y_continuous(limits=c(-.5e5,5e5)) + guides(color=FALSE)
+```{r population}
+our.seed = 0
+set.seed(our.seed)
+N=7233584
+p=4999960/N
+y= c(rep(1,p*N), rep(0, (1-p)*N))
+y=sample(y) # shuffle the order 
+population.proportion = p
 ```
 
-- This is a way of displaying everyone in our sample. Each person is a dot.
-    - Their horizontal position---their $x$-coordinate---is determined by the covariate $X_i$.
-    - Their vertical position---their $y$ coordinate---is determined by the outcome $Y_i$.
-- We've overlaid a black dot to show the subsample means.
-- It's a bit hard to see what's going on because everyone is plotted on top of one another.
-- That's because $X_i$ is binary---it takes on only two values. But it's an easy fix.
+```{r sample}
+set.seed(our.seed)
 
-
-## An Idea for plots
--  don't put everyone on top of each other
--  line People up in Arbitary Order to create spacing
--  This lets us see variation in our outcome within groups
--  Can be useful to add summary; subsample standard deviation 
-
-## A Jitter Plot of Our Data
-
-```{r}
-attach(earnings)
-
-ggplot(earnings) +  geom_point(aes(x=degree, y=income, color=degree), 
-                                position=position_jitter(width=.3), alpha=.1) + 
-                   geom_point(aes(x=degree, y=mean), data=summaries) +
-                   scale_y_continuous(limits=c(-.5e5,5e5)) + guides(color=FALSE)
+n = 625
+J = sample(N, n, replace=TRUE)
+Y = y[J]
+sample.proportion = mean(Y)
+poll = data.frame(J=J, Y=Y)
 ```
 
-- This plot tweaks the x-coordinate to give the dots more space. 
-  - We have the same dots, but with a bit of random noise added to each one's x-coordinate.
-  - This makes it easier to see how many dots there are at a given income level (i.e. y-coordinate).
-  - We keep the noise small so we can still see the real value of $X_i$
-  - Each vertical tube is a set of people with the same degree status.
+## The Data
 
-
-## Subsample Standard Deviations
-
-```{r}
-ggplot(earnings) +  geom_point(aes(x=degree, y=income, color=degree), 
-                                position=position_jitter(width=.3, height=0), alpha=.1) + 
-                   geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) +
-                   scale_y_continuous(limits=c(-.5e5,5e5)) + guides(color=FALSE)
-```
-
-- To summarize spread, we can draw in the subsample standard deviations.
-- I've drawn in bars extending one standard deviation above and below the mean.
-
-
-## Special Case: Binary Outcomes
-
-- Let's revisit our data thinking of *employment* as the outcome.
-- That's binary. You're either employed or not.
-- So we have a binary covariate *and* a binary outcome.
-
-$$
-$$
-
-:::: columns
-
-::: column
-### In English
-$$
-\begin{array}{r|rr}
-\text{Household} & \text{Degree} & \text{Employed}  \\
-\hline
-1 & 0 & 1 \\
-2 & 1  & 1 \\
-\vdots & \vdots & \vdots \\
-2245 & 0 & 1\\
-\hline
-\end{array}
-$$
-
-:::
-
-::: column
-### In Mathematical Notation
-$$
-\begin{array}{r|rr}
-i & X_i & Y_i  \\
-\hline
-1 & 0 & 1 \\
-2 & 1  & 1 \\
-\vdots & \vdots & \vdots \\
-2245 & 0 & 1\\
-\hline
-\end{array}
-$$
-:::
-
-::::
-
-
-## Binary Outcome Regression
+- Suppose you want to predict how many Georgia residents will turn out to vote in the 2020 presidential election.
+- To do that, you'll do some polling.
+  - You use a list of the $N \approx `r approx(N)`$ people registered to vote in Georgia.
+  - And you make $n=`r n`$ phone calls.
+  - And then you ask the potential voter whether they plan to vote.
+- What you're hoping is that the proportion of people you call who say they plan to vote is a useful prediction of the proportion of registered voters who do actually vote.
+- Here's a partial view of the data you collect.
 
 ```{r}
-laborforce<- subset(earnings,!(is.na(employed)))
-
-summaries = laborforce %>% group_by(fouryrdegree) %>%
-                         summarize(mean=mean(employed), sd=sd(employed))
-
-ggplot(laborforce) +  geom_point(aes(x=fouryrdegree, y=employed, color=degree), 
-                                position=position_jitter(width=.3, height=.01), alpha=.1) + 
-                      geom_pointrange(aes(x=fouryrdegree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) +
-                    guides(color=FALSE)
-
+poll %>% ellipsis(nhead=4, ntail=2) %>% kable() 
 ```
-To give our dots a little space, we've added little vertical jitter here as well.
 
-**Activity**. In pairs, discuss ...
+## Location
 
-- The substantive interpretation of the subsample means and their difference.
-- Why is the SD smaller for those with four-year degrees than those without? 
-    - Hint: look at the variance formula for binary variables.
-  
+## Spread
+
+- This is calculable from (n+) location 
+
+## Distribution
+- This is just two numbers
+
+## Location is Everything...
+- ... in binary-valued data.
+
+Table?
