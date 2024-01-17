@@ -411,16 +411,122 @@ poll = data.frame(J=J, Y=Y)
 poll %>% ellipsis(nhead=4, ntail=2) %>% kable() 
 ```
 
+## Dot Plot
+
+```{r}
+#| out-height: 500px
+poll$call = 1:nrow(poll) 
+scatter = ggplot(poll) + geom_point(aes(x=call, y=Y), alpha=.1)
+scatter
+```
+
+- This is the same sort of plot we saw before, but it's harder to look at.
+- Because there are only two possible values of $Y$, everyone is on two lines.
+- It's not as easy to eyeball location or spread, but we can still calculate them and draw them in.
+
 ## Location
+
+```{r}
+x.med  = 300
+x.mean = 400
+size.mean = 3
+size.med = 3
+
+summaries = poll %>% 
+    summarize(mean=mean(Y), 
+              median=median(Y),  
+              sd=sd(Y), 
+              mad=mad(Y, constant=1))
+scatter + geom_point(aes(x=x.mean, y=mean), size=size.mean, color='red', data=summaries) + 
+          geom_hline(aes(yintercept=mean), color='red', data=summaries) +
+          geom_point(aes(x=x.med, y=median), size=size.med, color='orange', data=summaries) +
+          geom_hline(aes(yintercept=median), color='orange', data=summaries)
+```
+
+- The **location** of the data is still --- sort of --- where it is.
+- It's about approximating the data by a *constant*.
+$$ Y_i \approx \mu \qfor i=1,\dots,n $$
+- But when the data is binary, it has no 'middle', so that approximation looks odd.
+- However, the usual summaries of location have different---and natural---interpretations.
+    - e.g. the [Median]{.fg style="--col: orange"}. In binary data, it's whichever outcome is most common.
+    - e.g. the [Mean]{.fg style="--col: red"}. In binary data, it's the proportion of ones: $`r sum(poll$Y)`/`r n` \approx `r round(sample.proportion, 2)`$.
+
+## Distribution
+
+```{r}
+#| layout-ncol: 2
+h=ggplot(poll) + geom_histogram(aes(x=Y, y=after_stat(density)), 
+                                  colour="black", fill="blue", bins=2) + coord_flip() 
+h 
+scatter + ylim(0,1)
+```
+
+- Distribution offers no more information than the mean $\hat\mu$ itself.
+- To report the distribution, we report the proportion of ones ($\hat\mu$) and zeros ($1-\hat\mu$).
 
 ## Spread
 
-- This is calculable from (n+) location 
+```{r}
+#| out-height: 500px
+scatter + geom_pointrange(aes(x=x.mean, y=mean, ymin=mean-sd, ymax=mean+sd), color='red', data=summaries)  +
+          geom_hline(aes(yintercept=mean), color='red', data=summaries) +
+          geom_pointrange(aes(x=x.med, y=median, ymin=median-mad, ymax=median+mad), color='orange', data=summaries) +
+          geom_hline(aes(yintercept=median), color='orange', data=summaries)
+```
 
-## Distribution
-- This is just two numbers
+- The **spread** of the data is still how far it tends to be from its location. Sort of.
+- Let's look at our usual measures of spread.
+    - the [Median Absolute Deviation]{.fg style="--col: orange"}, the median distance from the median, is zero. Why?
+    - the [Standard Deviation]{.fg style="--col: red"} is the square root of the mean squared distance from the mean. It's a function of the mean: $\sqrt{\hat\mu(1-\hat\mu)}$.
 
-## Location is Everything...
-- ... in binary-valued data.
 
-Table?
+## From Location to Spread
+
+When $\hat\mu$ is the mean, the standard deviation is $\sqrt{\hat\mu(1-\hat\mu)}$. Let's prove it.
+
+$$
+\begin{aligned}
+\text{standard deviation}^2 
+&= \frac{1}{n}\sum_{i=1}^n (Y_i - \hat\mu)^2 \\
+&= \frac{1}{n}\sum_{y \in \{0,1\}} \sum_{i : Y_i=y} (Y_i - \hat\mu)^2 \\ 
+&= \frac{1}{n}\qty{ N_1 (1 - \hat\mu)^2  + (n-N_1) (0 - \hat\mu)^2 } \\
+&= \frac{1}{n}\qty{ N_1 (1 - 2\hat\mu + \hat\mu^2)  + (n-N_1) (0 - \hat\mu)^2 } \\
+&= \frac{1}{n}\qty{ N_1 - 2N_1 \hat\mu + n \hat\mu^2} \\
+&= \frac{1}{n}\qty{ n\hat\mu - 2n\hat\mu\times \hat \mu + n \hat \mu^2} \\
+&= \frac{1}{n}\qty{ n\hat\mu - n\hat\mu^2 } = \hat\mu - \hat\mu^2 = \hat\mu(1-\hat\mu)
+\end{aligned}
+$$
+
+## Summary
+
+- We've seen two ways to look at data.
+  - Tables.
+  - Dot plots.
+- And three ways to summarize it.
+    - location
+    - spread
+    - distribution
+- When outcomes are binary, things are a bit harder visually.
+- But summaries are simpler---they all boil down to the same thing.
+- For that reason, we'll focus on binary data for a couple weeks.
+
+# Summaries of Random Data
+
+## The Idea
+
+- When our data is random, so is a summary of that data.
+- That's because our summary is a function of our data. A function of something random is itself random.
+- To understand what our summary are telling us about the random mechanism our data comes from ...
+  - We'll often talk about *our summary's distribution*
+  - In particular, the distribution of summaries we'd get if we got data from our random mechanism many times.
+  - We call this the *sampling distribution* of our summary.
+- This is more useful than it sounds. 
+- We can use it, for example, to learn about large groups of people using small surveys.
+- To get a sense of how all this works, let's do a few simple examples.
+- As our source of randomness, we'll roll dice.
+
+## Sum of Two Dice
+
+## Proportion of Odds in 5 Rolls
+
+## Candy Preferences
