@@ -70,33 +70,136 @@ grid.theme = theme_get()
 theme_set(simplified.theme)
 ```
 
-## Review
+# Review and Warm-Up
+
+## How Many Odd Numbers Are There Between 1 and 6?
+
+```{r}
+m = 6
+number = 1:6
+y = number %% 2
+
+set.seed(1)
+n = 5
+J = sample(number, 5, replace=TRUE)
+Y = y[J]
+
+scale_dice=scale_x_continuous(breaks=(0:5)/5, labels=sprintf('%d/5', 0:5), limits=c(0,1))
+```
+
+- You could count them all, but that's tedious. 
+
+$$
+\begin{array}{r|rrrrrr|r}
+j & 1 & 2 & 3 & 4 &  \dots &   `r m` & \bar{y}  \\
+y_{j} & `r y[1]` & `r y[2]` & `r y[3]` & `r y[4]` & \dots & `r y[m]`   & \textcolor{blue}{`r approx(mean(y))`}  \\
+\end{array}
+$$
+
+- Instead, you do a little experiment.
+  - You roll a die 5 times.
+  - You record the proportion of odds you get.
+
+$$
+\begin{array}{r|rrrrr|r}
+i & 1 & 2 & 3 & 4 & 5 & \bar{Y}  \\
+J_i & `r J[1]` & `r J[2]` & `r J[3]` & `r J[4]` & `r J[5]` & \\
+Y_i & `r Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \textcolor{red}{`r approx(mean(Y))`} \\
+\end{array}
+$$
+
+- Much faster. And if you do bother to count them all... 
+- You'll find [our estimate]{.fg text="style:red"} is pretty close to [the actual proportion]{.fg text="style:blue"}
+- But is this approach trustworthy? After all, the answer we got *is* random.
+- To talk about this, we'll think about the *sampling distribution* of our estimate.
+
+## The Sampling Distribution ...
+
+```{r}
+#| out-height: 500px
+Js = t(replicate(10000, sample(number, n, replace=TRUE)))
+Ys = array(dim=dim(Js))
+for (i in 1:10000) {
+  Ys[i,] = y[Js[i,]]
+}
+dice.data = data.frame(p=rowMeans(Ys), y=runif(nrow(Ys)))
+ggplot(dice.data) + geom_bar(aes(x=p, y=after_stat(prop))) + 
+           geom_point(aes(x=mean(Ys[1,]), y=.1), color='red') +
+           geom_point(aes(x=mean(Ys[2,]), y=.2), color='green') + scale_dice 
+```
+
+:::: {.columns}
+::: {.column}
+- is the distribution of estimates we'd get if we **replicated** our experiment \ over and over.
+- Think of lots of different people rolling the dice and reporting what they got.
+- We'll think about this by imagining that our friends did the same experiment. 
+  - We'll give each friend a row in a table.
+  - And we'll give their estimates a color so we can tell them apart.
+:::
+::: {.column}
+$$
+\begin{array}{r|rrrrr|r}
+i & 1 & 2 & 3 & 4 & 5 & \bar{Y}  \\
+\hline
+J_i & `r J=Js[1,]; J[1]` & `r J[2]` & `r J[3]` & `r J[4]` & `r J[5]` & \\
+Y_i & `r Y=y[J];   Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \textcolor{red}{`r approx(mean(Y))`} \\
+\hline
+J_i & `r J=Js[2,]; J[1]` & `r J[2]` & `r J[3]` & `r J[4]` & `r J[5]` & \\
+Y_i & `r Y=y[J];   Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \textcolor{green}{`r approx(mean(Y))`} \\
+\hline
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+$$
+:::
+::::
 
 
-- Last lecture, we talked about how to summarize a sample. 
-- We talked about ...
-  - sample means
-  - subsample means 
-  - differences in subsample means
-- We talked about a few ways of thinking about means
-  - as the balance point on a seesaw
-  - as the point that minimizes the sum of squared residuals 
-- Throughout, we were thinking about the sample on its own terms.
+## What Do We Do With This
+```{r}
+#| out-height: 500px
+#| layout-ncol: 2
+#| 
+Js = t(replicate(10000, sample(number, n, replace=TRUE)))
+Ys = array(dim=dim(Js))
+for (i in 1:10000) {
+  Ys[i,] = y[Js[i,]]
+}
+dice.data = data.frame(p=rowMeans(Ys), y=runif(nrow(Ys)))
 
-## Today
+ggplot(dice.data) + geom_bar(aes(x=p, y=after_stat(prop))) +
+           geom_point(aes(x=mean(Ys[1,]), y=.1), color='red') +
+           geom_point(aes(x=mean(Ys[2,]), y=.2), color='green') + scale_dice
 
-- Today we'll consider a context in which ...
-  - we have a random sample from a large population 
-  - we have measured a binary outcome
-- Our goal will be to summarize the population.
-- We'll talk about ...
-  - population means
-  - subpopulation means 
-  - differences in subpopulation means
-- As you might expect, this is harder than summarizing the sample.
-  - Most of the data we're summarizing is data we don't have.
-  - That is, it's about people in the population who aren't in the sample.
-    
+## change sampling distn
+
+Js = t(replicate(1000, sample(number, n, replace=TRUE)))
+Ys = array(dim=dim(Js))
+for (i in 1:1000) {
+  Ys[i,] = Js[i,]==1
+}
+dice.data2 = data.frame(p=rowMeans(Ys), y=runif(nrow(Ys)))
+
+ggplot(dice.data2) + geom_bar(aes(x=p, y=after_stat(prop))) +
+           geom_point(aes(x=mean(Ys[1,]), y=.1), color='red') +
+           geom_point(aes(x=mean(Ys[2,]), y=.2), color='green') + scale_dice
+```
+
+
+- This is a little counterintuitive as a summary of the proportion of odds between 1 and 6.
+  - But it does tell us something. 
+  - It's pretty different from what we'd get if there were only one odd number.
+- One way we can make this sound more like the proportion we want is to say
+  - what we've estimated
+  - how close we tend to be
+- For example, 
+  - in `r percent(mean(dice.data$p==1/2))` of replications, we'll be exactly right
+  - in `r percent(mean(abs(dice.data$p-1/2) <= 1/6))` of replications, we'll be off by no more than 1/6
+- This gives us ...
+  - an **interval** you can expect the proportion is in 
+  - a statement about how much **confidence** you should have about that.
+
+# Polling
+
 ## Context
 
 ::: {.hidden}
@@ -392,86 +495,36 @@ $$
 {f_{\cdot}(\cdot)} & \hphantom{Ber(`r approx(p)`)} & & \hphantom{Ber(`r approx(p)`)} &  & & \hphantom{Ber(`r approx(p)`)} & \hphantom{\frac{Bin(`r n`,`r approx(p)`)}{`r n`}} \\
 \end{array}
 
-- What is the distribution of $Y_1$?
-- What is the distribution of $\sum_{i}^{`r n`}Y_i$ \ ?
-
-## The Sampling Distribution of our Estimate
-
-$$
-\begin{array}{r|rr|rr|r|rr|r}
-\text{call} &  1 & & 2 & & \dots & `r n` & &  \\
-\text{pollster} & J_1 & Y_1 & J_2 & Y_2   & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
-\hline
-\color{black}   1   
-    & \color{black}   `r J=J1; Y=y[J]; J[1]`    & \color{black}    `r Y[1]` 
-    & \color{black}   `r J[2]`   & \color{black}   `r Y[2]`           & \color{black}   \dots 
-    & \color{black}   `r J[n]`   & \color{black}   `r Y[n]`           & \color{black}   `r approx(mean(Y))` \\
-\color{magenta} 2   
-    & \color{magenta} `r J=J2; Y=y[J]; J[1]`    & \color{magenta}  `r Y[1]` 
-    & \color{magenta} `r J[2]`   & \color{magenta}  `r Y[2]`          & \color{magenta} \dots 
-    & \color{magenta} `r J[n]`   & \color{magenta} `r Y[n]`           & \color{magenta} `r approx(mean(Y))` \\
-\color{cyan}    3   
-    & \color{cyan}    `r J=J3; Y=y[J]; J[1]`    & \color{cyan}     `r Y[1]` 
-    & \color{cyan}    `r J[2]`   & \color{cyan}    `r Y[2]`           & \color{cyan}    \dots 
-    & \color{cyan}    `r J[n]`   & \color{cyan}    `r Y[n]`           & \color{cyan}    `r approx(mean(Y))` \\
-{\vdots} & {\vdots} & {\vdots}  & {\vdots} & {\vdots}  & {\vdots} & {\vdots} & {\vdots} &  {\vdots} \\ 
-\color{gray}    1M   
-    & \color{gray}    `r J=JM; Y=y[J]; J[1]`    & \color{gray}     `r Y[1]` 
-    & \color{gray}    `r J[2]`   & \color{gray}    `r Y[2]`           & \color{gray}    \dots 
-    & \color{gray}    `r J[n]`   & \color{gray}    `r Y[n]`           & \color{gray}    `r approx(mean(Y))` \\
- {\vdots} & {\vdots} & {\vdots} & {\vdots} & {\vdots}  & {\vdots} & {\vdots} & {\vdots}  & {\vdots} \\ 
-\hline
-{f_{\cdot}(\cdot)} & Ber(`r approx(p)`) & & Ber(`r approx(p)`) &  & & Ber(`r approx(p)`) & \frac{Bin(`r n`,`r approx(p)`)}{`r n`} \\
-\end{array}
-$$
-
-- $Y_1$ has a Bernoulli distribution 
-- $\sum_{i}^{`r n`}Y_i$, a sum of *independent and identically distributed* Bernoullis, has a Binomial distribution.
-
-## Review of Bernoulli and Binomial Distributions
-
-- Our individual responses $Y_1...Y_{`r n`}$ are Bernoulli Random Variables 
-$$
-\begin{aligned}
-f_{Y_1}(y) &= (`r approx(p)`)^{y} (`r approx(1-p)`)^{1-y} \qfor  y=0,1\\
-\vdots \quad  &=   \quad\quad\quad\quad\quad\quad \vdots  \\
-f_{Y_{`r n`}}(y) &= (`r approx(p)`)^{y} (`r approx(1-p)`)^{1-y} \qfor  y=0,1
-\end{aligned}
-$$
-
-- Our sum of responses, $S_{`r n`} = \sum_{i=1}^{`r n`} Y_i$, is a Binomial Random Variable
-$$
-\begin{aligned}
-f_{S_{`r n`}}(s) = {`r n` \choose s} 
-(`r approx(1-p)`)^{s} 
-(`r approx(1-p)`)^{`r n`-s} 
-\qfor  s=0 \ldots `r n`
-\end{aligned}
-$$
-
-- Our sample proportion, $\overline{Y}_{`r n`}$, has the distribution of this Binomial Random Variable divided by $`r n`$.
 
 ## The Sampling Distribution in **R**
 
-Resample the number of voters 1,000,000 times and store these 1,000,000 numbers in a vector.
-
 ```{r}
-#| echo: true
+#| echo: false
 set.seed(our.seed)
-sumY.samples <- rbinom(1000000, size=n, prob=mean(y))
 ```
 
-Divide all of these numbers by the sample size
-
+We run 10,000 simulated polls and store who we call (J) and what they say (Y).
 ```{r}
 #| echo: true
-meanY.samples <- sumY.samples/n
+Js = array(dim=c(10000, n))
+Ys = array(dim=c(10000, n))
+for(rr in 1:10000) {
+  Js[rr,] = sample(N, n, replace=TRUE)
+  Ys[rr,] = y[Js[rr,]]
+}
+```
+
+We calculate the sample proportion for each poll.
+```{r}
+#| echo: true
+meanY.samples = rowMeans(Ys)
 ```
 
 Histogram the result
 ```{r}
 #| echo: true
-ggplot() + geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001) 
+#| out-height: 400px
+ggplot() + geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.2) 
 ```
 
 ## Annotating the Sampling Distribution Histogram 
@@ -480,11 +533,23 @@ ggplot() + geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=
 #| echo: true
 #| out-height: 400px
 
-ggplot() + geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.2) +
-           geom_vline(aes(xintercept=mean(meanY.samples)), color="blue") +
-           geom_vline(aes(xintercept=quantile(meanY.samples, probs=c(.16, .84))), color="blue", linetype='dashed') + 
-           geom_vline(aes(xintercept=quantile(meanY.samples, probs=c(.025, .975))), color="blue", linetype='dotted') +
+width = function(samples, alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( mean(samples) - w/2 <= samples & samples <= mean(samples) + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
+}
+w66 = width(meanY.samples, alpha=1/3)
+w95 = width(meanY.samples, alpha=.05)
+
+annotated.histogram = ggplot() + 
+           geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.2) +
            geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7) +
+           geom_vline(aes(xintercept=mean(meanY.samples)), color="blue") +
+           geom_vline(aes(xintercept=mean(meanY.samples)+c(-1,1)*w66/2), color="blue", linetype='dashed') +
+           geom_vline(aes(xintercept=mean(meanY.samples)+c(-1,1)*w95/2), color="blue", linetype='dotted') +
            scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) +
            scale_y_continuous(breaks=seq(0,40,  by=10), limits=c(0, 40))
 ```
@@ -503,18 +568,8 @@ ggplot() + geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=
 ```{r}
 #| out-height: 500px
 Y=y[J1] 
+p.as.close    = mean(abs(meanY.samples - mean(y)) <= abs(mean(Y)-mean(y))) 
 
-dist.68   = max(abs(quantile(meanY.samples, probs=c(.16,   .84))-mean(y)))
-dist.95   = max(abs(quantile(meanY.samples, probs=c(.025, .975))-mean(y)))
-p.as.close    = mean(abs(meanY.samples - mean(y)) < abs(mean(Y)-mean(y))) 
-
-annotated.histogram = ggplot() + geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.2) +
-           geom_vline(aes(xintercept=mean(meanY.samples)), color="blue") +
-           geom_vline(aes(xintercept=quantile(meanY.samples, probs=c(.16, .84))), color="blue", linetype='dashed') + 
-           geom_vline(aes(xintercept=quantile(meanY.samples, probs=c(.025, .975))), color="blue", linetype='dotted') +
-           geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7) +
-           scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) + 
-           scale_y_continuous(breaks=seq(0,40,  by=10), limits=c(0, 40))
 annotated.histogram + geom_point(aes(x=mean(Y), y=0))
 ```
 
@@ -525,11 +580,11 @@ annotated.histogram + geom_point(aes(x=mean(Y), y=0))
 **Q**. Did we get lucky? 
 
 ::: fragment
-No, not really.
+Not too lucky.
 
-  - In 68% of polls, the sample proportion is within `r round(dist.68,3)` of the population proportion.
-  - In 95% of polls, the sample proportions are within  `r round(dist.95,3)` of the population proportion.
   - In `r percent(p.as.close)` of polls, we come as close as our estimate.
+  - In 68% of polls, the sample proportion is within `r w66/2` of the population proportion.
+  - In 95% of polls, the sample proportions are within  `r w95/2` of the population proportion.
   
 :::
 
@@ -733,48 +788,24 @@ coverage = mean(mean(y)- width/2 <= meanY.samples & meanY.samples <= mean(y) + w
 ```
 
 
-## It Works. Why Does it Work?
-
-- Here's an argument specific to the binary-outcome case we've been talking about today.
-- We know the sampling distribution
-- They're the distributions of means of `r n` independent Bernoullis---$\frac{Binomial(`r n`,p)}{`r n`}$---with different vote probabilities $p$.
-  - In the first case, $p$ is the proportion of voters in the population.
-  - In the second case, $p$ is the proportion of voters in the sample.
-  - And the difference between these proportions is small in almost all polls.
-- The Binomial distribution is *continuous* as a function of $p$---when $p$ changes little, the distribution changes little.
-- This means that, in almost all polls, bootstrap and actual sampling distributions are very similar.
-- The relevant difference (after centering) is even smaller because *the way* the binomial changes is mostly location.
+## Summary
 
 ```{r}
-#| out-height: 200px
-#| layout-ncol: 2
-K = 3
-ps = quantile(meanY.samples, c(.025, .5, .975))
+#| out-height: 500px
 
-ggplot() + geom_line(aes(x=x/n, y=n*dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n), alpha=.5) +
-           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n), linetype='dotted') +
-           geom_line(aes(x=x/n, y=n*dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
-           geom_pointrange(aes(x=p, xmin=qbinom(.025,n,p)/n, xmax=qbinom(.975,n,p)/n, y=20*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
-           xlim(.6,.8) + guides(color=FALSE)
-
-ggplot() + geom_line(aes(x=x/n-p, y=n*dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n), alpha=.5) +
-           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n-mean(y)), linetype='dotted') +
-           geom_line(aes(x=x/n-p, y=n*dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
-           geom_pointrange(aes(x=0, xmin=qbinom(.025,n,p)/n-p, xmax=qbinom(.975,n,p)/n-p, y=20*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
-           xlim(-.1,.1) + guides(color=FALSE)
+annotated.histogram + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.samples[1:K]-width/2, xmax=meanY.samples[1:K]+width/2), alpha=.2, color='purple') 
 ```
 
-::: aside
-Sampling Distributions with Interval Showing Middle 95% for p at the 2.5th, 50th, and 95th percentiles of the sampling distribution. \
-With centering (right) and without (left). 
-:::
+- Our sample proportion `r approx(mean(Y))` is close to the population proportion `r approx(mean(y))`. Did we get lucky? 
+  - No! In a million runs, almost all are within .05.
+- Could we have predicted how close we would get before seeing the `r approx(mean(y))`? 
+  - Yes! We can use a calibrated interval estimate---a Confidence Interval.
+- Except that so far, we've cheated. We've used the sampling distribution of our point estimate.
 
 ## A Problem 
 ```{r}
 #| out-height: 500px
 
-width = quantile(meanY.samples, probs=c(.975)) - quantile(meanY.samples, probs=c(.025))
-coverage = mean(population.proportion - width/2 <= meanY.samples & meanY.samples <= population.proportion + width/2)
 annotated.histogram + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.samples[1:K]-width/2, xmax=meanY.samples[1:K]+width/2), alpha=.2, color='purple') 
 ```
 
@@ -784,11 +815,4 @@ annotated.histogram + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xm
 - But what we actually do is *almost* the same. 
   - We *do* the same thing.
   - But we use an *estimate* of the sampling distribution in place of the thing itself.
-- Today we'll talk about an estimate based on *the bootstrap*.
-
-## Summary
-
-- Our sample proportion `r approx(mean(Y))` is close to the population proportion `r approx(mean(y))`. Did we get lucky? 
-  - No! In a million runs, almost all are within .05.
-- Could we have predicted how close we would get before seeing the `r approx(mean(y))`? 
-  - Yes! We can use a calibrated interval estimate---a Confidence Interval.
+- That's what we'll talk about next time.

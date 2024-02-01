@@ -1,6 +1,6 @@
 ---
-title: "QTM 220: Lectures 5-6"
-subtitle: "Inference for Subpopulation Means"
+title: "QTM 220: Lecture 3"
+subtitle: "Population Inference for Means"
 format: 
   clean-revealjs:
     height: 1000
@@ -27,7 +27,6 @@ knitr:
       bg: transparent
 ---
 
-
 ```{r load-libraries}
 library(purrr)
 library(tibble)
@@ -53,16 +52,16 @@ census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
 
 ```{r ggplot-themes}
 class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
-        panel.background = element_rect(fill = "transparent", colour = NA),
+		    panel.background = element_rect(fill = "transparent", colour = NA),
                     legend.background = element_rect(fill="transparent", colour = NA),
                     legend.box.background = element_rect(fill="transparent", colour = NA),
                     legend.key = element_rect(fill="transparent", colour = NA),
-        axis.ticks.x = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.x  = element_text(colour = "#aaaaaa"),
-        axis.text.y  = element_text(colour = "#aaaaaa"),
-        axis.title.x  = element_text(colour = "#aaaaaa"),
-        axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
+		    axis.ticks.x = element_blank(),
+		    axis.ticks.y = element_blank(),
+		    axis.text.x  = element_text(colour = "#aaaaaa"),
+		    axis.text.y  = element_text(colour = "#aaaaaa"),
+		    axis.title.x  = element_text(colour = "#aaaaaa"),
+		    axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
 )
 
 theme_set(class.theme)
@@ -71,11 +70,11 @@ theme_update(axis.title.x  = element_blank(),
 simplified.theme = theme_get()
 
 theme_update(axis.text.x   = element_blank(), 
-              axis.text.y   = element_blank())
+   	         axis.text.y   = element_blank())
 blank.theme = theme_get()
 
 theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
-           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+	         panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
 grid.theme = theme_get()
 
 theme_set(simplified.theme)
@@ -97,8 +96,7 @@ ellipsis <- function(df, nhead=5L, ntail=2) {
 
 ```{r get-california-data}
 #| cache: true
-cps.sampling.ratio = 1/2500
-plotting.cps.sampling.ratio=1/25
+
 california.state.code = 6
 cps.data = cpsR::get_asec(year=2022, vars=c('pearnval', 'gestfips', 'h_numper', 'htotval', 'a_age', 'a_hga','gereg', 'a_maritl', 'a_sex','peafever','a_wkstat','gtco'), key=census.api.key)
 ```
@@ -106,7 +104,7 @@ cps.data = cpsR::get_asec(year=2022, vars=c('pearnval', 'gestfips', 'h_numper', 
 ```{r process-california-data}
 all.earnings = data.frame(age=cps.data$a_age,
                           state.code = cps.data$gestfips,
-              county.code = cps.data$gtco,
+						  county.code = cps.data$gtco,
                           income=cps.data$htotval, 
                           education=case_match(cps.data$a_hga,
                                           0  ~ 0,   # child
@@ -162,11 +160,12 @@ ca_county_info = read.csv('california_county_info.csv') %>%
 earnings.county = left_join(earnings, ca_county_info[,c('FIPS.code', 'subregion')], by=c('county.code' = 'FIPS.code'))
 earnings$county = earnings.county$subregion
 earnings$county[is.na(earnings$county)]='unknown'
-  
+	
 # To give our survey recipients a bit more reality, we'll give them fake locations on a map
 # And we'll make up a population of California residents that they're sampled from
 # maps are based on code from https://eriqande.github.io/rep-res-eeb-2017/map-making-in-R.html
 
+cps.sampling.ratio = 1/2500
 counties = map_data("county")
 ca_county = counties %>%
   filter(region == "california")
@@ -196,7 +195,7 @@ ca.pop.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) +
 # 3. for each, sample a latitude and longitude by taking a randomly weighted combination of the    
 #    county's vertices. As long as the county is convex, these points will be inside the county.
 # 4. we'll give them a degree too, chosen independently of all else from the empirical distribution on the sample
-npop = nrow(earnings) / plotting.cps.sampling.ratio
+npop = nrow(earnings) / cps.sampling.ratio
 
 # takes a list of subregions, possibly with duplicates
 # for each element, chooses random lat/long coordinates within the sample.subregion
@@ -233,16 +232,9 @@ pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.populat
 sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
 ```
 
-```{r visualization-defaults}
-scale_y = function(limits=c(0, 4e5)) { 
-  scale_y_continuous(labels=label_dollar(), limits=limits)
-}
+# Introduction
 
-dot.size = 2
-```
-
-## Last time
-
+## Review
 ::: {.hidden}
 $$
 \DeclareMathOperator{\E}{E}
@@ -254,690 +246,299 @@ $$
 
 :::
 
-
-- We talked about what a random sample from a population tells us about subpopulation proportions.
-  - In particular, we looked at the rate of voting among Black and non-Black Georgia-registered voters in 2020. 
-- We saw that the sample analog---our subsample proportion---was likely to be close. 
-  - Less close, however, than the whole-sample proportion was to the whole-population proportion.
-  - That's what tends to happen when you have a smaller sample size.
-- To summarize how close to the subpopulation proportion we'd be, we used confidence intervals.
-  - These are *calibrated* interval estimates*
-  - That is, we calibrate them so that, 95% of the time, they contain what we're trying to estimate.
-  - To do this, we used the *bootstrap sampling distribution* as an estimate of the sampling distribution.
-
+-  Last lecture, we discussed learning about population proportions.
+-  Our polling strategy gave us independent observations from our population of registered voters.
+  - Our outcomes were binary, so these were independent Bernoulli-distributed random variables.
+  - And the probability of voting was the proportion of registered voters who turned out to vote.
+-  We saw that the sample proportion was a good estimate of population proportion.
+-  And that we could characterize the accuracy of our prediction using a confidence interval. 
+-  We used the bootstrap sampling distribution to calibrate the intervals.
+  
 ## Today
 
-- We'll see what a random sample from a population tells us about subpopulation means and differences in them.
-- Returning to our CPS Income data example, we'll consider ...
-  - incomes among people [with 4-year degrees]{.twocolor-green} 
-  - income differences between people [with 4-year degrees]{.twocolor-green} and people [without them]{.twocolor-red}.
-- Our population will be the set of California residents 
+- In this one, we'll consider an outcome that isn't binary---it'll be income.
+- Our goal will be to learn about the population mean from a random sample.
+	- We'll use---or act as if we've used---the same polling strategy as before.
+	- This means that as, before, we'll think of our observations as being independent draws from same distribution.
+	- In particular, the distribution of outcomes in the population.
+	- But we will not have a simple way to characterize that distribution (e.g., Bernoulli in the binary case).
+- Not knowing the distribution isn't a problem when the sample is large.
+- But understanding why it isn't a problem is subtle. 
+
+
+## Context: 2022 CPS Wage Data
+
+- The Current Population Survey is a survey run by Census Bureau and Bureau of Labor Statistics
+    - Each year, about 1/2500 US residents is surveyed.
+    - Think of our survey responses like our poll responses from last lecture.
+		- Each one comes from a resident chosen independently from the set of all residents.
+		- With each resident having equal probability of being chosen.
+    - This is an approximation, but it gets better if you focus on a single state.
+- We'll look at surveyed California residents 
     - between the ages of 25 and 35
     - with at least an 8th-grade education
-- It's a reasonable approximation to treat our data as
-  a representative sample (with replacement) from it.
-  
+- This sample includes `r nrow(earnings)` people. Here's a partial view of their responses.
+
+```{r}
+earnings[, c('age','income','education','county')] %>% ellipsis(nhead=4, ntail=2) %>% kable()
+```
+
+## Sample and Population
 
 :::: columns
-
-::: column
-```{r map-sample}
-#| fig-width: 5
-#| out-height: 400px
-ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) + guides(color=FALSE)
-```
-:::
-
 ::: column
 
-```{r table}
-tab = earnings[sample(nrow(earnings)), ]
-tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=6,ntail=2)
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+```{r}
+sample.plot
 ```
-:::
 
+:::
+::: column
+
+```{r}
+pop.plot
+```
+
+:::
 ::::
+
+- We're using the sample on the left to learn about the population on the right.
+- And we'll think of the sample as being drawn, with replacement, from the population.
+- As if each dot on the left were chosen, from those on the right, by rolling a huge die.
+
+
+## Two Questions
+ 
+- The mean income in our sample is \$`r approx(mean(earnings$income))`.
+- Unlike the turnout example, we'll never see the whole population.
+	- We won't ever know the population mean. But we'll give it a name: $\mu$.
+	- We won't ever know population standard deviation. We'll call that  $\sigma$.
+	- And we definitely won't ever know the sampling distribution of our sample mean.
+- But we still want to answer our two questions. 
+
+$$
+$$
+
+1. Is `r approx(mean(earnings$income))` likely to be close to the population mean $\mu$?  
+2. Can we say how close? 
+
+
+## Answers
+
+- The answers are the same as before: Yes and Yes.
+- And we don't need to change anything about what we actually do.
+	- We can use an interval estimate centered on our sample mean.
+	- And choose the interval's width using the bootstrap sampling distribution.
+- But we do need to understand why the answers are the same.
+	- Our justification for all of this last lecture required binary outcomes.
+	- It was based on the sampling distribution and bootstrap sampling distributions being Binomial.
+	- That meant that if we got the vote proportion $p$ approximately correct, \
+	  we'd also get the sampling distribution approximately correct.
+- Now we'll need to understand why the same is true more generally.
+
+## Parts of This Will Be Dry
+
+- Last lecture, we managed to avoid doing any calculations.
+- Today, and from here on, we won't be able to do that.
+- Let's take a few minutes to review some of the math we'll need.
+
+# Probability Review
+
+## Approach
+
+- One thing I struggle with is thinking at multiple levels of abstraction at once.
+	- I know the 'rules' --- how I'm allowed to manipulate symbols on the page.
+	- And I know why the rules are the rules --- I can explain them and I can prove them.
+	- But when I try to use the rules and explain them at the same time, I get lost.
+- To avoid this, I'll do my best not to mix levels of abstraction.
+	- If you're like me, that's probably a good thing.
+	- And if you aren't, it still is---it doesn't help anybody for me to get lost.
+- What I'm going to do now is state the rules and explain them.
+- Later, when we're doing more substantive stuff, I'll just use them without explanation.
+- There will be a section like this in a lot of lectures.
+
+## Rule 1: Expectations are Linear
+
+$$ 
+\begin{aligned}
+\E\qty( a Y + b Z ) 
+&= \E\qty(aY) + \E\qty(bZ) \\
+&= a\E(Y) + b\E(Z)  \quad \text{ for any random variables $Y, Z$ and numbers $a,b$ }
+\end{aligned}
+$$
+
+- There are two things going on here.
+  1. To average a sum of two things, we can take two averages and sum.
+  2. To average a constant times a random variable, we can multiply the random variable's average by the constant.
+- In other words, we can *distribute* expectations and can pull constants out of them.
+- We can do this when we're summing more random variables too.
+
+$$
+\begin{aligned}
+\E \sum_i a_i Y_i 
+&= \sum_i \E a_i Y_i && \text{ distributing expectations} \\
+&= \sum_i a_i \E Y_i && \text{ pulling constants out} \\
+\end{aligned}
+$$
+
+
+
+## Rule 1: Proof
+
+- In essence, it comes down to the fact that all we're doing is summing.
+	- Expectations are probability-weighted sums.
+	- And we're looking at the expectation of a sum.
+- And we can change the order we sum in without changing what we get.
+
+$$
+\small{
+\begin{aligned}
+\E\qty( a Y + b Z ) 
+&= \sum_{y}\sum_z (a y + b z) \ P(Y=y, Z=z) && \text{ by definition of expectation} \\
+&= \sum_{y}\sum_z a y \ P(Y=y, Z=z) + \sum_{z}\sum_y b z \ P(Y=y, Z=z) && \text{changing the order in which we sum} \\
+&= \sum_{y} a y \ \sum_z P(Y=y,Z=z) + \sum_{z} b z \ \sum_y P(Y=y,Z=z) && \text{pulling constants out of the inner sums} \\
+&= \sum_{y} a y \ P(Y=y) + \sum_{z} b z \ \sum_y P(Z=z)  && \text{summing to get marginal probabilities from our joint } \\
+&= a\sum_{y} y \ P(Y=y) + b\sum_{z} z \ \sum_y P(Z=z)  && \text{ pulling constants out of the remaining sum } \\
+&= a\E Y + b \E Z  && \text{by definition}
+\end{aligned}
+}
+$$
+
+## Rule 2: Independence implies Expectation of Product = Expectation Product.
+
+$$
+\begin{aligned}
+\E Y Z  = \E Y \E Z \quad \text{ if $Y$ and $Z$ are independent}.
+\end{aligned}
+$$
+
+- This says you can distribute expections into products *of independent random variables*.
+- It's not true in general. 
+- For example, $Y^2$ is the product of $Y$ and $Y$.
+	- And this is usually positive even if $\E Y=0$.
+	- e.g. $\E Y^2=1$ if $Y=\pm 1$ each with probability $1/2$.
+- But it has a very useful consequence when we're talking about mean-zero random variables.
+- If two random variables are independent, and *either* has mean zero, their product has mean-zero too.
+$$ \E Y Z = \E Y \E Z = 0 \quad \text{ if $Y$ and $Z$ are independent and } \quad \E Y = 0 \quad \text{ or } \quad \E Z = 0 $$
+
+
+## Rule 2: Proof
+
+- Recall that independence means that the joint distribution is the product of the marginals.
+$$ 
+P(Y=y,Z=z) = P(Y=y)P(Z=z)  \quad \text{ if and only if } \quad Y \text{ and } Z \ \text{ are independent }.
+$$
+
+- We can use this to nest one sum inside the other when calculating our expectation.
+  
+$$
+\begin{aligned}
+\E\qty( Y Z )  
+&= \sum_{y}\sum_z y z \ P(Y=y, Z=z)   && \text{ by definition of expectation} \\
+&= \sum_{y}\sum_z yz \ P(Y=y)P(Z=z)   && \text{ as a result of independence } \\
+&= \sum_{y} y \ P(Y=y) \ \sum z P(Z=z)  && \text{pulling constants out of the inner sums} \\
+&= \E Y \ \E Z && \text{ by definition }
+\end{aligned}
+$$
+
+## Practice: Variance of a Sum of Independent Random Variables
+
+Prove this.
+$$
+\Var(Y + Z) = \Var(Y)+ \Var(Z) \quad \text{ if $Y$ and $Z$ are independent}.
+$$
+
+- This is a straightforward consequence of Rules 1 and 2.
+- And the 'FOIL' calculation from high school algebra: $(a+b)^2 = a^2 + 2ab + b^2$.
+- Recall the definition of variance: $\Var(X) = \E(X-\E X)^2$.
+
+::: fragment
+$$
+\small{
+\begin{aligned}
+\Var (Y + Z) 
+&= \E \qty{ Y + Z - \E (Y + Z) }^2 && \text{ by definition } \\
+&= \E\qty{ (Y-\E Y) + (Z-\E Z) }^2 && \text{ using Rule 1 }\\
+&=  \E\qty{(Y-\E Y)^2 +  2 (Y-\E Y)(Z-\E Z)  + (Z-\E Z)^2} && \text{ using FOIL} \\
+&=  \E (Y-\E Y)^2 +  2 \E (Y-\E Y)(Z-\E Z)  + \E (Z-\E Z) && \text{ using Rule 1 } \\
+&= \Var(Y) + 2 \times 0 + \Var(Z) && \text{ using Rule 2 on the middle term}
+\end{aligned}
+}
+$$
+
+:::
+
+## Where Are All These Expectations Coming From?
+
+- We haven't really been talking about expected values in past lectures.
+- We have, on the other hand, been talking about population means.
+- There is a connection between the two---*sampling uniformly at random* from the population.
+	- Suppose we have $N$ balls in an urn and we've written the numbers $y_1 \ldots y_N$ on them.
+	- And when we draw a ball from the urn, each has probability $1/N$ of being chosen.
+	- If we let the random variable $Y$ be what's written on the ball we draw, 
+	  then $\E Y$ is the mean of the numbers on the balls.	
+
+$$ 
+\E[Y] = \sum_{j=1}^N y_j \ P(Y=j) = \sum_{j=1}^N y_j \ \frac{1}{N} = \frac{1}{N}\sum_{i=1}^N y_j 
+$$
 
 ::: aside
-The locations shown on the map are made up. They're not the actual locations of the people in the sample. \
-The survey includes some location information for some people, but as you can see in the table, not for everyone.
+We talk about a population of balls with numbers on them instead of a population of numbers because it makes it easier
+to talk about populations with duplicates. When talking about a population of numbers directly, 
+it's hard to make sense of the statement 'each of the numbers $y_1 \ldots y_N$ has probability $1/N$ of being chosen'
+when there are duplicates. But it's easy to understand that different balls can have the same number written on them.
 :::
 
+## Sampling with Replacement
 
-## Subsample and subpopulation means
+- Statisticians talk a lot about independent and identically distributed (i.i.d.) random variables.
+- There's basically only one way to get them---by *sampling with replacement*.
+- That means sampling uniformly at random from a population over and over.
+- It's another urn reference---it says we replace our balls after we draw them so that...
+	1. The population doesn't change from draw to draw.
+	2. No draw influences any other.
+- Same as rolling a die over and over.
+- That's the kind of sampling we were doing in our hypothetical poll last lecture.
+- And it'll be what we talk about most, if not all, of the time in this class.
+
+# Estimating a Population Mean
+
+## Context
+
+- We're interested in estimating the mean household income of a population of California residents. 
+- In particular, the population of residents
+    - between the ages of 25 and 35
+    - with at least an 8th-grade education
+- We have this income information for a sample of `r nrow(earnings)` of such residents.
+- And we'll think of this sample as being drawn, with replacement, from the population.
+- We'll be using the mean of income in the sample to estimate the mean in the population.
 
 ```{r}
-#| out-height: 250px
-#| fig-asp: .25 
-earnings.jitter = ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), 
-                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
-                   scale_y() + guides(color=FALSE)
-
-summaries = earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
-earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) + scale_y()
+earnings[, c('age','income','education','county')] %>% ellipsis(nhead=4, ntail=2) %>% kable()
 ```
 
-- A reasonable starting point for describing income in a subsample is its mean income.
-  - We'll think about the subsample with $X_i=x$ for some value $x$. 
-  - e.g. $X_i=1$ for people with 4-year degrees.
-
-$$ 
-\hat \mu(x) = \frac{1}{N_x}\sum_{i:X_i=x} Y_i \quad \text{ where } \quad N_x = \sum_{i:X_i=1} 1.
-$$
-
-- We can think of it  as an estimate of the mean of the corresponding subpopulation.
-$$
-\mu(x) = \frac{1}{m_x}\sum_{j:x_j = x } y_j \quad \text{ where } \quad m_x = \sum_{j:x_j=x} 1.
-$$
-
-## Population Means and Expectations
-
-- Because we're sampling uniformly at random, we can think of population means as *expectations*. 
-    
-$$ 
-\mu := \frac{1}{m}\sum_{j=1}^m y_j = \E[Y_i]  \quad \text{ when } \quad Y_i = y_1...y_m \quad \text{ each with probability } \quad \frac{1}{m}.
-$$
-
-- Similarly, we can think of subpopulation means as *conditional expectations*. 
-
-$$ 
-\begin{aligned}
-\mu(x) 
-&:= \frac{1}{M_x}\sum_{j:x_j = x } y_j = \E[Y_i \mid X_i = x]  \  
-\quad \text{ when } \quad P(Y_i \mid X_i=x) = \frac{1}{m_x} \quad \text{ for } m_x = \sum_{j:x_j = x } 1 \\ 
-&\text{and therefore when } \quad (X_i,Y_i) = (x_1,y_1) \ldots (x_m, y_m) \quad \text{ each with probability } \quad \frac{1}{m} 
-\end{aligned}
-$$
-
-- Let's think about this idea that a subsample behaves like a draw from the corresponding subpopulation.
-
-
-## Conditioning in Dice Rolls 
-
-::: {.incremental}
-
-- Suppose we want to know the mean dice roll *among dice rolls that are even*.
-- What's the probability, given that we roll even, that we roll a $2$? Or a $4$? Or a $6$?
-- It's 1/3. How do we know this?
-- Symmetry.
-  - There's no difference in the frequency with which we roll $2$, $4$, and $6$.
-  - So there shouldn't be a difference in the frequency of them even rolls.
-
-:::
-
-## Conditioning in Survey Context
+## Sampling Distribution for the Sample Mean
 
 ```{r}
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16), background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
-```
-
-\ \
-
-- Suppose we want to know the mean income *among people with 4-year degrees*.
-- When we sample with replacement, we are  in effect just rolling a bigger die.
-- As a result, the frequency with which we roll any one person's number
-  - counted as a fraction among any subpopulation they're in
-  - is the same for all people in it.
-
-$$
-\begin{aligned}
-&P(J=j ) = 1/m \quad \text{ for all j } \quad \in 1 \ldots m \\
-&\implies 
-P(J=j \mid J \in \{j_1, \ldots, j_{m_x}\}) = \begin{cases} \frac{1}{m_x} & \text{ if } j \in \{j_1, \ldots, j_{m_x}\} \\ 0 & \text{ otherwise } \end{cases}
-\end{aligned}
-$$
-
-
-## Plan
-
-- We'll ultimately be talking about point and interval estimates of subpopulation means $\mu(x)$.
-- And using our sampling assumptions, we've seen that we can think of these as *conditional expectations*.
-  - In particular, as the *conditional expectation* $\E[Y_i \mid X_i=x]$ ...
-  - when $(X_i,Y_i)$ takes on the values $(x_1,y_1) \ldots (x_M, y_M)$ each with probability $1/M$.
-- So we'll start by reviewing some properties of conditional expectations.
-
-## Review: Expectations and Conditional Expectations
-
-## Conditioning
-
-### The law of iterated expectations
-$$
-E \{ E( Y \mid X ) \} \quad \text{ for any random variables $X, Y$} 
-$$
-
-To calculate the mean of $Y$, we can average within subpopulations, then across subpopulations.
-
-### Irrelevance of independent conditioning variables
-$$ E( Y \mid X, X' ) = E( Y \mid X ) \quad \text{ when $X'$ is independent of $X,Y$ } $$
-
-If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the relationship between them.
-
-## Linearity of Expectations
-
-$$ 
-\begin{aligned}
-E ( a Y + b Z ) 
-&= E (aY) + E (bZ) \\
-&= aE(Y) + bE(Z)  \\
-& \text{ for random variables $Y, Z$ and numbers $a,b$ }
-\end{aligned}
-$$
-
-  - There are two things going on here.
-    - To average a sum of two things, we can take two averages and sum.
-    - To average a constant times a random variable, we can multiply the random variable's average by the constant.
-  - In other words, we can *distribute* expectations and can pull constants out of them.
-  
-## Linearity of **Conditional** Expectations
-
-$$ 
-\begin{aligned}
-E\{ a(X) Y + b(X) Z \mid X \} 
-&= E\{a(X)Y \mid X\} + E\{ b(X)Z \mid X\} \\
-&= a(X)E(Y \mid X) + b(X)E(Z \mid X)
-\end{aligned}
-$$
-
-- This is like linearity of expectations, but with a twist.
-   - When we condition on $X$, we're working with subpopulations in which $X$ is constant.
-   - This means we can act as if functions of $X$ **are** constants.
-   - So we can pull them out of expectations that are conditional on $X$.
-   
-## It's important to distinguish between two things
-
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-Y = c(.75,1,1.25, 1,1.25,1.5)
-X = 0 + (1:6 > 3)
-Xdodge = X + rep(.02*c(-1,0,1),2)
-mu = function(x) { mean(Y[X==x]) }
-
-tinypop.plot = ggplot() + geom_point(aes(x=Xdodge, y=Y, color=factor(X)), alpha=.7, size=2) + 
-  scale_x_continuous(breaks=c(0,1), labels=c('0','1')) + scale_y_continuous(breaks=seq(.25,1.75,by=.25)) +
-  guides(color=FALSE) 
-tinypop.plot
-```
-
-  1.  The **conditional expectation function** $\mu(x)=E[Y \mid X=x]$.
-      - $\mu$ is a function; evaluated at $x$, it's a number. It's not random.
-      - It's the mean of the subpopulation of people with $X=x$.
-   
-  2.  The conditional expectation $\mu(X)=E[Y \mid X]$.
-      - $\mu(X)$ is the mean of a **random subpopulation** of people.
-      - It's the conditional expectation function **evaluated at** the random variable $X$.
-      - This is the sort of thing that shows up when we use the law of iterated expectations.
-
-## Check Your Understanding {.smaller}
-
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-tinypop.plot
-```
-
-- Suppose we sample a point $(X, Y)$  uniformly at random from the population of 6 points above.
-  - What is the conditional expectation function $\mu(x)$ at [$x=0$]{.twocolor-red} and [$x=1$]{.twocolor-green}?
-  - What is the conditional expectation $\mu(X)$?
-  
-::: fragment
-  - [$\mu(0)=`r mu(0)`$]{.twocolor-red} and [$\mu(1)=`r mu(1)`$]{.twocolor-green}
-:::
-::: fragment
-  - $\mu(X)$ is a random variable taking on these two values.
-  $$ \mu(X) = \begin{cases}
-      `r mu(0)` & \text{ when } X=0 \\
-      `r mu(1)` & \text{ when } X=1
-      \end{cases}
-  $$
-:::
-
-## The Indicator Trick
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-tinypop.plot
-```
-
-- Suppose we sample a point $(X, Y)$  uniformly at random from the population of 6 points above.
-  - What is $X\mu(X)$?
-
-::: fragment
-
-- $X\mu(X)$ is a random variable taking on these two values.
-  $$ X\mu(X) = \begin{cases}
-      0 \times \mu(0) = 0 \times `r mu(0)` & \text{ when } X=0 \\
-      1 \times \mu(1) = 1 \times `r mu(1)` & \text{ when } X=1
-      \end{cases}
-  $$
-
-- We can write it equivalently as $X\mu(1)$ because either ...
-  - $X=0$, so $X\mu(X) = X\mu(1)=0$ 
-  - $X=1$, so $X\mu(X)=X\mu(1)=1\times \mu(1)$
-- This comes up a lot working with subsample means.
-- We'll swap $X\mu(X)$ for $X\mu(1)$ often, referring to the **indicator trick**.
-
-:::
-
-
-## A More Realistic Example
-
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-#| 
-mean.has.degree = round(summaries$mean[summaries$degree=='4-year degree'] / 10000) * 10
-mean.no.degree  = round(summaries$mean[summaries$degree=='no 4-year degree'] / 10000) * 10
-degree.proportion = round(mean(earnings$degree=='4-year degree'),1)
-earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) + scale_y()
-```
-
- - Let's think about a random person drawn from this population
-    - $Y$ is their income 
-    - $X$ is an indicator for having a four-year degree. 
-  - Suppose the subpopulation means are `r approx(mean.has.degree, 10)` for people with degrees and `r approx(mean.no.degree, 10)` for people without.
-  - And that `r approx(degree.proportion*10,1)`/10 of our population has degrees.
-  
-- Questions 
-  - What is $E(Y \mid X)$? 
-  - What is $E(Y)$?
-
-:::: r-stack
-::: {.fragment .fade-out data-fragment-index="1"}
-
-- $E(Y \mid X)$ is a random variable that is **either** `r mean.has.degree`K or `r mean.no.degree`K
-  - It's `r mean.has.degree`K with probability `r degree.proportion*10`/10,       when $X=1$. 
-  - It's `r mean.no.degree`K  with probability `r (1-degree.proportion)*10`/10,   when $X=0$. 
-
-::: 
-
-::: {.fragment .current-visible data-fragment-index="1"}
-
-- $\E(Y)$ is the expectation of this random variable---a number.
-- We can calculate it using the law of iterated expectations.
-
-$$
-\begin{aligned} 
-E\{ E( Y \mid X ) \} 
-&= E(Y|X=1)P(X=1) + E(Y|X=0)P(X=0) \\
-&= `r mean.has.degree`K \cdot `r degree.proportion*10`/10 +
-   `r mean.no.degree`K  \cdot `r (1-degree.proportion)*10`/10
-=  `r mean.has.degree*degree.proportion`K +
-   `r mean.no.degree*(1-degree.proportion)`K 
-=  `r mean.has.degree*degree.proportion + mean.no.degree*(1-degree.proportion)`K
-\end{aligned}
-$$
-
-:::
-::::
-
-
-
-## Review Exercise 1
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-tinypop.plot
-```
-
-- Suppose we sample a point $(X, Y)$ in the plot above uniformly at random.
-  - Ignore the jitter; just think of the points as being at $X=0$ and $X=1$.
-  - What is $\E\{ \mu(X) \}$?
-
-::: fragment
-  - There are two ways of thinking about calculating $\E\{\mu(X)\}$.
-      1. We just calculate the expectation of it, thinking of it as an arbitrary random variable.
-      2. We use the law of iterated expectations to show it's the unconditional mean of $Y$.
-
-$$
-\small{
-\begin{aligned}
-\E\qty{ \mu(X) } &= \frac{1}{2}\mu(0) + \frac{1}{\mu(1)}= \frac{1}{2} \cdot `r mu(0)` + \frac{1}{2} \cdot `r mu(1)` = 1.05 && \text{ the first way } \\
-\E\qty{ \mu(X) } &= \E\qty{\E\qty(Y \mid X)} = \E\qty{Y} = \frac{1}{6} \cdot `r Y[1]` + \frac{1}{6} \cdot `r Y[2]` + \ldots && \text{ the second way }
-\end{aligned}
-}
-$$
-
-:::
-
-## Review Exercise 2
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-tinypop.plot
-```
-
-- Suppose we sample a point $(X, Y)$ in the plot above uniformly at random.
-  - Ignore the jitter; just think of the points as being at $X=0$ and $X=1$.
-  - What is $\E\{ X\mu(X) \}/\E(X)$?
-
-::: fragment
-
-- It's $\mu(1)$. $X\mu(X)=X\mu(1)$, so ...
-$$
-\begin{aligned}
-\E\{ X\mu(X) \} 
-&= \E\{ X\mu(1) \} \\
-&= \mu(1) \ \E\{ X \} \\
-\end{aligned}
-$$
-
-:::
-
-## Review Exercise 3
-
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-tinypop.plot
-```
-
-- Suppose we sample a point $(X, Y)$ in the plot above uniformly at random.
-  - Ignore the jitter; just think of the points as being at $X=0$ and $X=1$.
-  - What is $\E\{ (1-X)\mu(X) \}/\E(1-X)$?
-
-::: fragment
-
-- It's $\mu(0)$. It's analogous to the last one. $(1-X)\mu(X)=(1-X)\mu(0)$, so ...
-$$
-\begin{aligned}
-\E\{ (1-X)\mu(X) \} 
-&= \E\{ (1-X)\mu(0) \} \\
-&= \mu(0) \ \E\{ 1-X \} \\
-\end{aligned}
-$$
-
-:::
-
-## Review: Variance and Conditional Variance
-
-
-## Variance as Excess {.smaller}
-
-$$
-\small{
-\begin{aligned}
-\Var(Y) &= \E \qty[ \qty{ Y - \E(Y) }^2 ] && \text{ the \emph{spread} idea: the mean square of a \emph{centered version} of $Y$ } \\
-&= \E\qty(Y^2) - \qty{\E\qty(Y)}^2         && \text{ the \emph{excess} idea: the average amount $Y^2$ \emph{exceeds} the square of its mean}.
-\end{aligned}
-}
-$$
-
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-tinypop.square.plot = ggplot() + geom_point(aes(x=Xdodge, y=Y, color=factor(X)), alpha=.5, size=3*dot.size) +
-                                 geom_point(aes(x=Xdodge, y=Y^2, color=factor(X)), shape=0, size=3*dot.size) + 
-                                 geom_segment(aes(x=Xdodge, xend=Xdodge, y=Y, yend=Y^2), alpha=.3) + guides(color=FALSE)
-tinypop.square.plot + xlim(min(Xdodge[X==0])-sd(Xdodge[X==0]), max(Xdodge[X==0] + sd(Xdodge[X==0])))
-```
-
-Let's think, in terms of the plot, about why there is excess in the square.
-
-- Suppose $Y$ takes on three values --- the dots ---with equal probability.
-    - Its expectation is the average height of the black dots.
-    - And its expectation, squared, is the square of this.
-- Its square $Y^2$ takes on the the square of those values---the squares --- with equal probability.
-    - Its expectation is the average height of the squares.
-- Why is the second one bigger?
-
-::: fragment
-
-- Because squaring *increases big draws of Y* more than it *decreases small ones*.
-- Visually, the line from $Y$ to $Y^2$ is longer when $Y$ is bigger than when it's smaller.
-
-:::
-
-
-## Equivalence Proof
-
-::: fragment
-
-$$
-\small{
-\begin{aligned}
-\E \qty[ \qty{ Y - \E(Y) }^2 ] 
-&= \E \qty[ Y^2 - 2 Y \E(Y) + \qty{\E(Y)}^2 ] && \text{ FOIL } \\
-&= \E[ Y^2] - \E\qty[2 Y \E(Y)] + \E\qty[\qty{\E(Y)}^2] && \text{Distributing expectations (linearity)} \\
-&= \E[ Y^2] - 2\E(Y)\E\qty[Y] + \qty{\E(Y)}^2\E[1] && \text{Pulling constants out of expectations (linearity)} \\
-&= \E[ Y^2] - 2\qty{\E(Y)}^2 + \qty{\E(Y)}^2] && \text{Recognizing a product of something with itself as a square} \\
-&= \E[ Y^2] - \cancel{2}\qty{\E(Y)}^2 + \cancel{\qty{\E(Y)}^2}] && \text{Subtracting} 
-\end{aligned}
-}
-$$
-
-:::
-
-## Conditional Variance {.smaller}
-
-- The **conditional variance** describes the spread of one random variable *within groups*. 
-- Like the conditional expectation of the random variable, there are two related concepts.
-
-1. The **conditional variance function**.
-$$
-\sigma^2(x) := \Var(Y \mid X=x) = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X=x]
-$$
-    - This is the variance of $Y$, **within the subpopulation** of people with $X=x$.
-    - It is the *conditional expectation function* of the random variable $\textcolor{blue}{\{Y-\E(Y \mid X)\}^2}$.
-    - We call it 'the conditional variance of $Y$ given $X=x$'
-
-2. The conditional variance $\sigma^2(X) = \Var(Y \mid X)$
-$$
-\sigma^2(X) := \Var(Y \mid X)   = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X]
-$$
-
-    - This is the variance of $Y$ within **a random subpopulation** of people.
-        - It's the conditional variance function **evaluated at** the random variable $X$.
-        - And  the conditional expectation of the random variable $\textcolor{blue}{\{Y-\E(Y \mid X)\}^2}$.
-    - We call it 'the conditional variance of $Y$ given $X$.
-    - This is the sort of thing that shows up when you use the law of iterated expectations.
-
-
-
-## Conditional Variance as Excess {.smaller}
-
-$$
-\small{
-\begin{aligned}
-\Var(Y \mid X) &= \E \qty[ \qty{ Y - \E(Y\mid X)}^2 \mid X ] && \text{ the \emph{spread} idea: the mean square of a conditionally centered version of $Y$ } \\
-&= \E\qty(Y^2 \mid X) - \qty{\E\qty(Y \mid X)}^2              && \text{ the \emph{excess} idea: the average amount $Y^2$ exceeds the square of its cond. mean}
-\end{aligned}
-}
-$$
-
-
-```{r}
-#| out-height: 500px
-#| fig-asp: .5
-tinypop.square.plot 
-```
-
-- We can think of the Conditional Variance as excess, too.
-- It's the same as the unconditional case, but *within subpopulations*.
-
-
-## The Law of Total Variance
-
-$$
-\Var[Y] = \E\qty{\Var( Y \mid X ) } + \Var\qty{\E( Y \mid X ) }  
-$$
-
-- The Law of Total Variance relates Conditional and Unconditional Variance
-- It's like the Law of Total Expectation, but for Variance
-- It's a useful way to decompose the variance a random variable.
-- Think about where most of the variance in $Y$ is coming from in the two populations shown below.
-
-```{r}
-#| out-height: 500px
-#| fig-ncol: 2
-
-ggplot() + geom_point(aes(x=Xdodge, y=Y, color=factor(X)), alpha=.7, size=4) + 
-  scale_y_continuous(breaks=seq(0,3,by=.5), limits=c(0,3)) + guides(color=FALSE) 
-ggplot() + geom_point(aes(x=Xdodge, y=Y+X, color=factor(X)), alpha=.7, size=4) + 
-  scale_y_continuous(breaks=seq(0,3,by=.5), limits=c(0,3)) + guides(color=FALSE) 
-
-```
-
-
-## An Activity 
-
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-#| 
-mean.has.degree = round(summaries$mean[summaries$degree=='4-year degree'] / 10000) * 10
-mean.no.degree  = round(summaries$mean[summaries$degree=='no 4-year degree'] / 10000) * 10
-degree.proportion = round(mean(earnings$degree=='4-year degree'),1)
-earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) + scale_y()
-```
-
-- Working with your neighbor, think about why we call it this.
-- Try to put the three terms into words.
-    - $\Var[Y]$ is the ...
-    - $\E\qty{ \Var(Y \mid X) }$ is the ...
-    - $\Var\qty{\E( Y \mid X)}$ is the ...
-- Do this in two ways.
-    1. Using 'Random Variables Language', 
-        - e.g. 'the expected value of the conditional variance of Y given X'
-    2. Using 'Population Language'
-        - e.g. 'the variance of income (Y) within the random subpopulation with degree status X'
-
-
-
-
-
-## Proof
-
-**Claim.**
-$$
-\Var[Y] = \textcolor{blue}{\E\qty[\Var(Y \mid X)]} + \textcolor{green}{\Var\qty[\E(Y \mid X)]} 
-$$
-
-1. Rewrite the variances, conditional and unconditional, in *excess* form.
-
-::: fragment
-$$
-\Var[Y]  = \textcolor{blue}{\E\qty[ \E(Y^2 \mid X) - \qty{\E\qty(Y \mid X)}^2]} 
-                       + \textcolor{green}{\E\qty{ \E(Y \mid X)^2}  - \qty(\E\qty{\E\qty(Y \mid X)})^2} 
-$$
-
-:::
-
-2. Distribute the outer expectations in the first term.
-
-::: fragment
-$$
-\Var[Y] = \textcolor{blue}{\E\qty[ \E(Y^2 \mid X)] - \E\qty[\qty{\E\qty(Y \mid X)}^2]} 
-                       + \textcolor{green}{\E \qty[ \qty{\E(Y \mid X)^2} ] - \qty(\E\qty{\E\qty(Y \mid X)})^2}
-$$
-
-:::
-
-3. Cancel matching terms
-
-::: fragment
-$$
-\Var[Y]  = \textcolor{blue}{\E\qty[ \E(Y^2 \mid X)] \cancel{- \E\qty[\qty{\E\qty(Y \mid X)}^2]}}  
-                       + \textcolor{green}{\cancel{\E \qty[ \qty{\E(Y \mid X)^2} ]} -  \qty(\E\qty{\E\qty(Y \mid X)})^2}
-$$
-
-:::
-
-4. Use the law of iterated expectations to simplify the remaining terms.
-
-::: fragment
-$$
-\Var[Y]  = \textcolor{blue}{E[Y^2]  \cancel{- \E\qty[\qty{\E\qty(Y \mid X)}^2]}}
-                       + \textcolor{green}{\cancel{\E \qty[ \qty{\E(Y \mid X)^2} ]} - (\E\qty{Y})^2}
-$$
-
-:::
-
-
-# Estimating Subpopulation Means
-
-## Estimating Subpopulation Means for Income in California
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) + scale_y()
-```
-
-- When we're talking about CPS survey data, we will never know the true subpopulation means.
-  - But we can express them as *conditional means* of random variables drawn from the population.
-  - And we have a sample of `r n` of these random variables from the population.
-
-$$
-\begin{aligned}
-\mu(1) &= \E[Y_i \mid X_i=1] && \text{is the mean income of people in our population with a 4-year degree} \\
-\mu(0) &= \E[Y_i \mid X_i=0] && \text{is the mean income of people in our population without one}
-\end{aligned}
-$$
-
-- We will also never know the subpopulation income standard deviations.
-
-$$
-\begin{aligned}
-\sigma(1) &= \sqrt{\Var[Y_i \mid X_i=1]} \\
-\sigma(0) &= \sqrt{\Var[Y_i \mid X_i=0]}
-\end{aligned}
-$$
-
-- All this this is part of the larger story that we'll never know our data's sampling distribution.
-  - We'd have to survey every California resident to know it. That's too much work.
-- But we still want to know things about it---in particular those subpopulation means.
-- We'll use our sample to estimate them.
-
-## A Table of Imaginary Replications
-
-```{r}
-X = 0+(earnings$degree == '4-year degree')
 Y = earnings$income
-J = sample(n*2500, n, replace=TRUE)
 ```
 
 $$
-\small{
-\begin{array}{r|rrr|rrr|r|rrr|rrr}
-\text{recipient} &  1 & & & 2 & & & \dots & `r n` & & & & & & \\
-\text{survey}    & J_1 & X_1 & Y_1 & J_2 & X_2 & Y_2   & \dots & J_{`r n`} & X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  & \overline{XY} \\
+\begin{array}{r|rrrr|r}
+i  &  1   &  2         &     \dots  & `r n`      & & \\ 
+s  & Y_1  & Y_2        &     \dots  & Y_{`r n`}  &  \overline{Y}_{`r n`} \\ 
 \hline
-\color{black}   1   
-    & \color{black}   `r J[1]`                   & \color{black}  `r X[1]`      & \color{black} `r Y[1]` 
-    & \color{black}   `r J[2]`                   & \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
-                                                 & \color{black}   \dots
-    & \color{black}   ?                          & \color{black}   ?     & \color{black} ?       
-    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(X*Y))` \\
-\color{magenta}   2   
-    & \color{magenta}   ?  & \color{magenta}     & \color{magenta}  ? 
-    & \color{magenta}   ?                        & \color{magenta}  ?      & \color{magenta} ?      
-                                                 & \color{magenta}   \dots 
-    & \color{magenta}   ?                        & \color{magenta}   ?     & \color{magenta} ?       
-    & \color{magenta}   ??                       & \color{magenta} ??      & \color{magenta} ?? \\
-\color{cyan}    3   
-    & \color{cyan}      ?		         & \color{cyan}   ?        & \color{cyan}  ? 
-    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?      
-                                                 & \color{cyan}    \dots 
-    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?       
-    & \color{cyan}      ??  			 & \color{cyan}   ??       & \color{cyan}    ?? \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{gray}    1M   
-    & \color{gray}      ?		         & \color{gray}   ?        & \color{gray}  ? 
-    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?      
-                                                 & \color{gray}    \dots 
-    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?       
-    & \color{gray}      ??  			 & \color{gray}   ??       & \color{gray}    ?? \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+1    & `r Y[1]` & `r Y[2]`  & \dots  & `r Y[n]`  & `r approx(mean(Y))` \\
+2    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+3    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
+1M   &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
+\hline
+\E_{\cdot}(\cdot) & ?  & ?     & \dots & ?      & ?? \\
+\V_{\cdot}(\cdot) & ?  & ?     & \dots & ?      & ?? \\
+f_{\cdot}(\cdot) & ??? & ??? & \dots & ??? & ???? \\
 \end{array}
-}
 $$
 
 - This is a table like the one we used to show our sampling distribution as in last lecture.
@@ -945,411 +546,411 @@ $$
   - Last class, we were able to add additional rows for 'our friends polls'.
   - We used our (post-election) knowledge of the population to fake these polls.
 - This time, this is really all we've got. We'll never see the population.
-- But when we talk about the probability that $X_i$,$Y_i$, $\bar Y$, etc takes on a value, 
-  we're talking about how often it takes on the value in those never-to-be-seen rows.
-- It's impossible to *know* these probabilities, but we can *reason about* their implications.
+- But when we talk about the probability that $Y_i$ or $\bar Y$ takes on a value $y$, 
+  we're talking about how often it takes on the value $y$ in those never-to-be-seen rows.
+- It's impossible to *know* these probabilities, but we can *reason about* them mathematically.
 
 
-## A Table of Imaginary Replications
-
+## Sampling Distribution for the Sample Mean
 $$
-\small{
-\begin{array}{r|rrr|rrr|r|rrr|rrr}
-\text{recipient} &  1 & & & 2 & & & \dots & `r n` & & & & & & \\
-\text{survey}    & J_1 & X_1 & Y_1 & J_2 & X_2 & Y_2   & \dots & J_{`r n`} & X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  & \overline{XY} \\
+\begin{array}{r|rrrr|r}
+i  &  1   &  2         &     \dots  & `r n`      & & \\ 
+s  & Y_1  & Y_2        &     \dots  & Y_{`r n`}  &  \overline{Y}_{`r n`} \\ 
 \hline
-\color{black}   1   
-    & \color{black}   `r J[1]`                   & \color{black}  `r X[1]`      & \color{black} `r Y[1]` 
-    & \color{black}   `r J[2]`                   & \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
-                                                 & \color{black}   \dots
-    & \color{black}   ?                          & \color{black}   ?     & \color{black} ?       
-    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(X*Y))` \\
-\color{magenta}   2   
-    & \color{magenta}   ?  & \color{magenta}     & \color{magenta}  ? 
-    & \color{magenta}   ?                        & \color{magenta}  ?      & \color{magenta} ?      
-                                                 & \color{magenta}   \dots 
-    & \color{magenta}   ?                        & \color{magenta}   ?     & \color{magenta} ?       
-    & \color{magenta}   ??                       & \color{magenta} ??      & \color{magenta} ?? \\
-\color{cyan}    3   
-    & \color{cyan}      ?		         & \color{cyan}   ?        & \color{cyan}  ? 
-    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?      
-                                                 & \color{cyan}    \dots 
-    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?       
-    & \color{cyan}      ??  			 & \color{cyan}   ??       & \color{cyan}    ?? \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{gray}    1M   
-    & \color{gray}      ?		         & \color{gray}   ?        & \color{gray}  ? 
-    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?      
-                                                 & \color{gray}    \dots 
-    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?       
-    & \color{gray}      ??  			 & \color{gray}   ??       & \color{gray}    ?? \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+1    & `r Y[1]` & `r Y[2]`  & \dots  & `r Y[n]`  & `r approx(mean(Y))` \\
+2    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+3    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
+1M   &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
+\hline
+\E_{\cdot}(\cdot) & \inblue{\mu}      & \inblue{\mu}      & \dots & \inblue{\mu}      & ?? \\
+\V_{\cdot}(\cdot) & \inblue{\sigma^2} & \inblue{\sigma^2} & \dots & \inblue{\sigma^2} & ?? \\
+f_{\cdot}(\cdot) & ??? & ??? & \dots & ??? & ???? \\
 \end{array}
-}
 $$
 
 
-- What we're interested in is the mean income of people with 4-year degrees.
+- Our starting point is what we know about our income observations $Y_1 \ldots Y_n$.
+- Because we're sampling with replacement, they're iid random variables.
+- And although we don't know their distribution $f_Y(y)$ ...
+  - We know their expected value $\E[Y]$ is the population mean $\inblue{\mu}$
+  - And their variance $\Var[Y]$ is the population variance $\inblue{\sigma^2}$.
+- Let's use this to characterize the sampling distribution of the mean $\overline{Y}$.
+	- We'll calculate its expected value.
+	- Then its variance.
+	- Then *approximate* its distribution
+
+
+## The Mean
+This one's easy. What is the expected value of the sample mean?
+
+$$
+\E\qty[\frac1n\sum_{i=1}^n Y_i] \ = \  ?
+$$
+
+## The Mean: Answered
+The expected value of the sample mean is the population mean.
+
+$$
+\begin{aligned}
+\E\qty[\frac1n\sum_{i=1}^n Y_i] 
+&= \frac1n\sum_{i=1}^n \E[Y_i] && \text{ via linearity (Rule 1)} \\
+&= \frac1n\sum_{i=1}^n \mu     && \text{ via uniform sampling } \\
+&= \frac1n \times n \times \mu = \mu.
+\end{aligned}
+$$
+
+## The Variance
+
+This one's a bit harder.  Let me get you started.
+
+$$
+\begin{aligned}
+\Var[\bar Y] 
+&= \E\qty[ \qty{ \frac{1}{n}\sum_i Y_i - \E \qty( \frac{1}{n}\sum_i Y_i ) }^2 ] && \text{definition}\\
+&= \E\qty[ \qty{ \frac{1}{n}\sum_i (Y_i - \E Y_i) }^2 ]  && \text{Rule 2: Linearity} \\
+&= \E\qty[ \qty{ \frac{1}{n}\sum_i Z_i }^2 ] && \text{for} \ \ Z_i = Y_i - \E Y_i \\
+&= \E\qty[ \frac{1}{n^2}\sum_i \sum_j Z_i Z_j ]   && \text{via FOIL}
+\end{aligned}
+$$
+
+### FOIL?
+
+- Remember FOIL from high school algebra? 
+- When we square a sum, we get *all products* of terms in the sum.
+  
+$$ 
+(a+b)^2 = \inblue{(a+b)}\inred{(a+b)} 
+= \inblue{a}\inred{a} + \inblue{a}\inred{b} + \inblue{b}\inred{a} + \inblue{b}\inred{b}
+= a^2 + 2ab + b^2
+$$
+
+- Same deal for bigger sums.
 
 $$ 
-\mu(1) = \E[ Y_i \mid X_i=1] 
+\qty{ \sum_i Z_i }^2 = \inblue{\sum_i Z_i}\inred{\sum_j Z_j} = \sum_i \sum_j \inblue{Z_i}\inred{Z_j}
 $$
 
-- We'll use the corresponding sample mean as a point estimate. 
-- How, using the data in our table, can we calculate that?
-
-::: fragment
+## Completing the Calculation
 
 $$
-\hat\mu(1) 
-= \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} 
-= \frac{\sum_{i=1}^n X_i Y_i}{\sum_{i=1}^n X_i}
-= \frac{\frac{1}{n}\sum_{i=1}^n X_i Y_i}{\frac{1}{n}\sum_{i=1}^n X_i}
-= \frac{\overline{XY}}{\overline{X}}
+\begin{aligned}
+\Var[\bar Y] &= \E\qty[ \frac{1}{n^2}\sum_i \sum_j Z_i Z_j ]  \quad \text{ for } \quad Z_i = Y_i - \E Y_i \quad && \text{via FOIL}
+\end{aligned}
 $$
 
+**Activity**. Complete the calculation to get a simple expression. 
+
+:::: columns
+::: column
+ **Hints**.
+
+  1. Use Rule 1 to push the expectation inside the sum.
+  2. Think about what $\E Z_i Z_j$ is when $i=j$ and $i\neq j$.
+  3. Is Rule 2 useful here?
+  4. What is $\E Z_i^2$  
 :::
-
-## The Sampling Distribution of $\hat\mu(1)$
-
-
-- To calibrate an interval estimate, we'll need to estimate the sampling distribution of our point estimate.
-- Because it's a mean, it's reasonable to assume that it's approximately normal. 
-     - For now, just go with it. 
-     - We'll formalize this after Exam 1.
-
-$$ f_{\hat\mu_1}(\cdot) \approx N(?, ?) $$
-
-- To use this knowledge, we'll need to know --- or estimate ---the *mean* and *variance* of this normal.
-- That is, we'll need to find the mean and variance of our point estimate. Let's do it.
-
-## The Expectation of the Subsample Mean
-
-**Claim.** The subsample mean is unbiased for the subpopulation mean.
-$$ \E[\hat\mu(1)] = \mu(1) $$
-
-**Sketch.**
-
-  - Use the Law of Iterated Expectations, conditioning on $X_1 \ldots X_n$.
-  - Then the linearity of conditional expectations to push the conditional expectation into the sum.
-  - Then irrelevance of independent conditioning variables to write things in terms of the *random variable* $\mu(X_i)$  
-  - Then the **indicator trick**. What's $X_i \mu(X_i)$? How is it related to $\mu(1)$?
-
-::: fragment
-
+::: column
+**Rules**.
 $$
 \small{
 \begin{aligned}
-\E[\hat\mu(1)] 
-&=\E\qty[ E\qty{\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} \mid X_1 \ldots X_n}] \\
-&=E\qty[\frac{\sum_{i=1}^{n} X_i \E\qty{ X_{i} \mid X_1 \ldots X_n}}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i\E\qty{ Y_{i} \mid X_i}}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i \mu(X_i)}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i\mu(1)}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\mu(1) \times \frac{\sum_{i=1}^{n}X_i}{\sum_{i=1}^{n}X_{i}}] = \E[\mu(1)]=\mu(1) 
+\text{1.} \quad & \E\qty[ \sum_i a_i Y_i] =  \sum_i a_i \E Y_i \quad \text{ for RVs $Y_i$ and constants $a_i$.} \\
+\text{2.} \quad & \E\qty[ Z_i Z_j] = \E[Z_i] \E[ Z_j]  \quad \text{if $Z_i$ and $Z_j$ are independent.} \\
 \end{aligned}
 }
 $$
 
 :::
+::::
 
-## Looking Back
-
+## The Variance: Answered
 $$
-\small{
 \begin{aligned}
-\E[\hat\mu(1)] 
-&=\E\qty[ E\qty{\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} \mid X_1 \ldots X_n}] \\
-&=E\qty[\frac{\sum_{i=1}^{n} X_i \E\qty{ X_{i} \mid X_1 \ldots X_n}}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i\E\qty{ Y_{i} \mid X_i}}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i \mu(X_i)}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i\mu(1)}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\mu(1) \times \frac{\sum_{i=1}^{n}X_i}{\sum_{i=1}^{n}X_{i}}] = \E[\mu(1)]=\mu(1) 
-\end{aligned}
-}
-$$
-
-- Now let's look back at our proof. 
-- What's the *conditional expectation* of our estimator, $\E[\hat\mu(1) \mid X_1 \ldots X_n]$?
-- This'll be useful in a minute.
-
-::: fragment
-
- - It's $\mu(1)$, the subpopulation mean, just like the unconditional expecation.
- - In our proof, we used the law of iterated expectations to write $\E[\hat\mu(1)]$ as the expectation of $\E[\hat\mu(1) \mid X_1 \ldots X_n]$.
-  - And we showed that the latter is *the constant* $\mu(1)$.
-  - So the former is the expectation of that constant---the same constant.
-
-:::
-
-
-## The Variance of the Subsample Mean
-
-**Claim.** The variance of our point estimate is the **expected value** of the subpopulation variance divided by the number of people in the subsample.
-$$ \Var[\hat\mu(1)] = \E\qty[ \frac{\sigma^2(1)}{N_1} ] \quad \text{ for } \quad N_1 = \sum_{i=1}^n X_i $$
-
-- This is like what we saw in the unconditional case in Lecture 3, with a twist.
-- The number of people in the subsample is random, so instead of $1/n$, we have $\E[ 1/N_1 ]$.
-- Let's prove it.
-  - It's a bit long. 
-  - To keep organized, I'll remind you where we left off at the top of each slide.
-  - Except the first one, where we're starting from the beginning.
-
-## Proof, Part 1
-
-- We'll start by using the Law of Total Variance, conditioning on $X_1 \ldots X_n$.
-- We 'looked back' just now for a reason---we saw that one of these terms is zero.
-
-$$
-\small{
-\begin{aligned}
-\Var\qty[ \hat \mu(1) ] &= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + \Var\qty[ \E{\hat \mu(1) \mid X_1 \ldots X_n} ] \\
-&= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + \Var[\mu(1)] \\
-&= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + 0
-\end{aligned}
-}
-$$
-
-
-
-## Proof, Part 2 {.smaller}
-
-$$
-\Var\qty[ \hat \mu(1) ] 
-= \E\qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] 
-$$
-
-- Now we'll substitute in definitions and simplify.
-- We'll end having to work with the conditional mean of a *squared sum*.
-
-$$
-\small{
-\begin{aligned}
-\Var\qty[ \hat \mu(1) ] 
-&= \E\qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] \\
-&= \E\qty[ \E\qty{  \qty(\hat \mu(1)-\mu(1))^2 \mid X_1 \ldots X_n }] \\
-&= \E\qty[ \E\qty{  \qty(\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} - \mu(1))^2 \mid X_1 \ldots X_n }] \\
-&= \E\qty[ \E\qty{  \qty(\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} - \frac{\mu(1)\sum_{i=1}^n X_i}{\sum_{i=1}^n X_i })^2 \mid X_1 \ldots X_n }] \\
-&= \E\qty[ \E\qty{  \qty(\frac{\sum_{i=1}^{n}X_i \qty{Y_{i}-\mu(1)}}{\sum_{i=1}^{n}X_{i}})^2 \mid X_1 \ldots X_n }] \\
-&= \E\qty[ \frac{\E\qty{ \qty(\sum_{i=1}^{n}X_i \qty{Y_{i}-\mu(1)})^2 \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}]
-\end{aligned}
-}
-$$
-
-## Proof, Part 3 {.smaller}
-
-$$
-\Var\qty[ \hat \mu(1) ]  = \E\qty[ \frac{\E\qty{ \qty(\sum_{i=1}^{n}X_i \qty{Y_{i}-\mu(1)})^2 \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}]
-$$
-
-- To work with this squared sum, we do our FOIL-like expansion. This is ...
-
-$$ \small{ 
-\begin{aligned}
-\qty(\sum_{i}Z_i)^2 = \qty(\sum_{i}Z_i) \qty(\sum_{j}Z_i) = \sum_i\sum_j Z_i Z_j \quad && \text{ for } \quad Z_i = X_i \qty{Y_{i}-\mu(1)} \\
-\text{or equivalently, using the \textbf{indicator trick}} && \text{ for } \quad Z_i = X_i\qty{Y_i - \mu(X_i)}
-\end{aligned}
-}
-$$
-
-- This lets us push the conditional mean *all the way into the sum*, so it meets the individual terms.
-- And when we've done that, we can use the irrelevance of independent conditioning variables to simplify.
-
-$$
-\small{
-\begin{aligned}
-\Var\qty[ \hat \mu(1) ] 
-&= \E\qty[ \frac{\E\qty{ \qty(\sum_{i=1}^{n}Z_i )^2 \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
-&= \E\qty[ \frac{\E\qty{ \sum_{i=1}^{n}\sum_{j=1}^n Z_i Z_j \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
-&= \E\qty[ \frac{\sum_{i=1}^{n}\sum_{j=1}^n \E\qty{Z_i Z_j \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
-&= \E\qty[ \frac{\sum_{i=1}^{n}\sum_{j=1}^n \E\qty{Z_i Z_j \mid X_i, X_j}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
-\end{aligned}
-}
-$$
-
-## Proof, Part 4 {.smaller}
-
-$$
-\begin{aligned} 
-\Var\qty[ \hat \mu(1) ] 
-&= \E\qty[ \frac{\sum_{i=1}^{n}\sum_{j=1}^n \E\qty{Z_i Z_j \mid X_i, X_j}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \quad \text{ for } \quad Z_i=Y_i-\mu(X_i)
+\Var[\bar Y] 
+&= \E\qty[ \frac{1}{n^2}\sum_i \sum_j Z_i Z_j ]  && \text{via FOIL} \\
+&= \frac{1}{n^2} \sum_i \sum_j \E Z_i Z_j    && \text{via Rule 1: Linearity } \\
+&= \frac{1}{n^2} \sum_i \qty( \sum_{j : j\neq i} \E Z_i Z_j + \E Z_i^2  )  && \text{Taking out the term with $i=j$ term from the inner sum}  \\
+&= \frac{1}{n^2} \sum_i \qty( \sum_{j : j\neq i} 0 + \E Z_i^2  )  && \text{via Rule 2} \\
+&= \frac{1}{n^2} \sum_i \E\qty(Y_i-\E Y_i)^2  && \text{using the definition of $Z_i$} \\
+&= \frac{1}{n^2} \sum_i \Var(Y_i)             && \text{using the definition of variance} \\
+&= \frac{1}{n^2} \times n \times \Var(Y_i) = \frac{\Var(Y_i)}{n} = \frac{\sigma^2}{n}.   && \text{counting the copies of $\Var(Y_i)$ in the sum} \\
 \end{aligned}
 $$
 
-
-- Let's take a look at one of the terms in the numerator, $\E\qty{Z_i Z_j \mid X_i, X_j}$.
-  - We're going to show that the cross-terms --- the ones for $i \neq j$ --- are zero.
-  - This will let us drop them from the sum.
-  - We'll use the fact that $Z_i$ and $Z_j$ are independent for $i \neq j$.
-- Let's rewrite a cross-term using our usual stuff
-  - the law of iterated expectations, conditioning on $Z_i$
-  - linearity of expectations;
-  - irrelevance of independent conditioning variables.
-
-$$\small{
-\begin{aligned}
-\E\qty{Z_i Z_j \mid X_i, X_j} 
-&= \E\qty{ \E(Z_i Z_j \mid Z_i,X_i,X_j) } \\
-&= \E\qty{ Z_i \E(Z_j \mid X_i,X_j) } \\
-&= \E\qty{ Z_i \textcolor{blue}{\E(Z_j \mid X_j)} } \quad \text{ where } \\
-\textcolor{blue}{\E(Z_j \mid X_j)} 
-&= \E\qty[X_j \qty{Y_j - \mu(X_j)}] \\ 
-&= \E\qty{ \E\qty[X_j \qty{Y_j - \mu(X_j)} \mid X_j] } \\
-&= \E\qty[X_j \qty{ \E\qty[Y_j \mid X_j] - \mu(X_j)}] \\
-&= \E\qty[X_j \cross{\qty{ \mu(X_j) - \mu(X_j)}}] = 0. \\
-\end{aligned}
-}$$
-
-
-## Proof, Part 5 {.smaller}
+## The State of Our Sampling Distribution Table.
 
 $$
-\begin{aligned} 
-\Var\qty[ \hat \mu(1) ] 
-&= \E\qty[ \frac{\sum_{i=1}^{n}\sum_{j=1}^n \E\qty{Z_i Z_j \mid X_i, X_j}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \quad \text{ for } \quad Z_i=Y_i-\mu(X_i)  \\
-&= \E\qty[ \frac{\sum_{i=1}^{n} \E\qty{Z_i^2 \mid X_i}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \quad \text{because cross-terms are zero}.
-\end{aligned}
+\begin{array}{r|rrrr|r}
+i  &  1   &  2         &     \dots  & `r n`      & & \\ 
+s  & Y_1  & Y_2        &     \dots  & Y_{`r n`}  &  \overline{Y}_{`r n`} \\ 
+\hline
+1    & `r Y[1]` & `r Y[2]`  & \dots  & `r Y[n]`  & `r approx(mean(Y))` \\
+2    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+3    &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
+1M   &  ?     &  ?      &     \dots  &  ?        & ?? \\
+\dots & \dots & \dots   &     \dots  & \dots     & \dots \\
+\hline
+\E_{\cdot}(\cdot) & \mu & \mu & \dots & \mu & \inblue{\mu} \\
+\V_{\cdot}(\cdot) & \sigma^2 & \sigma^2 & \dots & \sigma^2 & \inblue{\frac{\sigma^2}{n}} \\
+f_{\cdot}(\cdot) & ??? & ??? & \dots & ??? & ???? \\
+\end{array}
 $$
 
-- All we've got to do now is recognize what we have. 
-- Let's look at a term in the numerator.
-  - We'll use iterated expecations and linearity.
-  - Then the indicator trick.
+- We've been able to fill in the mean and variance of our sample mean.
+  - The mean is the mean of an individual observation.
+  - The variance is $1/n$ times the variance of an individual observation.
+    - We call its square root, the corresponding standard deviation, the *standard error*.
+    - That's what we tend to call the standard deviation of an estimator.
+- These two pieces of information are somewhat useful on their own.
+ - We can use Chebyshev's Inequality to say something about how close our estimator $\overline{Y}$ is to the sample mean $\mu$
+- But having a good approximation to the *distribution* of $\overline{Y}$ would be nicer.
 
-$$
-\small{
-\begin{aligned}
-\E\qty[Z_i^2 \mid X_i] 
-&= \E\qty[ X_i\qty{Y_i - \mu(X_i)}^2 \mid X_i] 
-= X_i\E\qty[\qty{Y_i - \mu(X_i)}^2 \mid X_i] 
-= X_i\Var\qty[Y_i \mid X_i] = X_i \sigma^2(X_i) 
-= X_i\sigma^2(1) 
-\end{aligned}
-}
-$$
+## Approximate Normality 
 
-- We finish up by substituting this back into what we started with.
-
+- The central limit theorem says the distribution of the sample mean will be approximately normal.
+  - We'll get into the precise meaning of this statement later in the semester.
+  - But for now, it's reasonable to *act as if* the distribution of $\overline{Y}$ were normal.
+ 
 $$
-\small{ 
-\begin{aligned}
-\Var\qty[ \hat \mu(1) ] 
-&= \E\qty[ \frac{\sum_{i=1}^{n} \E\qty{Z_i^2 \mid X_i}}{\qty(\sum_{i=1}^{n}X_{i})^2}]  
-= \E\qty[ \frac{\sum_{i=1}^{n} X_i \sigma^2(1)}{\qty(\sum_{i=1}^{n}X_{i})^2}] 
-= \E\qty[ \frac{\cancel{\sum_{i=1}^{n} X_i }\sigma^2(1)}{\qty(\sum_{i=1}^{n}X_{i})^{\cancel{2}}}] 
-= \E\qty[ \frac{\sigma^2(1)}{\sum_{i=1}^{n}X_{i}}] = \sigma^2(1) \times \E\qty[ \frac{1}{N_1}]. 
-\end{aligned}
-}
+\overline{Y} \sim N\qty( \E \overline{Y},\ \Var \overline{Y} ) = N\qty(\mu,\ \frac{\sigma^2}{n})
 $$
 
-
-## Our Estimator's Sampling Distribution 
+- This is what our approximation to the distribution of the estimator $\overline{Y}$ looks like.
 ```{r}
-#| out-height: 300px
-#| fig-asp: .3 
-
-
-muhat.1 = mean(Y[X==1])
-se = sqrt(var(Y[X==1])/sum(X))
-breaks = seq(-4*se, 4*se, 2*se) 
-signs  = case_when(
-  breaks < 0 ~ '-', 
-  breaks == 0 ~ '',
-  breaks > 0 ~ '+')
-offsets = case_when(
-  breaks != 0 ~ approx(breaks),
-  breaks == 0 ~ '')
-labels.conrete = sprintf('%1.2f', breaks+muhat.1)
-labels.abstract = sprintf('μ %s %s',     signs, offsets)
-
 x=seq(-4,4,by=.01)
-sampling.dist.plot = ggplot() + geom_area(aes(x=x,y=dnorm(x)), alpha=.1, color='black', fill='green') + 
+ggplot() + geom_area(aes(x=x,y=dnorm(x)), alpha=.1, color='black', fill='green') + 
        geom_vline(aes(xintercept=qnorm(c(.16,.84))), linetype='dashed', color='blue') +
        geom_vline(aes(xintercept=qnorm(c(.025,.975))), linetype='dotted', color='blue') +
-       scale_x_continuous(breaks=seq(-4,4,by=2), labels=labels.abstract) 
-
-sampling.dist.plot
+       scale_x_continuous(breaks=seq(-4,4), 
+                          labels=ifelse(seq(-4,4)==0, 'µ', sprintf("µ+%dσ/√n",seq(-4,4))),
+                          guide=guide_axis(angle = 90))
 ```
 
-- It's approximately this normal, with
-  - mean $\mu(1)$, the subpopulation mean for people with 4-year degrees.
-  - standard deviation $\sqrt{\E \frac{\sigma^2(1)}{N_1}}$
-- 95% of draws from this distribution lie between the dotted blue lines.
-  - Which are $\mu(1) \pm 1.96 \sqrt{\E \frac{\sigma^2(1)}{N_1}}$.
-- With a little arithmetic, this tells us we can get a calibrated interval by ...
-  - Starting at our point estimate
-  - Drawing *arms* on either side of length $1.96 \sqrt{\E \frac{\sigma^2(1)}{N_1}}$
+- 2/3 of samples will be within .96 standard error of zero (dashed lines above).
+- 95% of samples will be within 1.96 standard errors of zero (dotted lines above).
 
-## Forming the CI {.smaller}
-
+## Central Limit Theorem Review 
 ```{r}
-#| out-height: 250px
-#| fig-asp: .25
+sigma = 50/sqrt(12)
+mu = 25
+x = seq(-25,75,by=.1)
 
-sampling.dist.plot
+unif.clt.plot = function(n.clt) {
+  a<- runif(n.clt*100000,0,50)
+  dim(a) = c(n.clt,100000)
+  a.bar = apply(a,2,mean)
+  ggplot() + geom_histogram(aes(x=a.bar, y=after_stat(density)), bins=100) + 
+             geom_area(aes(x=x,y=dnorm(x, mu, sigma/sqrt(n.clt))), alpha=.1, color='black', fill='green') +
+             scale_x_continuous(breaks=mu + seq(-4,4)*sigma/sqrt(n.clt), 
+                                limits=mu + c(-4,4)*sigma/sqrt(n.clt), 
+                                labels=ifelse(seq(-4,4)==0, 'µ', sprintf("µ+%dσ/√n",seq(-4,4))),
+                                guide=guide_axis(angle = 90)) 
+}
+
+unif.clt.plot(2)
 ```
+- What is the mean of a uniform random variable with a range from 0 to 50? 
+- How "normal" the sampling distribution is depends on the sample size! 
+- Let's compare our sampling distribution to a normal approximation.
+- Here they are at the sample size of 2.
 
-$$ \tiny{ 
-  \text{an approximately calibrated 95\% interval:} \quad  \qty[ \hat\mu(1) - 1.96 \sqrt{\E \frac{\sigma^2(1)}{N_1}} \quad  \ldots \quad \hat\mu(1) + 1.96 \sqrt{\E \frac{\sigma^2(1)}{N_1}} ] 
-} $$
 
-- We can *almost* do that.
-  - We know our point estimate.
-  - And although we *don't know* the standard error we need to draw the arms, it's easy enough to estimate.
-- We'll substiute the *subsample variance* $\hat\sigma(1)$ for the *subpopulation variance* $\sigma(1)$.
-$$ \tiny{
-\hat\sigma^2(1) = \frac{1}{N_1}\sum_{i:X_i=1} \qty{ Y_i - \hat\mu(1) }^2
-} $$
-
-- And the inverse of the *subsample size*, $1 / N_1$, for its *expected value*.
-
-$$ \tiny{
-\text{another approximately calibrated 95\% interval:} \quad  \qty[ \hat\mu(1) - 1.96 \sqrt{\frac{\hat\sigma^2(1)}{N_1}} \quad  \ldots \quad \hat\mu(1) + 1.96 \sqrt{\frac{\hat\sigma^2(1)}{N_1}} ] = \qty[`r approx(muhat.1 - 1.96*se)` \quad \ldots \quad `r approx(muhat.1 + 1.96*se)`] 
-} $$
-
-- This is the interval we'll use.  Why am I not drawing it in?
-
-## I can't
-
+## Central Limit Theorem Review 
 ```{r}
-#| out-height: 250px 
-#| fig-ncol: 2
-sampling.dist.plot
-ggplot() + geom_pointrange(aes(x=muhat.1, y=.25, xmin=muhat.1-1.96*se, xmax=muhat.1+1.96*se)) 
+unif.clt.plot(10)
 ```
+- Here they are at the sample size of 10.
 
-- I can draw the sampling distribution---in abstract terms, centered on the subpopulation man $\mu(1)$.
-- I can draw the interval---in concrete terms, centered on our point estimate $\hat\mu(1)$.
-- But I don't know the precise relationship between these two points.
-- That means I can't 'align the axes' and overlay one on the other.
-
-\ \ 
-
-- When I did this for turnout, I was using *post-election knowledge* of the population.
-- I'm never going to have that knowledge about income in California.
-- So we'll never know if our interval covers the subpopulation mean.
-
-## Interpretation
+## Central Limit Theorem Review 
 ```{r}
-#| out-height: 250px
-#| fig-asp: .25 
+unif.clt.plot(50)
+```
+- Here they are at the sample size of 50.
 
-set.seed(0)
+## Central Limit Theorem Review 
+```{r}
+unif.clt.plot(250)
+```
+- Here they are at the sample size of 250. Pretty close, right?
+- This works for almost all distributions, not just the uniform distribution.
+
+
+## Implications of Normality
+
+```{r}
+#| out-height: 400px
 x=seq(-4,4,by=.01)
-muhat = rnorm(20)
-
-sampling.dist.plot + 
-       geom_pointrange(aes(x=muhat, y=(1:20)/40, xmin=muhat-1.96, xmax=muhat+1.96, color=abs(muhat) <= 1.96), alpha=.4) +
-       scale_color_discrete(type=c('#F50041', '#6615A3')) + guides(color=FALSE)
+ggplot() + geom_area(aes(x=x,y=dnorm(x)), alpha=.1, color='black', fill='green') + 
+       geom_vline(aes(xintercept=qnorm(c(.16,.84))), linetype='dashed', color='blue') +
+       geom_vline(aes(xintercept=qnorm(c(.025,.975))), linetype='dotted', color='blue') +
+       scale_x_continuous(breaks=seq(-4,4), labels=ifelse(seq(-4,4)==0, 0, sprintf("%dσ/√n",seq(-4,4))))
 ```
 
-- We do think---based on our mathematical reasoning---that our interval is calibrated.
-- Recall what calibration means.
-  - A calibrated interval contains what it's supposed to
-  - in the case, the subpopulation mean $\mu(1)$
-  - roughly 95% of the time --- 19/20 times 
-- So if we want to picture our interval in reference to $\mu$, we can in a sense.
-  - We can think, in rough terms, of it being *one of these*.
-  - We don't know which and they're all equally likely.
-  - Most of the time, it'll be one of the [good ones]{.fg style="color:#6615A3"}
-  - But sometimes it'll be the [bad one]{.fg style="color:#F50041"}.
+$$
+\left[\mu - 1.96 \cdot \frac{\sigma}{\sqrt{n}} \quad \ldots \quad \mu + 1.96 \cdot \frac{\sigma}{\sqrt{n}} \right] 
+$$  
+
+- If our sampling distribution were exactly normal, 95% of the time our mean would lie in this interval.
+- One thing this tells us: as long as $\sqrt{n}$ is big in relation to $\sigma$, our sample mean $\overline{Y}_n$ will likely be close to our population mean $\mu$. 
+- This quantifies our answer to Question 1.
+
+## Two Questions 
+
+1. Is \$135,406 close to the population mean $\mu$?  Yes! 
+2. Can we say something about how close?  Let's use a confidence interval.  
+	- For calibration, we'll try to estimates of the sampling distribution.
+		- One based directly on our normal approximation.
+		- One based on the bootstrap as before.
+	- Approximate normality *justifies* the bootstrap here.
+	- Just like the (exact) binomial distribution justified it for the proportion.
+
+## Bootstrapped Sampling Distribution of a Sample Mean
+
+- We don't observe the population so we cannot construct the sampling distribution. 
+- However, we can approximate the sampling distribution.
+  - To do this, we take repeated random samples *from our sample*. 
+  - That's the bootstrap idea.
+
+$$
+\begin{array}{r|rrrr|r}
+i &  1 & 2  & \dots & `r n` & \bar{Y}_{`r n`}  \\
+Y_i & `r Y[1]` & `r Y[2]`  & \dots & `r Y[n]` & `r approx(mean(Y))`
+\end{array}
+$$
+
+- With the data stored in this table, we can calculate the mean of a bootstrap sample like this.
+
+```{r}
+#| echo: true
+mean(sample(Y, size=n, replace=TRUE)) 
+```
+
+## Bootstrapped CIs for a Population Mean
+
+```{r}
+#| echo: true
+B=10000
+Y.bar <- rep(NA, B)
+
+for(b in 1:B){
+	Y.bar[b]= mean(sample(Y, size=n, replace=TRUE))	
+}
+quantile(Y.bar,probs=c(.025,.975)) 
+
+ggplot() + geom_histogram(aes(x=Y.bar, y=after_stat(density)), bins=100) +
+           geom_vline(aes(xintercept=quantile(Y.bar, probs=c(.025, .975))), 
+                      linetype='dotted', color='blue')
+```
+
+## Bootstrapped Sampling Distribution vs Sampling Distribution
+
+1. CLT says the sampling distribution is approximately normal.
+2. We see that the bootstrapped distribution is approximately normal.
+3. Remaining question is whether they're the same normal.
+	- Does the bootstrapped CI have approximately the same size 
+	   as the middle 95% of the sampling distribution.
+
+Let's table the remaining question for now while we look at another approach to CIs.
+
+## Normal-Approximation CI
+
+-  Another way to get a 95\% CI is to use our normal approximation directly.
+-  We can use the fact that the middle 95\% of the distribution lies approximately in the interval
+ $$
+ \left[\mu - 1.96 \cdot \frac{\sigma}{\sqrt{n}} \ \ldots \ \mu + 1.96 \cdot \frac{\sigma}{\sqrt{n}} \right]
+ $$
+ 
+- If we plug in the sample standard deviation $\hat\sigma$ for $\sigma$,  then we get something we can calculate.
+a real interval.
+$$
+ \left[\mu - 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}} \ ...\ \mu + 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}} \right] = [129,720 \ \ldots \ 141,091]
+ $$
+
+-  Pretty close to our bootstrap interval.
+
+
+
+## Why does this work?
+
+- The facts we've derived about the sampling distribution of the sample mean tell us that 
+
+$$
+\begin{aligned}
+&P\qty(\mu - 1.96 \cdot \frac{\sigma}{\sqrt{n}} \leq \overline Y \leq \mu + 1.96 \cdot \frac{\sigma}{\sqrt{n}}\qty) \approx .95
+\end{aligned} 
+$$
+
+- Some algebra (left as an exercise) shows that this implies 
+  
+$$
+\begin{aligned}
+&P\qty(\overline Y - 1.96 \cdot \frac{\sigma}{\sqrt{n}} \leq \mu \leq \overline Y + 1.96 \cdot \frac{\sigma}{\sqrt{n}}) \approx .95
+\end{aligned}
+$$
+
+- We don't know $\sigma$, so we can't do this exactly. 
+- But we can use the sample standard deviation in its place.
+
+$$
+\begin{aligned}
+&P\qty(\overline Y - 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}} \leq \mu \leq \overline Y + 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}}) \approx .95
+\end{aligned}
+$$
+
+- The remaining question is to what degree this substitution is justified.
+- i.e., are the following two things close?
+	- $\sigma$, the population standard deviation
+	- $\hat\sigma$, our sample standard deviation 
+- Or, to keep the right scale in mind,
+	- $\sigma/\sqrt{n}$, which we call the (population) standard error.
+	- $\hat\sigma/\sqrt{n}$, which we call the estimated standard error.
+
+## Something Like an Answer 
+
+- To get a sense of how variable the estimated standard error is, we can bootstrap it.
+
+```{r}
+#| out-height: 400px
+B=10000
+s.boot <- rep(NA,B)
+for(b in 1:B){
+	s.boot[b]= sd(sample(Y,size=n,replace=TRUE))	
+}
+ggplot() + geom_histogram(aes(x=s.boot/sqrt(n), y=after_stat(density)))
+```
+
+- Does variation on this scale have much of an impact on our interval?
+$$
+\qty[\overline Y - 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}} \quad \ldots \quad \overline Y + 1.96 \cdot \frac{\hat\sigma}{\sqrt{n}} ] = 
+\qty[`r approx(mean(Y) - 1.96*sd(Y)/sqrt(n))` \quad \ldots \quad `r approx(mean(Y) + 1.96*sd(Y)/sqrt(n))`]
+$$
+
+::: fragment
+- Yes, but not too much. 
+  - We're seeing that we're almost always within about $1000$ of the population standard error.
+  - If we're off by $1000$ in the standard error, we're off by $1000 \times 1.96 \approx 2000$ on the interval's bounds.
+  - That's about 20% off on each side. We'll ignore it for now. 
+:::
+
+
+## CI Wrap Up
+
+- We got the following 95% CIs for the population income mean.
+  - Bootstrap: \$`r approx(quantile(Y.bar,.025))` to \$`r approx(quantile(Y.bar,.975))`
+  - Normal Approx: \$`r approx(mean(Y) - 1.96*sd(Y)/sqrt(n))` to \$`r approx(mean(Y) + 1.96*sd(Y)/sqrt(n))`
+- They're more or less the same. 
+  - We can think of that as evidence that they're valid, although it's not proof.
+  - We'll have higher standards  later in the semester. I promise.
+
+### Our Two Questions
+
+1.	Is \$135,406 close to the population mean $\mu$?  Yes! 
+2. Can say something about how close? Yes! Likely within \$5000 or so.
+
+- We can say this after observing only a tiny fraction of the population. 
+  - About $1/2500$ people. 
+  - That's pretty cool. 
+
