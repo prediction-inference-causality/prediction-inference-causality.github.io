@@ -1,6 +1,6 @@
 ---
 title: "Lecture 2"
-subtitle: "Population Inference for a Proportion"
+subtitle: "Interval Estimates for a Proportion"
 format:
   clean-revealjs:
     height: 1000
@@ -42,16 +42,16 @@ approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=c
 
 ```{r ggplot-themes}
 class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
-		    panel.background = element_rect(fill = "transparent", colour = NA),
+        panel.background = element_rect(fill = "transparent", colour = NA),
                     legend.background = element_rect(fill="transparent", colour = NA),
                     legend.box.background = element_rect(fill="transparent", colour = NA),
                     legend.key = element_rect(fill="transparent", colour = NA),
-		    axis.ticks.x = element_blank(),
-		    axis.ticks.y = element_blank(),
-		    axis.text.x  = element_text(colour = "#aaaaaa"),
-		    axis.text.y  = element_text(colour = "#aaaaaa"),
-		    axis.title.x  = element_text(colour = "#aaaaaa"),
-		    axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = "#aaaaaa"),
+        axis.text.y  = element_text(colour = "#aaaaaa"),
+        axis.title.x  = element_text(colour = "#aaaaaa"),
+        axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
 )
 
 theme_set(class.theme)
@@ -60,11 +60,11 @@ theme_update(axis.title.x  = element_blank(),
 simplified.theme = theme_get()
 
 theme_update(axis.text.x   = element_blank(), 
-   	         axis.text.y   = element_blank())
+              axis.text.y   = element_blank())
 blank.theme = theme_get()
 
 theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
-	         panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
 grid.theme = theme_get()
 
 theme_set(simplified.theme)
@@ -200,9 +200,6 @@ ggplot(dice.data2) + geom_bar(aes(x=p, y=after_stat(prop))) +
 
 # Polling
 
-## Context
-
-::: {.hidden}
 
 ```{r population}
 our.seed = 0
@@ -223,7 +220,79 @@ Y = y[J]
 sample.proportion = mean(Y)
 ```
 
-:::
+
+```{r histograms}
+width = function(samples, alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( mean(samples) - w/2 <= samples & samples <= mean(samples) + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
+}
+
+height = .04
+scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) 
+scale_y = scale_y_continuous(breaks=seq(0,height,by=.01), limits=c(0, height))
+annotate.histogram = function(samples) { 
+    w66 = width(samples, alpha=1/3)
+    w95 = width(samples, alpha=.05)
+    ggplot() + geom_bar(aes(x=samples, y=after_stat(prop)), alpha=.3) +
+           geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7) +
+           geom_vline(aes(xintercept=mean(samples)), color="blue") +
+           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w66/2), color="blue", linetype='dashed') +
+           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w95/2), color="blue", linetype='dotted') +
+           scale_x + scale_y
+}
+
+K=100
+heights = sample(height*(1:K)/K)
+default.highlight.colors = c('black', 'magenta', 'cyan', 'gray')
+with.points = function(histplot, samples, K=100, highlight=4) {
+    set.seed(our.seed)
+    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
+    heights = sample(height*(1:K)/K)
+    data = data.frame(y=heights, x=samples[1:K], 
+                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
+                      alpha=c(rep(1, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
+    histplot + geom_point(aes(y=y, x=x, color=I(color), alpha=I(alpha)), data=data)
+}
+
+with.intervals = function(histplot, samples, w=width(samples, alpha=.05), K=100, 
+                          highlight=4, highlight.alpha=1) { 
+    set.seed(our.seed)
+    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
+    heights = sample(height*(1:K)/K)
+    data = data.frame(y=heights, x=samples[1:K], w=w,
+                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
+                      alpha=c(rep(highlight.alpha, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
+    histplot + 
+        geom_pointrange(aes(y=y, x=x, xmin=x-w/2, xmax=x+w/2, color=I(color), alpha=I(alpha)), data=data)
+}
+```
+
+```{r mapping}
+# Create fake locations for the people in our population
+# by taking random convex combinations of state vertices
+set.seed(0)
+ga.shape = us_map(include = c("GA"))
+
+# To reduce computation, we'll have 100K locations + jitter
+M = 100000 
+V = nrow(ga.shape)
+weights = abs(rt(M*V,1))
+dim(weights) = c(M,V)
+weights = (1/rowSums(weights)) * weights 
+base.x = weights %*% ga.shape$x
+base.y = weights %*% ga.shape$y
+base.ind = 1 + ( (0:(N-1)) %% M )
+locations = data.frame(x=base.x[base.ind] + rnorm(N, sd=.01),
+                       y=base.y[base.ind] + rnorm(N, sd=.01))
+
+ga = ggplot() + geom_polygon(data=ga.shape, aes(x = x, y = y), fill="white", color="black") + coord_fixed() + blank.theme
+```
+
+## Context
 
 - Suppose that, week before the 2020 presidential election, you did some polling.
   - You use a list of the $N \approx `r approx(N)`$ people registered to vote in Georgia.
@@ -323,35 +392,13 @@ is close to the population proportion $`r approx(sum(y))` / `r approx(N)` \appro
 - On each call, each registered voter has a $1/`r approx(N)`$ chance of being called.
   - This is called sampling with replacement because we could call the same person twice.
   - In our poll, this is unlikely because we're making a small number of calls relative to population size.
-  
-
-
-
-```{r mapping}
-# Create fake locations for the people in our population
-# by taking random convex combinations of state vertices
-set.seed(0)
-ga.shape = us_map(include = c("GA"))
-
-# To keep all this from being overwhelming, we'll have 10000 fake locations
-# The jth person is at the (j %% M + 1)st location
-M = 10000 
-V = nrow(ga.shape)
-weights = abs(rt(M*V,1))
-dim(weights) = c(M,V)
-weights = (1/rowSums(weights)) * weights
-locations = data.frame(x=weights %*% ga.shape$x, y=weights %*% ga.shape$y)
-
-ga = ggplot() + geom_polygon(data=ga.shape, aes(x = x, y = y), fill="white", color="black") + coord_fixed() + blank.theme
-```
-`
 
 :::: {.r-stack}
 ::: {.fragment .fade-out data-fragment-index="0"}
 
 ```{r}
 #| out-height: 300px
-sample.locations = locations[J %% M + 1, ]
+sample.locations = locations[J, ]
 sample.locations$label = J
 ga + geom_text(aes(x = x, y = y, label=label), alpha=.5, data=sample.locations[c(1,2,n),]) 
 ```
@@ -403,7 +450,7 @@ JM = sample(N, n, replace=TRUE)
 J = J1
 Y = y[J1]
 
-sample.locations = locations[J %% M +1, ]
+sample.locations = locations[J, ]
 sample.locations$label = J
 ga + geom_text(aes(x = x, y = y, label=label), alpha=.2, data=sample.locations) 
 ```
@@ -427,7 +474,7 @@ $$
 J = J2
 Y = y[J2]
 
-sample.locations = locations[J %% M + 1, ]
+sample.locations = locations[J, ]
 sample.locations$label = J
 ga + geom_text(aes(x = x, y = y, label=label), color='magenta', alpha=.2, data=sample.locations)
 ```
@@ -450,7 +497,7 @@ $$
 J = J3
 Y = y[J3]
 
-sample.locations = locations[J %% M + 1, ]
+sample.locations = locations[J,]
 sample.locations$label = J
 ga + geom_text(aes(x = x, y = y, label=label), color='cyan', alpha=.2, data=sample.locations)
 ```
@@ -491,8 +538,6 @@ $$
     & \color{gray}    `r J[2]`   & \color{gray}    `r Y[2]`           & \color{gray}    \dots 
     & \color{gray}    `r J[n]`   & \color{gray}    `r Y[n]`           & \color{gray}    `r approx(mean(Y))` \\
  {\vdots} & {\vdots} & {\vdots} & {\vdots} & {\vdots}  & {\vdots} & {\vdots} & {\vdots}  & {\vdots} \\ 
-\hline
-{f_{\cdot}(\cdot)} & \hphantom{Ber(`r approx(p)`)} & & \hphantom{Ber(`r approx(p)`)} &  & & \hphantom{Ber(`r approx(p)`)} & \hphantom{\frac{Bin(`r n`,`r approx(p)`)}{`r n`}} \\
 \end{array}
 
 
@@ -524,34 +569,16 @@ Histogram the result
 ```{r}
 #| echo: true
 #| out-height: 400px
-ggplot() + geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.2) 
+ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), alpha=.3)  
 ```
 
 ## Annotating the Sampling Distribution Histogram 
 
 ```{r}
-#| echo: true
-#| out-height: 400px
+#| out-height: 500px
 
-width = function(samples, alpha=.05) {
-  covg.dif = function(w) { 
-    actual = mean( mean(samples) - w/2 <= samples & samples <= mean(samples) + w/2)
-    nominal = 1-alpha 
-    actual - nominal  
-  }
-  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
-}
-w66 = width(meanY.samples, alpha=1/3)
-w95 = width(meanY.samples, alpha=.05)
-
-annotated.histogram = ggplot() + 
-           geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.2) +
-           geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7) +
-           geom_vline(aes(xintercept=mean(meanY.samples)), color="blue") +
-           geom_vline(aes(xintercept=mean(meanY.samples)+c(-1,1)*w66/2), color="blue", linetype='dashed') +
-           geom_vline(aes(xintercept=mean(meanY.samples)+c(-1,1)*w95/2), color="blue", linetype='dotted') +
-           scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) +
-           scale_y_continuous(breaks=seq(0,40,  by=10), limits=c(0, 40))
+annotated.histogram = annotate.histogram(meanY.samples)
+annotated.histogram
 ```
 
 - There are a few features we may want to highlight.
@@ -569,8 +596,10 @@ annotated.histogram = ggplot() +
 #| out-height: 500px
 Y=y[J1] 
 p.as.close    = mean(abs(meanY.samples - mean(y)) <= abs(mean(Y)-mean(y))) 
+w66 = width(meanY.samples, alpha=1/3)
+w95 = width(meanY.samples, alpha=.05)
 
-annotated.histogram + geom_point(aes(x=mean(Y), y=0))
+annotated.histogram + geom_point(aes(x=mean(Y), y=heights[1]))
 ```
 
 
@@ -580,11 +609,11 @@ annotated.histogram + geom_point(aes(x=mean(Y), y=0))
 **Q**. Did we get lucky? 
 
 ::: fragment
-Not too lucky.
+Not that lucky.
 
   - In `r percent(p.as.close)` of polls, we come as close as our estimate.
-  - In 68% of polls, the sample proportion is within `r w66/2` of the population proportion.
-  - In 95% of polls, the sample proportions are within  `r w95/2` of the population proportion.
+  - In 68% of polls, the sample proportion is within `r percent(w66/2)` of the population proportion.
+  - In 95% of polls, the sample proportions are within  `r percent(w95/2)` of the population proportion.
   
 :::
 
@@ -592,7 +621,7 @@ Not too lucky.
 
 ```{r}
 #| out-height: 500px
-annotated.histogram + geom_point(aes(x=mean(Y), y=0))
+annotated.histogram + geom_point(aes(x=mean(Y), y=heights[1]))
 ```
 
 **Q**. Could we have predicted how close we'd get before the election happened?
@@ -609,16 +638,15 @@ Yes, in sense.
 
 ```{r}  
 #| out-height: 500px
-width = .02
+w = .02
 p.blank = ggplot() + geom_vline(aes(xintercept=population.proportion), color='green', size=1) +
-                     scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6,.8)) +
-                     scale_y_continuous(breaks=seq(0,40,  by=10), limits=c(0, 40))
-p.nofriends = p.blank + geom_pointrange(aes(y=0, x=mean(Y), xmin=mean(Y)-width/2, xmax=mean(Y)+width/2))
+  scale_x + scale_y
+p.nofriends = p.blank + geom_pointrange(aes(y=heights[1], x=mean(Y), xmin=mean(Y)-w/2, xmax=mean(Y)+w/2))
 p.nofriends
 ```
 
 - Our *point estimate* of the population proportion is the sample proportion $\overline{Y}_{`r n`}$.
-- So let's try an interval of width .02 centered on it: $\ \ \overline{Y}_{`r n`} \pm .01$.
+- So let's try an interval of w .02 centered on it: $\ \ \overline{Y}_{`r n`} \pm .01$.
 - Ours covers --- includes --- the population proportion.
 - Is that just chance? Let's check out our friends' intervals.
 
@@ -629,8 +657,8 @@ p.nofriends
 Y2 = y[J2]
 Y3 = y[J3]
 p.with2friends = p.nofriends + 
-                  geom_pointrange(aes(y=15, x=mean(Y2), xmin=mean(Y2)-width/2, xmax=mean(Y2)+width/2), color='magenta') +
-                  geom_pointrange(aes(y=30, x=mean(Y3), xmin=mean(Y3)-width/2, xmax=mean(Y3)+width/2), color='cyan') 
+                  geom_pointrange(aes(y=heights[2], x=mean(Y2), xmin=mean(Y2)-w/2, xmax=mean(Y2)+w/2), color='magenta') +
+                  geom_pointrange(aes(y=heights[3], x=mean(Y3), xmin=mean(Y3)-w/2, xmax=mean(Y3)+w/2), color='cyan') 
 p.with2friends
 ```
 
@@ -643,12 +671,11 @@ p.with2friends
 
 ```{r}
 #| out-height: 500px
-K=100
-p.with2friends + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.samples[1:K]-width/2, xmax=meanY.samples[1:K]+width/2), 
+p.with2friends + geom_pointrange(aes(y=heights, x=meanY.samples[1:K], xmin=meanY.samples[1:K]-w/2, xmax=meanY.samples[1:K]+w/2), 
                                  alpha=.1, color='purple') 
 ```
 
-- $`r sum(meanY.samples[1:K]-width/2 <= p & p <= meanY.samples[1:K]+width/2)`/100$ cover the population proportion.
+- $`r sum(meanY.samples[1:K]-w/2 <= p & p <= meanY.samples[1:K]+w/2)`/100$ cover the population proportion.
 - This gives us a sense of the *probability* that our interval covers the population proportion.
 - If we want to be more precise, we could do the same for millions.
 - Let's not. Instead, let's work out a trick for counting intervals that cover.
@@ -657,9 +684,11 @@ p.with2friends + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=me
 ##  Coverage Probability and Sampling Distributions
 ```{r}
 #| out-height: 500px
-p.blank + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.samples[1:K]-width/2, xmax=meanY.samples[1:K]+width/2), 
-                                 alpha=.1, color='purple') + 
-                 geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.2) 
+ 
+blank.histogram = ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), alpha=.2) + 
+  scale_x + scale_y 
+p.coverage.ex = with.intervals(blank.histogram, meanY.samples, w=.02, highlight=0) 
+p.coverage.ex
 ```
 
  **Activity**. Calculate this *coverage probability* using the *sampling distribution* of our point estimate $\bar Y_{`r n`}$.\
@@ -669,21 +698,21 @@ p.blank + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.sam
 
   - Suppose we want to use a diagram like this to count the number of intervals that cover.
   - But we don't want to draw in the horizontal segments for each poll.
-  - We just want to draw a dot representing $\bar Y_{`r n`}$.
+  - We just want to draw dots representing each poll's point estimate $\bar Y_{`r n`}$.
   - Can we draw in a few lines that'll help us count?
 
 
 ## Using Our Hint
 ```{r}
 #| out-height: 500px
-
-p.blank + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.samples[1:K]-width/2, xmax=meanY.samples[1:K]+width/2), 
-                                 alpha=.1, color='purple') + 
-                 geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.2) + 
-                 geom_vline(aes(xintercept=population.proportion+c(-.01,.01)), color="red", linetype='dotted', size=1) 
+p.coverage.hint = p.coverage.ex + 
+  geom_vline(aes(xintercept=population.proportion+c(-.01,.01)), color="red", linetype='dotted') +
+  geom_rect(aes(xmin=population.proportion-w/2, xmax=population.proportion+w/2, 
+                ymin=0, ymax=Inf,-w/2), alpha=.1, fill='red')
+p.coverage.hint
 ```
 
-- Let's draw an interval of width .02 centered on the population proportion---as a pair of dotted lines. 
+- Let's draw an interval of width .02 centered on the population proportion---as a pair of dotted lines.
   - This gives it 'arms' the same length as our interval estimates have.
   - And its arms touch a point estimate *if and only if* the point estimates' arms touch it.
 - That means we can count the intervals that cover by counting the point estimates between the dotted lines.
@@ -692,10 +721,7 @@ p.blank + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.sam
 ## The Coverage Probability
 ```{r}
 #| out-height: 500px
-K=100
-p.blank + geom_point(aes(y=30*(1:K)/K, x=meanY.samples[1:K]), alpha=.2, color='purple') + 
-                 geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.2) + 
-                 geom_vline(aes(xintercept=population.proportion+c(-.01,.01)), color="red", linetype='dotted', size=1) 
+p.coverage.hint
 ```
 
 It's the probability that a random draw from the sampling distribution lies between the dotted lines.
@@ -705,16 +731,13 @@ $$
 And it's about 40\%.
 ```{r}
 #| echo: true
-mean(mean(y) - .01 <= meanY.samples & meanY.samples <= mean(y) + .01)
+mean(mean(y) - w/2 <= meanY.samples & meanY.samples <= mean(y) + w/2)
 ```
 
 ## Ad-hoc Interval Estimates
 ```{r}
 #| out-height: 500px
-K=100
-p.blank + geom_point(aes(y=30*(1:K)/K, x=meanY.samples[1:K]), alpha=.2, color='purple') + 
-                 geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.2) + 
-                 geom_vline(aes(xintercept=population.proportion+c(-.01,.01)), color="red", linetype='dotted', size=1) 
+p.coverage.hint
 ```
 
 What we just did was choose a width and calculate a coverage probability.
@@ -727,10 +750,9 @@ What we just did was choose a width and calculate a coverage probability.
 ## Calibrated Interval Estimates
 ```{r}
 #| out-height: 500px
-K=100
-p.blank + geom_point(aes(y=30*(1:K)/K, x=meanY.samples[1:K]), alpha=.2, color='purple') + 
-                 geom_histogram(aes(x=meanY.samples, y=after_stat(density)), binwidth=.001, alpha=.2) + 
-                 geom_vline(aes(xintercept=population.proportion+c(-.01,.01)), color="red", linetype='dotted', size=1) 
+with.intervals(annotated.histogram, meanY.samples, highlight=0) +
+  geom_vline(aes(xintercept=population.proportion+c(-w/2,w/2)), color="red", linetype='dotted') +
+  geom_rect(aes(xmin=population.proportion-w/2, xmax=population.proportion+w/2, ymin=0, ymax=Inf), alpha=.1, fill='red')
 ```
 
 What we want to do is choose a coverage probability and calculate the right width.
@@ -744,7 +766,7 @@ What we want to do is choose a coverage probability and calculate the right widt
 
 ```{r}
 #| out-height: 500px
-annotated.histogram + geom_point(aes(y=30*(1:K)/K, x=meanY.samples[1:K]), alpha=.2, color='purple')       
+with.intervals(annotated.histogram, meanY.samples, highlight=0) 
 ```
 
 Remember what we've drawn in.
@@ -757,34 +779,38 @@ Remember what we've drawn in.
 
 ```{r}
 #| out-height: 500px
-annotated.histogram + geom_point(aes(y=30*(1:K)/K, x=meanY.samples[1:K]), alpha=.2, color='purple')       
+with.intervals(annotated.histogram, meanY.samples, highlight=0) 
 ```
+
 **Activity**. 
 
   - Suppose you and your friends want to draw in intervals around your point estimates.
   - How wide should they be if you want 95\% of them to cover the population proportion?
-  - Think about 'arms'. You may assume the sampling distribution is symmetric.
+  - Think about 'arms'. 
 
 ## Using the Sampling Distribution for Calibration
 
 ```{r}
 #| out-height: 500px
 
-width = quantile(meanY.samples, probs=c(.975)) - quantile(meanY.samples, probs=c(.025))
-coverage = mean(population.proportion - width/2 <= meanY.samples & meanY.samples <= population.proportion + width/2)
-annotated.histogram + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.samples[1:K]-width/2, xmax=meanY.samples[1:K]+width/2), alpha=.2, color='purple') 
+w = width(meanY.samples, .05)
+with.intervals(annotated.histogram, meanY.samples, highlight=0) + 
+  geom_rect(aes(xmin=population.proportion-w/2, xmax=population.proportion+w/2, ymin=0, ymax=Inf), alpha=.1, fill='green')
+
+dotted.width = w
 ```
 
 **Answer**.
 
-- The width of a 95% interval should be the width between the blue lines.
+- The width of a 95% interval should be the width between the dotted blue lines.
 - That's the width of the 'arms' containing 95% of the estimates drawn from the sampling distribution.
-- These intervals have a coverage probability of `r percent(coverage)`. 
+- You can check that these intervals have the coverage we want.
 
 ```{r}
 #| echo: true
-width = quantile(meanY.samples, probs=c(.975)) - quantile(meanY.samples, probs=c(.025))
-coverage = mean(mean(y)- width/2 <= meanY.samples & meanY.samples <= mean(y) + width/2)
+#|  
+coverage = mean(mean(y)- dotted.width/2 <= meanY.samples & meanY.samples <= mean(y) + dotted.width/2)
+coverage
 ```
 
 
@@ -793,11 +819,12 @@ coverage = mean(mean(y)- width/2 <= meanY.samples & meanY.samples <= mean(y) + w
 ```{r}
 #| out-height: 500px
 
-annotated.histogram + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.samples[1:K]-width/2, xmax=meanY.samples[1:K]+width/2), alpha=.2, color='purple') 
+with.intervals(annotated.histogram, meanY.samples, highlight=1) +  
+  geom_rect(aes(xmin=population.proportion-w/2, xmax=population.proportion+w/2, ymin=0, ymax=Inf), alpha=.1, fill='green') 
 ```
 
 - Our sample proportion `r approx(mean(Y))` is close to the population proportion `r approx(mean(y))`. Did we get lucky? 
-  - No! In a million runs, almost all are within .05.
+  - Not that lucky. In `r percent(p.as.close)` of polls, we come as close as our estimate.
 - Could we have predicted how close we would get before seeing the `r approx(mean(y))`? 
   - Yes! We can use a calibrated interval estimate---a Confidence Interval.
 - Except that so far, we've cheated. We've used the sampling distribution of our point estimate.
@@ -806,7 +833,8 @@ annotated.histogram + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xm
 ```{r}
 #| out-height: 500px
 
-annotated.histogram + geom_pointrange(aes(y=30*(1:K)/K, x=meanY.samples[1:K], xmin=meanY.samples[1:K]-width/2, xmax=meanY.samples[1:K]+width/2), alpha=.2, color='purple') 
+with.intervals(annotated.histogram, meanY.samples, highlight=1) +
+ geom_rect(aes(xmin=population.proportion-w/2, xmax=population.proportion+w/2, ymin=0, ymax=Inf), alpha=.1, fill='green')
 ```
 
 - We can't calibrate intervals like this in real life.

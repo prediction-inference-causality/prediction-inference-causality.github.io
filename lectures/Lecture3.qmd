@@ -28,6 +28,8 @@ knitr:
 ---
 
 ```{r setup}
+library(usmap)
+library(sf)
 library(ggplot2)
 library(scales)
 library(knitr)
@@ -153,10 +155,11 @@ meanY.samples = rowMeans(Ys)
 height = .04
 scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) 
 scale_y = scale_y_continuous(breaks=seq(0,height,by=.01), limits=c(0, height))
+
 annotate.histogram = function(samples) { 
     w66 = width(samples, alpha=1/3)
     w95 = width(samples, alpha=.05)
-    ggplot() + geom_bar(aes(x=samples, y=after_stat(prop)), position='identity', alpha=.3) +
+    ggplot() + geom_bar(aes(x=samples, y=after_stat(prop)), alpha=.3) +
            geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7) +
            geom_vline(aes(xintercept=mean(samples)), color="blue") +
            geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w66/2), color="blue", linetype='dashed') +
@@ -164,33 +167,27 @@ annotate.histogram = function(samples) {
            scale_x + scale_y
 }
 
-with.points = function(histplot, samples, K=100) { 
-    K=100
+default.highlight.colors = c('black', 'magenta', 'cyan', 'gray')
+with.points = function(histplot, samples, K=100, highlight=4) {
     set.seed(our.seed)
+    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
     heights = sample(height*(1:K)/K)
-    histplot + 
-        geom_point(aes(y=heights[5:K],  x=samples[5:K]), alpha=.1, color='purple') + 
-        geom_point(aes(y=heights[1],    x=samples[1]), alpha=1, color='black') +  
-        geom_point(aes(y=heights[2],    x=samples[2]), alpha=1, color='magenta') +
-        geom_point(aes(y=heights[3],    x=samples[3]), alpha=1, color='cyan') +
-        geom_point(aes(y=heights[4],    x=samples[4]), alpha=1, color='gray') 
+    data = data.frame(y=heights, x=samples[1:K], 
+                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
+                      alpha=c(rep(1, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
+    histplot + geom_point(aes(y=y, x=x, color=I(color), alpha=I(alpha)), data=data)
 }
 
-with.intervals = function(histplot, samples, w=width(samples, alpha=.05), K=100) {
-    K=100
+with.intervals = function(histplot, samples, w=width(samples, alpha=.05), K=100, 
+                          highlight=4, highlight.alpha=1) { 
     set.seed(our.seed)
+    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
     heights = sample(height*(1:K)/K)
+    data = data.frame(y=heights, x=samples[1:K], w=w,
+                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
+                      alpha=c(rep(highlight.alpha, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
     histplot + 
-        geom_pointrange(aes(y=heights[5:K], x=samples[5:K],
-                            xmin = samples[5:K]-w/2, xmax = samples[5:K]+w/2), alpha=.1, color='purple') +
-        geom_pointrange(aes(y=heights[1], x=samples[1], 
-                            xmin = samples[1]-w/2, xmax = samples[1]+w/2), alpha=1, color='black') +  
-        geom_pointrange(aes(y=heights[2], x=samples[2],
-                            xmin = samples[2]-w/2, xmax = samples[2]+w/2), alpha=1, color='magenta') +  
-        geom_pointrange(aes(y=heights[3], x=samples[3],   
-                            xmin = samples[3]-w/2, xmax = samples[3]+w/2), alpha=1, color='cyan') + 
-        geom_pointrange(aes(y=heights[4], x=samples[4],                                   
-                            xmin = samples[4]-w/2, xmax = samples[4]+w/2), alpha=1, color='gray') 
+        geom_pointrange(aes(y=y, x=x, xmin=x-w/2, xmax=x+w/2, color=I(color), alpha=I(alpha)), data=data)
 }
 
 annotated.histogram = annotate.histogram(meanY.samples)
@@ -338,7 +335,7 @@ w.est=width(estimated.dist.samples, alpha=.05)
 annotated.histogram.estimated = annotate.histogram(estimated.dist.samples)
 calibrated.width.histogram.estimated = annotated.histogram.estimated + 
     geom_rect(aes(xmin=mean(Y)-w.est/2, xmax=mean(Y)+w.est/2, ymin=0, ymax=Inf), alpha=.15, fill='red')
-with.intervals(calibrated.width.histogram.estimated, estimated.dist.samples)
+with.intervals(calibrated.width.histogram.estimated, estimated.dist.samples, highlight=FALSE)
 ```
 
 - Here we've estimated the sampling distribution --- we'll get to how --- and used it to find an interval width.
@@ -354,25 +351,25 @@ with.intervals(calibrated.width.histogram.estimated, estimated.dist.samples)
 ```{r}
 #| out-height: 400px
 #| fig-asp: .3 
-calibration.comparison.histogram = 
-    calibrated.width.histogram + 
-    geom_rect(aes(xmin=mean(y)-w.est/2, xmax=mean(y)+w.est/2, ymin=0, ymax=Inf), alpha=.15, fill='red')
+calibration.comparison.histogram = annotated.histogram +
+    geom_rect(aes(xmin=mean(y)-w/2, xmax=mean(y)+w/2, ymin=0, ymax=1.25*heights[1]), alpha=.15, fill='green') +
+    geom_rect(aes(xmin=mean(y)-w.est/2, xmax=mean(y)+w.est/2, ymin=1.25*heights[1], ymax=Inf), alpha=.15, fill='red')
 
 K=100
 set.seed(our.seed)
 heights = sample(height*(1:K)/K)
 
 calibration.comparison.histogram +  
-    geom_pointrange(aes(y=heights[1]+3, x=meanY.samples[1], 
-                        xmin = meanY.samples[1]-w.est/2, xmax = meanY.samples[1]+w.est/2), alpha=1, color='red')  +
+    geom_pointrange(aes(y=heights[1]*1.5, x=meanY.samples[1], 
+                        xmin = meanY.samples[1]-w.est/2, xmax = meanY.samples[1]+w.est/2), alpha=1, color='black')  +
     geom_pointrange(aes(y=heights[1], x=meanY.samples[1], 
-                        xmin = meanY.samples[1]-w/2, xmax = meanY.samples[1]+w/2), alpha=1, color='black')   
+                        xmin = meanY.samples[1]-w/2, xmax = meanY.samples[1]+w/2), alpha=.4, color='black')   
 ```
 
 - It doesn't matter because we're not putting arms on draws from the estimated sampling distribution.
-- We're putting arms on our point estimate, which is a draws from the **actual sampling distribution**.
-- All that matters is the width---not the center---of the estimated sampling distribution.
-- And that's very close to the width we get from the actual sampling distribution.
+- We're putting arms on our point estimate, which is a draw from the **actual sampling distribution**.
+- To do this, we're using the width---but not the center---of the estimated sampling distribution.
+- And it works because that's very close to the width we'd get from the actual sampling distribution.
 - Above, I've drawn in shaded regions corresponding to two versions of the the [population proportion's]{.fg style="color:limegreen"} arms.
     - The [green region]{.fg style="color:limegreen"} is the one we get from the actual sampling distribution. We can't use this.
     - The [red region]{.fg style="color:red"} is the one we get from the estimated sampling distribution. We can --- and do --- use this.
@@ -385,10 +382,10 @@ calibration.comparison.histogram +
 #| out-height: 300px
 #| fig-asp: .25 
 p = mean(y)
-xx= seq(0,n)
+x= seq(0,n)
 
-with.points(calibrated.width.histogram, meanY.samples) +
-            geom_line(aes(x=xx/n, y=dbinom(xx, n, mean(y))), color='black')
+with.points(calibrated.width.histogram, meanY.samples, highlight=FALSE) +
+            geom_line(aes(x=x/n, y=dbinom(x, n, mean(y))), color='black')
 ```
 
 - To estimate the sampling distribution, it helps to know something about the actual sampling distribution.
@@ -410,18 +407,19 @@ $$
 ```{r}
 #| out-height: 300px
 #| layout-ncol: 2 
-#| fig-asp: .5 
+#| fig-asp: .4 
 #| fig-cap:
 #|   - "Actual Sampling Distribution"
 #|   - "Estimated Sampling Distribution"
 
 p = mean(y)
 
-with.points(calibrated.width.histogram, meanY.samples) +
-            geom_line(aes(x=xx/n, y=dbinom(xx, n, mean(y))), color='black')
+with.points(calibrated.width.histogram, meanY.samples, highlight=1) +
+            geom_line(aes(x=x/n, y=dbinom(x, n, mean(y))), color='gray')
 
-with.points(calibrated.width.histogram.estimated, estimated.dist.samples) +
-            geom_line(aes(x=xx/n, y=dbinom(xx, n, mean(Y))), color='black')
+with.points(calibrated.width.histogram.estimated, estimated.dist.samples, highlight=0) +
+            geom_line(aes(x=x/n, y=dbinom(x, n, mean(Y))), color='black') +
+            geom_point(aes(x=mean(Y), y=heights[1]))
 ```
 
 $$
@@ -444,9 +442,76 @@ samples = rbinom(10000, 625, mean(Y)) / 625
     - If we prefer, we can calibrate using the actual estimated binomial distribution, i.e., using `dbinom`.
     - We'll explore this a bit at some point in the future, but it doesn't make much difference.
 
-## The Estimate Works. Why Does it Work?
+## Each of Our Friends Gets Their Own Estimate
 
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+#| fig-cap:
+#|   - "Actual Sampling Distribution"
+#|   - "Estimated Sampling Distribution (Poll 1)"
+#|   - "Estimated Sampling Distribution (Poll 2)"
+#|   - "Estimated Sampling Distribution (Poll 3)"
 
+plot.interval = function(Y, height, color) {
+    set.seed(our.seed)
+    samples = rbinom(10000, n, mean(Y)) / n 
+    w=width(samples, alpha=.05)
+    geom_pointrange(aes(x=mean(Y), y=height, xmin=mean(Y)-w/2, xmax=mean(Y)+w/2), color=color)
+}
+
+dh = .2*heights[1]
+with.intervals(calibrated.width.histogram, meanY.samples, highlight=3, highlight.alpha=.4) +
+               geom_line(aes(x=x/n, y=dbinom(x, n, mean(y))), color='gray') +
+               plot.interval(y[J1], dh+heights[1], 'black') +
+               plot.interval(y[J2], dh+heights[2], 'magenta') +
+               plot.interval(y[J3], dh+heights[3], 'cyan') 
+
+calibration.diagram = function(Y, color, height) {
+    set.seed(our.seed)
+    samples = rbinom(10000, n, mean(Y)) / n 
+    w=width(samples, alpha=.05)
+    histplot = annotate.histogram(samples)
+    histplot + geom_rect(aes(xmin=mean(Y)-w/2, 
+                             xmax=mean(Y)+w/2, ymin=0, ymax=Inf), 
+                             alpha=.15, fill='red') + 
+    geom_line(aes(x=x/n, y=dbinom(x, n, mean(Y))), color=color) +
+    geom_point(aes(x=mean(Y), y=height), color=color)
+}
+
+calibration.diagram(Y,     'black',   heights[1])
+calibration.diagram(y[J2], 'magenta', heights[2])
+calibration.diagram(y[J3], 'cyan',    heights[3])
+```
+
+- This means each of our friends estimates a different width for their interval.
+- But they're all close to the width we get using the actual sampling distribution. You can see it above.
+    - I've plotted the intervals they'd use --- based on their sampling distribution estimates --- in bold colors.
+    - And the intervals they wish they could --- based on the actual sampling distribution --- more faintly. 
+
+## Evidence That It Works 
+
+```{r}
+#| out-height: 400px
+K = 100
+ps = meanY.samples[1:K]
+
+ggplot() + geom_line(aes(x=x/n-p, y=n*dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n)) +
+           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n-mean(y)), linetype='dotted') +
+           geom_line(aes(x=x/n-p, y=n*dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.2) +
+           geom_pointrange(aes(x=0, xmin=qbinom(.025,n,p)/n-p, xmax=qbinom(.975,n,p)/n-p, y=20*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
+           xlim(-.1,.1) + guides(color=FALSE)
+```
+
+- We see the same thing when we look at 100 polls.
+- Our friends' sampling distribution estimates are all close to the actual sampling distribution.
+- The resulting interval-widths are near-indistinguishable from the width we got using the sampling distribution.
+  - The estimated widths are shown as points with arms.
+  - That sampling distribution's actual width is the space between the dotted lines.
+- You can see estimating the width like this works reliably.
+
+## Why Does it Work?
 
 ```{r}
 #| out-height: 300px
@@ -460,7 +525,7 @@ density.stability.plot = ggplot() +
            geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n), linetype='dotted') +
            geom_line(aes(x=x/n, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
            geom_pointrange(aes(x=p, xmin=qbinom(.025,n,p)/n, xmax=qbinom(.975,n,p)/n, y=.6*height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
-           xlim(.6,.8) + guides(color=FALSE) + geom_vline(xintercept=mean(y), color='green', size=2, alpha=.5)
+           xlim(.6,.8) + guides(color=FALSE) + geom_vline(xintercept=mean(y), color='green', size=1, alpha=.5)
 centered.density.stability.plot = ggplot() + 
            geom_line(aes(x=x/n-p, y=dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n), alpha=.5) +
            geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n-mean(y)), linetype='dotted') +
@@ -494,9 +559,45 @@ centered.density.stability.plot
     - 95% of the time, you'll get an estimate somewhere between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} ones.
     - And, as a result, a width for your interval estimate somewhere between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} widths.
 - As you can see, the widths we get barely change. What changes is the location.
-- But because we're using calibrated 95% intervals, we still cover the population proportion. Or, at least, almost do. 
+- But because we're using calibrated 95% intervals, we still cover the population proportion 95% of the time.
+    - i.e., we cover it when our sample proportion is between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} ones.
+- Or, accounting for [slight underestimates]{.fg style="color:blue"} of the sampling distribution's width, almost cover it. 
 
 ## The Bootstrap Interpretation
+```{r mapping}
+#| cache: true
+
+# Create fake locations for the people in our population
+# by taking random convex combinations of state vertices
+set.seed(0)
+ga.shape = us_map(include = c("GA"))
+
+# To reduce computation, we'll have 10K locations + jitter
+M = 10000 
+V = nrow(ga.shape)
+weights = abs(rt(M*V,1))
+dim(weights) = c(M,V)
+weights = (1/rowSums(weights)) * weights 
+base.x = weights %*% ga.shape$x
+base.y = weights %*% ga.shape$y
+base.ind = 1 + ( (0:(N-1)) %% M )
+locations = data.frame(x=base.x[base.ind] + rnorm(N, sd=.01),
+                       y=base.y[base.ind] + rnorm(N, sd=.01))
+
+ga = ggplot() + geom_polygon(data=ga.shape, aes(x = x, y = y), fill="white", color="black") + coord_fixed() + blank.theme
+```
+
+```{r}
+#| out-height: 300px
+#| fig-asp: 1 
+#| layout-ncol: 3
+sample.locations = locations[J, ]
+boot.ind = sample(1:n, n, replace=TRUE)
+resampled.locations = sample.locations[boot.ind, ]
+ga + geom_point(aes(x = x, y = y), alpha=.05, data=locations[1:M,], size=.05)
+ga + geom_point(aes(x = x, y = y), alpha=.2, data=sample.locations) 
+ga + geom_point(aes(x = x, y = y), alpha=.2, data=resampled.locations)
+```
 
 - There's another way to think about this.
 - The estimated sampling distribution is $\text{Binomial}(n,p)/n$ for $n=`r n`$ and $p=\bar Y\approx `r mean(Y)`$.
@@ -506,18 +607,47 @@ centered.density.stability.plot
 - What's the distribution of the proportion of yeses if we poll a population of `r n` people ...
 - ... among whom the proportion of yeses is exactly $\bar Y\approx `r mean(Y)`$?
 
-::: fragment
+
+## The Bootstrap Interpretation
+
+```{r}
+#| out-height: 300px
+#| fig-asp: 1 
+#| layout-ncol: 3
+ga + geom_point(aes(x = x, y = y), alpha=.05, data=locations[1:M,], size=.05)
+ga + geom_point(aes(x = x, y = y), alpha=.2, data=sample.locations) 
+ga + geom_point(aes(x = x, y = y), alpha=.2, data=resampled.locations)
+```
 
 - It's the same distribution. It's $\text{Binomial}(n,p)/n$.
 - That means we can get a draw from our estimated sampling distribution by
 - running a 'poll' of the people in our sample, i.e.
     - rolling a 625-sided die 625 times
-    - calling up the corresponding person in our sample
+    - 'calling' the corresponding person in our sample
     - and counting up the yeses we hear
-:::
+- We call the sample we get from this new 'poll' a **bootstrap sample**.
 
+## The Bootstrap Interpretation
 
-## Bootstrapping
+```{r}
+#| out-height: 300px
+#| fig-asp: 1 
+#| layout-ncol: 3
+ga + geom_point(aes(x = x, y = y), alpha=.05, data=locations[1:M,], size=.05)
+ga + geom_point(aes(x = x, y = y), alpha=.2, data=sample.locations, size=1) 
+ga + geom_point(aes(x = x, y = y), alpha=.2, data=resampled.locations, size=1)
+```
+
+- If we plot our voters on a map, you can see the idea in visual terms.
+    - On the left, we have the population. 
+    - In the middle, we have our sample.
+    - On the right, we have locations drawn, with replacement, from the sample.
+- Each 'call' is one transparent dot, so we see darker dots ...
+    - or actually multiple copies of the same dot overlaid
+    - where we've drawn someone multiple times.
+- 2x darker means we've called them twice, 3x darker means we've called them three times, etc.
+
+## Bootstrapping Our Turnout Estimate
 
 ```{r}
 set.seed(our.seed)
@@ -534,7 +664,7 @@ for(rr in 1:10000) {
     meanY.boot[rr] = sum(Y[I])/n
 }
 
-ggplot() + geom_bar(aes(x=meanY.boot, y=after_stat(prop)), alpha=.3, position='identity') + 
+ggplot() + geom_bar(aes(x=meanY.boot, y=after_stat(prop)), alpha=.3) + 
            geom_line(aes(x=(0:n)/n, y=dbinom(0:n, n, mean(Y))), color='black') + 
            xlim(.6,.8)
 ```
