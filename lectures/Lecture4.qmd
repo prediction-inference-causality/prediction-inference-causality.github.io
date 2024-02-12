@@ -539,11 +539,15 @@ $$
 
 set.seed(our.seed)
 difference.samples = array(dim=10000)
+difference.sd.samples = array(dim=10000)
 for(rr in 1:10000) {
     I = sample(1:m, n, replace=TRUE)
     X = x[I]
     Y = y[I]
     difference.samples[rr] = mean(Y[X==1]) - mean(Y[X==0])
+    p1 = mean(Y[X==1])
+    p0 = mean(Y[X==0])
+    difference.sd.samples[rr] = sqrt(p1*(1-p1)/sum(X==1) + p0*(1-p0)/sum(X==0))
 }
 ```
 
@@ -751,14 +755,15 @@ for(rr in 1:10000) {
 scale_x_dif = scale_x_continuous(limits=c(-.1,.2))
 wboot=width(difference.bootstrap.samples, alpha=.05)
 annotated.difference.histogram.noshade = annotate.histogram(difference.histogram, difference.samples, shade=FALSE) 
-with.points(annotated.difference.histogram.noshade, difference.samples, height=10, highlight=0) + 
-  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+w/2), 
-                  data=data.frame(x=difference.samples[1], y=5, w=wboot), color='black') + 
-                  coord_flip() + scale_x_dif
 
 pboot=ggplot() + geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
 annotated.bootstrap.difference.histogram = annotate.histogram(pboot, difference.bootstrap.samples,
   shade=TRUE, shade.color='red')
+
+with.points(annotated.difference.histogram.noshade, difference.samples, height=10, highlight=0) + 
+  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+w/2), 
+                  data=data.frame(x=difference.samples[1], y=5, w=wboot), color='black') + 
+                  coord_flip() + scale_x_dif
 
 with.points(annotated.bootstrap.difference.histogram, 
             c(difference.samples[1], difference.bootstrap.samples), 
@@ -779,9 +784,7 @@ with.points(annotated.bootstrap.difference.histogram,
 
 # Why Does The Bootstrap Work?
 
-FINISH FROM HERE
-
-## The Parametric Argument
+## Our Binomial-Specific Argument 
 ```{r}
 #| out-height: 300px
 #| fig-asp: .6 
@@ -789,9 +792,10 @@ FINISH FROM HERE
 #| 
 K = 3
 ps = quantile(meanY.samples, c(.025, .5, .975))
+p = population.proportion
 
 density.stability.plot = ggplot() + 
-           geom_line(aes(x=x/n, y=dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n), alpha=.5) +
+           geom_line(aes(x=x/n, y=dbinom(x,n,p)), data=expand.grid(p=p, x=0:n), alpha=.5) +
            geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n), linetype='dotted') +
            geom_line(aes(x=x/n, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
            geom_pointrange(aes(x=p, xmin=qbinom(.025,n,p)/n, xmax=qbinom(.975,n,p)/n, y=.6*default.height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
@@ -807,78 +811,149 @@ density.stability.plot
 centered.density.stability.plot
 ```
 
-BLAH
+- Last class, we argued that we could estimate the sampling distribution of a proportion well enough.
+- Our argument used the parametric form of the sampling distribution: the binomial distribution.
+  - The width of the binomial probability distribution doesn't change quickly as the probability of heads changes. 
+  - So if we have an ok estimate of the probability of heads,      i.e. the sample proportion $\bar Y$ ...
+  - then we can use that instead of the actual probability of heads, i.e. the population proportion $\bar y$.
 
-- Our argument last class used its equivalence to the parametric estimate based on the binomial distribution. 
-- Remember this plot?  
-- That equivalence is only there is we're estimating a proportion. Not, e.g., a difference in proportions.
+$$
+\bar Y \approx \bar y \implies \text{Binomial}(n,\bar Y) \approx \text{Binomial}(n,\bar y)
+$$
+
+- This told us the bootstrap worked because the bootstrap was doing exactly this.
+- That is, the bootstrap sampling distribution *is* Binomial with heads probability $\bar Y$.
 - But the bootstrap still works. Why? Ultimately, it's a subtle question with a lot of different answers.
 - I'm going to give you a simple one. One that's very similar to the one we used last class.
 - Instead of *equivalance* to a parametric estimate, we'll argue using *approximation* by one.
 
-## A Simple Nonparametric Argument
-
-```{r}
-#| out-height: 300px 
-#| fig-asp: .6
-#| layout-ncol: 2 
-xx = seq(-.1,.2, length=100)
-with.points(p, difference.samples, height=10) + 
-  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.samples), sd(difference.samples))), color='black') + coord_flip()
-
-with.points(pboot, difference.bootstrap.samples, height=10) + 
-  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='black') + coord_flip()
-```
-
-$$
-p_{\mu,\sigma}(x) = \frac{1}{\sqrt{2\pi}\sigma} e^{-\frac{(x-\mu)^2}{2\sigma^2}}
-$$
-
-- The sampling distribution of the difference in turnout is approximately normal. 
-- So is the bootstrap sampling distribution.
-- Most things involving averages are. This is a consequence of the **Central Limit Theorem**.
-- The normal distribution is a function of two parameters: its mean and its standard deviation.
-
-
-## Normal Approximation
-
-```{r}
-#| out-height: 300px 
-#| fig-asp: .6
-#| layout-ncol: 2 
-xx = seq(-.1,.2, length=100)
-with.points(p, difference.samples, height=10) + 
-  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.samples), sd(difference.samples))), color='black') + 
-  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.samples), sd(difference.bootstrap.samples))), color='red') +  
-  coord_flip()
-
-with.points(pboot, difference.bootstrap.samples, height=10) + 
-  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='red') + coord_flip()
-```
-
-$$
-p_{\mu,\sigma}(x) = \frac{1}{\sqrt{2\pi}\sigma} e^{-\frac{(x-\mu)^2}{2\sigma^2}}
-$$
-
-- And it's continuous in those parameters.
-- if we're close in mean and standard deviation, we're close in the distribution.
-- So to show that the bootstrap sampling distribution is close to the actual sampling distribution ... 
-- ... it's enough to show that their means and standard deviations are close.
-- Even better: if we're just interested in the width of a 95% interval, the means don't matter. 
-- All that matters is the standard deviation.
-
-## Let's See If We Can Make a Plot Like This
-
+## The Same Idea With Normal Approximation
 ```{r}
 #| out-height: 300px
 #| fig-asp: .6 
 #| layout-ncol: 2
-#| 
+
+ 
+K = 3
+ps = quantile(meanY.samples, c(.025, .5, .975))
+dbinomapprox = function(x,n,p) { 
+  dnorm(x+.5, n, sqrt(p*(1-p))) - dnorm(x-.5, n, sqrt(n*p*(1-p)))
+}
+qbinomapprox = function(x,n,p) {
+  qnorm(x,n*p, sqrt(n*p*(1-p)))
+}
+
+density.stability.plot.approx = ggplot() + 
+           geom_line(aes(x=x/n, y=dbinom(x,n,p)), data=expand.grid(p=p, x=0:n), alpha=.5) +
+           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n), linetype='dotted') +
+           geom_line(aes(x=x/n, y=dbinomapprox(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
+           geom_pointrange(aes(x=p, xmin=qbinomapprox(.025,n,p)/n, xmax=qbinom(.975,n,p)/n, y=.6*default.height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
+           xlim(.6,.8) + guides(color=FALSE) + geom_vline(xintercept=mean(y), color='green', size=2, alpha=.5)
+centered.density.stability.plot.approx = ggplot() + 
+           geom_line(aes(x=x/n-p, y=dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n), alpha=.5) +
+           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n-mean(y)), linetype='dotted') +
+           geom_line(aes(x=x/n-p, y=dbinomapprox(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
+           geom_pointrange(aes(x=0, xmin=qbinomapprox(.025,n,p)/n-p, xmax=qbinom(.975,n,p)/n-p, y=.6*default.height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
+           xlim(-.1,.1) + guides(color=FALSE)
+
 density.stability.plot
 centered.density.stability.plot
 ```
 
-- This is what we had based on the binomial distribution of a sample proportion.
-- What do we need to do to make a similar plot based on the \
-approximately normal sampling distribution of a *difference* in proportions?
+- Here I've drawn the same diagram as before, but with the binomial distribution replaced by a **normal approximation** to it.
+$$
+f_{\mu,\sigma}(x) = \frac{1}{\sqrt{2\pi}\sigma} e^{-\frac{(x-\mu)^2}{2\sigma^2}} \qfor \mu=p \qand \sigma=\sqrt{p(1-p)/n}
+$$
 
+- This is a good approximation. I can't tell the difference between this diagram and the last one.
+- And we can repeat our argument using the normal distribution's parametric form.
+  - The width of the normal distribution doesn't change too fast as its standard deviation $\sigma$ does.
+  - So if we have a good estimate of that standard deviation, e.g. $\sqrt{p(1-p)/n}$ where $p$ is the sample proportion $\bar Y$ ...
+  - then we can use that instead of the actual standard deviation, which is the same where $p$ is the population proportion $\bar y$.
+- This argument generalizes well. It works, e.g., for the difference in proportions.
+- It works whenever the actual and boostrap sampling distributions ...
+  - are both approximately normal
+  - and have similar standard deviations.
+
+## Approximate Normality for the Difference in Turnout
+
+```{r}
+#| out-height: 300px 
+#| fig-asp: .6
+#| layout-ncol: 2 
+#| fig-cap:
+#| - A histogram of draws from the actual sampling distribution and its normal approximation.
+#| - A histogram of draws from the bootstrap sampling distribution and its normal approximation. 
+ 
+xx = seq(-.2,.3, length=1000)
+annotated.difference.histogram + 
+  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.samples), sd(difference.samples))), color='black') +
+  coord_flip() + scale_x_dif
+
+annotated.bootstrap.difference.histogram +
+  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='black') + 
+  coord_flip() + scale_x_dif
+```
+
+- The actual sampling distribution of the difference in turnout is approximately normal. 
+- So is the bootstrap sampling distribution. And they do have similar standard deviations.
+- Most things involving averages are approximately normal. This is a consequence of the **Central Limit Theorem**.
+- We won't prove that, so you'll have to take my word for it.
+  - There's a very nice proof that doesn't really require any background you don't have.
+  - It uses an argument called *Stein's method* that's very interesting and very widely applicable.
+  - But it'd take us a couple of lectures and we don't have time for that.
+
+## The Same Idea for the Difference in Turnout
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+ 
+difs   = quantile(difference.samples, c(.025, .5, .975))
+sigmas = quantile(difference.sd.samples, c(.025, .5, .975))
+xgrid = seq(-.2,.3, length=1000)
+height = dnorm(0,0,min(sigmas))
+
+density.stability.plot.dif = ggplot() + 
+           geom_line(aes(x=x, y=dnorm(x,d,s), color=factor(d), linetype=factor(s)), 
+                     data=expand.grid(d=difs, s=sigmas, x=xgrid), alpha=.5) +
+           geom_pointrange(aes(x=d, xmin=qnorm(.025,d,s), xmax=qnorm(.975,d,s), 
+                            y=.6*height*k/9, color=factor(d), linetype=factor(s)), 
+                            data=cbind(expand.grid(s=sigmas, d=difs), data.frame(k=1:9))) +
+           xlim(min(xgrid), max(xgrid)) + guides(color=FALSE, linetype=FALSE) + 
+           geom_vline(xintercept=mean(y[x==1])-mean(y[x==0]), color='green', size=2, alpha=.5)
+
+density.stability.plot.dif
+```
+
+- We can use almost the same picture to argue that the bootstrap works for the difference in turnout.
+- But there is a difference. 
+  - The spread of a proportion's sampling distribution is determined by that proportion.
+  - But the spread of the difference isn't determined by the difference. 
+  - It's determined by the two proportions we're comparing.
+- This means we can't summarize the range of interval estimates we tend to get as we did before.
+- i.e., by drawing a single interval around the [2.5th]{.fg style="color:red"}, [50th]{.fg style="color:green"}, and [97.5th]{.fg style="color:blue"} percentiles of our sampling distribution.
+- Instead, we need to draw intervals at a range of widths. 
+- Above, I've drawn intervals three intervals around each point estimate.
+- One each at the 2.5th, 50th, and 97.5th percentiles of the sampling distribution of interval estimate widths.
+
+## Summary
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3
+
+
+density.stability.plot.dif
+```
+
+- Most of the time, the bootstrap sampling distribution is a good approximation of the actual sampling distribution.
+- This means we have a general procedure we can use to calibrating interval estimates: we use the bootstrap.
+- The downside is that it's a bit opaque. 
+  - We can use it to approximate our point estimate's sampling distribution *after* we've run our experiment.
+  - But that doesn't tell us what it will look like *before* we've run it.
+- That matters when we're designing experiments. It's important to know what we will and won't be able to learn.
+  - e.g., it's important to make our experiments big enough that we get the precision we need.
+  - This is called *power analysis* and it's a big part of experimental design.
+- Next class, we'll talk about how to use normal approximation to do that.
