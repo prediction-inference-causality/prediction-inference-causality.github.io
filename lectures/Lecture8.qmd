@@ -148,20 +148,6 @@ earnings$person = 1:nrow(earnings)
 n = nrow(earnings)
 ```
 
-```{r fake-pop-and-sample-it}
-set.seed(11)
-pop.earnings = earnings[sample(nrow(earnings), nrow(display.population), replace=TRUE), ]
-pop.earnings$income = pop.earnings$income + 
-    ifelse(1:nrow(pop.earnings) <= nrow(earnings), 0, 3000*rnorm(nrow(pop.earnings)))
-pop.j = sample(nrow(pop.earnings))
-pop.earnings[pop.j, ] = pop.earnings
-
-pop.tab = pop.earnings
-J = pop.j[1:nrow(earnings)]
-sample.tab = pop.tab[J, ]
-sample.tab$J = J
-```
-
 
 ```{r maps}
 #| cache: true
@@ -252,6 +238,19 @@ pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.populat
 sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
 ```
 
+```{r fake-pop-and-sample-it}
+set.seed(11)
+pop.earnings = earnings[sample(nrow(earnings), nrow(display.population), replace=TRUE), ]
+pop.earnings$income = pop.earnings$income + 
+    ifelse(1:nrow(pop.earnings) <= nrow(earnings), 0, 3000*rnorm(nrow(pop.earnings)))
+pop.j = sample(nrow(pop.earnings))
+pop.earnings[pop.j, ] = pop.earnings
+
+pop.tab = pop.earnings
+J = pop.j[1:nrow(earnings)]
+sample.tab = pop.tab[J, ]
+sample.tab$J = J
+```
 
 
 ## Review
@@ -278,9 +277,7 @@ width = function(samples, alpha=.05) {
   uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
 }
 
-default.height = .04
-scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) 
-scale_y = scale_y_continuous(breaks=seq(0,default.height,by=.01), limits=c(0, default.height))
+default.height = function(samples) { dnorm(0, mean=0, sd=sd(samples)) }
 
 annotate.histogram = function(histplot, samples, shade=FALSE, 
                               shade.width=width(samples, alpha=.05), shade.color='green', shade.alpha=.15) { 
@@ -297,14 +294,8 @@ annotate.histogram = function(histplot, samples, shade=FALSE,
     } else { p }
 }
 
-annotated.bar = function(samples, ...) { 
-    p = ggplot() + geom_bar(aes(x=samples, y=after_stat(prop)), alpha=.3) +
-        geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7)
-    annotate.histogram(p, samples, ...) + scale_x + scale_y
-}
-
 default.highlight.colors = c('black', 'magenta', 'cyan', 'gray')
-with.points = function(histplot, samples, K=100, highlight=4, height=default.height) {
+with.points = function(histplot, samples, K=100, highlight=4, height=default.height(samples)) {
     set.seed(our.seed)
     highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
     heights = sample(height*(1:K)/K)
@@ -315,7 +306,7 @@ with.points = function(histplot, samples, K=100, highlight=4, height=default.hei
 }
 
 with.intervals = function(histplot, samples, w=width(samples, alpha=.05), K=100, 
-                          highlight=4, highlight.alpha=1, height=default.height) { 
+                          highlight=4, highlight.alpha=1, height=default.height(samples)) { 
     set.seed(our.seed)
     highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
     heights = sample(height*(1:K)/K)
@@ -348,10 +339,9 @@ for(rr in 1:10000) {
 ## Where We Are
 
 ```{r visualization-defaults}
-scale_y = function(limits=c(0, 4e5)) { 
+scale_y = function(limits=c(0, 2.5e5)) { 
   scale_y_continuous(labels=label_dollar(), limits=limits)
 }
-
 dot.size = 2
 ```
 
@@ -492,15 +482,71 @@ for(rr in 1:10000) {
  
 xx = seq(min(difference.bootstrap.samples), max(difference.bootstrap.samples), length.out=1000)
 wboot=width(difference.bootstrap.samples, alpha=.05)
-difference.bootstrap.samples = difference.bootstrap.samples 
-bootstrap.histogram=ggplot() + geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
-annotated.bootstrap.difference.histogram = annotate.histogram(bootstrap.histogram, difference.bootstrap.samples,
+
+bootstrap.histogram = ggplot() + 
+  geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
+annotated.bootstrap.difference.histogram = 
+  annotate.histogram(bootstrap.histogram, difference.bootstrap.samples,
   shade=FALSE)
-with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, height=.1, highlight=0) + 
+
+with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, highlight=0) + 
   geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+wboot/2), 
-                  data=data.frame(x=difference, y=.05, w=wboot), color='black')  +
+                  data=data.frame(x=difference, y=.4*default.height(difference.bootstrap.samples), w=wboot), color='black')  +
   geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='cyan') 
 ``` 
+
+$$
+\mu(1)-\mu(0) \in `r approx(difference)` \pm `r approx(wboot/2)` \qqtext{is a 95\% confidence interval}
+$$ 
+
+
+## The NSW version
+
+
+```{r}
+#| cache: true
+
+```{r}
+nsw = read.csv('https://davidahirshberg.bitbucket.io/teaching/regression/fall2021/data/nsw.csv')
+nsw.experimental = nsw[nsw$dataset=='nsw', ]
+X = as.numeric(0+nsw.experimental$treated)
+Y=as.numeric(nsw.experimental$income78)
+n = length(Y)
+
+difference = mean(Y[X==1]) - mean(Y[X==0])
+difference.bootstrap.samples = array(dim=10000)
+for(rr in 1:10000) {
+    I = sample(1:n, n, replace=TRUE)
+    Xstar = X[I]
+    Ystar = Y[I]
+    difference.bootstrap.samples[rr] = mean(Ystar[Xstar==1]) - mean(Ystar[Xstar==0])
+}
+```
+
+```{r}
+#| out-height: 250px
+#| fig-asp: .25 
+ 
+xx = seq(min(difference.bootstrap.samples), max(difference.bootstrap.samples), length.out=1000)
+wboot=width(difference.bootstrap.samples, alpha=.05)
+
+bootstrap.histogram = ggplot() + 
+  geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
+annotated.bootstrap.difference.histogram = 
+  annotate.histogram(bootstrap.histogram, difference.bootstrap.samples,
+  shade=FALSE)
+
+with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, highlight=0) + 
+  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+wboot/2), 
+                  data=data.frame(x=difference, y=.4*default.height(difference.bootstrap.samples), w=wboot), color='black')  +
+  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='cyan') 
+``` 
+
+$$
+\mu(1)-\mu(0) \in `r approx(difference)` \pm `r approx(wboot/2)` \qqtext{is a 95\% confidence interval}
+$$ 
+
+
 
 # Probability Stuff
 
@@ -546,14 +592,20 @@ earnings.jitter +
 
 ## Review: Expectations
 
+```{r}
+cols = c('income50k', 'income', 'education', 'county')
+sample.tab$roll = sample.tab$J
+```
+
 :::: columns
 ::: column
 ```{r}
+style.tab(pop.tab)
 ```
 :::
 ::: column
 ```{r}
-sample.tab
+style.tab(sample.tab, cols=c('roll', cols))
 ```
 :::
 ::::
@@ -572,6 +624,36 @@ $$
 = \frac{1}{m}\sum_{j=1}^m y_j
 \end{aligned}
 $$
+
+## Rules for Expectations
+
+### The law of iterated expectations
+$$
+E \{ E( Y \mid X ) \} \quad \text{ for any random variables $X, Y$} 
+$$
+
+To calculate the mean of $Y$, we can average within subpopulations, then across subpopulations.
+
+### Irrelevance of independent conditioning variables
+$$ E( Y \mid X, X' ) = E( Y \mid X ) \quad \text{ when $X'$ is independent of $X,Y$ } $$
+
+If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the relationship between them.
+
+### Linearity of Expectations
+$$ 
+E ( a Y + b Z ) &= aE(Y) + bE(Z)  \quad \text{ for random variables $Y, Z$ and numbers $a,b$ }
+$$
+
+### Linearity of Conditional Expectations
+
+$$
+E\{ a(X) Y + b(X) Z \mid X \} = a(X)E(Y \mid X) + b(X)E(Z \mid X)
+$$
+
+- This is like linearity of expectations, but with a twist.
+   - When we condition on $X$, we're working with subpopulations in which $X$ is constant.
+   - This means we can act as if functions of $X$ **are** constants.
+   - So we can pull them out of expectations that are conditional on $X$.
 
 
 ## Spread
