@@ -1,6 +1,6 @@
 ---
 title: "Lecture 7"
-subtitle: "Working With Non-Binary Outcomes"
+subtitle: "Working With Non-Binary Outcomes: Location"
 format: 
   clean-revealjs:
     height: 1000
@@ -79,6 +79,12 @@ theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)
 grid.theme = theme_get()
 
 theme_set(simplified.theme)
+```
+
+
+```{r define-colors}
+twocolor.red   = 'rgb(248,118,109)'
+twocolor.green = 'rgb(0,191,196)'
 ```
 
 ```{r table-styling}
@@ -233,6 +239,20 @@ pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.populat
 sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
 ```
 
+```{r fake-pop-and-sample-it}
+set.seed(11)
+pop.earnings = earnings[sample(nrow(earnings), nrow(display.population), replace=TRUE), ]
+pop.earnings$income = pop.earnings$income + 
+    ifelse(1:nrow(pop.earnings) <= nrow(earnings), 0, 3000*rnorm(nrow(pop.earnings)))
+pop.j = sample(nrow(pop.earnings))
+pop.earnings[pop.j, ] = pop.earnings
+
+pop.tab = pop.earnings
+J = pop.j[1:nrow(earnings)]
+sample.tab = pop.tab[J, ]
+sample.tab$J = J
+```
+
 
 
 ## So Far
@@ -262,6 +282,9 @@ width = function(samples, alpha=.05) {
 default.height = .04
 scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) 
 scale_y = scale_y_continuous(breaks=seq(0,default.height,by=.01), limits=c(0, default.height))
+```
+
+```{r}
 
 annotate.histogram = function(histplot, samples, shade=FALSE, 
                               shade.width=width(samples, alpha=.05), shade.color='green', shade.alpha=.15) { 
@@ -306,7 +329,7 @@ with.intervals = function(histplot, samples, w=width(samples, alpha=.05), K=100,
     histplot + 
         geom_pointrange(aes(y=y, x=x, xmin=x-w/2, xmax=x+w/2, color=I(color), alpha=I(alpha)), data=data)
 }
-```
+
 
 ```{r}
 #| cache: true
@@ -366,10 +389,9 @@ Shown above: an estimate of the difference in turnout between people who receive
 ## Today
 
 ```{r visualization-defaults}
-scale_y = function(limits=c(0, 4e5)) { 
+scale_y = function(limits=c(0, 2.5e5)) { 
   scale_y_continuous(labels=label_dollar(), limits=limits)
 }
-
 dot.size = 2
 ```
 
@@ -379,20 +401,25 @@ dot.size = 2
 ```{r map-sample}
 #| fig-width: 5
 #| out-height: 300px
-ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) + guides(color=FALSE)
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) + guides(color='none')
 ```
 :::
 
 ::: column
 
 ```{r table}
-tab = earnings[sample(nrow(earnings)), ]
-tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=4,ntail=2)
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+style.tab = function(tab, cols=c('income', 'education', 'county'), nhead=3, ntail=1) {
+  tab$income50k = 0+(tab$income > 50000)
+  tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
+  tab$county = ifelse(tab$county=='los angeles', 'LA',  tab$county)
+  ellipsis.tab = tab[, cols] %>% ellipsis(nhead=nhead,ntail=ntail)
+  ellipsis.tab %>%
+    kable %>% kable_styling() %>% 
+    row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
+    row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+}
+
+style.tab(sample.tab, nhead=4)
 ```
 :::
 
@@ -414,6 +441,40 @@ The survey includes some location information for some people, but as you can se
 :::
 
 
+## Imagining a Population
+
+```{r}
+#| out-height: 300px
+#| fig-width: 5 
+#| layout-ncol: 2 
+#| 
+ca.plot + 
+ geom_point(aes(x=long, y=lat, color=degree), data=display.population, size=.02, alpha=.1) + 
+ guides(color='none')
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) +
+  guides(color='none')
+```
+
+:::: columns
+::: column
+```{r}
+style.tab(pop.tab)
+```
+:::
+::: column
+```{r}
+style.tab(sample.tab)
+```
+:::
+::::
+
+- We don't have much information about the people in our population. Except the ones in our sample. 
+- But, for the sake of visualization, I've made some up. 
+  - We'll put visualizations of this fake population on the left.
+  - Visualizations of the (real) sample will be on the right.
+
+
+
 ## Sampling
 
 ```{r pop-sample-maps}
@@ -423,7 +484,7 @@ The survey includes some location information for some people, but as you can se
 #| 
 ca.plot + 
  geom_point(aes(x=long, y=lat, color=degree), data=display.population, size=.02, alpha=.1) + 
- guides(color=FALSE)
+ guides(color='none')
 ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) 
 ```
 
@@ -435,18 +496,17 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1,
 
 ## Sample and Population Means
 
+
 ```{r}
 #| out-height: 300px
 #| layout-ncol: 2
 #| 
-pop.earnings = earnings[sample(nrow(earnings), nrow(display.population), replace=TRUE), ]
-pop.earnings$income = pop.earnings$income + 3000*rnorm(nrow(pop.earnings))
 
 ggplot(pop.earnings) + 
   geom_point(aes(x=0, y=income),  color='blue',
             size=.2, position=position_jitter(seed=0,w=.3), alpha=.05) +
   stat_summary(aes(x=0, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x))  +
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x))  + 
   scale_y() 
 
 ggplot(earnings) + 
@@ -504,32 +564,41 @@ $$
 - We'll use the mean in the corresponding subsample to estimate it.
 
 $$ 
-\hat \mu(x) = \frac{1}{N_x}\sum_{i:X_i=x} Y_i \quad \text{ where } \quad N_x = \sum_{i:X_i=1} 1.
+\hat \mu(x) = \frac{1}{N_x}\sum_{i:X_i=x} Y_i \quad \text{ where } \quad N_x = \sum_{i:X_i=x} 1.
 $$
+
 
 ## Are These Good Estimators?
 
 ```{r}
-#| layout-ncol: 2
-#| 
-xx = seq(-4,4,by=.01)
-heights = seq(0,.4,length.out=100)
+xx = seq(-6,6,by=.01)
+K = 100
+heights = seq(0,.4,length.out=K)
 normals = rnorm(10000)
 
-ggplot() + geom_histogram(aes(x=normals, y=after_stat(density)), alpha=.3, bins=100) +
+unbiased.plot = ggplot() + geom_histogram(aes(x=normals, y=after_stat(density)), alpha=.3, bins=100) +
            geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
            geom_vline(xintercept=0, color='blue') + 
            geom_vline(xintercept=c(-1,1), color='blue', linetype='dashed') +
            geom_vline(xintercept=c(-2,2), color='blue', linetype='dotted') +
-           geom_point(aes(y=heights, x=normals[1:length(heights)]), color='purple', alpha=.3)
-
-ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bins=100) +
+           geom_pointrange(aes(y=heights, x=normals[1:K], xmin=normals[1:K]-1.96, xmax=normals[1:K]+1.96), 
+                           color='purple', alpha=.15) + xlim(min(xx),max(xx))
+           
+biased.plot = ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bins=100) +
            geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
            geom_vline(xintercept=2+0, color='blue') + 
            geom_vline(xintercept=2+c(-1,1), color='blue', linetype='dashed') +
            geom_vline(xintercept=2+c(-2,2), color='blue', linetype='dotted') +
-           geom_point(aes(y=heights, x=normals[1:length(heights)]+2), color='purple', alpha=.3) +
-           xlim(-4,4)
+           geom_pointrange(aes(y=heights, x=2+normals[1:K], xmin=2+normals[1:K]-1.96, xmax=2+normals[1:K]+1.96), 
+                           color='purple', alpha=.15) + xlim(min(xx),max(xx))
+
+
+```
+
+```{r}
+#| layout-ncol: 2
+unbiased.plot
+biased.plot
 ```
 
 - Today, we'll focus on the **location** of our estimator. 
@@ -540,7 +609,7 @@ ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bin
   - But if they look like they do on the right, we're not.
   - You can see that a good number of our samples on the right are far off-target. 
   - Further away, e.g., than the width of the distribution.
-- To think about this in general terms, we'll use **random variables** to describe
+- To think about this, we'll use **random variables** to describe
   the relationship between the sample and population.
 
 # Random Variables
@@ -568,18 +637,34 @@ earnings.jitter +
   - That's the result of a random process---the roll of a die.
 - To summarize this result, we talk about the **probability distribution** of $Y_i$.
 
-## Probability Distributions: The Binary Case
-```{r}
-set.seed(0)
-tab = earnings[sample(nrow(earnings)), ]
-tab$income.exceeds.100k = 0 + (tab$income > 100000)
-ellipsis.tab = tab[, c('income.exceeds.100k', 'degree', 'age', 'county')] %>% ellipsis(nhead=4,ntail=2)
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+### Notation Conventions
 
+- Random variables are written in **uppercase**: $X$, $Y$, $Z$, etc. Constants are written in **lowercase**: $x$, $y$, $z$, etc.
+- We'll use the same letter for a random variable and the value it takes on. $x$ is a possible value of $X$, $y$ of $Y$, etc.
+- Estimators are also random variables, but instead of uppercase we use a **hat**: $\hat \mu$, $\hat \sigma$, etc.
+- We'll use the same letter for the estimator and what it's meant to estimate. $\hat \mu$ is an estimate of $\mu$.
+
+
+
+## Probability Distributions: The Binary Case
+
+```{r}
+cols = c('income50k', 'income', 'education', 'county')
+sample.tab$roll = sample.tab$J
 ```
+
+:::: columns
+::: column
+```{r}
+style.tab(pop.tab, cols=cols)
+```
+:::
+::: column
+```{r}
+style.tab(sample.tab, cols=c('roll', cols))
+```
+:::
+::::
 
 - When our outcomes are binary, it's easy to describe this distribution.
   - All we need to know is the probability that $Y_i$ is 1. Why?
@@ -594,16 +679,20 @@ $$
 
 
 ## Probability Distributions: The General Case
+
+:::: columns
+::: column
 ```{r}
-set.seed(0)
-tab = earnings[sample(nrow(earnings)), ]
-tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=4,ntail=2)
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+style.tab(pop.tab, cols=cols)
 ```
+:::
+::: column
+```{r}
+style.tab(sample.tab, cols=c('roll', cols))
+```
+:::
+::::
+
 
 - When our outcomes are are nonbinary, it's a bit more complicated.
   - We need to know the probability that $Y_i$ takes on each possible value.But we calculate it the same way. 
@@ -624,16 +713,19 @@ $$
 
 ## Expectations
 
+:::: columns
+::: column
 ```{r}
-set.seed(0)
-tab = earnings[sample(nrow(earnings)), ]
-tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=4,ntail=2)
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+style.tab(pop.tab, cols=cols)
 ```
+:::
+::: column
+```{r}
+style.tab(sample.tab, cols=c('roll', cols))
+```
+:::
+::::
+
 
 - That said, we often don't need to know the whole distribution.
 - Often the only thing we care about is the expected value of $Y_i$. Or some related quantity.
@@ -653,16 +745,19 @@ $$
 
 ## Expectations
 
+:::: columns
+::: column
 ```{r}
-set.seed(0)
-tab = earnings[sample(nrow(earnings)), ]
-tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=4,ntail=2)
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+style.tab(pop.tab, cols=cols)
 ```
+:::
+::: column
+```{r}
+style.tab(sample.tab, cols=c('roll', cols))
+```
+:::
+::::
+
 
 - What's nice about the binary case is, in fact, that it's an expectation.
 - When $Y_i$ is binary, the probability it's 1 is its expected value $Y_i$.
@@ -720,16 +815,6 @@ $$
 ```{r}
 #| out-height: 300px
 #| layout-ncol: 2 
-
-earnings.jitter.pop = ggplot(pop.earnings) + 
-    geom_point(aes(x=degree, y=income, color=degree), 
-               size=.2, position=position_jitter(seed=0,w=.3), alpha=.1) +
-     scale_y() + guides(color='none')
-
-earnings.jitter = ggplot(earnings) + 
-    geom_point(aes(x=degree, y=income, color=degree), 
-               size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
-     scale_y() + guides(color='none')
 
 earnings.jitter.pop + 
   stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
@@ -895,7 +980,7 @@ mu = function(x) { mean(Y[X==x]) }
 
 tinypop.plot = ggplot() + geom_point(aes(x=Xdodge, y=Y, color=factor(X)), alpha=.7, size=2) + 
   scale_x_continuous(breaks=c(0,1), labels=c('0','1')) + scale_y_continuous(breaks=seq(.25,1.75,by=.25)) +
-  guides(color=FALSE) 
+  guides(color='none') 
 tinypop.plot
 ```
 
@@ -966,48 +1051,50 @@ tinypop.plot
 #| out-height: 250px
 #| fig-asp: .25
 #| 
-mean.has.degree = round(summaries$mean[summaries$degree=='4-year degree'] / 10000) * 10
-mean.no.degree  = round(summaries$mean[summaries$degree=='no 4-year degree'] / 10000) * 10
-degree.proportion = round(mean(earnings$degree=='4-year degree'),1)
-earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) + scale_y()
+pop.summaries = pop.earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
+mean.has.degree = round(pop.summaries$mean[pop.summaries$degree=='4-year degree'] / 10000) * 10
+mean.no.degree  = round(pop.summaries$mean[pop.summaries$degree=='no 4-year degree'] / 10000) * 10
+degree.proportion = round(mean(pop.earnings$degree=='4-year degree'),1)
+earnings.jitter.pop + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) 
 ```
 
  - Let's think about a random person drawn from this population
     - $Y$ is their income 
     - $X$ is an indicator for having a four-year degree. 
-  - Suppose the subpopulation means are `r approx(mean.has.degree, 10)` for people with degrees and `r approx(mean.no.degree, 10)` for people without.
+  - Suppose the subpopulation means are `r approx(mean.has.degree, 10)`k for people with degrees and `r approx(mean.no.degree, 10)`k for people without.
   - And that `r approx(degree.proportion*10,1)`/10 of our population has degrees.
   
-- Questions 
-  - What is $E(Y \mid X)$? 
-  - What is $E(Y)$?
+- **Q.**  What is $E(Y \mid X)$? And what is $E(Y)$?
 
-:::: r-stack
-::: {.fragment .fade-out data-fragment-index="1"}
+:::: columns
+::: column
+::: fragment
 
-- $E(Y \mid X)$ is a random variable that is **either** `r mean.has.degree`K or `r mean.no.degree`K
-  - It's `r mean.has.degree`K with probability `r degree.proportion*10`/10,       when $X=1$. 
-  - It's `r mean.no.degree`K  with probability `r (1-degree.proportion)*10`/10,   when $X=0$. 
+- $E(Y \mid X)$ is a random variable that is **either** `r mean.has.degree`k or `r mean.no.degree`k
+  - It's `r mean.has.degree`k with probability `r degree.proportion*10`/10,       when $X=1$. 
+  - It's `r mean.no.degree`k  with probability `r (1-degree.proportion)*10`/10,   when $X=0$. 
 
 ::: 
+:::
+::: column
+::: fragment
 
-::: {.fragment .current-visible data-fragment-index="1"}
-
-- $\E(Y)$ is the expectation of this random variable---a number.
-- We can calculate it using the law of iterated expectations.
+- $\E(Y)$ is its expectation. A number.
+- We'll calculate it using iterated expectations.
 
 $$
 \begin{aligned} 
 E\{ E( Y \mid X ) \} 
 &= E(Y|X=1)P(X=1) + E(Y|X=0)P(X=0) \\
-&= `r mean.has.degree`K \cdot `r degree.proportion*10`/10 +
-   `r mean.no.degree`K  \cdot `r (1-degree.proportion)*10`/10
-=  `r mean.has.degree*degree.proportion`K +
-   `r mean.no.degree*(1-degree.proportion)`K 
-=  `r mean.has.degree*degree.proportion + mean.no.degree*(1-degree.proportion)`K
+&= `r mean.has.degree`k \cdot `r degree.proportion*10`/10 +
+   `r mean.no.degree`k  \cdot `r (1-degree.proportion)*10`/10
+=  `r mean.has.degree*degree.proportion`k +
+   `r mean.no.degree*(1-degree.proportion)`k 
+=  `r mean.has.degree*degree.proportion + mean.no.degree*(1-degree.proportion)`k
 \end{aligned}
 $$
 
+:::
 :::
 ::::
 
@@ -1030,7 +1117,7 @@ tinypop.plot
 $$
 \small{
 \begin{aligned}
-\E\qty{ \mu(X) } &= \frac{1}{2}\mu(0) + \frac{1}{\mu(1)}= \frac{1}{2} \cdot `r mu(0)` + \frac{1}{2} \cdot `r mu(1)` = 1.05 && \text{ the first way } \\
+\E\qty{ \mu(X) } &= \frac{1}{2}\mu(0) + \frac{1}{2}\mu(1)= \frac{1}{2} \cdot `r mu(0)` + \frac{1}{2} \cdot `r mu(1)` = `r (mu(0)+mu(1))/2` && \text{ the first way } \\
 \E\qty{ \mu(X) } &= \E\qty{\E\qty(Y \mid X)} = \E\qty{Y} = \frac{1}{6} \cdot `r Y[1]` + \frac{1}{6} \cdot `r Y[2]` + \ldots && \text{ the second way }
 \end{aligned}
 }
@@ -1094,31 +1181,16 @@ $$
 
 ```{r}
 #| layout-ncol: 2
-#| 
-xx = seq(-4,4,by=.01)
-heights = seq(0,.4,length.out=100)
-normals = rnorm(10000)
-
-ggplot() + geom_histogram(aes(x=normals, y=after_stat(density)), alpha=.3, bins=100) +
-           geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
-           geom_vline(xintercept=0, color='blue') + 
-           geom_vline(xintercept=c(-1,1), color='blue', linetype='dashed') +
-           geom_vline(xintercept=c(-2,2), color='blue', linetype='dotted') +
-           geom_point(aes(y=heights, x=normals[1:length(heights)]), color='purple', alpha=.3)
-
-ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bins=100) +
-           geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
-           geom_vline(xintercept=2+0, color='blue') + 
-           geom_vline(xintercept=2+c(-1,1), color='blue', linetype='dashed') +
-           geom_vline(xintercept=2+c(-2,2), color='blue', linetype='dotted') +
-           geom_point(aes(y=heights, x=normals[1:length(heights)]+2), color='purple', alpha=.3) +
-           xlim(-4,4)
+unbiased.plot
+biased.plot
 ```
 
 - The **bias** of an estimator is the difference between its expected value and the value of the thing it's estimating.
 - We haven't talked about this yet because there hasn't been any. We've been using **unbiased estimators**.
-- You can see, looking at the sampling distribution plot on the right, that bias might cause some problems with coverage.
-- If we calibrate interval estimates to cover **the estimator's mean** 95% of the time---and that's what we've really been doing---how often will they cover the [thing we're estimating]{.fg style="color:green"}?
+- You can see, looking at the sampling distribution on the right, that bias might cause some problems with coverage.
+- If we calibrate interval estimates to cover **the estimator's mean** 95% of the time
+  - and that's what we've really been doing
+  how often will they cover the [thing we're estimating]{.fg style="color:green"}?
 - This means biased estimators can cause big problems. We'll talk about this more later in the semester.
 - But for now, let's just show the estimators that we've been using are, in fact, unbiased.
 
@@ -1133,7 +1205,7 @@ $$
 \begin{aligned}
 \E\qty[\frac1n\sum_{i=1}^n Y_i] 
 &= \frac1n\sum_{i=1}^n \E[Y_i] && \text{ via linearity (Rule 1)} \\
-&= \frac1n\sum_{i=1}^n \mu     && \text{ via uniform sampling } \\
+&= \frac1n\sum_{i=1}^n \mu     && \text{ via equal-probability sampling } \\
 &= \frac1n \times n \times \mu = \mu.
 \end{aligned}
 $$

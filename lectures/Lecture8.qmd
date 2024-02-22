@@ -1,6 +1,6 @@
 ---
-title: "Lecture 7"
-subtitle: "Working With Non-Binary Outcomes"
+title: "Lecture 8"
+subtitle: "Working With Non-Binary Outcomes: Spread"
 format: 
   clean-revealjs:
     height: 1000
@@ -148,6 +148,19 @@ earnings$person = 1:nrow(earnings)
 n = nrow(earnings)
 ```
 
+```{r fake-pop-and-sample-it}
+set.seed(11)
+pop.earnings = earnings[sample(nrow(earnings), nrow(display.population), replace=TRUE), ]
+pop.earnings$income = pop.earnings$income + 
+    ifelse(1:nrow(pop.earnings) <= nrow(earnings), 0, 3000*rnorm(nrow(pop.earnings)))
+pop.j = sample(nrow(pop.earnings))
+pop.earnings[pop.j, ] = pop.earnings
+
+pop.tab = pop.earnings
+J = pop.j[1:nrow(earnings)]
+sample.tab = pop.tab[J, ]
+sample.tab$J = J
+```
 
 
 ```{r maps}
@@ -348,34 +361,25 @@ dot.size = 2
 ```{r map-sample}
 #| fig-width: 5
 #| out-height: 300px
-ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) + guides(color=FALSE)
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) + guides(color='none')
 ```
 :::
 
 ::: column
 
-```{r fake-pop-and-sample-it}
-set.seed(11)
-pop.earnings = earnings[sample(nrow(earnings), nrow(display.population), replace=TRUE), ]
-pop.earnings$income = pop.earnings$income + 
-    ifelse(1:nrow(pop.earnings) <= nrow(earnings), 0, 3000*rnorm(nrow(pop.earnings)))
-pop.j = sample(nrow(pop.earnings))
-pop.earnings[pop.j, ] = pop.earnings
-
-pop.tab = pop.earnings
-J = pop.j[1:nrow(earnings)]
-sample.tab = pop.tab[J, ]
-sample.tab$J = J
-```
-
 ```{r table}
-tab = sample.tab
-tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-ellipsis.tab = tab[, c('income', 'education', 'county')] %>% ellipsis(nhead=4,ntail=1)
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+style.tab = function(tab, cols=c('income', 'education', 'county'), nhead=3, ntail=1) {
+  tab$income50k = 0+(tab$income > 50000)
+  tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
+  tab$county = ifelse(tab$county=='los angeles', 'LA',  tab$county)
+  ellipsis.tab = tab[, cols] %>% ellipsis(nhead=nhead,ntail=ntail)
+  ellipsis.tab %>%
+    kable %>% kable_styling() %>% 
+    row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
+    row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+}
+
+style.tab(sample.tab, nhead=4)
 ```
 :::
 
@@ -397,36 +401,25 @@ ellipsis.tab %>%
 #| 
 ca.plot + 
  geom_point(aes(x=long, y=lat, color=degree), data=display.population, size=.02, alpha=.1) + 
- guides(color=FALSE)
+ guides(color='none')
 ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) +
-  guides(color=FALSE)
+  guides(color='none')
 ```
 
-:::: columns
 
+:::: columns
 ::: column
 ```{r}
-tab = pop.tab
-tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-ellipsis.tab = tab[, c('income', 'education', 'county')] %>% ellipsis(nhead=3,ntail=1)
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+style.tab(pop.tab)
 ```
 :::
 ::: column
 ```{r}
-tab = sample.tab
-tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-ellipsis.tab = tab[, c('J', 'income', 'education', 'county')] %>% ellipsis(nhead=3,ntail=1)
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+style.tab(sample.tab)
 ```
 :::
 ::::
+
 
 - We don't have much information about the people in our population. Except the ones in our sample. 
 - But, for the sake of visualization, I've made some up. 
@@ -436,26 +429,34 @@ ellipsis.tab %>%
 ## Unbiasedness
 
 ```{r}
-#| layout-ncol: 2
-#| 
-xx = seq(-4,4,by=.01)
-heights = seq(0,.4,length.out=100)
+xx = seq(-6,6,by=.01)
+K = 100
+heights = seq(0,.4,length.out=K)
 normals = rnorm(10000)
 
-ggplot() + geom_histogram(aes(x=normals, y=after_stat(density)), alpha=.3, bins=100) +
+unbiased.plot = ggplot() + geom_histogram(aes(x=normals, y=after_stat(density)), alpha=.3, bins=100) +
            geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
            geom_vline(xintercept=0, color='blue') + 
            geom_vline(xintercept=c(-1,1), color='blue', linetype='dashed') +
            geom_vline(xintercept=c(-2,2), color='blue', linetype='dotted') +
-           geom_point(aes(y=heights, x=normals[1:length(heights)]), color='purple', alpha=.3)
-
-ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bins=100) +
+           geom_pointrange(aes(y=heights, x=normals[1:K], xmin=normals[1:K]-1.96, xmax=normals[1:K]+1.96), 
+                           color='purple', alpha=.15) + xlim(min(xx),max(xx))
+           
+biased.plot = ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bins=100) +
            geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
            geom_vline(xintercept=2+0, color='blue') + 
            geom_vline(xintercept=2+c(-1,1), color='blue', linetype='dashed') +
            geom_vline(xintercept=2+c(-2,2), color='blue', linetype='dotted') +
-           geom_point(aes(y=heights, x=normals[1:length(heights)]+2), color='purple', alpha=.3) +
-           xlim(-4,4)
+           geom_pointrange(aes(y=heights, x=2+normals[1:K], xmin=2+normals[1:K]-1.96, xmax=2+normals[1:K]+1.96), 
+                           color='purple', alpha=.15) + xlim(min(xx),max(xx))
+
+
+```
+
+```{r}
+#| layout-ncol: 2
+unbiased.plot
+biased.plot
 ```
 
 - We've shown that using sample means as estimators of population means gives us **unbiased estimators**.
@@ -467,38 +468,60 @@ ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bin
   - Calibration via bootstrap works for every unbiased estimator we'll talk about this semester. 
   - Things are more complicated for fancy machine learning stuff, but that's beyond the scope.
 
-## So...
+## So We Can Trust This Interval Estimate
 
+```{r}
+#| cache: true
+X = as.numeric(earnings$education >= 16)
+Y = earnings$income 
+n = length(Y)
 
+difference = mean(Y[X==1]) - mean(Y[X==0])
+difference.bootstrap.samples = array(dim=10000)
+for(rr in 1:10000) {
+    I = sample(1:n, n, replace=TRUE)
+    Xstar = X[I]
+    Ystar = Y[I]
+    difference.bootstrap.samples[rr] = mean(Ystar[Xstar==1]) - mean(Ystar[Xstar==0])
+}
+```
 
-## Spread
+```{r}
+#| out-height: 250px
+#| fig-asp: .25 
+ 
+xx = seq(min(difference.bootstrap.samples), max(difference.bootstrap.samples), length.out=1000)
+wboot=width(difference.bootstrap.samples, alpha=.05)
+difference.bootstrap.samples = difference.bootstrap.samples 
+bootstrap.histogram=ggplot() + geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
+annotated.bootstrap.difference.histogram = annotate.histogram(bootstrap.histogram, difference.bootstrap.samples,
+  shade=FALSE)
+with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, height=.1, highlight=0) + 
+  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+wboot/2), 
+                  data=data.frame(x=difference, y=.05, w=wboot), color='black')  +
+  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='cyan') 
+``` 
 
+# Probability Stuff
 
+## Review: Random Variables
 
-Anything we'll talk about in class---
-crucial for statistical inference, i.e. interval estimation. 
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2 
 
-And it's basically sufficient, too.
+earnings.jitter.pop = ggplot(pop.earnings) + 
+    geom_point(aes(x=degree, y=income, color=degree), 
+               size=.2, position=position_jitter(seed=0,w=.3), alpha=.1) +
+     scale_y() + guides(color='none')
 
+earnings.jitter = ggplot(earnings) + 
+    geom_point(aes(x=degree, y=income, color=degree), 
+               size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+     scale_y() + guides(color='none')
+```
 
-- And 
-
-is a good idea.
-, we'll focus on the **location** of our estimator. 
-  - That is, on where its sampling distribution is centered.
-  - We'll think about the **precision** of our estimator next time.
-- We want to know if it's centered at our [estimation target]{.fg style="text:green"}.
-  - If things look like they do on the left, we're in good shape.
-  - But if they look like they do on the right, we're not.
-  - You can see that a good number of our samples on the right are far off-target. 
-  - Further away, e.g., than the width of the distribution.
-- To think about this in general terms, we'll use **random variables** to describe
-  the relationship between the sample and population.
-
-
-# Random Variables
-
-## Observations as Random Variables
+## Review: Observations as Random Variables
 
 ```{r}
 #| out-height: 300px
@@ -521,97 +544,21 @@ earnings.jitter +
   - That's the result of a random process---the roll of a die.
 - To summarize this result, we talk about the **probability distribution** of $Y_i$.
 
-## Probability Distributions: The Binary Case
-```{r}
-style.tab = function(tab) { 
-  tab$county[tab$county=='los angeles'] = 'LA'
-  tab[,'income50k'] = 0 + (tab$income >= 50000)
-  tab[,'income'] = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-  fields = c('income50k', 'income', 'education', 'county')
-  if('J' %in% names(tab)) { fields = c('J', fields) }
-
-  ellipsis.tab = tab[, fields] %>% ellipsis(nhead=3,ntail=1)
-  ellipsis.tab %>%
-    kable %>% kable_styling() %>% 
-    row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
-    row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
-}
-```
+## Review: Expectations
 
 :::: columns
 ::: column
 ```{r}
-style.tab(pop.tab)
 ```
 :::
 ::: column
 ```{r}
-style.tab(sample.tab)
+sample.tab
 ```
 :::
 ::::
 
-- When our outcomes are binary, it's easy to describe this distribution.
-  - All we need to know is the probability that $Y_i$ is 1. Why?
-  - To do that, we **sum the probabilities** of the rolls that result in it being one.
-
-$$
-P(Y_i = 1) = \sum_{j: y_j = 1} P(\text{roll}_i = j) = \sum_{j: y_j = 1} \frac{1}{m} \times y_j = \mu.
-$$
-
-- This **collapses** out information about our random process that's irrelevant to $Y_i$.
-- That is, it collapses the probability we roll each number in 1...m into our 'weighted coin flip'.
-
-
-## Probability Distributions: The General Case
-
-:::: columns
-::: column
-```{r}
-style.tab(pop.tab)
-```
-:::
-::: column
-```{r}
-style.tab(sample.tab)
-```
-:::
-::::
-
-- When our outcomes are are nonbinary, it's a bit more complicated.
-  - We need to know the probability that $Y_i$ takes on each possible value.But we calculate it the same way. 
-  - We sum the probabilities of the rolls that result in it taking on those values.
-
-$$
-P(Y_i = y) = \sum_{j: y_j = y} P(\text{roll}_i = j) 
-$$
-
-- We're still collapsing out irrelevant information, but what we're left with is more complicated.
-- It's a **weighted die roll**, with one face for each possible value of $Y_i$. 
-- And If each person's income is different, then there's nothing to collapse out. Then, ...
-$$ 
-P(Y_i = y) = \begin{cases} \frac{1}{m} & \qqtext{for} y \in y_1 \ldots y_m \\ 
-                            0 & \qqtext{otherwise}
-             \end{cases}
-$$
-
-## Expectations
-
-:::: columns
-::: column
-```{r}
-style.tab(pop.tab)
-```
-:::
-::: column
-```{r}
-style.tab(sample.tab)
-```
-:::
-::::
-
-- That said, we often don't need to know the whole distribution.
-- Often the only thing we care about is the expected value of $Y_i$. Or some related quantity.
+- Often the thing we care about is the expected value of $Y_i$. Or some related quantity.
   - The expected value of $Y_i$ is the **probability-weighted average** of the values it can take on.
   - What's nice about this is that we can think of this in 'uncollapsed' terms.
 - When we sample as usual, this is just the population mean.
@@ -626,568 +573,475 @@ $$
 \end{aligned}
 $$
 
-## Expectations
 
-:::: columns
-::: column
-```{r}
-style.tab(pop.tab)
-```
-:::
-::: column
-```{r}
-style.tab(sample.tab)
-```
-:::
-::::
-
-- What's nice about the binary case is, in fact, that it's an expectation.
-- When $Y_i$ is binary, the probability it's 1 is its expected value $Y_i$.
-
-$$
-\begin{aligned}
-P(Y_i=1) = \sum_{j: y_j = 1} P(\text{roll}_i = j) 
-         &= \sum_{j:y_j=1} \frac{1}{m} \\
-         &= \sum_{j=1}^m \frac{1}{m} \times \begin{cases} 1 & \ \ \text{ if } y_j = 1 \\ 0 & \ \ \text{ otherwise} \\ \end{cases} \\
-         &= \sum_{j=1}^m \frac{1}{m} \times y_j = \E[Y_i].
-\end{aligned}
-$$
-
-- In fact, we like expectations so much that we often use them to work with probabilities.
-
-$$
-P(Z \in A) = \E[1_A(Z)] \qfor 1_A(z) = 
-\begin{cases} 
-1 & \qqtext{ for } z \in A \\ 0 & \qqtext{ otherwise} 
-\end{cases}
-$$
-
-
-## Independence 
-
+## Spread
 
 ```{r}
 #| out-height: 300px
 #| layout-ncol: 2 
+#| 
+ggplot(earnings) + 
+  geom_point(aes(x=0, y=income), color='blue', 
+            size=2, position=position_jitter(seed=0,w=.3), alpha=.2) +
+  stat_summary(aes(x=0, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x))  
 
-summaries = earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
-
-earnings.jitter.pop + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
 earnings.jitter + 
   stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
           fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
 ```
 
-- We say random variables are **independent** if knowing the value of one doesn't tell us anything about the value of the other.
-- When this is the case, their joint probability distribution is just the product of their individual ones.
-
+- To summarize the **spread** of a distribution, we often talk about variance.
+- The variance is an expectation: it's the **expected squared difference** between a random variable and its expectation.
 $$
-P(Y_1=y_1 \qand Y_2=y_2) = P(Y_1=y_1)P(Y_2=y_2).
-$$
-
-- That's what happens when the randomness in $Y_1$ and $Y_2$ comes from two different rolls of the die.
-- And since that's how we're doing our sampling --- that's sampling with replacement---it'll be true in our sample.
-- Because we get each of our observations the same way, they also have the same probability distribution. 
-- We say they're **independent and indentically distributed.**
-
-## Conditioning
-
-```{r}
-#| out-height: 300px
-#| layout-ncol: 2 
-
-earnings.jitter.pop = ggplot(pop.earnings) + 
-    geom_point(aes(x=degree, y=income, color=degree), 
-               size=.2, position=position_jitter(seed=0,w=.3), alpha=.1) +
-     scale_y() + guides(color='none')
-
-earnings.jitter = ggplot(earnings) + 
-    geom_point(aes(x=degree, y=income, color=degree), 
-               size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
-     scale_y() + guides(color='none')
-
-earnings.jitter.pop + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-earnings.jitter + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-```
-
-- **Conditioning** is, in effect, a way of thinking about sampling as a two-stage process.
-  - First, we choose the color of our dot, i.e., the value of $X_i$, according to it frequency in the population.
-  - Then, we choose a specific one of those dots, i.e. $J_i$, from those with that color---with equal probability.
-- Because this is just a way of thinking, each person still gets chosen with probability $1/m$.
-$$
-P(J_i=j) = 
-\begin{cases}
-   \frac{m_{green}}{m} \ \ \ \ \ \times \frac{1}{m_{green}} \ \ \ \ \ =\ \frac{1}{m} & \text{if the $j$th dot is green  ($x_j=1$) } \\
-    \frac{m-m_{green}}{m} \times \frac{1}{m-m_{green}} \ = \ \frac{1}{m} & \text{otherwise}
-\end{cases}
-$$
-  
-
-
-## Conditioning
-
-```{r}
-#| out-height: 300px
-#| layout-ncol: 2 
-
-earnings.jitter.pop + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-earnings.jitter + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-```
-
-
-- The **Conditional Probability** of $Y_i$ is the probability resulting from the second stage.
-- It's a function of the result of the first. 
-  - $P(Y_i=y \mid X_i=1)$ is the probability distribution of $Y_i$ when we're rolling the 'green die'.
-  - $P(Y_i=y \mid X_i=0)$ is the probability distribution of $Y_i$ when we're rolling the 'red die'.
-- And the **Conditional Expectation** of $Y_i$ is the 'second stage expected value' in the same sense.
-  - $\E[Y_i \mid X_i=1]$ is the expected value of $Y_i$ when we're rolling the 'green die'. 
-  - That is, the mean value $\mu(1)$ of $y_j$ in the subpopulation drawn as little green dots.
-  - $\E[Y_i \mid X_i=0]$ is the expected value of $Y_i$ when we're rolling the 'red die'.
-  - That is, the mean value $\mu(0)$ of $y_j$ in the subpopulation drawn as little red dots.
-
-
-# Working with Expectations 
-
-## Conditioning
-
-```{r}
-#| out-height: 300px
-#| layout-ncol: 2 
-
-earnings.jitter.pop + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-earnings.jitter + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-```
-
-### The law of iterated expectations
-$$
-E \{ E( Y \mid X ) \} \quad \text{ for any random variables $X, Y$} 
+\Var(Y) = \E \qty[ \qty{ Y - \E(Y) }^2 ]
 $$
 
-To calculate the mean of $Y$, we can average within subpopulations, then across subpopulations.
+- To put that back on the same scale as $Y$---instead of the scale of $Y^2$---we take it's square root. That's the standard deviation.
 
-### Irrelevance of independent conditioning variables
-$$ E( Y \mid X, X' ) = E( Y \mid X ) \quad \text{ when $X'$ is independent of $X,Y$ } $$
-
-If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the relationship between them.
-
-## Linearity of Expectations
-
-```{r}
-#| out-height: 300px
-#| layout-ncol: 2 
-
-earnings.jitter.pop + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-earnings.jitter + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-```
-
-$$ 
-\begin{aligned}
-E ( a Y + b Z ) 
-&= E (aY) + E (bZ) \\
-&= aE(Y) + bE(Z)  \\
-& \text{ for random variables $Y, Z$ and numbers $a,b$ }
-\end{aligned}
+$$
+\text{standard deviation}(Y) = \sqrt{\Var(Y)}
 $$
 
-  - There are two things going on here.
-    - To average a sum of two things, we can take two averages and sum.
-    - To average a constant times a random variable, we can multiply the random variable's average by the constant.
-  - In other words, we can *distribute* expectations and can pull constants out of them.
-  
-## Proof
+- We can talk about spread outright (left) --- that's (unconditional) variance.
+- Or spread within groups (right) --- that's conditional variance.
 
-- In essence, it comes down to the fact that all we're doing is summing.
-	- Expectations are probability-weighted sums.
-	- And we're looking at the expectation of a sum.
-- And we can change the order we sum in without changing what we get.
+
+## Variance as Excess {.smaller}
 
 $$
 \small{
 \begin{aligned}
-\E\qty( a Y + b Z ) 
-&= \sum_{y}\sum_z (a y + b z) \ P(Y=y, Z=z) && \text{ by definition of expectation} \\
-&= \sum_{y}\sum_z a y \ P(Y=y, Z=z) + \sum_{z}\sum_y b z \ P(Y=y, Z=z) && \text{changing the order in which we sum} \\
-&= \sum_{y} a y \ \sum_z P(Y=y,Z=z) + \sum_{z} b z \ \sum_y P(Y=y,Z=z) && \text{pulling constants out of the inner sums} \\
-&= \sum_{y} a y \ P(Y=y) + \sum_{z} b z \ \sum_y P(Z=z)  && \text{summing to get marginal probabilities from our joint } \\
-&= a\sum_{y} y \ P(Y=y) + b\sum_{z} z \ \sum_y P(Z=z)  && \text{ pulling constants out of the remaining sum } \\
-&= a\E Y + b \E Z  && \text{by definition}
+\Var(Y) &= \E \qty[ \qty{ Y - \E(Y) }^2 ] && \text{ the \emph{spread} idea: the mean square of a \emph{centered version} of $Y$ } \\
+&= \E\qty(Y^2) - \qty{\E\qty(Y)}^2         && \text{ the \emph{excess} idea: the average amount $Y^2$ \emph{exceeds} the square of its mean}.
 \end{aligned}
 }
 $$
 
-## Linearity of **Conditional** Expectations
-
-```{r}
-#| out-height: 300px
-#| layout-ncol: 2 
-
-earnings.jitter.pop + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-earnings.jitter + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-```
-
-$$ 
-\begin{aligned}
-E\{ a(X) Y + b(X) Z \mid X \} 
-&= E\{a(X)Y \mid X\} + E\{ b(X)Z \mid X\} \\
-&= a(X)E(Y \mid X) + b(X)E(Z \mid X)
-\end{aligned}
-$$
-
-- This is like linearity of expectations, but with a twist.
-   - When we condition on $X$, we're working with subpopulations in which $X$ is constant.
-   - This means we can act as if functions of $X$ **are** constants.
-   - So we can pull them out of expectations that are conditional on $X$.
-   
-## It's important to distinguish between two things
-
 ```{r}
 #| out-height: 250px
 #| fig-asp: .25
+
 Y = c(.75,1,1.25, 1,1.25,1.5)
 X = 0 + (1:6 > 3)
 Xdodge = X + rep(.02*c(-1,0,1),2)
 mu = function(x) { mean(Y[X==x]) }
 
-tinypop.plot = ggplot() + geom_point(aes(x=Xdodge, y=Y, color=factor(X)), alpha=.7, size=2) + 
-  scale_x_continuous(breaks=c(0,1), labels=c('0','1')) + scale_y_continuous(breaks=seq(.25,1.75,by=.25)) +
-  guides(color=FALSE) 
-tinypop.plot
+tinypop.square.plot = ggplot() + geom_point(aes(x=Xdodge, y=Y, color=factor(X)), alpha=.5, size=3*dot.size) +
+                                 geom_point(aes(x=Xdodge, y=Y^2, color=factor(X)), shape=0, size=3*dot.size) + 
+                                 geom_segment(aes(x=Xdodge, xend=Xdodge, y=Y, yend=Y^2), alpha=.3) + guides(color='none')
+tinypop.square.plot + xlim(min(Xdodge[X==0])-sd(Xdodge[X==0]), max(Xdodge[X==0] + sd(Xdodge[X==0])))
 ```
 
-  1.  The **conditional expectation function** $\mu(x)=E[Y \mid X=x]$.
-      - $\mu$ is a function; evaluated at $x$, it's a number. It's not random.
-      - It's the mean of the subpopulation of people with $X=x$.
-   
-  2.  The conditional expectation $\mu(X)=E[Y \mid X]$.
-      - $\mu(X)$ is the mean of a **random subpopulation** of people.
-      - It's the conditional expectation function **evaluated at** the random variable $X$.
-      - This is the sort of thing that shows up when we use the law of iterated expectations.
+Let's think, in terms of the plot, about why there is excess in the square.
 
-## Check Your Understanding {.smaller}
-
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-tinypop.plot
-```
-
-- Suppose we sample a point $(X, Y)$  uniformly at random from the population of 6 points above.
-  - What is the conditional expectation function $\mu(x)$ at [$x=0$]{.twocolor-red} and [$x=1$]{.twocolor-green}?
-  - What is the conditional expectation $\mu(X)$?
-  
-::: fragment
-  - [$\mu(0)=`r mu(0)`$]{.twocolor-red} and [$\mu(1)=`r mu(1)`$]{.twocolor-green}
-:::
-::: fragment
-  - $\mu(X)$ is a random variable taking on these two values.
-  $$ \mu(X) = \begin{cases}
-      `r mu(0)` & \text{ when } X=0 \\
-      `r mu(1)` & \text{ when } X=1
-      \end{cases}
-  $$
-:::
-
-## The Indicator Trick
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-tinypop.plot
-```
-
-- Suppose we sample a point $(X, Y)$  uniformly at random from the population of 6 points above.
-  - What is $X\mu(X)$?
+- Suppose $Y$ takes on three values --- the dots ---with equal probability.
+    - Its expectation is the average height of the black dots.
+    - And its expectation, squared, is the square of this.
+- Its square $Y^2$ takes on the the square of those values---the squares --- with equal probability.
+    - Its expectation is the average height of the squares.
+- Why is the second one bigger?
 
 ::: fragment
 
-- $X\mu(X)$ is a random variable taking on these two values.
-  $$ X\mu(X) = \begin{cases}
-      0 \times \mu(0) = 0 \times `r mu(0)` & \text{ when } X=0 \\
-      1 \times \mu(1) = 1 \times `r mu(1)` & \text{ when } X=1
-      \end{cases}
-  $$
-
-- We can write it equivalently as $X\mu(1)$ because either ...
-  - $X=0$, so $X\mu(X) = X\mu(1)=0$ 
-  - $X=1$, so $X\mu(X)=X\mu(1)=1\times \mu(1)$
-- This comes up a lot working with subsample means.
-- We'll swap $X\mu(X)$ for $X\mu(1)$ often, referring to the **indicator trick**.
+- Because squaring *increases big draws of Y* more than it *decreases small ones*.
+- Visually, the line from $Y$ to $Y^2$ is longer when $Y$ is bigger than when it's smaller.
 
 :::
 
 
-## A More Realistic Example
+## Equivalence Proof
+
+::: fragment
+
+$$
+\small{
+\begin{aligned}
+\E \qty[ \qty{ Y - \E(Y) }^2 ] 
+&= \E \qty[ Y^2 - 2 Y \E(Y) + \qty{\E(Y)}^2 ] && \text{ FOIL } \\
+&= \E[ Y^2] - \E\qty[2 Y \E(Y)] + \E\qty[\qty{\E(Y)}^2] && \text{Distributing expectations (linearity)} \\
+&= \E[ Y^2] - 2\E(Y)\E\qty[Y] + \qty{\E(Y)}^2\E[1] && \text{Pulling constants out of expectations (linearity)} \\
+&= \E[ Y^2] - 2\qty{\E(Y)}^2 + \qty{\E(Y)}^2] && \text{Recognizing a product of something with itself as a square} \\
+&= \E[ Y^2] - \cancel{2}\qty{\E(Y)}^2 + \cancel{\qty{\E(Y)}^2}] && \text{Subtracting} 
+\end{aligned}
+}
+$$
+
+:::
+
+## Conditional Variance {.smaller}
+
+- The **conditional variance** describes the spread of one random variable *within groups*. 
+- Like the conditional expectation of the random variable, there are two related concepts.
+
+1. The **conditional variance function**.
+$$
+\sigma^2(x) := \Var(Y \mid X=x) = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X=x]
+$$
+    - This is the variance of $Y$, **within the subpopulation** of people with $X=x$.
+    - It is the *conditional expectation function* of the random variable $\textcolor{blue}{\{Y-\E(Y \mid X)\}^2}$.
+    - We call it 'the conditional variance of $Y$ given $X=x$'
+
+2. The conditional variance $\sigma^2(X) = \Var(Y \mid X)$
+$$
+\sigma^2(X) := \Var(Y \mid X)   = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X]
+$$
+
+    - This is the variance of $Y$ within **a random subpopulation** of people.
+        - It's the conditional variance function **evaluated at** the random variable $X$.
+        - And  the conditional expectation of the random variable $\textcolor{blue}{\{Y-\E(Y \mid X)\}^2}$.
+    - We call it 'the conditional variance of $Y$ given $X$.
+    - This is the sort of thing that shows up when you use the law of iterated expectations.
+
+
+
+## Conditional Variance as Excess {.smaller}
+
+$$
+\small{
+\begin{aligned}
+\Var(Y \mid X) &= \E \qty[ \qty{ Y - \E(Y\mid X)}^2 \mid X ] && \text{ the \emph{spread} idea: the mean square of a conditionally centered version of $Y$ } \\
+&= \E\qty(Y^2 \mid X) - \qty{\E\qty(Y \mid X)}^2              && \text{ the \emph{excess} idea: the average amount $Y^2$ exceeds the square of its cond. mean}
+\end{aligned}
+}
+$$
+
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .5
+tinypop.square.plot 
+```
+
+- We can think of the Conditional Variance as excess, too.
+- It's the same as the unconditional case, but *within subpopulations*.
+
+
+## The Law of Total Variance
+
+$$
+\Var[Y] = \E\qty{\Var( Y \mid X ) } + \Var\qty{\E( Y \mid X ) }  
+$$
+
+- The Law of Total Variance relates Conditional and Unconditional Variance
+- It's like the Law of Total Expectation, but for Variance
+- It's a useful way to decompose the variance a random variable.
+- Think about where most of the variance in $Y$ is coming from in the two populations shown below.
+
+```{r}
+#| out-height: 500px
+#| fig-ncol: 2
+
+ggplot() + geom_point(aes(x=Xdodge, y=Y, color=factor(X)), alpha=.7, size=4) + 
+  scale_y_continuous(breaks=seq(0,3,by=.5), limits=c(0,3)) + guides(color='none') 
+ggplot() + geom_point(aes(x=Xdodge, y=Y+X, color=factor(X)), alpha=.7, size=4) + 
+  scale_y_continuous(breaks=seq(0,3,by=.5), limits=c(0,3)) + guides(color='none') 
+
+```
+
+
+## An Activity 
 
 ```{r}
 #| out-height: 250px
 #| fig-asp: .25
-#| 
+
 mean.has.degree = round(summaries$mean[summaries$degree=='4-year degree'] / 10000) * 10
 mean.no.degree  = round(summaries$mean[summaries$degree=='no 4-year degree'] / 10000) * 10
 degree.proportion = round(mean(earnings$degree=='4-year degree'),1)
 earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) + scale_y()
 ```
 
- - Let's think about a random person drawn from this population
-    - $Y$ is their income 
-    - $X$ is an indicator for having a four-year degree. 
-  - Suppose the subpopulation means are `r approx(mean.has.degree, 10)` for people with degrees and `r approx(mean.no.degree, 10)` for people without.
-  - And that `r approx(degree.proportion*10,1)`/10 of our population has degrees.
-  
-- Questions 
-  - What is $E(Y \mid X)$? 
-  - What is $E(Y)$?
+- Working with your neighbor, think about why we call it this.
+- Try to put the three terms into words.
+    - $\Var[Y]$ is the ...
+    - $\E\qty{ \Var(Y \mid X) }$ is the ...
+    - $\Var\qty{\E( Y \mid X)}$ is the ...
+- Do this in two ways.
+    1. Using 'Random Variables Language', 
+        - e.g. 'the expected value of the conditional variance of Y given X'
+    2. Using 'Population Language'
+        - e.g. 'the variance of income (Y) within the random subpopulation with degree status X'
 
-:::: r-stack
-::: {.fragment .fade-out data-fragment-index="1"}
 
-- $E(Y \mid X)$ is a random variable that is **either** `r mean.has.degree`K or `r mean.no.degree`K
-  - It's `r mean.has.degree`K with probability `r degree.proportion*10`/10,       when $X=1$. 
-  - It's `r mean.no.degree`K  with probability `r (1-degree.proportion)*10`/10,   when $X=0$. 
+## Proof
 
-::: 
+**Claim.**
+$$
+\Var[Y] = \textcolor{blue}{\E\qty[\Var(Y \mid X)]} + \textcolor{green}{\Var\qty[\E(Y \mid X)]} 
+$$
 
-::: {.fragment .current-visible data-fragment-index="1"}
+1. Rewrite the variances, conditional and unconditional, in *excess* form.
 
-- $\E(Y)$ is the expectation of this random variable---a number.
-- We can calculate it using the law of iterated expectations.
+::: fragment
+$$
+\Var[Y]  = \textcolor{blue}{\E\qty[ \E(Y^2 \mid X) - \qty{\E\qty(Y \mid X)}^2]} 
+                       + \textcolor{green}{\E\qty{ \E(Y \mid X)^2}  - \qty(\E\qty{\E\qty(Y \mid X)})^2} 
+$$
+
+:::
+
+2. Distribute the outer expectations in the first term.
+
+::: fragment
+$$
+\Var[Y] = \textcolor{blue}{\E\qty[ \E(Y^2 \mid X)] - \E\qty[\qty{\E\qty(Y \mid X)}^2]} 
+                       + \textcolor{green}{\E \qty[ \qty{\E(Y \mid X)^2} ] - \qty(\E\qty{\E\qty(Y \mid X)})^2}
+$$
+
+:::
+
+3. Cancel matching terms
+
+::: fragment
+$$
+\Var[Y]  = \textcolor{blue}{\E\qty[ \E(Y^2 \mid X)] \cancel{- \E\qty[\qty{\E\qty(Y \mid X)}^2]}}  
+                       + \textcolor{green}{\cancel{\E \qty[ \qty{\E(Y \mid X)^2} ]} -  \qty(\E\qty{\E\qty(Y \mid X)})^2}
+$$
+
+:::
+
+4. Use the law of iterated expectations to simplify the remaining terms.
+
+::: fragment
+$$
+\Var[Y]  = \textcolor{blue}{E[Y^2]  \cancel{- \E\qty[\qty{\E\qty(Y \mid X)}^2]}}
+                       + \textcolor{green}{\cancel{\E \qty[ \qty{\E(Y \mid X)^2} ]} - (\E\qty{Y})^2}
+$$
+
+:::
+
+## The Variance of The Mean
 
 $$
-\begin{aligned} 
-E\{ E( Y \mid X ) \} 
-&= E(Y|X=1)P(X=1) + E(Y|X=0)P(X=0) \\
-&= `r mean.has.degree`K \cdot `r degree.proportion*10`/10 +
-   `r mean.no.degree`K  \cdot `r (1-degree.proportion)*10`/10
-=  `r mean.has.degree*degree.proportion`K +
-   `r mean.no.degree*(1-degree.proportion)`K 
-=  `r mean.has.degree*degree.proportion + mean.no.degree*(1-degree.proportion)`K
+\begin{aligned}
+\Var[\bar Y] 
+&= \E\qty[ \qty{ \frac{1}{n}\sum_i Y_i - \E \qty( \frac{1}{n}\sum_i Y_i ) }^2 ] && \text{definition}\\
+&= \E\qty[ \qty{ \frac{1}{n}\sum_i (Y_i - \E Y_i) }^2 ]  && \text{Rule 2: Linearity} \\
+&= \E\qty[ \qty{ \frac{1}{n}\sum_i Z_i }^2 ] && \text{for} \ \ Z_i = Y_i - \E Y_i \\
+&= \E\qty[ \frac{1}{n^2}\sum_i \sum_j Z_i Z_j ]   && \text{via FOIL}
 \end{aligned}
+$$
+
+### FOIL?
+
+- Remember FOIL from high school algebra? 
+- When we square a sum, we get *all products* of terms in the sum.
+  
+$$ 
+(a+b)^2 = \inblue{(a+b)}\inred{(a+b)} 
+= \inblue{a}\inred{a} + \inblue{a}\inred{b} + \inblue{b}\inred{a} + \inblue{b}\inred{b}
+= a^2 + 2ab + b^2
+$$
+
+- Same deal for bigger sums.
+
+$$ 
+\qty{ \sum_i Z_i }^2 = \inblue{\sum_i Z_i}\inred{\sum_j Z_j} = \sum_i \sum_j \inblue{Z_i}\inred{Z_j}
+$$
+
+## Completing the Calculation
+
+$$
+\begin{aligned}
+\Var[\bar Y] &= \E\qty[ \frac{1}{n^2}\sum_i \sum_j Z_i Z_j ]  \quad \text{ for } \quad Z_i = Y_i - \E Y_i \quad && \text{via FOIL}
+\end{aligned}
+$$
+
+**Activity**. Complete the calculation to get a simple expression. 
+
+:::: columns
+::: column
+ **Hints**.
+
+  1. Use Rule 1 to push the expectation inside the sum.
+  2. Think about what $\E Z_i Z_j$ is when $i=j$ and $i\neq j$.
+  3. Is Rule 2 useful here?
+  4. What is $\E Z_i^2$  
+:::
+::: column
+**Rules**.
+$$
+\small{
+\begin{aligned}
+\text{1.} \quad & \E\qty[ \sum_i a_i Y_i] =  \sum_i a_i \E Y_i \quad \text{ for RVs $Y_i$ and constants $a_i$.} \\
+\text{2.} \quad & \E\qty[ Z_i Z_j] = \E[Z_i] \E[ Z_j]  \quad \text{if $Z_i$ and $Z_j$ are independent.} \\
+\end{aligned}
+}
 $$
 
 :::
 ::::
 
-## Review Exercise 1
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-tinypop.plot
-```
+## The Variance of The Mean: Answered
+$$
+\begin{aligned}
+\Var[\bar Y] 
+&= \E\qty[ \frac{1}{n^2}\sum_i \sum_j Z_i Z_j ]  && \text{via FOIL} \\
+&= \frac{1}{n^2} \sum_i \sum_j \E Z_i Z_j    && \text{via Rule 1: Linearity } \\
+&= \frac{1}{n^2} \sum_i \qty( \sum_{j : j\neq i} \E Z_i Z_j + \E Z_i^2  )  && \text{Taking out the term with $i=j$ term from the inner sum}  \\
+&= \frac{1}{n^2} \sum_i \qty( \sum_{j : j\neq i} 0 + \E Z_i^2  )  && \text{via Rule 2} \\
+&= \frac{1}{n^2} \sum_i \E\qty(Y_i-\E Y_i)^2  && \text{using the definition of $Z_i$} \\
+&= \frac{1}{n^2} \sum_i \Var(Y_i)             && \text{using the definition of variance} \\
+&= \frac{1}{n^2} \times n \times \Var(Y_i) = \frac{\Var(Y_i)}{n} = \frac{\sigma^2}{n}.   && \text{counting the copies of $\Var(Y_i)$ in the sum} \\
+\end{aligned}
+$$
 
-- Suppose we sample a point $(X, Y)$ in the plot above uniformly at random.
-  - Ignore the jitter; just think of the points as being at $X=0$ and $X=1$.
-  - What is $\E\{ \mu(X) \}$?
+## The Variance of the Subsample Mean
 
-::: fragment
-  - There are two ways of thinking about calculating $\E\{\mu(X)\}$.
-      1. We just calculate the expectation of it, thinking of it as an arbitrary random variable.
-      2. We use the law of iterated expectations to show it's the unconditional mean of $Y$.
+**Claim.** The variance of our point estimate is the **expected value** of the subpopulation variance divided by the number of people in the subsample.
+$$ \Var[\hat\mu(1)] = \E\qty[ \frac{\sigma^2(1)}{N_1} ] \quad \text{ for } \quad N_1 = \sum_{i=1}^n X_i $$
+
+- This is like what we saw in the unconditional case in Lecture 3, with a twist.
+- The number of people in the subsample is random, so instead of $1/n$, we have $\E[ 1/N_1 ]$.
+- Let's prove it.
+  - It's a bit long. 
+  - To keep organized, I'll remind you where we left off at the top of each slide.
+  - Except the first one, where we're starting from the beginning.
+
+## Proof, Part 1
+
+- We'll start by using the Law of Total Variance, conditioning on $X_1 \ldots X_n$.
+- We 'looked back' just now for a reason---we saw that one of these terms is zero.
 
 $$
 \small{
 \begin{aligned}
-\E\qty{ \mu(X) } &= \frac{1}{2}\mu(0) + \frac{1}{\mu(1)}= \frac{1}{2} \cdot `r mu(0)` + \frac{1}{2} \cdot `r mu(1)` = 1.05 && \text{ the first way } \\
-\E\qty{ \mu(X) } &= \E\qty{\E\qty(Y \mid X)} = \E\qty{Y} = \frac{1}{6} \cdot `r Y[1]` + \frac{1}{6} \cdot `r Y[2]` + \ldots && \text{ the second way }
+\Var\qty[ \hat \mu(1) ] &= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + \Var\qty[ \E{\hat \mu(1) \mid X_1 \ldots X_n} ] \\
+&= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + \Var[\mu(1)] \\
+&= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + 0
 \end{aligned}
 }
 $$
 
-:::
-
-## Review Exercise 2
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-tinypop.plot
-```
-
-- Suppose we sample a point $(X, Y)$ in the plot above uniformly at random.
-  - Ignore the jitter; just think of the points as being at $X=0$ and $X=1$.
-  - What is $\E\{ X\mu(X) \}/\E(X)$?
-
-::: fragment
-
-- It's $\mu(1)$. $X\mu(X)=X\mu(1)$, so ...
-$$
-\begin{aligned}
-\E\{ X\mu(X) \} 
-&= \E\{ X\mu(1) \} \\
-&= \mu(1) \ \E\{ X \} \\
-\end{aligned}
-$$
-
-:::
-
-## Review Exercise 3
-
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-tinypop.plot
-```
-
-- Suppose we sample a point $(X, Y)$ in the plot above uniformly at random.
-  - Ignore the jitter; just think of the points as being at $X=0$ and $X=1$.
-  - What is $\E\{ (1-X)\mu(X) \}/\E(1-X)$?
-
-::: fragment
-
-- It's $\mu(0)$. It's analogous to the last one. $(1-X)\mu(X)=(1-X)\mu(0)$, so ...
-$$
-\begin{aligned}
-\E\{ (1-X)\mu(X) \} 
-&= \E\{ (1-X)\mu(0) \} \\
-&= \mu(0) \ \E\{ 1-X \} \\
-\end{aligned}
-$$
-
-:::
 
 
-# Unbiasedness of Means
-
-## Bias
-
-```{r}
-#| layout-ncol: 2
-#| 
-xx = seq(-4,4,by=.01)
-heights = seq(0,.4,length.out=100)
-normals = rnorm(10000)
-
-ggplot() + geom_histogram(aes(x=normals, y=after_stat(density)), alpha=.3, bins=100) +
-           geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
-           geom_vline(xintercept=0, color='blue') + 
-           geom_vline(xintercept=c(-1,1), color='blue', linetype='dashed') +
-           geom_vline(xintercept=c(-2,2), color='blue', linetype='dotted') +
-           geom_point(aes(y=heights, x=normals[1:length(heights)]), color='purple', alpha=.3)
-
-ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bins=100) +
-           geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
-           geom_vline(xintercept=2+0, color='blue') + 
-           geom_vline(xintercept=2+c(-1,1), color='blue', linetype='dashed') +
-           geom_vline(xintercept=2+c(-2,2), color='blue', linetype='dotted') +
-           geom_point(aes(y=heights, x=normals[1:length(heights)]+2), color='purple', alpha=.3) +
-           xlim(-4,4)
-```
-
-- The **bias** of an estimator is the difference between its expected value and the value of the thing it's estimating.
-- We haven't talked about this yet because there hasn't been any. We've been using **unbiased estimators**.
-- You can see, looking at the sampling distribution plot on the right, that bias might cause some problems with coverage.
-- If we calibrate interval estimates to cover **the estimator's mean** 95% of the time---and that's what we've really been doing---how often will they cover the [thing we're estimating]{.fg style="color:green"}?
-- This means biased estimators can cause big problems. We'll talk about this more later in the semester.
-- But for now, let's just show the estimators that we've been using are, in fact, unbiased.
-
-## The Sample Mean
-
-**Claim.** The sample mean is an unbiased estimator of the population mean.
-$$ \E[\hat\mu] = \mu $$
-
-::: fragment
+## Proof, Part 2 {.smaller}
 
 $$
-\begin{aligned}
-\E\qty[\frac1n\sum_{i=1}^n Y_i] 
-&= \frac1n\sum_{i=1}^n \E[Y_i] && \text{ via linearity (Rule 1)} \\
-&= \frac1n\sum_{i=1}^n \mu     && \text{ via uniform sampling } \\
-&= \frac1n \times n \times \mu = \mu.
-\end{aligned}
+\Var\qty[ \hat \mu(1) ] 
+= \E\qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] 
 $$
 
-:::
-
-## A Subsample Mean
-
-**Claim.** The subsample mean is unbiased for the subpopulation mean.
-$$ \E[\hat\mu(1)] = \mu(1) $$
-
-**Sketch.**
-
-  - Use the Law of Iterated Expectations, conditioning on $X_1 \ldots X_n$.
-  - Then the linearity of conditional expectations to push the conditional expectation into the sum.
-  - Then irrelevance of independent conditioning variables to write things in terms of the *random variable* $\mu(X_i)$  
-  - Then the **indicator trick**. What's $X_i \mu(X_i)$? How is it related to $\mu(1)$?
-
-::: fragment
+- Now we'll substitute in definitions and simplify.
+- We'll end having to work with the conditional mean of a *squared sum*.
 
 $$
 \small{
 \begin{aligned}
-\E[\hat\mu(1)] 
-&=\E\qty[ E\qty{\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} \mid X_1 \ldots X_n}] \\
-&=E\qty[\frac{\sum_{i=1}^{n} X_i \E\qty{ X_{i} \mid X_1 \ldots X_n}}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i\E\qty{ Y_{i} \mid X_i}}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i \mu(X_i)}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i\mu(1)}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\mu(1) \times \frac{\sum_{i=1}^{n}X_i}{\sum_{i=1}^{n}X_{i}}] = \E[\mu(1)]=\mu(1) 
+\Var\qty[ \hat \mu(1) ] 
+&= \E\qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] \\
+&= \E\qty[ \E\qty{  \qty(\hat \mu(1)-\mu(1))^2 \mid X_1 \ldots X_n }] \\
+&= \E\qty[ \E\qty{  \qty(\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} - \mu(1))^2 \mid X_1 \ldots X_n }] \\
+&= \E\qty[ \E\qty{  \qty(\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} - \frac{\mu(1)\sum_{i=1}^n X_i}{\sum_{i=1}^n X_i })^2 \mid X_1 \ldots X_n }] \\
+&= \E\qty[ \E\qty{  \qty(\frac{\sum_{i=1}^{n}X_i \qty{Y_{i}-\mu(1)}}{\sum_{i=1}^{n}X_{i}})^2 \mid X_1 \ldots X_n }] \\
+&= \E\qty[ \frac{\E\qty{ \qty(\sum_{i=1}^{n}X_i \qty{Y_{i}-\mu(1)})^2 \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}]
 \end{aligned}
 }
 $$
 
-:::
-
-## Differences in Subsample Means
-
-**Claim.** The difference in subsample means is unbiased for the difference in subpopulation means.
-
-$$ \E[\hat\mu(1) - \hat\mu(0)] = \mu(1) - \mu(0) $$
-
-::: fragment
-This follows from the linearity of expectations and unbiasedness of the subsample means.
+## Proof, Part 3 {.smaller}
 
 $$
-\E[\hat\mu(1) - \hat\mu(0)] = \E[\hat\mu(1)] - \E[\hat\mu(0)] =  \mu(1) - \mu(0) 
+\Var\qty[ \hat \mu(1) ]  = \E\qty[ \frac{\E\qty{ \qty(\sum_{i=1}^{n}X_i \qty{Y_{i}-\mu(1)})^2 \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}]
 $$
 
-:::
+- To work with this squared sum, we do our FOIL-like expansion. This is ...
 
-## Summary
+$$ \small{ 
+\begin{aligned}
+\qty(\sum_{i}Z_i)^2 = \qty(\sum_{i}Z_i) \qty(\sum_{j}Z_i) = \sum_i\sum_j Z_i Z_j \quad && \text{ for } \quad Z_i = X_i \qty{Y_{i}-\mu(1)} \\
+\text{or equivalently, using the \textbf{indicator trick}} && \text{ for } \quad Z_i = X_i\qty{Y_i - \mu(X_i)}
+\end{aligned}
+}
+$$
 
-```{r}
-#| layout-ncol: 2
-#| 
-xx = seq(-4,4,by=.01)
-heights = seq(0,.4,length.out=100)
-normals = rnorm(10000)
+- This lets us push the conditional mean *all the way into the sum*, so it meets the individual terms.
+- And when we've done that, we can use the irrelevance of independent conditioning variables to simplify.
 
-ggplot() + geom_histogram(aes(x=normals, y=after_stat(density)), alpha=.3, bins=100) +
-           geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
-           geom_vline(xintercept=0, color='blue') + 
-           geom_vline(xintercept=c(-1,1), color='blue', linetype='dashed') +
-           geom_vline(xintercept=c(-2,2), color='blue', linetype='dotted') +
-           geom_point(aes(y=heights, x=normals[1:length(heights)]), color='purple', alpha=.3)
+$$
+\small{
+\begin{aligned}
+\Var\qty[ \hat \mu(1) ] 
+&= \E\qty[ \frac{\E\qty{ \qty(\sum_{i=1}^{n}Z_i )^2 \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
+&= \E\qty[ \frac{\E\qty{ \sum_{i=1}^{n}\sum_{j=1}^n Z_i Z_j \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
+&= \E\qty[ \frac{\sum_{i=1}^{n}\sum_{j=1}^n \E\qty{Z_i Z_j \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
+&= \E\qty[ \frac{\sum_{i=1}^{n}\sum_{j=1}^n \E\qty{Z_i Z_j \mid X_i, X_j}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \\
+\end{aligned}
+}
+$$
 
-ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bins=100) +
-           geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
-           geom_vline(xintercept=2+0, color='blue') + 
-           geom_vline(xintercept=2+c(-1,1), color='blue', linetype='dashed') +
-           geom_vline(xintercept=2+c(-2,2), color='blue', linetype='dotted') +
-           geom_point(aes(y=heights, x=normals[1:length(heights)]+2), color='purple', alpha=.3) +
-           xlim(-4,4)
-```
+## Proof, Part 4 {.smaller}
 
-- So far, we've been using unbiased estimators. 
-- Their sampling distributions, in relation to the estimation target, look like the one on the left.
-- So now that we've worked out their location --- and are pleased --- it's time to talk about spread.
-- That's what we'll do next time.
+$$
+\begin{aligned} 
+\Var\qty[ \hat \mu(1) ] 
+&= \E\qty[ \frac{\sum_{i=1}^{n}\sum_{j=1}^n \E\qty{Z_i Z_j \mid X_i, X_j}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \quad \text{ for } \quad Z_i=Y_i-\mu(X_i)
+\end{aligned}
+$$
+
+
+- Let's take a look at one of the terms in the numerator, $\E\qty{Z_i Z_j \mid X_i, X_j}$.
+  - We're going to show that the cross-terms --- the ones for $i \neq j$ --- are zero.
+  - This will let us drop them from the sum.
+  - We'll use the fact that $Z_i$ and $Z_j$ are independent for $i \neq j$.
+- Let's rewrite a cross-term using our usual stuff
+  - the law of iterated expectations, conditioning on $Z_i$
+  - linearity of expectations;
+  - irrelevance of independent conditioning variables.
+
+$$\small{
+\begin{aligned}
+\E\qty{Z_i Z_j \mid X_i, X_j} 
+&= \E\qty{ \E(Z_i Z_j \mid Z_i,X_i,X_j) } \\
+&= \E\qty{ Z_i \E(Z_j \mid X_i,X_j) } \\
+&= \E\qty{ Z_i \textcolor{blue}{\E(Z_j \mid X_j)} } \quad \text{ where } \\
+\textcolor{blue}{\E(Z_j \mid X_j)} 
+&= \E\qty[X_j \qty{Y_j - \mu(X_j)}] \\ 
+&= \E\qty{ \E\qty[X_j \qty{Y_j - \mu(X_j)} \mid X_j] } \\
+&= \E\qty[X_j \qty{ \E\qty[Y_j \mid X_j] - \mu(X_j)}] \\
+&= \E\qty[X_j \cross{\qty{ \mu(X_j) - \mu(X_j)}}] = 0. \\
+\end{aligned}
+}$$
+
+
+## Proof, Part 5 {.smaller}
+
+$$
+\begin{aligned} 
+\Var\qty[ \hat \mu(1) ] 
+&= \E\qty[ \frac{\sum_{i=1}^{n}\sum_{j=1}^n \E\qty{Z_i Z_j \mid X_i, X_j}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \quad \text{ for } \quad Z_i=Y_i-\mu(X_i)  \\
+&= \E\qty[ \frac{\sum_{i=1}^{n} \E\qty{Z_i^2 \mid X_i}}{\qty(\sum_{i=1}^{n}X_{i})^2}] \quad \text{because cross-terms are zero}.
+\end{aligned}
+$$
+
+- All we've got to do now is recognize what we have. 
+- Let's look at a term in the numerator.
+  - We'll use iterated expecations and linearity.
+  - Then the indicator trick.
+
+$$
+\small{
+\begin{aligned}
+\E\qty[Z_i^2 \mid X_i] 
+&= \E\qty[ X_i\qty{Y_i - \mu(X_i)}^2 \mid X_i] 
+= X_i\E\qty[\qty{Y_i - \mu(X_i)}^2 \mid X_i] 
+= X_i\Var\qty[Y_i \mid X_i] = X_i \sigma^2(X_i) 
+= X_i\sigma^2(1) 
+\end{aligned}
+}
+$$
+
+- We finish up by substituting this back into what we started with.
+
+$$
+\small{ 
+\begin{aligned}
+\Var\qty[ \hat \mu(1) ] 
+&= \E\qty[ \frac{\sum_{i=1}^{n} \E\qty{Z_i^2 \mid X_i}}{\qty(\sum_{i=1}^{n}X_{i})^2}]  
+= \E\qty[ \frac{\sum_{i=1}^{n} X_i \sigma^2(1)}{\qty(\sum_{i=1}^{n}X_{i})^2}] 
+= \E\qty[ \frac{\cancel{\sum_{i=1}^{n} X_i }\sigma^2(1)}{\qty(\sum_{i=1}^{n}X_{i})^{\cancel{2}}}] 
+= \E\qty[ \frac{\sigma^2(1)}{\sum_{i=1}^{n}X_{i}}] = \sigma^2(1) \times \E\qty[ \frac{1}{N_1}]. 
+\end{aligned}
+}
+$$
