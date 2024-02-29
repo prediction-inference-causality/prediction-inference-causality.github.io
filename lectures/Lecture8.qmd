@@ -253,7 +253,7 @@ sample.tab$J = J
 ```
 
 
-## Review
+# Review
 
 ::: {.hidden}
 $$
@@ -281,16 +281,20 @@ default.height = function(samples) { dnorm(0, mean=0, sd=sd(samples)) }
 
 annotate.histogram = function(histplot, samples, shade=FALSE, 
                               shade.width=width(samples, alpha=.05), shade.color='green', shade.alpha=.15) { 
-    w66 = width(samples, alpha=1/3)
-    w95 = width(samples, alpha=.05)
+    annotations = data.frame(mu=mean(samples), 
+                             w66 = width(samples, alpha=1/3),
+                             w95 = width(samples, alpha=.05),
+                             shade.width=shade.width)
     p = histplot + 
-           geom_vline(aes(xintercept=mean(samples)), color="blue") +
-           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w66/2), color="blue", linetype='dashed') +
-           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w95/2), color="blue", linetype='dotted') 
+           geom_vline(aes(xintercept=mu), color="blue", data=annotations) +
+           geom_vline(aes(xintercept=mu-w66/2), color="blue", linetype='dashed', data=annotations) +
+           geom_vline(aes(xintercept=mu+w66/2), color="blue", linetype='dashed', data=annotations) +
+           geom_vline(aes(xintercept=mu-w95/2), color="blue", linetype='dotted', data=annotations) +
+           geom_vline(aes(xintercept=mu+w95/2), color="blue", linetype='dotted', data=annotations) 
     if(shade) { 
-      p + geom_rect(aes(xmin=mean(samples)-shade.width/2, 
-                        xmax=mean(samples)+shade.width/2, 
-                        ymin=0, ymax=Inf), alpha=shade.alpha, fill=shade.color)
+      p + geom_rect(aes(xmin=mu-shade.width/2, 
+                        xmax=mu+shade.width/2, 
+                        ymin=0, ymax=Inf), alpha=shade.alpha, fill=shade.color, data=annotations)
     } else { p }
 }
 
@@ -458,7 +462,7 @@ biased.plot
   - Calibration via bootstrap works for every unbiased estimator we'll talk about this semester. 
   - Things are more complicated for fancy machine learning stuff, but that's beyond the scope.
 
-## So We Can Trust This Interval Estimate
+## We Can Trust This Interval Estimate
 
 ```{r}
 #| cache: true
@@ -483,22 +487,26 @@ for(rr in 1:10000) {
 xx = seq(min(difference.bootstrap.samples), max(difference.bootstrap.samples), length.out=1000)
 wboot=width(difference.bootstrap.samples, alpha=.05)
 
-bootstrap.histogram = ggplot() + 
-  geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
+bootstrap.histogram = ggplot(data.frame(samples=difference.bootstrap.samples)) +
+  geom_histogram(aes(x=samples, y=after_stat(density)), alpha=.3, bins=100) 
+
 annotated.bootstrap.difference.histogram = 
   annotate.histogram(bootstrap.histogram, difference.bootstrap.samples,
   shade=FALSE)
+cali.interval.numeric = difference + c(-1,1)*wboot/2
 
-with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, highlight=0) + 
-  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+wboot/2), 
-                  data=data.frame(x=difference, y=.4*default.height(difference.bootstrap.samples), w=wboot), color='black')  +
-  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='cyan') 
+cali.interval.plot = with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, highlight=0) + 
+  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+w/2), 
+                  data=data.frame(x=difference, y=.4*default.height(difference.bootstrap.samples), w=wboot), color='black') 
+cali.interval.plot
 ``` 
 
 $$
 \mu(1)-\mu(0) \in `r approx(difference)` \pm `r approx(wboot/2)` \qqtext{is a 95\% confidence interval}
 $$ 
 
+- This is a 95% **confidence interval** for the difference in mean income between California residents [with]{.twocolor-green} and [without]{.twocolor-red} 4-year degrees.
+- In 95% of surveys, it'll contain the **different in population means**. That's the point of all of this.
 
 ## The NSW version
 
@@ -529,28 +537,63 @@ for(rr in 1:10000) {
  
 xx = seq(min(difference.bootstrap.samples), max(difference.bootstrap.samples), length.out=1000)
 wboot=width(difference.bootstrap.samples, alpha=.05)
+nsw.interval.numeric = difference + c(-1,1)*wboot/2
 
-bootstrap.histogram = ggplot() + 
-  geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
+bootstrap.histogram = ggplot(data.frame(samples=difference.bootstrap.samples)) +
+  geom_histogram(aes(x=samples, y=after_stat(density)), alpha=.3, bins=100) 
+
 annotated.bootstrap.difference.histogram = 
   annotate.histogram(bootstrap.histogram, difference.bootstrap.samples,
   shade=FALSE)
 
-with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, highlight=0) + 
-  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+wboot/2), 
-                  data=data.frame(x=difference, y=.4*default.height(difference.bootstrap.samples), w=wboot), color='black')  +
-  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='cyan') 
+inflation.factor = 3.5
+nsw.interval.plot = with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, highlight=0) + 
+  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+w/2), 
+                  data=data.frame(x=difference, y=.4*default.height(difference.bootstrap.samples), w=wboot), color='black')  
+nsw.interval.plot
 ``` 
 
 $$
 \mu(1)-\mu(0) \in `r approx(difference)` \pm `r approx(wboot/2)` \qqtext{is a 95\% confidence interval}
 $$ 
 
+- This is a 95% **confidence interval** for the difference in mean income between treated and untreated people in the National Supported Work experiment.
+- That's in 1978 dollars. Accounting for inflation, it's about $`r round(inflation.factor,1)`$ times that in 2022 dollars.
 
+$$
+\mu(1)-\mu(0) \in `r approx(inflation.factor*difference)` \pm `r approx(inflation.factor*wboot/2)` \qqtext{is a 95\% confidence interval (in 2022 dollars)}
+$$ 
+
+## What's The Difference?
+
+```{r}
+#| layout-ncol: 2
+#| fig-cap:
+#| - "California 4-year degree vs no 4-year degree"
+#| - "NSW treated vs untreated (adjusted for inflation)"
+
+cali.interval.plot
+nsw.interval.plot + scale_x_continuous(labels=function(x){x*inflation.factor})
+```
+
+- Do these intervals tell the same story about the income differences between the groups involved?
+
+::: fragment
+
+- In my opinion, no. 
+- The California interval tells us there's a big difference between these groups in the population.
+  - It's `r approx(cali.interval.numeric[1])` to `r approx(cali.interval.numeric[2])`. That's a big difference no matter which end of the interval the population difference is on.
+- The NSW interval tells us we don't know.
+  - It's `r approx(inflation.factor*nsw.interval.numeric[1])` to `r approx(inflation.factor*nsw.interval.numeric[2])` in 2022 dollars. 
+  - That's a smallish difference at one end of the interval and a big one at the other.
+- What we want is to be able to anticipate this and design our studies to avoid it. 
+- The key to this is understanding the **spread** of the distribution of our estimator. That's what we'll talk about today.
+
+:::
 
 # Probability Stuff
 
-## Review: Random Variables
+## Review: Observations as Random Variables
 
 ```{r}
 #| out-height: 300px
@@ -567,20 +610,21 @@ earnings.jitter = ggplot(earnings) +
      scale_y() + guides(color='none')
 ```
 
-## Review: Observations as Random Variables
 
 ```{r}
 #| out-height: 300px
 #| layout-ncol: 2 
-
 summaries = earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
 
-earnings.jitter.pop + 
+earnings.jitter.pop.withspread = earnings.jitter.pop +
   stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-earnings.jitter + 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x), size=1, alpha=.5) 
+earnings.jitter.withspread =  earnings.jitter + 
   stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x), size=1, alpha=.5) 
+
+earnings.jitter.pop.withspread
+earnings.jitter.withspread
 ```
 
 - The notation $y_j$ refers to a number.
@@ -589,6 +633,14 @@ earnings.jitter +
   - It's the income of the $i$th person we call in our survey. That's not a person.
   - That's the result of a random process---the roll of a die.
 - To summarize this result, we talk about the **probability distribution** of $Y_i$.
+
+### Notation Conventions
+
+- Random variables are written in **uppercase**: $X$, $Y$, $Z$, etc. Constants are written in **lowercase**: $x$, $y$, $z$, etc.
+- We'll use the same letter for a random variable and the value it takes on. $x$ is a possible value of $X$, $y$ of $Y$, etc.
+- Estimators are also random variables, but instead of uppercase we use a **hat**: $\hat \mu$, $\hat \sigma$, etc.
+- We'll use the same letter for the estimator and what it's meant to estimate. $\hat \mu$ is an estimate of $\mu$.
+
 
 ## Review: Expectations
 
@@ -641,8 +693,10 @@ If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the rela
 
 ### Linearity of Expectations
 $$ 
-E ( a Y + b Z ) &= aE(Y) + bE(Z)  \quad \text{ for random variables $Y, Z$ and numbers $a,b$ }
+E ( a Y + b Z ) = aE(Y) + bE(Z)  \quad \text{ for random variables $Y, Z$ and numbers $a,b$ }
 $$
+
+We can distribute expectations through sums and multiplication by constants.
 
 ### Linearity of Conditional Expectations
 
@@ -650,11 +704,29 @@ $$
 E\{ a(X) Y + b(X) Z \mid X \} = a(X)E(Y \mid X) + b(X)E(Z \mid X)
 $$
 
-- This is like linearity of expectations, but with a twist.
-   - When we condition on $X$, we're working with subpopulations in which $X$ is constant.
-   - This means we can act as if functions of $X$ **are** constants.
-   - So we can pull them out of expectations that are conditional on $X$.
+When we condition on $X$, we can distribute as if functions of $X$ were constants.
 
+## An Important Consequence.
+
+The expectation of a product of **independent** random variables is the product of their expectations.
+$$
+\E[YZ] = \E[Y]\E[Z] \qqtext{when $Y$ and $Z$ are independent}
+$$
+
+This comes up a lot in variance calculations. Let's prove it. It'll be good practice.
+
+::: fragment
+
+$$
+\begin{aligned}
+\E[YZ] &= \E\qty[ \E\qty{YZ \mid Z}] && \text{iterated expectations} \\
+&= \E\qty[ Z\E\qty{Y \mid Z} ] && \text{linearity of conditional expectations} \\
+&= \E\qty[ Z \E\qty{Y} ]       && \text{irrelevance of independent conditioning variables} \\
+&= \E\qty{Y}\E[Z]              && \text{linearity of expectations} 
+\end{aligned}
+$$
+
+:::
 
 ## Spread
 
@@ -666,11 +738,16 @@ ggplot(earnings) +
   geom_point(aes(x=0, y=income), color='blue', 
             size=2, position=position_jitter(seed=0,w=.3), alpha=.2) +
   stat_summary(aes(x=0, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x))  
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) +
+          scale_y() 
 
-earnings.jitter + 
+earnings.jitter.withspread = 
+  earnings.jitter + 
   stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) +
+          scale_y()
+
+earnings.jitter.withspread
 ```
 
 - To summarize the **spread** of a distribution, we often talk about variance.
@@ -689,114 +766,90 @@ $$
 - Or spread within groups (right) --- that's conditional variance.
 
 
-## Variance as Excess {.smaller}
 
-$$
-\small{
-\begin{aligned}
-\Var(Y) &= \E \qty[ \qty{ Y - \E(Y) }^2 ] && \text{ the \emph{spread} idea: the mean square of a \emph{centered version} of $Y$ } \\
-&= \E\qty(Y^2) - \qty{\E\qty(Y)}^2         && \text{ the \emph{excess} idea: the average amount $Y^2$ \emph{exceeds} the square of its mean}.
-\end{aligned}
-}
-$$
+## Conditional Variance {.smaller}
 
 ```{r}
-#| out-height: 250px
-#| fig-asp: .25
-
 Y = c(.75,1,1.25, 1,1.25,1.5)
 X = 0 + (1:6 > 3)
 Xdodge = X + rep(.02*c(-1,0,1),2)
 mu = function(x) { mean(Y[X==x]) }
 
-tinypop.square.plot = ggplot() + geom_point(aes(x=Xdodge, y=Y, color=factor(X)), alpha=.5, size=3*dot.size) +
-                                 geom_point(aes(x=Xdodge, y=Y^2, color=factor(X)), shape=0, size=3*dot.size) + 
-                                 geom_segment(aes(x=Xdodge, xend=Xdodge, y=Y, yend=Y^2), alpha=.3) + guides(color='none')
-tinypop.square.plot + xlim(min(Xdodge[X==0])-sd(Xdodge[X==0]), max(Xdodge[X==0] + sd(Xdodge[X==0])))
+tinypop.plot = ggplot(data.frame(X=X,Y=Y,Xdodge=Xdodge)) + 
+  geom_point(aes(x=Xdodge, y=Y, color=factor(X)), alpha=.5, size=3*dot.size) + 
+  guides(color='none')
+tinypop.square.plot = tinypop.plot + 
+  geom_point(aes(x=Xdodge, y=Y^2, color=factor(X)), shape=0, size=3*dot.size) + 
+  geom_segment(aes(x=Xdodge, xend=Xdodge, y=Y, yend=Y^2), alpha=.3) 
+tinypop.plot.withspread = tinypop.plot + 
+  stat_summary(aes(x=X, y=Y), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x), size=.5, alpha=.5)
+
+tinylims.0 = xlim(min(Xdodge[X==0])-sd(Xdodge[X==0]), max(Xdodge[X==0] + sd(Xdodge[X==0])))
+tinylims = xlim(min(Xdodge)-sd(Xdodge), max(Xdodge + sd(Xdodge)))
 ```
 
-Let's think, in terms of the plot, about why there is excess in the square.
-
-- Suppose $Y$ takes on three values --- the dots ---with equal probability.
-    - Its expectation is the average height of the black dots.
-    - And its expectation, squared, is the square of this.
-- Its square $Y^2$ takes on the the square of those values---the squares --- with equal probability.
-    - Its expectation is the average height of the squares.
-- Why is the second one bigger?
-
-::: fragment
-
-- Because squaring *increases big draws of Y* more than it *decreases small ones*.
-- Visually, the line from $Y$ to $Y^2$ is longer when $Y$ is bigger than when it's smaller.
-
-:::
-
-
-## Equivalence Proof
-
-::: fragment
-
-$$
-\small{
-\begin{aligned}
-\E \qty[ \qty{ Y - \E(Y) }^2 ] 
-&= \E \qty[ Y^2 - 2 Y \E(Y) + \qty{\E(Y)}^2 ] && \text{ FOIL } \\
-&= \E[ Y^2] - \E\qty[2 Y \E(Y)] + \E\qty[\qty{\E(Y)}^2] && \text{Distributing expectations (linearity)} \\
-&= \E[ Y^2] - 2\E(Y)\E\qty[Y] + \qty{\E(Y)}^2\E[1] && \text{Pulling constants out of expectations (linearity)} \\
-&= \E[ Y^2] - 2\qty{\E(Y)}^2 + \qty{\E(Y)}^2] && \text{Recognizing a product of something with itself as a square} \\
-&= \E[ Y^2] - \cancel{2}\qty{\E(Y)}^2 + \cancel{\qty{\E(Y)}^2}] && \text{Subtracting} 
-\end{aligned}
-}
-$$
-
-:::
-
-## Conditional Variance {.smaller}
+```{r}
+#| out-height: 250px
+#| fig-asp: .5
+#| layout-ncol: 2 
+tinypop.plot.withspread
+earnings.jitter.pop.withspread
+```
 
 - The **conditional variance** describes the spread of one random variable *within groups*. 
 - Like the conditional expectation of the random variable, there are two related concepts.
 
-1. The **conditional variance function**.
+1. The **conditional variance function**. This is a function of $x$.
 $$
 \sigma^2(x) := \Var(Y \mid X=x) = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X=x]
 $$
-    - This is the variance of $Y$, **within the subpopulation** of people with $X=x$.
-    - It is the *conditional expectation function* of the random variable $\textcolor{blue}{\{Y-\E(Y \mid X)\}^2}$.
-    - We call it 'the conditional variance of $Y$ given $X=x$'
 
-2. The conditional variance $\sigma^2(X) = \Var(Y \mid X)$
+2. The conditional variance $\sigma^2(X) = \Var(Y \mid X)$. This is a random variable.
 $$
 \sigma^2(X) := \Var(Y \mid X)   = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X]
 $$
 
-    - This is the variance of $Y$ within **a random subpopulation** of people.
-        - It's the conditional variance function **evaluated at** the random variable $X$.
-        - And  the conditional expectation of the random variable $\textcolor{blue}{\{Y-\E(Y \mid X)\}^2}$.
-    - We call it 'the conditional variance of $Y$ given $X$.
-    - This is the sort of thing that shows up when you use the law of iterated expectations.
 
-
-
-## Conditional Variance as Excess {.smaller}
-
-$$
-\small{
-\begin{aligned}
-\Var(Y \mid X) &= \E \qty[ \qty{ Y - \E(Y\mid X)}^2 \mid X ] && \text{ the \emph{spread} idea: the mean square of a conditionally centered version of $Y$ } \\
-&= \E\qty(Y^2 \mid X) - \qty{\E\qty(Y \mid X)}^2              && \text{ the \emph{excess} idea: the average amount $Y^2$ exceeds the square of its cond. mean}
-\end{aligned}
-}
-$$
-
+## The Conditional Variance Function
 
 ```{r}
-#| out-height: 500px
-#| fig-asp: .5
-tinypop.square.plot 
+#| out-height: 250px
+#| fig-asp: .25
+
+tinypop.plot 
+earnings.jitter.pop + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
 ```
 
-- We can think of the Conditional Variance as excess, too.
-- It's the same as the unconditional case, but *within subpopulations*.
+$$
+\sigma^2(x) := \Var(Y \mid X=x) = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X=x]
+$$
+
+- This is the variance of $Y$ within the subpopulation of people with $X=x$.
+  - $\sigma(1)$ is a number describing the spread of the green dots in our population.
+  - $\sigma(0)$ is a number describing the spread of the red dots in our population.
+- It's the conditional expectation function of the random variable $\textcolor{blue}{\{Y-\E(Y \mid X)\}^2}$.
+- We call it 'the conditional variance function of $Y$ given $X=x$.
+
+## The Conditional Variance 
+```{r}
+#| out-height: 250px
+#| fig-asp: .25
+
+tinypop.plot + tinylims.0
+```
+
+$$
+\sigma^2(X) := \Var(Y \mid X)   = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X]
+$$
+
+- This is the variance of $Y$ within **a random subpopulation** of people.
+    - It's the conditional variance function **evaluated at** the random variable $X$.
+    - And  the conditional expectation of the random variable $\textcolor{blue}{\{Y-\E(Y \mid X)\}^2}$.
+- We call it 'the conditional variance of $Y$ given $X$'.
+- This is the sort of thing that shows up when you use the law of iterated expectations.
 
 
 ## The Law of Total Variance
@@ -831,7 +884,9 @@ ggplot() + geom_point(aes(x=Xdodge, y=Y+X, color=factor(X)), alpha=.7, size=4) +
 mean.has.degree = round(summaries$mean[summaries$degree=='4-year degree'] / 10000) * 10
 mean.no.degree  = round(summaries$mean[summaries$degree=='no 4-year degree'] / 10000) * 10
 degree.proportion = round(mean(earnings$degree=='4-year degree'),1)
-earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) + scale_y()
+earnings.jitter.pop + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
 ```
 
 - Working with your neighbor, think about why we call it this.
@@ -844,6 +899,81 @@ earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+
         - e.g. 'the expected value of the conditional variance of Y given X'
     2. Using 'Population Language'
         - e.g. 'the variance of income (Y) within the random subpopulation with degree status X'
+
+
+# Proving the Law of Total Variance
+
+## Starting Point: Interpreting Variance as Excess {.smaller}
+
+$$
+\small{
+\begin{aligned}
+\Var(Y) &= \E \qty[ \qty{ Y - \E(Y) }^2 ] && \text{ the \emph{spread} idea: the mean square of a \emph{centered version} of $Y$ } \\
+&= \E\qty(Y^2) - \qty{\E\qty(Y)}^2         && \text{ the \emph{excess} idea: the average amount $Y^2$ \emph{exceeds} the square of its mean}.
+\end{aligned}
+}
+$$
+
+```{r}
+#| out-height: 250px
+#| fig-asp: .25
+
+tinypop.square.plot + tinylims 
+```
+
+Let's think, in terms of the plot, about why there is excess in the square.
+
+- Suppose $Y$ takes on three values --- the dots ---with equal probability.
+    - Its expectation is the average height of the black dots.
+    - And its expectation, squared, is the square of this.
+- Its square $Y^2$ takes on the the square of those values---the squares --- with equal probability.
+    - Its expectation is the average height of the squares.
+- Why is the second one bigger?
+  - Because squaring *increases big draws of Y* more than it *decreases small ones*.
+  - Visually, the line from $Y$ to $Y^2$ is longer when $Y$ is bigger than when it's smaller.
+- We'll mostly think about variance in terms of spread, but the 'excess' formula  comes up in calculations.
+
+## Equivalence Proof
+
+**Claim.** The spread and excess formulas for variance are equivalent.
+$$  
+\E \qty[ \qty{ Y - \E(Y) }^2 ] =\E[ Y^2] - \qty{\E(Y)}^2 
+$$
+
+$$
+\small{
+\begin{aligned}
+\E \qty[ \qty{ Y - \E(Y) }^2 ] 
+&= \E \qty[ Y^2 - 2 Y \E(Y) + \qty{\E(Y)}^2 ] && \text{ FOIL } \\
+&= \E[ Y^2] - \E\qty[2 Y \E(Y)] + \E\qty[\qty{\E(Y)}^2] && \text{Distributing expectations (linearity)} \\
+&= \E[ Y^2] - 2\E(Y)\E\qty[Y] + \qty{\E(Y)}^2\E[1] && \text{Pulling constants out of expectations (linearity)} \\
+&= \E[ Y^2] - 2\qty{\E(Y)}^2 + \qty{\E(Y)}^2] && \text{Recognizing a product of something with itself as a square} \\
+&= \E[ Y^2] - \cancel{2}\qty{\E(Y)}^2 + \cancel{\qty{\E(Y)}^2}] && \text{Subtracting} 
+\end{aligned}
+}
+$$
+
+
+## Conditional Variance as Excess {.smaller}
+
+$$
+\small{
+\begin{aligned}
+\Var(Y \mid X) &= \E \qty[ \qty{ Y - \E(Y\mid X)}^2 \mid X ] && \text{ the \emph{spread} idea: the mean square of a conditionally centered version of $Y$ } \\
+&= \E\qty(Y^2 \mid X) - \qty{\E\qty(Y \mid X)}^2              && \text{ the \emph{excess} idea: the average amount $Y^2$ exceeds the square of its cond. mean}
+\end{aligned}
+}
+$$
+
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .5
+tinypop.square.plot + tinylims
+```
+
+- We can think of the Conditional Variance as excess, too.
+- It's the same as the unconditional case, but *within subpopulations*.
 
 
 ## Proof
@@ -893,13 +1023,15 @@ $$
 
 :::
 
+# Variance Calculations
+
 ## The Variance of The Mean
 
 $$
 \begin{aligned}
 \Var[\bar Y] 
 &= \E\qty[ \qty{ \frac{1}{n}\sum_i Y_i - \E \qty( \frac{1}{n}\sum_i Y_i ) }^2 ] && \text{definition}\\
-&= \E\qty[ \qty{ \frac{1}{n}\sum_i (Y_i - \E Y_i) }^2 ]  && \text{Rule 2: Linearity} \\
+&= \E\qty[ \qty{ \frac{1}{n}\sum_i (Y_i - \E Y_i) }^2 ]  && \text{Linearity} \\
 &= \E\qty[ \qty{ \frac{1}{n}\sum_i Z_i }^2 ] && \text{for} \ \ Z_i = Y_i - \E Y_i \\
 &= \E\qty[ \frac{1}{n^2}\sum_i \sum_j Z_i Z_j ]   && \text{via FOIL}
 \end{aligned}
@@ -936,10 +1068,10 @@ $$
 ::: column
  **Hints**.
 
-  1. Use Rule 1 to push the expectation inside the sum.
+  1. Use linearity to push the expectation inside the sum.
   2. Think about what $\E Z_i Z_j$ is when $i=j$ and $i\neq j$.
-  3. Is Rule 2 useful here?
-  4. What is $\E Z_i^2$  
+  3. Recall that when $i \neq j$ they're independent.
+  4. What is $\E Z_i^2$?  
 :::
 ::: column
 **Rules**.
@@ -960,11 +1092,9 @@ $$
 \begin{aligned}
 \Var[\bar Y] 
 &= \E\qty[ \frac{1}{n^2}\sum_i \sum_j Z_i Z_j ]  && \text{via FOIL} \\
-&= \frac{1}{n^2} \sum_i \sum_j \E Z_i Z_j    && \text{via Rule 1: Linearity } \\
-&= \frac{1}{n^2} \sum_i \qty( \sum_{j : j\neq i} \E Z_i Z_j + \E Z_i^2  )  && \text{Taking out the term with $i=j$ term from the inner sum}  \\
-&= \frac{1}{n^2} \sum_i \qty( \sum_{j : j\neq i} 0 + \E Z_i^2  )  && \text{via Rule 2} \\
-&= \frac{1}{n^2} \sum_i \E\qty(Y_i-\E Y_i)^2  && \text{using the definition of $Z_i$} \\
-&= \frac{1}{n^2} \sum_i \Var(Y_i)             && \text{using the definition of variance} \\
+&= \frac{1}{n^2} \sum_i \sum_j \E Z_i Z_j    && \text{via Linearity } \\
+&= \frac{1}{n^2} \sum_i\sum_j \begin{cases} \E Z_i^2 & \text{if } i=j \\ \E Z_i \E Z_j & \text{if } i\neq j \end{cases} && \text{using the independence of $Z_i$ and $Z_j$} \\
+&= \frac{1}{n^2} \sum_i\sum_j \begin{cases}  \Var(Y_i) & \text{if } i=j \\ 0 \times 0 & \text{if } i\neq j \end{cases} && \text{since $Z_i=Y_i-\E Y_i$} \\
 &= \frac{1}{n^2} \times n \times \Var(Y_i) = \frac{\Var(Y_i)}{n} = \frac{\sigma^2}{n}.   && \text{counting the copies of $\Var(Y_i)$ in the sum} \\
 \end{aligned}
 $$
@@ -974,35 +1104,97 @@ $$
 **Claim.** The variance of our point estimate is the **expected value** of the subpopulation variance divided by the number of people in the subsample.
 $$ \Var[\hat\mu(1)] = \E\qty[ \frac{\sigma^2(1)}{N_1} ] \quad \text{ for } \quad N_1 = \sum_{i=1}^n X_i $$
 
-- This is like what we saw in the unconditional case in Lecture 3, with a twist.
+- This is like what we saw in the unconditional case, with a twist.
 - The number of people in the subsample is random, so instead of $1/n$, we have $\E[ 1/N_1 ]$.
 - Let's prove it.
-  - It's a bit long. 
-  - To keep organized, I'll remind you where we left off at the top of each slide.
-  - Except the first one, where we're starting from the beginning.
+  - It's not hard, but it's a bit long. The key is organization. 
+  - We'll break things down into manageable pieces and focus on one piece at a time. 
 
-## Proof, Part 1
+
+## Step 1. Total Variance 
+
+```{r}
+#| out-height: 250px
+#| fig-asp: .25
+tinypop.plot + tinylims
+```
 
 - We'll start by using the Law of Total Variance, conditioning on $X_1 \ldots X_n$.
-- We 'looked back' just now for a reason---we saw that one of these terms is zero.
-
+- And then we'll have to calculate two terms.
+  1. The expected value of the conditional variance
+  2. The variance of the conditional expectation 
 $$
-\small{
 \begin{aligned}
-\Var\qty[ \hat \mu(1) ] &= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + \Var\qty[ \E{\hat \mu(1) \mid X_1 \ldots X_n} ] \\
-&= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + \Var[\mu(1)] \\
-&= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + 0
+\Var\qty[ \hat \mu(1) ] &= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + \Var\qty[ \E\qty{\hat \mu(1) \mid X_1 \ldots X_n} ] \\
 \end{aligned}
-}
 $$
 
+- Plugging in the definitions of variance and conditional variance, these terms are 
 
+$$
+\begin{aligned}
+\Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n}  
+&= \E\qty( \qty[ \hat \mu(1) - \textcolor{blue}{\E\qty{\hat \mu(1) \mid X_1 \ldots X_n}} ]^2 \mid X_1 \ldots X_n) \\
+\Var\qty[\E\qty{\hat \mu(1) \mid X_1 \ldots X_n}] 
+&= \E\qty( \qty{\textcolor{blue}{\E\qty{\hat \mu(1) \mid X_1 \ldots X_n}} - \E\qty[\E\qty{\hat \mu(1) \mid X_1 \ldots X_n}]}^2 ) \\
+\end{aligned}
+$$
 
-## Proof, Part 2 {.smaller}
+- We see that the [conditional expectation of our estimator]{.fg style="color:blue"} comes up in both terms. 
+- I've claimed it's just $\mu(1)$. Let's take a look at that.  
+
+## Step 2. The Estimator's Conditional Mean {.smaller}
+
+- To calculate the conditional mean of our estimator, we'll revisit an argument we've seen before.
+- We'll look at our argument that our argument that the subsample mean $\hat\mu(1)$ is unbiased. 
+  - We'll see that it's **conditionally unbiased**.
+  - That is, its expected value is $\mu(1)$, the thing we want to estimate 
+  - *conditional on* the values of the covariates $X_1 \ldots X_n$.
+
+$$
+\begin{aligned}
+\E\qty[\hat\mu(1) \mid X_1 \ldots X_n] 
+&=\E\qty[\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} \mid X_1 \ldots X_n] \\
+&=\frac{\sum_{i=1}^{n} X_i \E\qty{ Y_{i} \mid X_1 \ldots X_n}}{\sum_{i=1}^{n}X_{i}} \\
+&=\frac{\sum_{i=1}^{n}X_i\E\qty{ Y_{i} \mid X_i}}{\sum_{i=1}^{n}X_{i}}  \\
+&=\frac{\sum_{i=1}^{n}X_i \mu(X_i)}{\sum_{i=1}^{n}X_{i}}  \\
+&=\frac{\sum_{i=1}^{n}X_i\mu(1)}{\sum_{i=1}^{n}X_{i}} \\
+&=\mu(1) \times \frac{\sum_{i=1}^{n}X_i}{\sum_{i=1}^{n}X_{i}} = \mu(1) 
+\end{aligned}
+$$
+
+## Step 3. Simplifying Our Total Variance Decomposition
+
+$$
+\begin{aligned}
+\Var\qty[ \hat \mu(1) ] &= \E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] + \Var\qty[ \E\qty{\hat \mu(1) \mid X_1 \ldots X_n} ] 
+\end{aligned}
+$$
+
+where 
+
+$$
+\begin{aligned}
+\Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n}  
+&= \E\qty( \qty[ \hat \mu(1) - \textcolor{blue}{\E\qty{\hat \mu(1) \mid X_1 \ldots X_n}} ]^2 \mid X_1 \ldots X_n) \\
+&= \E\qty( \qty[ \hat \mu(1) - \textcolor{blue}{\mu(1)} ]^2 \mid X_1 \ldots X_n) \\
+\Var\qty[\E\qty{\hat \mu(1) \mid X_1 \ldots X_n}] 
+&= \E\qty( \qty{\textcolor{blue}{\E\qty{\hat \mu(1) \mid X_1 \ldots X_n}} - \E\qty[\E\qty{\hat \mu(1) \mid X_1 \ldots X_n}]}^2 ) \\
+&= \E\qty( \qty{\textcolor{blue}{\mu(1)} - \E\qty[\mu(1)] }^2 )  = 0\\
+\end{aligned}
+$$
+
+so
+
+$$
+\Var\qty[ \hat \mu(1) ] = \E \qty[ \E\qty{ \qty[\hat \mu(1) - \textcolor{blue}{\mu(1)} ]^2 \mid X_1 \ldots X_n }]
+$$
+
+## Step 4. Rewriting as a Sum of Mean-Zero Random Variables {.smaller}
 
 $$
 \Var\qty[ \hat \mu(1) ] 
-= \E\qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] 
+= \E \qty[ \E\qty{ \qty[\hat \mu(1) - \textcolor{blue}{\mu(1)} ]^2 \mid X_1 \ldots X_n }]
 $$
 
 - Now we'll substitute in definitions and simplify.
@@ -1012,7 +1204,6 @@ $$
 \small{
 \begin{aligned}
 \Var\qty[ \hat \mu(1) ] 
-&= \E\qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] \\
 &= \E\qty[ \E\qty{  \qty(\hat \mu(1)-\mu(1))^2 \mid X_1 \ldots X_n }] \\
 &= \E\qty[ \E\qty{  \qty(\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} - \mu(1))^2 \mid X_1 \ldots X_n }] \\
 &= \E\qty[ \E\qty{  \qty(\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} - \frac{\mu(1)\sum_{i=1}^n X_i}{\sum_{i=1}^n X_i })^2 \mid X_1 \ldots X_n }] \\
@@ -1022,7 +1213,7 @@ $$
 }
 $$
 
-## Proof, Part 3 {.smaller}
+## Step 5 {.smaller}
 
 $$
 \Var\qty[ \hat \mu(1) ]  = \E\qty[ \frac{\E\qty{ \qty(\sum_{i=1}^{n}X_i \qty{Y_{i}-\mu(1)})^2 \mid X_1 \ldots X_n}}{\qty(\sum_{i=1}^{n}X_{i})^2}]
@@ -1053,7 +1244,7 @@ $$
 }
 $$
 
-## Proof, Part 4 {.smaller}
+## Step 6 {.smaller}
 
 $$
 \begin{aligned} 
@@ -1084,10 +1275,10 @@ $$\small{
 &= \E\qty[X_j \qty{ \E\qty[Y_j \mid X_j] - \mu(X_j)}] \\
 &= \E\qty[X_j \cross{\qty{ \mu(X_j) - \mu(X_j)}}] = 0. \\
 \end{aligned}
-}$$
+}
+$$
 
-
-## Proof, Part 5 {.smaller}
+## Step 7 {.smaller}
 
 $$
 \begin{aligned} 
@@ -1127,3 +1318,26 @@ $$
 \end{aligned}
 }
 $$
+
+## The Variance of **Differences in Means**
+
+**Claim.** The variance of the difference in subsample means is the **sum** of the variances of the subsample means themselves.
+$$ 
+\Var[\hat\mu(1) - \hat\mu(0)] = \E\qty[ \frac{\sigma^2(1)}{N_1} + 
+\frac{\sigma^2(0)}{N_0}] \quad \text{ for } \quad N_x = \sum_{i=1}^n 1_{x}(X_i) = \begin{cases} 1 &\text{if} X_i=x \\ 0 &\text{otherwise}\end{cases} 
+$$
+
+ **Prove it.**  This is about understanding the logic of the proof we just did. Start with the law of total variance.
+
+$$
+\Var[\hat\mu(1) - \hat\mu(0)] = \E\qty[ \Var[\hat\mu(1) - \hat\mu(0) \mid X_1 \ldots X_n] ] + \Var[\E[\hat\mu(1) - \hat\mu(0) \mid X_1 \ldots X_n] ]
+$$
+
+Here are some things to think about.
+
+ - What is the conditional expectation of the estimator given $X_1 \ldots X_n$, i.e. $\E[\hat\mu(1) - \hat\mu(0) \mid X_1 \ldots X_n]$?  And what is its variance? 
+ - $\Var[\hat\mu(1) - \hat\mu(0) \mid X_1 \ldots X_n]$ is the conditional mean $\E[Z^2 \mid X_i]$ of some random variable $Z$. 
+  - What is that random variable?
+  - Can we write it in a way so that, when we square it, the cross terms are zero?  
+  - Hint: $X_i(1-X_i)=0$.
+ 
