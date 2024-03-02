@@ -23,8 +23,8 @@ format:
         \DeclareMathOperator{\Var}{V}
         \DeclareMathOperator{\bias}{bias}
         \usepackage{environ}
-        %\NewEnviron{answer}{}{}
-        \NewEnviron{answer}{\color{blue}\paragraph{Answer.}\BODY\color{black}}{}
+        \NewEnviron{answer}{}{}
+        %\NewEnviron{answer}{\color{blue}\paragraph{Answer.}\BODY\color{black}}{}
 ---
 
 ```{r setup} 
@@ -40,6 +40,16 @@ We call an estimator \emph{consistent} if, when our sample size $n$ is large eno
 That is, an estimator $\hat\mu$ is a consistent estimator of $\mu$ if $\E (\hat \mu - \mu)^2 \to 0$ as $n \to \infty$. 
 One example of a consistent estimator, when we observe a sample with replacement $Y_1 \ldots Y_n$ from a population with mean $\mu$
 and standard deviation $\sigma$, is the sample mean $\hat \mu = \frac{1}{n}\sum_{i=1}^n Y_i$.
+
+It can be helpful to think in terms of \emph{location} and \emph{spread}. An estimator is consistent if and only if both its bias and variance go to zero as the sample size goes to infinity. Here's proof.
+\begin{align*}
+\E\qty[ \qty{\hat\mu - \mu}^2 ] 
+&= \E\qty[ \qty{\qty(\hat\mu - \E[\hat\mu]) + \qty(\E[\hat\mu] - \mu)}^2 ] \\
+&= \E\qty[ \qty(\hat\mu - \E[\hat\mu])^2 + 2\qty(\E[\hat\mu] - \mu)\qty(\hat\mu - \E[\hat\mu]) + \qty(\E[ \hat \mu] - \mu)^2 ] \\
+&= \E\qty(\hat\mu - \E[\hat\mu])^2 + 2\qty(\E[\hat\mu] - \mu)\E\qty(\hat\mu - \E[\hat\mu])+ \qty(\E[\hat \mu] - \mu)^2  \\
+&= \Var(\hat\mu) + 2\bias(\hat\mu) \times 0 + \bias(\hat\mu)^2 = \Var(\hat\mu) + \bias(\hat\mu)^2 
+\end{align*}
+
 
 \subsection*{Part 1}
 
@@ -83,24 +93,6 @@ ggplot(plotdata) + geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100,
 Estimators $a$ and $b$ are consistent. Estimator $c$ is not; it converges to $\mu+1$, not $\mu$.
 \end{answer}
 
-\subsection*{Part 2}
-Show that an estimator $\hat \mu$ is a consistent estimator of $\mu$ if its bias and variance converge to zero as $n \to \infty$.
-\textit{Hint.} You may want to add and subtract the mean of your estimator. 
-$$
-\hat\mu - \mu = \hat \mu - \E \hat \mu + \E \hat \mu - \mu
-$$
-
-\begin{answer}
-\begin{align*}
-\E\qty[ \qty{\hat\mu - \mu}^2 ] 
-&= \E\qty[ \qty{\qty(\hat\mu - \E\hat\mu) + \qty(\E\hat\mu - \mu)}^2 ] \\
-&= \E\qty[ \qty(\hat\mu - \E\hat\mu)^2 + 2\qty(\E\hat\mu - \mu)\qty(\hat\mu - \E\hat\mu) + \qty(\E \hat \mu - \mu)^2 ] \\
-&= \E\qty(\hat\mu - \E\hat\mu)^2 + 2\qty(\E\hat\mu - \mu)\E\qty(\hat\mu - \E\hat\mu)+ \qty(\E \hat \mu - \mu)^2  \\
-&= \Var(\hat\mu) + 2\bias(\hat\mu) \times 0 + \bias(\hat\mu)^2 = \Var(\hat\mu) + \bias(\hat\mu)^2 
-\end{align*}
-Thus, our estimator (i.e. this mean squared error converges to zero) if and only if its bias and variance converge to zero. 
-\end{answer}
-
 
 \section*{Practice Problem 2}
  Suppose you have a sample $Y_1, Y_2, \ldots, Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma > 0$. 
@@ -115,7 +107,7 @@ No. Its variance does not go to zero. At any sample size $n$, its variance will 
 
 
 In the plot below, I've shown a bootstrap estimate of the sampling distribution of an estimator $\hat\mu$.
-Suppose it's a good estimate---you can get away with thinkink of it as the estimator's \emph{actual} sampling distribution.
+Suppose it's a good estimate---you can get away with thinking of it as the estimator's \emph{actual} sampling distribution.
 On top of it, I've drawn four interval estimates. 
 \begin{itemize}
 \item Which have at least 95\% coverage? Put a check next to those.
@@ -141,24 +133,35 @@ stat = function(df) {
   mean(df$y[df$x==1]) - mean(df$y[df$x==0])
 }
 
-
 J = sample(1:N,size=n,replace=T)
 dfsam = dfpop[J,]
 
 
-bootstrap.estimates = replicate(1000, {
+bootstrap.estimates = replicate(10000, {
   dfboot = dfsam[sample(1:n, size=n, replace=T), ]
   stat(dfboot)
 })
+width = function(samples, alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( mean(samples) - w/2 <= samples & samples <= mean(samples) + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
+}
 
 muhat = stat(dfsam)
 muhat.se = sd(bootstrap.estimates)
+w95 = width(bootstrap.estimates, alpha=.05)
+w999 = width(bootstrap.estimates, alpha=.001)
+w50 = width(bootstrap.estimates, alpha=.5)
 
-ggplot() + geom_histogram(aes(x=bootstrap.estimates, y=after_stat(density)), alpha=.3) +
-           geom_pointrange(aes(y=2, x=muhat, xmin=muhat - 1.96*muhat.se, xmax=muhat+1.96*muhat.se)) + 
-           geom_pointrange(aes(y=3, x=mean(bootstrap.estimates), xmin=quantile(bootstrap.estimates, .025), xmax=quantile(bootstrap.estimates, .975))) +
-           geom_pointrange(aes(y=4, x=mean(bootstrap.estimates), xmin=quantile(bootstrap.estimates, .2), xmax=quantile(bootstrap.estimates, .8))) +
-           geom_pointrange(aes(y=5, x=mean(bootstrap.estimates), xmin=quantile(bootstrap.estimates, .001), xmax=quantile(bootstrap.estimates, .999))) + xlab('') + ylab('') + theme_bw()
+ggplot() + geom_histogram(aes(x=bootstrap.estimates, y=after_stat(density)), alpha=.3, bins=100) +
+           geom_pointrange(aes(y=5, x=muhat, xmin=muhat-w999/2, xmax=muhat+w999/2)) +
+           geom_pointrange(aes(y=4, x=muhat, xmin=muhat-w50/2, xmax=muhat+w50/2)) + 
+           geom_pointrange(aes(y=3, x=muhat, xmin=muhat - 1.96*muhat.se, xmax=muhat+1.96*muhat.se)) + 
+           geom_pointrange(aes(y=2, x=muhat, xmin=muhat-w95/2, xmax=muhat+w95/2)) +
+           xlab('') + ylab('') + theme_bw()
 ```
 
 
@@ -198,7 +201,7 @@ say which; say what happens instead; and explain why.
 
 \begin{answer}
 The problem is in the second to last line. Note that if we replace each instance of $Y_i$ with $\tilde Y_i=Y_1$, then
-$Z_i=Y_1 - \E Y_1$ for all $i$ and $Z_iZ_j=(Y_i-\E Y_1)^2$ for all $i$ and $j$. This means that 
+$Z_i=Y_1 - \E Y_1$ for all $i$ and $Z_iZ_j=(Y_1-\E Y_1)^2$ for all $i$ and $j$. This means that 
 $\E Z_i Z_j=\sigma^2$ always instead of only when $i=j$ and, as a result, $\frac{1}{n^2}\sum_i\sum_j \E Z_i Z_j$
 is an average of $n^2$ copies of $\sigma^2$ --- one for each pair $(i,j)$. It's $\sigma^2$.
 \end{answer}
@@ -209,21 +212,31 @@ is an average of $n^2$ copies of $\sigma^2$ --- one for each pair $(i,j)$. It's 
 
 Suppose Emory has developed a new 4+1 (Bachelors+Masters) program in Engineering
 and they want to compare it to the extant Emory/Georgia Tech dual degree program.
-Letting $Y_1(1) \ldots Y_n(1)$ and $Y_1(0) \ldots Y_n(0)$ be outcomes (e.g. post-program starting salaries) $n$ qualified applicants would receive in the 4+1 program and the dual degree program respectively, they are interested in estimating the average treatment effect $\tau = \E[Y_i(1)-Y_i(0)]$. Suppose all applicants are willing to participate in either program but 3/4 prefer the 
-Emory/Tech one.
+Letting $Y_1(1) \ldots Y_n(1)$ and $Y_1(0) \ldots Y_n(0)$ be outcomes (e.g. post-program starting salaries) $n$ qualified applicants would receive in the 4+1 program and the dual degree program respectively, they are interested in estimating the average treatment effect $\tau = \E[Y_i(1)-Y_i(0)]$. Suppose all applicants are willing to participate in either program but 3/4 prefer the Emory/Tech one.
 
-Two approaches are being considered.
+Two approaches to erollment are being considered.
 \begin{enumerate}
 \item Let students participate in the program they prefer. 
-Then compare the mean outcome for students participating in the 4+1 program.
-to the mean outcome for students participating in the Emory/Tech program.
-\item Randomize acceptance into these two programs, assigning each applicant to the 4+1 with probability $1/2$ and the Emory/GA Tech program with probability $1/2$. Then compare the mean outcome for students participating in the 4+1 program.
+\item Randomize acceptance into these two programs, assigning each applicant to the 4+1 with probability $1/2$ and the Emory/GA Tech program with probability $1/2$. 
 \end{enumerate}
+Either way, we'll estimate the average treatment effect by comparing the mean outcome for students participating in the 4+1 program to the mean outcome for students participating in the Emory/Tech program. That is, we'll use this difference-in-means estimator.  
+
+
+$$
+\hat \tau = \hat \mu(1) - \hat \mu(0) \qfor \hat\mu(x)=\frac{1}{N_x}\sum_{i:X_i=x}Y_i \qand N_x = \sum_{i:X_i=x} 1
+$$
+Here $X_i$ is a binary variable indicating which program student $i$ participates in.
+$$
+X_i = \begin{cases} 1 & \text{if student $i$ participates in the 4+1} \\ 0 & \text{if student $i$ participates in the Emory/Tech program} \end{cases} 
+$$
+And the variance of this difference in means is this.
+$$
+\Var[\hat\tau] = \E\qty[\frac{\sigma^2(1)}{N_1} + \frac{\sigma^2(0)}{N_0}] 
+$$
 
 \subsection*{Part 1}
 The first approach has the benefit of allowing people to make choices for themselves.
 Explain why the university might prefer the second one. Give two reasons. One must be valid \emph{even if} students preferences were, in fact, randomized. 
-
 
 \begin{answer}
 The first reason is that without randomization, the groups of students who enter the two programs may not be comparable.
@@ -248,54 +261,24 @@ That'll be true of the next two, too.
 
 \subsection*{Part 2}
 
-Suppose the university does adopt the second approach. Let $X_i=0$ if student $i$ 
-attends the Emory/Tech program and $X_i=1$ if they attend the new 4+1. And let 
-$Y_i$ be that student's outcome. Using the following table, write a
-95\% confidence interval for the average treatment effect $\tau$.
-In the table, $\overline{X} = \frac{1}{n}\sum_{i=1}^n X_i$, 
-$\overline{Y} = \frac{1}{n}\sum_{i=1}^n Y_i$, and $\overline{XY} = \frac{1}{n}\sum_{i=1}^n X_iY_i$.
+Suppose the university does adopt the second approach.  And let 
+$Y_i$ be that student's employment status at graduation, i.e. $Y_i=1$ if student $i$ has a job on graduation and $0$ otherwise. In our sample of $n=100$ students, half of the students were assigned to the 4+1 program and half to the Emory/Tech program. And within each group, half of the students have jobs at graduation.
+Report a 95\% confidence interval for the average treatment effect $\tau$.
 
-$$
-\begin{array}{rrrrrrr|rrr}
-X_1 & Y_1 & X_2 & Y_2  & \ldots & X_n & Y_n  & \overline{X} & \overline{Y} & \overline{XY} \\
-1   & 1   & 0   & 1    & \ldots & 1   & 0    &  1/2         & 1/2          & 1/4 
-\end{array}
-$$
-
-Please how your work. And while we would like your answer fully simplified, i.e. written
+Please show your work. And while we would like your answer fully simplified, i.e. written
 in the form $[a,b]$ for two numbers $a$ and $b$, don't worry about being precise with your arithmetic.
 It may be helpful to remember that the variance of a binary random variable $Y_i$ with mean $p$ 
 is $p(1-p)$.
 
 \begin{answer}
-Here I should point out that I made a mistake when writing the premise, as what I've put in my table
-and want to work with here is a binary outcome. So, for the sake of this part, let's suppose we're talking about
-$Y_i$ being a binary variable indicating employment, i.e. a variable that's one if person $i$ has a job on graduation
-and $0$ otherwise.  
-
-As a result of randomization, the average treatment effect is the difference in subpopulation means 
-$\E[Y_i \mid X_i=1] - \E[Y_i \mid X_i=0]$, and we'll estimate this by the difference in means in the corresponding subsamples.
-This difference in subsample means is zero. To show this, we express the difference in means in terms of numbers in the table as follows.
-
-$$
-\begin{aligned}
-&\frac{\sum_{i=1}^n X_i Y_i}{\sum_{i=1}^n X_i} - \frac{\sum_{i=1}^n (1-X_i) Y_i}{\sum_{i=1}^n (1-X_i)} \\
-&=\frac{\frac1n \sum_{i=1}^n X_i Y_i}{\frac1n\sum_{i=1}^n X_i} - \frac{\frac1n\sum_{i=1}^n Y_i - \frac1n\sum_{i=1}^n X_i) Y_i}{\frac1n\sum_{i=1}^n 1 - \frac1n\sum_{i=1}^n X_i} \\
-&=\frac{\overline{XY}}{\overline{X}} - \frac{\overline{Y} - \overline{XY}}{1 - \overline{X}} = \frac{1/4}{1/2}  - \frac{1/2 - 1/4}{1 - 1/2} = \frac{1/4}{1/2}  - \frac{1/4}{1/2} = 0.
-\end{aligned}
-$$
-
-The confidence intervals we typically use have the form $\text{estimate} \pm 1.96 \times \text{estimated standard error}$,
-so this means our confidence interval will be $\pm 1.96 \times \text{estimated standard error}$.  To make that a number,
+Our point estimate, $\hat\mu(1) - \hat\mu(0)$, is $1/2 - 1/2 = 0$.
+We'll report a 95% interval of the form $\text{estimate} \pm 1.96 \times \text{estimated standard error}$,
+which in this case is just $\pm 1.96 \times \text{estimated standard error}$.  To make that a number,
 let's estimate the standard error. And, as discussed in the previous answer, the standard error is
 the square root of $\E[ \sigma^2(1)/N_1 + \sigma^2(0)/N_0]$ where $\sigma^2(x) = \Var[Y_i \mid X_i=x]$;
-to estimate this, we'll plug in $1/N_1=1/(n\bar X)=1/(n/2)$ and $1/N_0=1/(n-n\bar X)=1/(n/2)$ 
-as estimates of their respective expectations and, the variance of a binary random variable $Y_i$ with expectation $p$ being $p(1-p)$, 
-we'll estimate $\sigma^2(x)=\Var[Y_i \mid X_i=x]$ by $\hat p (1-\hat p)$ where $\hat p$ is the average
-of $Y_i$ in the corresponding subsample. These are both, as we've just shown, $1/2$, so our estimate
-of $\sigma^2(x)$ is $(1/2)(1-1/2)=1/4$ for both $x=0$ and $x=1$. Thus, our estimated standard error is
-the square root of $(1/4)/(n/2) + (1/4)/(n/2) = (1/2)/n + (1/2)/n = 1/n$, i.e., it's $1/\sqrt{n}$.
-As a result, our confidence interval is $[-1.96/\sqrt{n}, 1.96/\sqrt{n}]$.
+to estimate this, we'll plug in $1/(n/2)$ and $1/(n/2)$ as estimates of their respective expectations and, the variance of a binary random variable $Y_i$ with expectation $p$ being $p(1-p)$, we'll estimate $\sigma^2(x)=\Var[Y_i \mid X_i=x]$ by $\hat p (1-\hat p)$ where $\hat p$ is the average of $Y_i$ in the corresponding subsample. This is $1/2$ in both groups, so our estimate of $\sigma^2(x)$ is $(1/2)(1-1/2)=1/4$ for both $x=0$ and $x=1$. Thus, our estimated standard error is the square root of $(1/4)/(n/2) + (1/4)/(n/2) = (1/2)/n + (1/2)/n = 1/n$, i.e., it's $1/\sqrt{n}$.
+As a result, our confidence interval is $[-1.96/\sqrt{n}, 1.96/\sqrt{n}]$. 
+Plugging in $n=100$, we get $[-.196, .196]$.
 \end{answer}
 
 \section*{Practice Problem 6}
@@ -307,8 +290,7 @@ is small. The brewer says they've checked 100 bottles from the same batch and
 only one was off. And they're claiming, on the basis of this, to have a 95% confidence
 interval of $[0,.02]$ for the proportion of bad bottles in the delivery. 
 
-Is this reasonable? Explain why or why not.
-You may think of the bottles that have been checked as a sample drawn,
+Is this reasonable? Explain why or why not. You may think of the bottles that have been checked as a sample drawn,
 with replacement, from the 100,000 that were delivered.
 
 \begin{answer}
@@ -318,10 +300,7 @@ so the sample mean's standard error is the square root of $p(1-p)/n$ where $p$ i
 We don't know $p$, but we can estimate it by the sample proportion $\hat p = 1/100 = .01$; as a result, our estimated standard error is
 the square root of $(1/100)(1-1/100)/100 \approx 1/100^2$---i.e. it's $1/100$.\footnote{Here I've used the pretty good approximation 
 $1-1/100 \approx 1$.}  Because our sample mean is $1/100$ too, this means our interval should be 
-$[1/100 - 1.96 \times 1/100, \ 1/100 + 1.96 \times 1/100] \approx [1/100 - 2/100, \ 1/100 + 2/100] = [-.01, .03]$. Because a proportion 
-can't be negative, we'd usually report that as $[0, .03]$.
+$[1/100 - 1.96 \times 1/100, \ 1/100 + 1.96 \times 1/100] \approx [1/100 - 2/100, \ 1/100 + 2/100] = [-.01, .03]$. Because a proportion can't be negative, we'd usually report that as $[0, .03]$.
 
-Now let's think about what the brewer is telling us. The upper bound on their interval is $.02$, substantially smaller. 
-They're understating their uncertainty about the quality of what they've delivered---i.e. they're saying it's better
-than they can justify based on the size of the sample they've checked. Not reasonable.
+Now let's think about what the brewer is telling us. The upper bound on their interval is $.02$, substantially smaller. They're understating their uncertainty about the quality of what they've delivered---i.e. they're saying it's better than they can justify based on the size of the sample they've checked. Not reasonable.
 \end{answer}
