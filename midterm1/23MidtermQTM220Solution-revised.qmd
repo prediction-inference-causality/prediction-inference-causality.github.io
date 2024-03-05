@@ -1,5 +1,5 @@
 ---
-title: "Exam 1 (Sept 21/25)"
+title: "Exam 1 (March 6)"
 subtitle: "QTM 220"
 execute:
   echo: false
@@ -33,11 +33,6 @@ library(magrittr)
 if (knitr::is_latex_output())
   knitr::opts_chunk$set(dev = "cairo_pdf")
 ```
-
-\section*{Instructions}
-Do Problem 1, either 2a or 2b, 3, and 4. No additional points will be awarded for doing both 2a and 2b; do whichever you prefer.
-If you do both, and it is not clear to us which one you want graded, we will grade Problem 2a.
-
 
 \section*{Problem 1}
 Suppose we have a sample $Y_1 \ldots Y_n$ stored on an \textbf{R} vector $Y$ of length $n$.
@@ -147,7 +142,7 @@ mean(Y) + 1.96 * sd(Y.bar)
 
 
 \newpage
-\section*{Problem 2a}
+\section*{Problem 2}
 In 2015, Berkeley implemented a penny-per-ounce tax on soda. Advocates claimed the tax would reduce the rate of diabetes in the city's population. Now we want to check this claim---in a sense. What we want to know is the 
 difference between the rate of diabetes among residents of Berkeley --- one city in the San Francisco Bay Area --- to the rate among residents of the Bay Area as a whole. 
 
@@ -194,97 +189,6 @@ $$
 
 
 \newpage
-\section*{Problem 2b}
-
-Suppose we have a bivariate sample $(X_1,Y_1) \ldots (X_n,Y_n)$ stored in a pair of length-n vectors $X$ and $Y$. 
-And that $X_1 \ldots X_n$ are binary, i.e., either 0 or 1.
-
-```{r}
-#| out-height: 6in
-
-set.seed(123)
-
-n = 40
-X = rbinom(n,1,1/3)
-Y = rnorm(n) + X
-x = seq(-2,2,by=.01)
-regression_line=lm(Y~X)
-summaries=data.frame(X=X,Y=Y) %>% group_by(X) %>% summarize(mean=mean(Y), sd=sd(Y))
-
-ggplot() + geom_point(aes(x=X, y=Y), alpha=.3, size=4, position=position_jitter(w=.1,h=0)) + 
-           geom_pointrange(aes(x=X,y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) +
-           scale_x_continuous(breaks=c(0,1), limits=c(-.1,1.1)) + 
-           geom_line(aes(x=x,y=predict(regression_line, newdata=data.frame(X=x))), linetype='dashed', alpha=.5) + 
-           xlab('') + ylab('') + theme_bw()
-
-```
-
-
-
-
-\subsection*{Part a}
-What does the following code produce? State it in words and mark it with an 'a' on the plot above.
-```{r}
-#| echo: true
-mean(Y[X==0])
-```
-
-\begin{answer}
-The mean of the subsample with $X_i=0$. It's the black dot (in the center of the vertical line segment) on the left side of the plot.
-\vspace{1in}
-\end{answer}
-
-\subsection*{Part b}
-Consider the least-squares regression line, $\hat b_0 + \hat b_1 x$ where 
-$$ 
-\hat b_0,\hat b_1 = \operatorname*{argmin}_{a,b} \sum_{i=1}^n \qty( b_0 + b_1 X_i - Y_i )^2.
-$$
-
-We can get the coefficients $\hat b_0$ and $\hat b_1$ by running the following \textbf{R} code.
-\textbf{R} gives $\hat b_0$ the label '(Intercept)' and $\hat b_1$ the label 'X'.
-
-```{r}
-#| eval: true
-#| echo: true 
- 
-regression_line = lm(Y~X)
-coefficients(regression_line)
-```
-
-Mark this line with a 'b' on the plot above. And explain why $\hat b_0$ is the same thing as your answer to the last question.
-
-\begin{answer}
-It's the dashed gray line. $\hat b_0$ is the same thing we got last time because, when $X$ is binary, the least squares line goes through the two sample means. And at $x=0$, the height of the line is $y=\hat b_0 + \hat b_1 \times 0 = \hat b_0$.
-\end{answer}
-
-\subsection*{Part c}
-What does the following code produce? State it in words and mark it with a 'c', and an arrow or bracket if necessary for clarity, on the plot above.
-```{r}
-#| eval: true
-#| echo: true 
- 
-mean(Y[X==1]) - mean(Y[X==0])
-```
-
-\begin{answer}
-It's the difference in sample means. On the plot, that's the difference in height between the black dot on the right and the one on the left.
-\vspace{1in}
-\end{answer}
-
-\subsection*{Part d}
-Let's revisit the least squares regression line introduced in part (b). Explain why the slope $\hat b_1$ is equal to the number we see in part (c).
-
-\begin{answer}
-We know that the slope $\hat b_1$ is equal to the \emph{difference in heights} of the line at $x=1$ and $x=0$.
-$$
-\hat b_1 = \frac{ (\hat b_0 + \hat b_1 \times 1) - (\hat b_0 + \hat b_1 \times 0) }{ 1 - 0}
-$$
-
-And because the least squares regression line goes through the two subsample means, this is the difference in subsample means.
-\vspace{2in}
-\end{answer}
-
-\newpage
 \section*{Problem 3}
 
  Suppose you have a sample $Y_1, Y_2, \ldots, Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma$. 
@@ -308,7 +212,7 @@ And because the least squares regression line goes through the two subsample mea
 \end{answer}
 
 \subsection*{Part b} 
-What is the bias of $E[\tilde{Y}]$ for $\mu$?
+What is the estimator's bias, $E[\tilde{Y}] - \mu$?
 
 \begin{answer}
  \begin{align*}
