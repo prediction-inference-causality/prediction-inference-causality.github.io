@@ -1,6 +1,6 @@
 ---
-title: "QTM 220 Lecture 9"
-subtitle: "Descriptive Statistics with Non-Binary Covariates"
+title: "Lecture 9"
+subtitle: "Working with Non-Binary Covariates"
 format: 
   clean-revealjs:
     height: 1000
@@ -316,9 +316,6 @@ earnings.jitter
     - 8+  years  = finished middle school
     - 12+ years = high school diploma
     - 16+ years = 4-year college degree
-- You may notice the numbers are a bit smaller than the incomes we've been looking at.
-  - That's because previously, we were looking at household income. Now we're looking at individual income. 
-  - It's roughly half the size. Many households have 2 incomes, so that makes sense.
 
 ::: aside
 Ignore the gaps at 15 and 17 years for now. We'll come back to them.
@@ -923,88 +920,19 @@ $$
 
 :::    
 
-## The Least Squares Slope
-
-```{r}
-#| out-height: 250px
-#| fig-asp: .25  
-earnings$foreground = earnings$education <= 12
-model = lm(income ~ education, data=earnings[earnings$education <= 12,])
-
-lm.predictions = data.frame(education=seq(8,12,by=.01))
-lm.predictions$muhat = predict(model, newdata=lm.predictions)
-
-aggregate.comparison.plot + scale_x(c(8,12)) + scale_y(c(0, .7e5)) +
-    geom_line(aes(x=education, y=muhat), data=lm.predictions, color='red', alpha=.4)
-```
-
-- Another thing people use as a summary is the *slope of the least squares line*---the red line.
-- **Q.** Is that the same as either of the two summaries we've been talking about? You may want to zoom in.
-
-::: fragment
-
-- **A.** No. We can see that visually. The slope of the least squares line is smaller than the secant slope.
-- And the secant slope --- the average over years --- is smaller than the average over people.
-  - least squares slope &lt; secant slope &lt; average over people
-:::
-
-## Calculating The Least Squares Slope
-
-- The least squares line is the line that minimizes the sum of squared errors.
-
-$$
-\small{
-\hat ax + \hat b = \operatorname*{argmin}_{a,b} \sum_{i} \qty(aX_i + b - Y_i)^2 \quad \text{ implicitly summing over } \quad i:X_i \in 8 \ldots 12
-}
-$$
-
-- We can solve for $\hat a$ and $\hat b$ by taking derivatives and setting them to zero.
-- And we'll find that the slope is the subsample covariance of $X$ and $Y$ divided by the subsample variance of $X$.
-
-$$ 
-\small{
-\hat b = \frac{\frac{1}{N_{HS}}\sum_i (X_i - \bar X) Y_i}{\frac{1}{N_{HS}}\sum_i (X_i - \bar X)^2} \quad \text{ where } \quad \bar X = \frac{1}{N_{HS}}\sum_i X_i \quad \text{ and } \quad N_{HS} = \sum_i 1.
-}
-$$
-
-- We can rewrite this as a weighted average of the subsample means $\hat\mu(x)$.
-
-::: fragment
-
-$$
-\small{
-\begin{aligned}
-\hat b 
-&= \frac{1}{N_{HS}}\sum_{i} w(X_i)Y_i =
-\frac{1}{N_{HS}}\sum_{x\in 8\ldots 12} \sum_{i:X_i=x} w(x) Y_i 
-\quad 
-&& \text{ for } \quad w(x) = \frac{x - \bar X}{\frac{1}{N_{HS}}\sum_{i} (X_i-\bar X)^2} \\
-&= \frac{1}{N_{HS}}\sum_{x\in 8 \ldots 12} w(x) N_x \ \times \  \frac{1}{N_x}\sum_{i:X_i=x} Y_i 
-= \sum_{x \in 8 \ldots 12} \tilde w (x) \ \hat\mu(x)  \quad 
-&& \text{ for } \quad \tilde w(x)
-= \frac{N_x}{N_{HS}} \times w(x) 
-= \frac{N_x (x-\bar X)}{\sum_{i} (X_i-\bar X)^2} 
-\end{aligned}
-}
-$$
-:::
-
-
 ## Our Weights
 
 ```{r}
 #| out-height: 500px
 P = function(x) { mean(hs.subsample == x) }
-tw = function(x) { sum(hs.subsample==x)*(x - mean(hs.subsample)) / sum((hs.subsample - mean(hs.subsample))^2) }
 
 years.weights  = c(1/4, 0, 0, 0, -1/4) 
 people.weights = c(P(12), P(11)-P(12), P(10)-P(11), P(9)-P(10), -P(9))
-lsq.weights    = c(tw(12), tw(11), tw(10), tw(9), tw(8))
 x= rev(seq(8,12))
 
-weights = data.frame(x=rep(x,3), 
-                     w=c(years.weights, people.weights, lsq.weights), 
-                     type=rep(c('over years', 'over people', 'least squares'), each=length(x)))
+weights = data.frame(x=rep(x,2), 
+                     w=c(years.weights, people.weights), 
+                     type=rep(c('over years', 'over people'), each=length(x)))
 
 
 ggplot(weights) + geom_point(aes(x=x, y=w, color=type)) + 
@@ -1012,12 +940,11 @@ ggplot(weights) + geom_point(aes(x=x, y=w, color=type)) +
                   scale_x(c(8,12)) + theme_update(legend.position = c(0.1, 0.1)) + scale_color_discrete(name="")
 ```
 
-- We can see the weights we're using in the three summaries we've been talking about.
+- We can see the weights we're using in the two summaries we've been talking about.
 - If you look at them hard enough, there's a lot to see. But we won't go into it here.
 - What's obvious is that they focus, to different degrees, on different comparisons.
   - The average over years puts all its emphasis on a long-term comparison: $\hat\mu(12)$ vs. $\hat\mu(8)$.
   - The average over people puts most of its emphasis on a short-term one: $\hat\mu(12)$ vs. $\hat\mu(11)$.
-  - The least squares slope spreads emphasis over comparisons between $\hat\mu(12)$ and $\hat\mu(9) \ldots \hat \mu(11)$.
 
 ## The Impact of Variation in Slope
 
@@ -1035,16 +962,12 @@ plot.aggregate.comparison = function(earnings2) {
     geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education<=12,], color='black', linetype='dashed') +
     scale_y(c(0, .7e5))
 
-  model = lm(income ~ education, data=earnings2[earnings2$education <= 12,])
-  lm.predictions = data.frame(education=seq(8,12,by=.01))
-  lm.predictions$muhat = predict(model, newdata=lm.predictions)
-  aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5)) +
-      geom_line(aes(x=education, y=muhat), data=lm.predictions, color='red', alpha=.4)
+  aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5)) 
 }
 plot.aggregate.comparison(earnings2)
 ```
 
-- While our three summaries estimates are based on very different comparisons, we got similar answers.
+- While our two summaries estimates are based on very different comparisons, we got similar answers.
 - That was, fundamentally, because every comparison tells us the same thing. 
   - If you draw the lines from $\hat\mu(8) \ldots \hat \mu(11)$ to $\hat\mu(12)$, you'd get roughly the same slope.
 - If that weren't the case, it'd be a very different story. It'd look more like this.
@@ -1086,10 +1009,6 @@ over.years = function(earnings) {
   mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
   mean(mu[9:12] - mu[8:11])
 }
-lsq.slope = function(earnings) { 
-  model = lm(income ~ education, data=earnings[earnings$education <= 12,])
-  coef(model)[2]
-}
 ```
 
 :::: columns
@@ -1112,7 +1031,6 @@ $$
 \begin{array}{r|rrr}
 \text{Story} & 1 & 2 & 3 \\
 \hline
-\text{Least Squares Slope}  & \qquad  &  \qquad & \qquad   \\
 \text{Average over People}  & \qquad  &  \qquad & \qquad   \\
 \text{Average over Years}   & \qquad  &  \qquad & \qquad   \\
 \end{array}
@@ -1127,7 +1045,6 @@ $$
 \begin{array}{r|rrr}
 \text{Story} & 1 & 2 & 3 \\
 \hline
-\text{Least Squares Slope}  & `r approx(lsq.slope(earnings1))`   &  `r approx(lsq.slope(earnings2))` & `r approx(lsq.slope(earnings3))`  \\
 \text{Average over People}  & `r approx(over.people(earnings1))` &  `r approx(over.people(earnings2))` & `r approx(over.people(earnings3))`  \\
 \text{Average over Years}   & `r approx(over.years(earnings1))`  &  `r approx(over.years(earnings2))` & `r approx(over.years(earnings3))`  \\
 \end{array}
