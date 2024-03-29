@@ -1,6 +1,6 @@
 ---
-title: "QTM 220: Lectures 5-6"
-subtitle: "Inference for Subpopulation Means"
+title: "Lecture 7"
+subtitle: "Working With Non-Binary Outcomes"
 format: 
   clean-revealjs:
     height: 1000
@@ -106,8 +106,8 @@ cps.data = cpsR::get_asec(year=2022, vars=c('pearnval', 'gestfips', 'h_numper', 
 ```{r process-california-data}
 all.earnings = data.frame(age=cps.data$a_age,
                           state.code = cps.data$gestfips,
-              county.code = cps.data$gtco,
-                          income=cps.data$htotval, 
+                          county.code = cps.data$gtco,
+                          income=cps.data$pearnval, 
                           education=case_match(cps.data$a_hga,
                                           0  ~ 0,   # child
                                           31 ~ 0,   # < grade 1
@@ -233,15 +233,9 @@ pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.populat
 sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
 ```
 
-```{r visualization-defaults}
-scale_y = function(limits=c(0, 4e5)) { 
-  scale_y_continuous(labels=label_dollar(), limits=limits)
-}
 
-dot.size = 2
-```
 
-## Last time
+## So Far
 
 ::: {.hidden}
 $$
@@ -254,36 +248,137 @@ $$
 
 :::
 
+```{r}
+our.seed = 0
+width = function(samples, alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( mean(samples) - w/2 <= samples & samples <= mean(samples) + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
+}
 
-- We talked about what a random sample from a population tells us about subpopulation proportions.
-  - In particular, we looked at the rate of voting among Black and non-Black Georgia-registered voters in 2020. 
-- We saw that the sample analog---our subsample proportion---was likely to be close. 
-  - Less close, however, than the whole-sample proportion was to the whole-population proportion.
-  - That's what tends to happen when you have a smaller sample size.
-- To summarize how close to the subpopulation proportion we'd be, we used confidence intervals.
-  - These are *calibrated* interval estimates*
-  - That is, we calibrate them so that, 95% of the time, they contain what we're trying to estimate.
-  - To do this, we used the *bootstrap sampling distribution* as an estimate of the sampling distribution.
+default.height = .04
+scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) 
+scale_y = scale_y_continuous(breaks=seq(0,default.height,by=.01), limits=c(0, default.height))
+
+annotate.histogram = function(histplot, samples, shade=FALSE, 
+                              shade.width=width(samples, alpha=.05), shade.color='green', shade.alpha=.15) { 
+    w66 = width(samples, alpha=1/3)
+    w95 = width(samples, alpha=.05)
+    p = histplot + 
+           geom_vline(aes(xintercept=mean(samples)), color="blue") +
+           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w66/2), color="blue", linetype='dashed') +
+           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w95/2), color="blue", linetype='dotted') 
+    if(shade) { 
+      p + geom_rect(aes(xmin=mean(samples)-shade.width/2, 
+                        xmax=mean(samples)+shade.width/2, 
+                        ymin=0, ymax=Inf), alpha=shade.alpha, fill=shade.color)
+    } else { p }
+}
+
+annotated.bar = function(samples, ...) { 
+    p = ggplot() + geom_bar(aes(x=samples, y=after_stat(prop)), alpha=.3) +
+        geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7)
+    annotate.histogram(p, samples, ...) + scale_x + scale_y
+}
+
+default.highlight.colors = c('black', 'magenta', 'cyan', 'gray')
+with.points = function(histplot, samples, K=100, highlight=4, height=default.height) {
+    set.seed(our.seed)
+    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
+    heights = sample(height*(1:K)/K)
+    data = data.frame(y=heights, x=samples[1:K], 
+                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
+                      alpha=c(rep(1, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
+    histplot + geom_point(aes(y=y, x=x, color=I(color), alpha=I(alpha)), data=data)
+}
+
+with.intervals = function(histplot, samples, w=width(samples, alpha=.05), K=100, 
+                          highlight=4, highlight.alpha=1, height=default.height) { 
+    set.seed(our.seed)
+    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
+    heights = sample(height*(1:K)/K)
+    data = data.frame(y=heights, x=samples[1:K], w=w,
+                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
+                      alpha=c(rep(highlight.alpha, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
+    histplot + 
+        geom_pointrange(aes(y=y, x=x, xmin=x-w/2, xmax=x+w/2, color=I(color), alpha=I(alpha)), data=data)
+}
+```
+
+```{r}
+#| cache: true
+social.pressure = read.csv('social-pressure-data.csv') 
+keep = social.pressure$treatment %in% c(' Control', ' Neighbors')
+D = as.numeric(social.pressure[keep,'treatment'] == ' Neighbors')
+Y = as.numeric(social.pressure[keep,'voted'] == 'Yes')
+n = length(Y)
+
+difference = mean(Y[D==1]) - mean(Y[D==0])
+difference.bootstrap.samples = array(dim=10000)
+for(rr in 1:10000) {
+    I = sample(1:n, n, replace=TRUE)
+    Dstar = D[I]
+    Ystar = Y[I]
+    difference.bootstrap.samples[rr] = mean(Ystar[Dstar==1]) - mean(Ystar[Dstar==0])
+}
+```
+
+```{r}
+#| out-height: 250px
+#| fig-asp: .25 
+ 
+xx = seq(.05, .1, length=1000)
+scale_x_dif = scale_x_continuous(limits=c(.07,.095), labels=label_percent())
+wboot=width(difference.bootstrap.samples, alpha=.05)
+
+difference.bootstrap.samples = difference.bootstrap.samples - mean(difference.bootstrap.samples) + difference
+pboot=ggplot() + geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
+annotated.bootstrap.difference.histogram = annotate.histogram(pboot, difference.bootstrap.samples,
+  shade=FALSE)
+
+with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, height=150, highlight=0) + 
+  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+wboot/2), 
+                  data=data.frame(x=difference, y=50, w=wboot), color='black')  +
+  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='cyan') +
+  scale_x_dif
+``` 
+
+
+- We've worked with binary outcomes. In particular, the outcome of voting.
+- We've estimated turnout: the proportion of people in our **population** of registered voters who do actually vote.
+- We've talked about how to estimate this using a **random sample** of these voters, e.g., from a telephone survey.
+- To summarize how close our estimate is to the actual turnout rate, we've used confidence intervals.
+  - We calibrate them so that, 95% of the time, they contain what we're trying to estimate.
+  - For calibration, we've used the **bootstrap sampling distribution** as an estimate of the sampling distribution.
+- And we've talked about using **normal approximation** to understand what it'll all look like.
+  - e.g. to estimate the precision we'll get from a given sample size.
+- We've done all this for *turnout differences* between groups of voters, too. 
+  - e.g. Black and non-Black voters.
+  - e.g. Voters who received a letter pressuring them to vote and voters who didn't.
+
+::: aside
+Shown above: an estimate of the difference in turnout between people who received a letter pressuring them to vote and people who didn't.
+:::
 
 ## Today
 
-- We'll see what a random sample from a population tells us about subpopulation means and differences in them.
-- Returning to our CPS Income data example, we'll consider ...
-  - incomes among people [with 4-year degrees]{.twocolor-green} 
-  - income differences between people [with 4-year degrees]{.twocolor-green} and people [without them]{.twocolor-red}.
-- Our population will be the set of California residents 
-    - between the ages of 25 and 35
-    - with at least an 8th-grade education
-- It's a reasonable approximation to treat our data as
-  a representative sample (with replacement) from it.
-  
+```{r visualization-defaults}
+scale_y = function(limits=c(0, 4e5)) { 
+  scale_y_continuous(labels=label_dollar(), limits=limits)
+}
+
+dot.size = 2
+```
 
 :::: columns
 
 ::: column
 ```{r map-sample}
 #| fig-width: 5
-#| out-height: 400px
+#| out-height: 300px
 ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) + guides(color=FALSE)
 ```
 :::
@@ -293,7 +388,7 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1,
 ```{r table}
 tab = earnings[sample(nrow(earnings)), ]
 tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=6,ntail=2)
+ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=4,ntail=2)
 ellipsis.tab %>%
   kable %>% kable_styling() %>% 
   row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
@@ -303,110 +398,326 @@ ellipsis.tab %>%
 
 ::::
 
+- We'll do the same thing, but for **non-binary outcomes**.
+- Using data from the Current Population Survey, we'll estimate ...
+  - the mean income in our population.
+  - the mean income among people in our population [with 4-year degrees]{.twocolor-green} 
+  - the difference in mean income between people [with 4-year degrees]{.twocolor-green} and people [without them]{.twocolor-red}.
+- Our population will be the set of California residents 
+    - between the ages of 25 and 35
+    - with at least an 8th-grade education
+
+
 ::: aside
 The locations shown on the map are made up. They're not the actual locations of the people in the sample. \
 The survey includes some location information for some people, but as you can see in the table, not for everyone.
 :::
 
 
-## Subsample and subpopulation means
+## Sampling
 
-```{r}
-#| out-height: 250px
-#| fig-asp: .25 
-earnings.jitter = ggplot(earnings) + geom_point(aes(x=degree, y=income, color=degree), 
-                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
-                   scale_y() + guides(color=FALSE)
-
-summaries = earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
-earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) + scale_y()
+```{r pop-sample-maps}
+#| out-height: 500px
+#| fig-asp: .8 
+#| layout-ncol: 2 
+#| 
+ca.plot + 
+ geom_point(aes(x=long, y=lat, color=degree), data=display.population, size=.02, alpha=.1) + 
+ guides(color=FALSE)
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) 
 ```
 
-- A reasonable starting point for describing income in a subsample is its mean income.
+- We'll act as if our data were sampled, with replacement, from this population.
+  - On the left, I've illustrated the population.
+  - On the right, I've illustrated our sample.
+- Our working assumption: each dot on the right was chosen, from those on the left, by rolling a big die.
+- That's not quite right, but we'll stick with it throughout the semester.
+
+## Sample and Population Means
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2
+#| 
+pop.earnings = earnings[sample(nrow(earnings), nrow(display.population), replace=TRUE), ]
+pop.earnings$income = pop.earnings$income + 3000*rnorm(nrow(pop.earnings))
+
+ggplot(pop.earnings) + 
+  geom_point(aes(x=0, y=income),  color='blue',
+            size=.2, position=position_jitter(seed=0,w=.3), alpha=.05) +
+  stat_summary(aes(x=0, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x))  +
+  scale_y() 
+
+ggplot(earnings) + 
+  geom_point(aes(x=0, y=income), color='blue', 
+            size=2, position=position_jitter(seed=0,w=.3), alpha=.2) +
+  stat_summary(aes(x=0, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x))  +
+  scale_y() 
+```
+
+- One thing we often want to estimate is the mean of our population.
+
+$$
+\mu = \frac{1}{m}\sum_{j=1}^m y_j 
+$$
+
+- We'll think of the mean in our sample as an estimate of it.
+
+$$ 
+\hat \mu = \frac{1}{n}\sum_{i=1}^n Y_i 
+$$
+
+
+## Subsample and Subpopulation means
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2 
+
+earnings.jitter.pop = ggplot(pop.earnings) + 
+    geom_point(aes(x=degree, y=income, color=degree), 
+               size=.2, position=position_jitter(seed=0,w=.3), alpha=.1) +
+     scale_y() + guides(color='none')
+
+earnings.jitter = ggplot(earnings) + 
+    geom_point(aes(x=degree, y=income, color=degree), 
+               size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+     scale_y() + guides(color='none')
+
+earnings.jitter.pop + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+earnings.jitter + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+```
+
+- We'll often be interested in the mean income in subpopulations, too.
   - We'll think about the subsample with $X_i=x$ for some value $x$. 
-  - e.g. $X_i=1$ for people with 4-year degrees.
+  - e.g. $X_i=1$ for people [with a 4-year degree]{.twocolor-green} and $X_i=0$ for people [without]{.twocolor-red}.
+$$
+\mu(x) = \frac{1}{m_x}\sum_{j:x_j = x } y_j \quad \text{ where } \quad m_x = \sum_{j:x_j=x} 1.
+$$
+
+- We'll use the mean in the corresponding subsample to estimate it.
 
 $$ 
 \hat \mu(x) = \frac{1}{N_x}\sum_{i:X_i=x} Y_i \quad \text{ where } \quad N_x = \sum_{i:X_i=1} 1.
 $$
 
-- We can think of it  as an estimate of the mean of the corresponding subpopulation.
-$$
-\mu(x) = \frac{1}{m_x}\sum_{j:x_j = x } y_j \quad \text{ where } \quad m_x = \sum_{j:x_j=x} 1.
-$$
 
-## Population Means and Expectations
-
-- Because we're sampling uniformly at random, we can think of population means as *expectations*. 
-    
-$$ 
-\mu := \frac{1}{m}\sum_{j=1}^m y_j = \E[Y_i]  \quad \text{ when } \quad Y_i = y_1...y_m \quad \text{ each with probability } \quad \frac{1}{m}.
-$$
-
-- Similarly, we can think of subpopulation means as *conditional expectations*. 
-
-$$ 
-\begin{aligned}
-\mu(x) 
-&:= \frac{1}{M_x}\sum_{j:x_j = x } y_j = \E[Y_i \mid X_i = x]  \  
-\quad \text{ when } \quad P(Y_i \mid X_i=x) = \frac{1}{m_x} \quad \text{ for } m_x = \sum_{j:x_j = x } 1 \\ 
-&\text{and therefore when } \quad (X_i,Y_i) = (x_1,y_1) \ldots (x_m, y_m) \quad \text{ each with probability } \quad \frac{1}{m} 
-\end{aligned}
-$$
-
-- Let's think about this idea that a subsample behaves like a draw from the corresponding subpopulation.
-
-
-## Conditioning in Dice Rolls 
-
-::: {.incremental}
-
-- Suppose we want to know the mean dice roll *among dice rolls that are even*.
-- What's the probability, given that we roll even, that we roll a $2$? Or a $4$? Or a $6$?
-- It's 1/3. How do we know this?
-- Symmetry.
-  - There's no difference in the frequency with which we roll $2$, $4$, and $6$.
-  - So there shouldn't be a difference in the frequency of them even rolls.
-
-:::
-
-## Conditioning in Survey Context
+## Observations as Random Variables
 
 ```{r}
+#| out-height: 300px
+#| layout-ncol: 2 
+
+summaries = earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
+
+earnings.jitter.pop + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+earnings.jitter + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+```
+
+- To talk about the relationship between the sample and population, we'll use **random variables**.
+- The notation $y_j$ refers to a number.
+  - It's the income of the $j$th person in our population. That's just some person. 
+- The notation $Y_i$ refers to something else.
+  - It's the income of the $i$th person we call in our survey. That's not a person.
+  - That's the result of a random process---the roll of a die.
+  - And that person is person $1 \ldots m$ each with probability $1/m$.
+- To summarize this result, we talk about the **probability distribution** of $Y_i$.
+
+## Probability Distributions: The Binary Case
+```{r}
+set.seed(0)
+tab = earnings[sample(nrow(earnings)), ]
+tab$income.exceeds.100k = tab$income > 100000
+ellipsis.tab = tab[, c('income.exceeds.100k', 'degree', 'age', 'county')] %>% ellipsis(nhead=4,ntail=2)
 ellipsis.tab %>%
   kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16), background=twocolor.green) %>%
+  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
+  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+
+```
+
+- When our outcomes are binary, it's easy to describe this distribution.
+  - All we need to know is the probability that $Y_i$ is 1. Why?
+  - To do that, we **sum the probabilities** of the rolls that result in it being one.
+
+$$
+P(Y_i = 1) = \sum_{j: y_j = 1} P(\text{roll}_i = j) = \sum_{j: y_j = 1} \frac{1}{m} \times y_j = \mu.
+$$
+
+- This **collapses** the information about what happens in our random process---the probability we roll each number in 1...m---into the information that's relevant to $Y_i$.
+- That collapsing is what gives us our 'weighted coin flip'.
+
+
+## Probability Distributions: The General Case
+```{r}
+set.seed(0)
+tab = earnings[sample(nrow(earnings)), ]
+tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
+ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=4,ntail=2)
+ellipsis.tab %>%
+  kable %>% kable_styling() %>% 
+  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
   row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
 ```
 
-\ \
+- When our outcomes are are nonbinary, it's a bit more complicated.
+  - We need to know the probability that $Y_i$ takes on each possible value.
+  - But we calculate it the same way. We sum the probabilities of the rolls that result in it taking on those values.
 
-- Suppose we want to know the mean income *among people with 4-year degrees*.
-- When we sample with replacement, we are  in effect just rolling a bigger die.
-- As a result, the frequency with which we roll any one person's number
-  - counted as a fraction among any subpopulation they're in
-  - is the same for all people in it.
+$$
+P(Y_i = y) = \sum_{j: y_j = y} P(\text{roll}_i = j) 
+$$
+
+- We're still collapsing out irrelevant information, but what we're left with is more complicated.
+- It's a **weighted die roll**, with one face for each possible value of $Y_i$.
+- And sometimes we're effectively back where we started: if each person's income is different, then there's nothing to collapse out: $P(Y_i = y) = 1/m$ for all $y$.
+
+## Expectations
+
+```{r}
+set.seed(0)
+tab = earnings[sample(nrow(earnings)), ]
+tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
+ellipsis.tab = tab[, c('income', 'degree', 'age', 'county')] %>% ellipsis(nhead=4,ntail=2)
+ellipsis.tab %>%
+  kable %>% kable_styling() %>% 
+  row_spec(which(ellipsis.tab$education >= 16),  background=twocolor.green) %>%
+  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+```
+
+- That said, we often don't need to know the whole distribution.
+- Often the only thing we care about is the expected value of $Y_i$. Or some related quantity.
+  - The expected value of $Y_i$ is the **probability-weighted average** of the values it can take on.
+  - What's nice about this is that we can think of this in 'uncollapsed' terms.
+- When we sample as usual, this is just the population mean.
+- The collapsed form is, in a sense, just summing in a different order.
 
 $$
 \begin{aligned}
-&P(J=j ) = 1/m \quad \text{ for all j } \quad \in 1 \ldots m \\
-&\implies 
-P(J=j \mid J \in \{j_1, \ldots, j_{m_x}\}) = \begin{cases} \frac{1}{m_x} & \text{ if } j \in \{j_1, \ldots, j_{m_x}\} \\ 0 & \text{ otherwise } \end{cases}
+\E[Y_i] = \sum_y P(Y_i = y) \times y
+&= \sum_y \qty(\sum_{j: y_j = y} \frac{1}{m}) \times y \\
+&= \frac{1}{m}\sum_y\sum_{j:y_j = y} y \\
+&= \frac{1}{m}\sum_{j=1}^m y_j
 \end{aligned}
 $$
 
+- What's nice about the binary case is, in fact, that it's an expectation.
+- When $Y_i$ is binary, the probability it's 1 is its expected value $Y_i$.
 
-## Plan
+$$
+P(Y_i=1) = \sum_{j: y_j = 1} P(\text{roll}_i = j) = \frac{1}{m}\sum_{j:1}^m \begin{cases} 1 & \text{ if } y_j = 1 \\ 0 & \text{ otherwise} \\ \end{cases} = \frac{1}{m}\sum_{j:1}^m y_j = \E[Y_i].
+$$
 
-- We'll ultimately be talking about point and interval estimates of subpopulation means $\mu(x)$.
-- And using our sampling assumptions, we've seen that we can think of these as *conditional expectations*.
-  - In particular, as the *conditional expectation* $\E[Y_i \mid X_i=x]$ ...
-  - when $(X_i,Y_i)$ takes on the values $(x_1,y_1) \ldots (x_M, y_M)$ each with probability $1/M$.
-- So we'll start by reviewing some properties of conditional expectations.
 
-## Review: Expectations and Conditional Expectations
+## Independence 
+
+- We say two random variables are **independent** if knowing the value of one doesn't tell us anything about the value of the other.
+- When this is the case, their joint probability distribution is just the product of their individual ones.
+
+$$
+P(Y_1=y_1 \quad Y_2=y_2) = P(Y_1=y_1)P(Y_2=y_2).
+$$
+
+- That's what happens when the randomness in $Y_1$ and $Y_2$ comes from two different rolls of the die.
+- And since that's how we're doing our sampling --- that's sampling with replacement---it'll be true in our sample.
+- Because we get each of our observations the same way, they also have the same probability distribution. 
+- We say they're **independent and indentically distributed.**
 
 ## Conditioning
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2 
+
+earnings.jitter.pop = ggplot(pop.earnings) + 
+    geom_point(aes(x=degree, y=income, color=degree), 
+               size=.2, position=position_jitter(seed=0,w=.3), alpha=.1) +
+     scale_y() + guides(color='none')
+
+earnings.jitter = ggplot(earnings) + 
+    geom_point(aes(x=degree, y=income, color=degree), 
+               size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+     scale_y() + guides(color='none')
+
+earnings.jitter.pop + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+earnings.jitter + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+```
+
+- **Conditioning** is, in effect, a way of thinking about sampling as a two-stage process.
+  - First, we choose the color of our dot, i.e., the value of $X_i$, according to it frequency in the population.
+  - Then, we choose a specific one of those dots, i.e. $J_i$, from those with that color---with equal probability.
+- Because this is just a way of thinking, each person still gets chosen with probability $1/m$.
+$$
+P(J_i=j) = 
+\begin{cases}
+   \frac{m_{green}}{m} \ \ \ \ \ \times \frac{1}{m_{green}} \ \ \ \ \ =\ \frac{1}{m} & \text{if the $j$th dot is green  ($x_j=1$) } \\
+    \frac{m-m_{green}}{m} \times \frac{1}{m-m_{green}} \ = \ \frac{1}{m} & \text{otherwise}
+\end{cases}
+$$
+  
+
+
+## Conditioning
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2 
+
+earnings.jitter.pop + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+earnings.jitter + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+```
+
+
+- The **Conditional Probability** of $Y_i$ is the probability resulting from the second stage.
+- It's a function of the result of the first. 
+  - $P(Y_i=y \mid X_i=1) is the probability distribution of $Y_i$ when we're rolling the 'green die'.
+  - $P(Y_i=y \mid X_i=0) is the probability distribution of $Y_i$ when we're rolling the 'red die'.
+- And the **Conditional Expectation** of $Y_i$ is the 'second stage expected value' in the same sense.
+  - $\E[Y_i \mid X_i=1]$ is the expected value of $Y_i$ when we're rolling the 'green die'. 
+  - That is, the mean value $\mu(1)$ of $y_j$ in the subpopulation drawn as little green dots.
+  - $\E[Y_i \mid X_i=0]$ is the expected value of $Y_i$ when we're rolling the 'red die'.
+  - That is, the mean value $\mu(0)$ of $y_j$ in the subpopulation drawn as little red dots.
+
+## The Dry Part Begins
+
+- Up to this point in the class, we've mostly focused on concepts and intuition.
+- We've done some calculations, but there have been parts that haven't been totally rigorous.
+- Today, and from here on, we won't be able to do that.
+- Let's take a few minutes to review some of the math we'll need.
+
+# Review: Expectations and Conditional Expectations
+
+## Conditioning
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2 
+
+earnings.jitter.pop + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+earnings.jitter + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+```
 
 ### The law of iterated expectations
 $$
@@ -422,6 +733,18 @@ If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the rela
 
 ## Linearity of Expectations
 
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2 
+
+earnings.jitter.pop + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+earnings.jitter + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+```
+
 $$ 
 \begin{aligned}
 E ( a Y + b Z ) 
@@ -436,7 +759,40 @@ $$
     - To average a constant times a random variable, we can multiply the random variable's average by the constant.
   - In other words, we can *distribute* expectations and can pull constants out of them.
   
+## Proof
+
+- In essence, it comes down to the fact that all we're doing is summing.
+	- Expectations are probability-weighted sums.
+	- And we're looking at the expectation of a sum.
+- And we can change the order we sum in without changing what we get.
+
+$$
+\small{
+\begin{aligned}
+\E\qty( a Y + b Z ) 
+&= \sum_{y}\sum_z (a y + b z) \ P(Y=y, Z=z) && \text{ by definition of expectation} \\
+&= \sum_{y}\sum_z a y \ P(Y=y, Z=z) + \sum_{z}\sum_y b z \ P(Y=y, Z=z) && \text{changing the order in which we sum} \\
+&= \sum_{y} a y \ \sum_z P(Y=y,Z=z) + \sum_{z} b z \ \sum_y P(Y=y,Z=z) && \text{pulling constants out of the inner sums} \\
+&= \sum_{y} a y \ P(Y=y) + \sum_{z} b z \ \sum_y P(Z=z)  && \text{summing to get marginal probabilities from our joint } \\
+&= a\sum_{y} y \ P(Y=y) + b\sum_{z} z \ \sum_y P(Z=z)  && \text{ pulling constants out of the remaining sum } \\
+&= a\E Y + b \E Z  && \text{by definition}
+\end{aligned}
+}
+$$
+
 ## Linearity of **Conditional** Expectations
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2 
+
+earnings.jitter.pop + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+earnings.jitter + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
+          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+```
 
 $$ 
 \begin{aligned}
@@ -579,8 +935,6 @@ $$
 :::
 ::::
 
-
-
 ## Review Exercise 1
 ```{r}
 #| out-height: 250px
@@ -657,8 +1011,125 @@ $$
 
 :::
 
-## Review: Variance and Conditional Variance
 
+# Unbiasedness of Sample and Subsample Means
+
+## Bias
+
+```{r}
+#| layout-nrow: 2
+#| 
+xx = seq(-4,4,by=.01)
+heights = seq(0,.4,length.out=100)
+normals = rnorm(10000)
+
+ggplot() + geom_histogram(aes(x=normals, y=after_stat(density)), alpha=.3, bins=100) +
+           geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
+           geom_vline(xintercept=0, color='blue') + 
+           geom_vline(xintercept=c(-1,1), color='blue', linetype='dashed') +
+           geom_vline(xintercept=c(-2,2), color='blue', linetype='dotted') +
+           geom_point(aes(y=heights, x=normals[1:length(heights)]), color='purple', alpha=.3)
+
+ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bins=100) +
+           geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
+           geom_vline(xintercept=2+0, color='blue') + 
+           geom_vline(xintercept=2+c(-1,1), color='blue', linetype='dashed') +
+           geom_vline(xintercept=2+c(-2,2), color='blue', linetype='dotted') +
+           geom_point(aes(y=heights, x=normals[1:length(heights)]+2), color='purple', alpha=.3) +
+           xlim(-4,4)
+```
+
+- The **bias** of an estimator is the difference between its expected value and the value of the thing it's estimating.
+- We haven't talked about this yet because there hasn't been any. We've been using **unbiased estimators**.
+- You can see, looking at the sampling distribution plot on the right, that bias might cause some problems with coverage.
+- If we calibrate interval estimates to cover **the estimator's mean** 95% of the time---and that's what we've really been doing---how often will they cover the [thing we're estimating]{.fg style="color:green"}?
+- This means biased estimators can cause big problems. We'll talk about this more later in the semester.
+- But for now, let's just show the estimators that we've been using are, in fact, unbiased.
+
+## The Sample Mean
+
+This one's easy. What is the expected value of the sample mean?
+
+$$
+\E\qty[\frac1n\sum_{i=1}^n Y_i] \ = \  ?
+$$
+
+## The Mean: Answered
+
+The expected value of the sample mean is the population mean.
+
+$$
+\begin{aligned}
+\E\qty[\frac1n\sum_{i=1}^n Y_i] 
+&= \frac1n\sum_{i=1}^n \E[Y_i] && \text{ via linearity (Rule 1)} \\
+&= \frac1n\sum_{i=1}^n \mu     && \text{ via uniform sampling } \\
+&= \frac1n \times n \times \mu = \mu.
+\end{aligned}
+$$
+
+## A Subsample Mean
+
+**Claim.** The subsample mean is unbiased for the subpopulation mean.
+$$ \E[\hat\mu(1)] = \mu(1) $$
+
+**Sketch.**
+
+  - Use the Law of Iterated Expectations, conditioning on $X_1 \ldots X_n$.
+  - Then the linearity of conditional expectations to push the conditional expectation into the sum.
+  - Then irrelevance of independent conditioning variables to write things in terms of the *random variable* $\mu(X_i)$  
+  - Then the **indicator trick**. What's $X_i \mu(X_i)$? How is it related to $\mu(1)$?
+
+::: fragment
+
+$$
+\small{
+\begin{aligned}
+\E[\hat\mu(1)] 
+&=\E\qty[ E\qty{\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} \mid X_1 \ldots X_n}] \\
+&=E\qty[\frac{\sum_{i=1}^{n} X_i \E\qty{ X_{i} \mid X_1 \ldots X_n}}{\sum_{i=1}^{n}X_{i}}] \\
+&=E\qty[\frac{\sum_{i=1}^{n}X_i\E\qty{ Y_{i} \mid X_i}}{\sum_{i=1}^{n}X_{i}}] \\
+&=E\qty[\frac{\sum_{i=1}^{n}X_i \mu(X_i)}{\sum_{i=1}^{n}X_{i}}] \\
+&=E\qty[\frac{\sum_{i=1}^{n}X_i\mu(1)}{\sum_{i=1}^{n}X_{i}}] \\
+&=E\qty[\mu(1) \times \frac{\sum_{i=1}^{n}X_i}{\sum_{i=1}^{n}X_{i}}] = \E[\mu(1)]=\mu(1) 
+\end{aligned}
+}
+$$
+
+:::
+
+## Looking Back
+
+$$
+\small{
+\begin{aligned}
+\E[\hat\mu(1)] 
+&=\E\qty[ E\qty{\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} \mid X_1 \ldots X_n}] \\
+&=E\qty[\frac{\sum_{i=1}^{n} X_i \E\qty{ X_{i} \mid X_1 \ldots X_n}}{\sum_{i=1}^{n}X_{i}}] \\
+&=E\qty[\frac{\sum_{i=1}^{n}X_i\E\qty{ Y_{i} \mid X_i}}{\sum_{i=1}^{n}X_{i}}] \\
+&=E\qty[\frac{\sum_{i=1}^{n}X_i \mu(X_i)}{\sum_{i=1}^{n}X_{i}}] \\
+&=E\qty[\frac{\sum_{i=1}^{n}X_i\mu(1)}{\sum_{i=1}^{n}X_{i}}] \\
+&=E\qty[\mu(1) \times \frac{\sum_{i=1}^{n}X_i}{\sum_{i=1}^{n}X_{i}}] = \E[\mu(1)]=\mu(1) 
+\end{aligned}
+}
+$$
+
+- Now let's look back at our proof. 
+- What's the *conditional expectation* of our estimator, $\E[\hat\mu(1) \mid X_1 \ldots X_n]$?
+- This'll be useful next time.
+
+::: fragment
+
+ - It's $\mu(1)$, the subpopulation mean, just like the unconditional expecation.
+ - In our proof, we used the law of iterated expectations to write $\E[\hat\mu(1)]$ as the expectation of $\E[\hat\mu(1) \mid X_1 \ldots X_n]$.
+  - And we showed that the latter is *the constant* $\mu(1)$.
+  - So the former is the expectation of that constant---the same constant.
+
+:::
+
+
+# Review: Variance and Conditional Variance
+
+# The Variance of Sample and Subsample Means
 
 ## Variance as Excess {.smaller}
 
@@ -792,7 +1263,7 @@ ggplot() + geom_point(aes(x=Xdodge, y=Y+X, color=factor(X)), alpha=.7, size=4) +
 ```{r}
 #| out-height: 250px
 #| fig-asp: .25
-#| 
+
 mean.has.degree = round(summaries$mean[summaries$degree=='4-year degree'] / 10000) * 10
 mean.no.degree  = round(summaries$mean[summaries$degree=='no 4-year degree'] / 10000) * 10
 degree.proportion = round(mean(earnings$degree=='4-year degree'),1)
@@ -809,9 +1280,6 @@ earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+
         - e.g. 'the expected value of the conditional variance of Y given X'
     2. Using 'Population Language'
         - e.g. 'the variance of income (Y) within the random subpopulation with degree status X'
-
-
-
 
 
 ## Proof
@@ -860,228 +1328,6 @@ $$
 $$
 
 :::
-
-
-# Estimating Subpopulation Means
-
-## Estimating Subpopulation Means for Income in California
-```{r}
-#| out-height: 250px
-#| fig-asp: .25
-earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) + scale_y()
-```
-
-- When we're talking about CPS survey data, we will never know the true subpopulation means.
-  - But we can express them as *conditional means* of random variables drawn from the population.
-  - And we have a sample of `r n` of these random variables from the population.
-
-$$
-\begin{aligned}
-\mu(1) &= \E[Y_i \mid X_i=1] && \text{is the mean income of people in our population with a 4-year degree} \\
-\mu(0) &= \E[Y_i \mid X_i=0] && \text{is the mean income of people in our population without one}
-\end{aligned}
-$$
-
-- We will also never know the subpopulation income standard deviations.
-
-$$
-\begin{aligned}
-\sigma(1) &= \sqrt{\Var[Y_i \mid X_i=1]} \\
-\sigma(0) &= \sqrt{\Var[Y_i \mid X_i=0]}
-\end{aligned}
-$$
-
-- All this this is part of the larger story that we'll never know our data's sampling distribution.
-  - We'd have to survey every California resident to know it. That's too much work.
-- But we still want to know things about it---in particular those subpopulation means.
-- We'll use our sample to estimate them.
-
-## A Table of Imaginary Replications
-
-```{r}
-X = 0+(earnings$degree == '4-year degree')
-Y = earnings$income
-J = sample(n*2500, n, replace=TRUE)
-```
-
-$$
-\small{
-\begin{array}{r|rrr|rrr|r|rrr|rrr}
-\text{recipient} &  1 & & & 2 & & & \dots & `r n` & & & & & & \\
-\text{survey}    & J_1 & X_1 & Y_1 & J_2 & X_2 & Y_2   & \dots & J_{`r n`} & X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  & \overline{XY} \\
-\hline
-\color{black}   1   
-    & \color{black}   `r J[1]`                   & \color{black}  `r X[1]`      & \color{black} `r Y[1]` 
-    & \color{black}   `r J[2]`                   & \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
-                                                 & \color{black}   \dots
-    & \color{black}   ?                          & \color{black}   ?     & \color{black} ?       
-    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(X*Y))` \\
-\color{magenta}   2   
-    & \color{magenta}   ?  & \color{magenta}     & \color{magenta}  ? 
-    & \color{magenta}   ?                        & \color{magenta}  ?      & \color{magenta} ?      
-                                                 & \color{magenta}   \dots 
-    & \color{magenta}   ?                        & \color{magenta}   ?     & \color{magenta} ?       
-    & \color{magenta}   ??                       & \color{magenta} ??      & \color{magenta} ?? \\
-\color{cyan}    3   
-    & \color{cyan}      ?		         & \color{cyan}   ?        & \color{cyan}  ? 
-    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?      
-                                                 & \color{cyan}    \dots 
-    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?       
-    & \color{cyan}      ??  			 & \color{cyan}   ??       & \color{cyan}    ?? \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{gray}    1M   
-    & \color{gray}      ?		         & \color{gray}   ?        & \color{gray}  ? 
-    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?      
-                                                 & \color{gray}    \dots 
-    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?       
-    & \color{gray}      ??  			 & \color{gray}   ??       & \color{gray}    ?? \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\end{array}
-}
-$$
-
-- This is a table like the one we used to show our sampling distribution as in last lecture.
-  - The first row shows our actual sample---the outcomes from our survey.
-  - Last class, we were able to add additional rows for 'our friends polls'.
-  - We used our (post-election) knowledge of the population to fake these polls.
-- This time, this is really all we've got. We'll never see the population.
-- But when we talk about the probability that $X_i$,$Y_i$, $\bar Y$, etc takes on a value, 
-  we're talking about how often it takes on the value in those never-to-be-seen rows.
-- It's impossible to *know* these probabilities, but we can *reason about* their implications.
-
-
-## A Table of Imaginary Replications
-
-$$
-\small{
-\begin{array}{r|rrr|rrr|r|rrr|rrr}
-\text{recipient} &  1 & & & 2 & & & \dots & `r n` & & & & & & \\
-\text{survey}    & J_1 & X_1 & Y_1 & J_2 & X_2 & Y_2   & \dots & J_{`r n`} & X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  & \overline{XY} \\
-\hline
-\color{black}   1   
-    & \color{black}   `r J[1]`                   & \color{black}  `r X[1]`      & \color{black} `r Y[1]` 
-    & \color{black}   `r J[2]`                   & \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
-                                                 & \color{black}   \dots
-    & \color{black}   ?                          & \color{black}   ?     & \color{black} ?       
-    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(X*Y))` \\
-\color{magenta}   2   
-    & \color{magenta}   ?  & \color{magenta}     & \color{magenta}  ? 
-    & \color{magenta}   ?                        & \color{magenta}  ?      & \color{magenta} ?      
-                                                 & \color{magenta}   \dots 
-    & \color{magenta}   ?                        & \color{magenta}   ?     & \color{magenta} ?       
-    & \color{magenta}   ??                       & \color{magenta} ??      & \color{magenta} ?? \\
-\color{cyan}    3   
-    & \color{cyan}      ?		         & \color{cyan}   ?        & \color{cyan}  ? 
-    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?      
-                                                 & \color{cyan}    \dots 
-    & \color{cyan}      ?                        & \color{cyan}   ?        & \color{cyan}  ?       
-    & \color{cyan}      ??  			 & \color{cyan}   ??       & \color{cyan}    ?? \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{gray}    1M   
-    & \color{gray}      ?		         & \color{gray}   ?        & \color{gray}  ? 
-    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?      
-                                                 & \color{gray}    \dots 
-    & \color{gray}      ?                        & \color{gray}   ?        & \color{gray}  ?       
-    & \color{gray}      ??  			 & \color{gray}   ??       & \color{gray}    ?? \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\end{array}
-}
-$$
-
-
-- What we're interested in is the mean income of people with 4-year degrees.
-
-$$ 
-\mu(1) = \E[ Y_i \mid X_i=1] 
-$$
-
-- We'll use the corresponding sample mean as a point estimate. 
-- How, using the data in our table, can we calculate that?
-
-::: fragment
-
-$$
-\hat\mu(1) 
-= \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} 
-= \frac{\sum_{i=1}^n X_i Y_i}{\sum_{i=1}^n X_i}
-= \frac{\frac{1}{n}\sum_{i=1}^n X_i Y_i}{\frac{1}{n}\sum_{i=1}^n X_i}
-= \frac{\overline{XY}}{\overline{X}}
-$$
-
-:::
-
-## The Sampling Distribution of $\hat\mu(1)$
-
-
-- To calibrate an interval estimate, we'll need to estimate the sampling distribution of our point estimate.
-- Because it's a mean, it's reasonable to assume that it's approximately normal. 
-     - For now, just go with it. 
-     - We'll formalize this after Exam 1.
-
-$$ f_{\hat\mu_1}(\cdot) \approx N(?, ?) $$
-
-- To use this knowledge, we'll need to know --- or estimate ---the *mean* and *variance* of this normal.
-- That is, we'll need to find the mean and variance of our point estimate. Let's do it.
-
-## The Expectation of the Subsample Mean
-
-**Claim.** The subsample mean is unbiased for the subpopulation mean.
-$$ \E[\hat\mu(1)] = \mu(1) $$
-
-**Sketch.**
-
-  - Use the Law of Iterated Expectations, conditioning on $X_1 \ldots X_n$.
-  - Then the linearity of conditional expectations to push the conditional expectation into the sum.
-  - Then irrelevance of independent conditioning variables to write things in terms of the *random variable* $\mu(X_i)$  
-  - Then the **indicator trick**. What's $X_i \mu(X_i)$? How is it related to $\mu(1)$?
-
-::: fragment
-
-$$
-\small{
-\begin{aligned}
-\E[\hat\mu(1)] 
-&=\E\qty[ E\qty{\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} \mid X_1 \ldots X_n}] \\
-&=E\qty[\frac{\sum_{i=1}^{n} X_i \E\qty{ X_{i} \mid X_1 \ldots X_n}}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i\E\qty{ Y_{i} \mid X_i}}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i \mu(X_i)}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i\mu(1)}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\mu(1) \times \frac{\sum_{i=1}^{n}X_i}{\sum_{i=1}^{n}X_{i}}] = \E[\mu(1)]=\mu(1) 
-\end{aligned}
-}
-$$
-
-:::
-
-## Looking Back
-
-$$
-\small{
-\begin{aligned}
-\E[\hat\mu(1)] 
-&=\E\qty[ E\qty{\frac{\sum_{i=1}^{n}X_i Y_{i}}{\sum_{i=1}^{n}X_{i}} \mid X_1 \ldots X_n}] \\
-&=E\qty[\frac{\sum_{i=1}^{n} X_i \E\qty{ X_{i} \mid X_1 \ldots X_n}}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i\E\qty{ Y_{i} \mid X_i}}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i \mu(X_i)}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\frac{\sum_{i=1}^{n}X_i\mu(1)}{\sum_{i=1}^{n}X_{i}}] \\
-&=E\qty[\mu(1) \times \frac{\sum_{i=1}^{n}X_i}{\sum_{i=1}^{n}X_{i}}] = \E[\mu(1)]=\mu(1) 
-\end{aligned}
-}
-$$
-
-- Now let's look back at our proof. 
-- What's the *conditional expectation* of our estimator, $\E[\hat\mu(1) \mid X_1 \ldots X_n]$?
-- This'll be useful in a minute.
-
-::: fragment
-
- - It's $\mu(1)$, the subpopulation mean, just like the unconditional expecation.
- - In our proof, we used the law of iterated expectations to write $\E[\hat\mu(1)]$ as the expectation of $\E[\hat\mu(1) \mid X_1 \ldots X_n]$.
-  - And we showed that the latter is *the constant* $\mu(1)$.
-  - So the former is the expectation of that constant---the same constant.
-
-:::
-
 
 ## The Variance of the Subsample Mean
 
