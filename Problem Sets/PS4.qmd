@@ -1,5 +1,5 @@
 ---
-title: "Problem Set 4"
+title: "Problem Set 4 Solutions"
 subtitle: "QTM 220"
 format: pdf
 editor: visual
@@ -9,19 +9,9 @@ Due 20 October at 2:00pm ET on Canvas. Questions about submission requirements s
 
 ```{r}
 #| echo: false
-#nba<- read.csv("/Users/acuttne/Dropbox/Emory QTM/220/Problem Sets/all_seasons.csv")
-#nba_recent<- nba[nba$season=="2021-22",]
-#nba_recent$draftlevel<- nba_recent$draft_round
-#nba_recent$draftlevel<- replace(nba_recent$draftlevel, nba_recent$draftlevel=="Undrafted",3)
-#nba_recent$draftlevel<- replace(nba_recent$draftlevel, nba_recent$draftlevel=="0",3)
-#write.csv(nba_recent,"nba_population.csv")
-#nba_recent<- read.csv("nba_population.csv")
-
-set.seed(220220)
-#nba.sample<- sample(1:nrow(nba_recent),50,replace=T)
-#nba.sample.draft<- nba_recent[nba.sample,]
-#write.csv(nba.sample.draft,"nba_sample_draft.csv")
-nba.sample.draft<- read.csv("nba_sample_draft.csv")
+nba.sam<- read.csv("nba_sample_draft.csv")
+nba.pop<- read.csv("nba_population.csv")
+library(ggplot2)
 ```
 
 ## NBA Draft Data: Sample
@@ -57,68 +47,323 @@ You are interested in the average net rating, the team's point differential per 
 
 (a) What is the subsample mean net rating among those drafted in the first round? Second round? Undrafted? Create a scatterplot with draft level on the x-axis and net rating on the y-axis.
 
+```{r}
+mean(nba.sam$net_rating[nba.sam$draftlevel==1])
+mean(nba.sam$net_rating[nba.sam$draftlevel==2])
+mean(nba.sam$net_rating[nba.sam$draftlevel==3])
+
+ggplot(nba.sam, aes(x=draftlevel, y=net_rating)) +geom_point  ()
+
+```
+
 (b) Using the notation from class, show that the subsample mean net rating estimator among those drafted in the first round is unbiased for the subpopulation mean net rating among those drafted in the first round.
+
+We want to show that $E[\hat{\mu}(1)] = \mu(1)$
+
+Subsample mean net rating estimator: $\hat{\mu}(1) = \frac{\sum_{i=1}^n 1_1 (X_i)Y_i }{\sum_{i=1}^n 1_1 (X_i)}$ where $$ 1_1(X) = \left\{  \begin{array} {ll}
+1 & if \ x = 1 \\
+0 & otherwise
+\end{array}
+\right. $$ By law of iterated expectations, $E[\hat{\mu}(1)] = E[E[\frac{\sum_{i=1}^n 1_1 (X_i)Y_i }{\sum_{i=1}^n 1_1 (X_i)} | X_1....X_n]]$
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ E[\sum_{i=1}^n 1_1 (X_i)Y_i  | X_1....X_n]]$$ because when we condition the indicator sum is a constant
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \sum_{i=1}^n E[ 1_1 (X_i)Y_i  | X_1....X_n]]$$ expectation of sum = sum of expectations
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \sum_{i=1}^n 1_1 (X_i) \ E[ Y_i  | X_1....X_n]]$$ $$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \sum_{i=1}^n 1_1 (X_i) \ E[ Y_i  | X_i]]$$ by irrelevance of independent conditioning variables
+
+We know $E[Y_i|X_i] = \mu(X_i)$ by definition
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \sum_{i=1}^n 1_1 (X_i) \ \mu(X_i)]$$
+
+for all $\mu(X_i)$ that are not $\mu(1)$ (i.e. $\mu(2)$ and $\mu(3)$), the indicator function will multiply them by 0 so we can remove them
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \sum_{i=1}^n 1_1 (X_i) \ \mu(1)]$$ $\mu(1)$ is a constant
+
+$$ E[\frac{1}{\sum_{i=1}^n 1_1 (X_i)}  \ \mu(1) \ \sum_{i=1}^n 1_1 (X_i)]$$
+
+The sums cancel
+
+$$E[\mu(1)] = \mu(1) $$ as expectation of a constant is that constant
+
+Thus the subsample mean among the first round draft picks is an unbiased estimator of the subpopulation mean among first round draft picks.
+
+\bigskip
 
 (c) What is the average incremental difference in mean net rating across the draft levels in your sample using the draftlevel variable, $$\frac{1}{2} \sum_{x=2}^3 \{\hat{\mu}(x) - \hat{\mu}(x-1)\}$$
 
+```{r}
+
+(1/2)*((mean(nba.sam$net_rating[nba.sam$draftlevel==2]) - 
+          mean(nba.sam$net_rating[nba.sam$draftlevel==1])) + 
+         (mean(nba.sam$net_rating[nba.sam$draftlevel==3]) -
+            mean(nba.sam$net_rating[nba.sam$draftlevel==2])))
+
+(1/2)*(mean(nba.sam$net_rating[nba.sam$draftlevel==3]) -
+         mean(nba.sam$net_rating[nba.sam$draftlevel==1]))
+
+```
+
 (d) Rewrite part (c) as a linear combination of sub-sample means, $\sum_{x}\alpha(x) \hat{\mu}(x)$. What is your $\alpha(x)$ function?
 
-(e) What is the estimated standard error of your average incremental difference using plug-in/normal approximation? 
+\bigskip
 
-(f) Generate a bootstrap estimated sampling distribution of the average incremental difference estimator. Calculate a 95% confidence interval using your bootstrapped distribution. 
+$\sum_{i=1}^3 \alpha(x) \hat{\mu}(x)$ where $$ \alpha(x) = \left\{  \begin{array} {ll}
+-\frac{1}{2} & if \ x = 1 \\
+\frac{1}{2} & if \ x =3 \\
+0 & otherwise
+\end{array}
+\right. $$
+
+This yields $\frac{1}{2} \hat{\mu}(3) - \frac{1}{2} \hat{\mu}(1)$
+
+```{r}
+(1/2)*mean(nba.sam$net_rating[nba.sam$draftlevel==3]) -(1/2)*mean(nba.sam$net_rating[nba.sam$draftlevel==1])
+```
+
+\bigskip
+
+(e) What is the estimated standard error of your average incremental difference using plug-in/normal approximation?
+
+\bigskip
+
+The variance of our estimator is $\sum_x \frac{\alpha^2(x) \hat{\sigma}^2(x)}{N_x}$, which we can take the square root of for the estimated standard error. First, lets calculate the sub-sample variances.
+
+```{r}
+v1<- var(nba.sam$net_rating[nba.sam$draftlevel==1])
+v2<- var(nba.sam$net_rating[nba.sam$draftlevel==2])
+v3<- var(nba.sam$net_rating[nba.sam$draftlevel==3])
+```
+
+We know our $\alpha$s are $\frac{1}{2}$ and $-\frac{1}{2}$
+
+What are our sub-sample sizes?
+
+```{r}
+n1<- length(nba.sam$net_rating[nba.sam$draftlevel==1])
+n2<- length(nba.sam$net_rating[nba.sam$draftlevel==2])
+n3<- length(nba.sam$net_rating[nba.sam$draftlevel==3])
+```
+
+Putting it all together,
+
+```{r}
+(((-1/2)^2)*(v1))/n1 
+
+(((1/2)^2)*(v3))/n3
+
+(((-1/2)^2)*(v1))/n1 + (((1/2)^2)*(v3))/n3
+```
+
+That is the variance of our estimator, but we need the standard error, which is the square root
+
+```{r}
+sqrt((((-1/2)^2)*(v1))/n1 + (((1/2)^2)*(v3))/n3)
+```
+
+(f) Generate a bootstrap estimated sampling distribution of the average incremental difference estimator. Calculate a 95% confidence interval using your bootstrapped distribution.
+
+\bigskip
+
+```{r}
+set.seed(220)
+B=10000
+theta1<- rep(NA,B)
+n=50
+
+for( b in 1:B ){
+bootind = sample(1:n,size=n,replace=T)
+dfboot = nba.sam[bootind,]
+theta1[b] = (1/2)*mean(dfboot$net_rating[dfboot$draftlevel==3]) -(1/2)*mean(dfboot$net_rating[dfboot$draftlevel==1])
+}
+
+hist(theta1)
+
+sd(theta1)
+
+quantile(theta1,prob =c(.025,.975))
+
+```
 
 (g) What is the average incremental difference in mean net rating across the draft levels in your sample weighted by the proportion of players drafted in each round (and undrafted)? $$\sum_{x=2}^3 P_x \{\hat{\mu}(x) - \hat{\mu}(x-1)\}$$ where $P_x = \frac{N_x}{\sum_{x=2}^3 N_x}$
 
+\bigskip
+
+Our $P$s: $P_2 = \frac{13}{13+14}$; $P_3 = \frac{14}{13+14}$
+
+$P_2 (\hat{\mu}(2) - \hat{\mu}(1) ) + P_3 (\hat{\mu}(3) - \hat{\mu}(2))$
+
+```{r}
+(13/27)*(mean(nba.sam$net_rating[nba.sam$draftlevel==2]) - mean(nba.sam$net_rating[nba.sam$draftlevel==1])) + (14/27)*(mean(nba.sam$net_rating[nba.sam$draftlevel==3]) - mean(nba.sam$net_rating[nba.sam$draftlevel==2]))
+```
+
 (h) Rewrite part (g) as a linear combination of sub-sample means, $\sum_{x}\hat{\alpha}(x) \hat{\mu}(x)$. What is your $\hat{\alpha}(x)$ function?
 
-(i) What is the lower bound on the estimated standard error of your sub-sample weighted average incremental difference using plug-in/normal approximation? 
+\bigskip
 
-(j) Generate a bootstrap estimated sampling distribution of the weighted average incremental difference estimator. Calculate a 95% confidence interval using your bootstrapped distribution. 
+$P_2 \hat{\mu}(2) - P_2 \hat{\mu}(1) + P_3 \hat{\mu}(3) - P_3 \hat{\mu}(2)$
+
+$\sum_{i=1}^3 \hat{\alpha}(x) \hat{\mu}(x)$ where $$ \hat{\alpha}(x) = \left\{  \begin{array} {ll}
+-P_2 & if \ x = 1 \\
+P_2 - P_3 & if \ x =2 \\
+P_3 & if \ x =3
+\end{array}
+\right. $$
+
+(i) What is the lower bound on the estimated standard error of your sub-sample weighted average incremental difference using plug-in/normal approximation?
+
+\bigskip
+
+We already have our subsample variances and subsample sizes from earlier, but now our $\alpha$s are different
+
+```{r}
+((-13/27)^2 *v1)/n1 
+
+((13/27 - 14/27)^2 * v2)/n2
+
+((14/27)^2 *v3)/n3
+
+
+((-13/27)^2 *v1)/n1 + ((13/27 - 14/27)^2 * v2)/n2 + ((14/27)^2 *v3)/n3
+
+
+sqrt(((-13/27)^2 *v1)/n1 + ((13/27 - 14/27)^2 * v2)/n2 + ((14/27)^2 *v3)/n3)
+
+```
+
+(j) Generate a bootstrap estimated sampling distribution of the weighted average incremental difference estimator. Calculate a 95% confidence interval using your bootstrapped distribution.
+
+```{r}
+theta2<- rep(NA,B)
+
+for( b in 1:B ){
+bootind2 = sample(1:n,size=n,replace=T)
+dfboot2 = nba.sam[bootind2,]
+P2<- length(dfboot2$draftlevel==2)/(length(dfboot2$draftlevel==2) + length(dfboot2$draftlevel==3))
+P3<- length(dfboot2$draftlevel==3)/(length(dfboot2$draftlevel==2) + length(dfboot2$draftlevel==3))
+theta2[b] = (-P2)*mean(dfboot2$net_rating[dfboot2$draftlevel==1]) + (P2-P3)*mean(dfboot2$net_rating[dfboot2$draftlevel==2]) +  P3*mean(dfboot2$net_rating[dfboot2$draftlevel==3])
+}
+
+hist(theta2)
+
+sd(theta2)
+
+quantile(theta2,prob =c(.025,.975))
+```
 
 (k) What is the least squares difference in mean net rating across draft levels in your sample? $$\sum_{x} \tilde{w}(x) \hat{\mu}(x)$$ where $\tilde{w}(x) = \frac{N_x (x-\bar{X})}{\sum_i (X_i - \bar{X})^2}$
 
+```{r}
+xvar<- rep(NA, n)
+for(i in 1:n){
+  xvar[i]<- (nba.sam$draftlevel[i] - mean(nba.sam$draftlevel))^2
+}
+denom<- sum(xvar)
+```
+
+$\tilde{w}(1) = \frac{23*(1-\bar{X})}{\sum_i (X_i - \bar{X})^2}$
+
+$\tilde{w}(2) = \frac{13*(2-\bar{X})}{\sum_i (X_i - \bar{X})^2}$
+
+$\tilde{w}(3) = \frac{14*(3-\bar{X})}{\sum_i (X_i - \bar{X})^2}$
+
+```{r}
+((23*(1-mean(nba.sam$draftlevel)))/denom)*mean(nba.sam$net_rating[nba.sam$draftlevel==1]) + ((13*(2-mean(nba.sam$draftlevel)))/denom)*mean(nba.sam$net_rating[nba.sam$draftlevel==2]) + ((14*(3-mean(nba.sam$draftlevel)))/denom)*mean(nba.sam$net_rating[nba.sam$draftlevel==3]) 
+
+#Just to check because it should be the same as the slope: 
+mod<- lm(net_rating~draftlevel, data=nba.sam)
+summary(mod)
+```
+
 (l) Rewrite part (k) as a linear combination of sub-sample means using the $\alpha(x)$ notation, $\sum_{x}\hat{\alpha}(x) \hat{\mu}(x)$. What is your $\hat{\alpha}(x)$ function?
 
-(m) What is the lower bound on the estimated standard error or your least squares summary of net rating across draft levels in your sample using plug-in/normal approximation? 
+$\hat{\alpha}(x)$ is the same as our $\tilde{w}(x)$s
 
-(n) Generate a bootstrap estimated sampling distribution of the least squares estimator of net rating across draft levels. Calculate a 95% confidence interval using your bootstrapped distribution. 
+$\sum_{i=1}^3 \hat{\alpha}(x) \hat{\mu}(x)$ where $$ \hat{\alpha}(x) = \left\{  \begin{array} {ll}
+\frac{N_1*(1-\bar{X})}{\sum_i (X_i - \bar{X})^2} & if \ x = 1 \\
+\frac{N_2*(2-\bar{X})}{\sum_i (X_i - \bar{X})^2} & if \ x =2 \\
+\frac{N_3*(3-\bar{X})}{\sum_i (X_i - \bar{X})^2} & if \ x =3
+\end{array}
+\right. $$
 
-(o) Fill in the following table with information using your sub-sample estimates 
+(m) What is the lower bound on the estimated standard error or your least squares summary of net rating across draft levels in your sample using plug-in/normal approximation?
+
+We already have our subsample variances and subsample sizes from earlier, but now our $\alpha$s are different
+
+```{r}
+
+(((23*(1-mean(nba.sam$draftlevel)))/denom))
+(((13*(2-mean(nba.sam$draftlevel)))/denom))
+(((14*(3-mean(nba.sam$draftlevel)))/denom))
+
+((((23*(1-mean(nba.sam$draftlevel)))/denom))^2 *v1)/n1 
+((((13*(2-mean(nba.sam$draftlevel)))/denom))^2 * v2)/n2
+((((14*(3-mean(nba.sam$draftlevel)))/denom))^2 *v3)/n3
+
+((((23*(1-mean(nba.sam$draftlevel)))/denom))^2 *v1)/n1 + ((((13*(2-mean(nba.sam$draftlevel)))/denom))^2 * v2)/n2 + ((((14*(3-mean(nba.sam$draftlevel)))/denom))^2 *v3)/n3
+
+sqrt(((((23*(1-mean(nba.sam$draftlevel)))/denom))^2 *v1)/n1 + ((((13*(2-mean(nba.sam$draftlevel)))/denom))^2 * v2)/n2 + ((((14*(3-mean(nba.sam$draftlevel)))/denom))^2 *v3)/n3) 
+
+```
+
+(n) Generate a bootstrap estimated sampling distribution of the least squares estimator of net rating across draft levels. Calculate a 95% confidence interval using your bootstrapped distribution.
+
+```{r}
+#this is a shortcut-- it would probably be better to calculate each of the weights and do the linear combination of means within the bootstrap. But I did confirm above that lm gives me the same estimate (which it should), so this is fine 
+
+theta3<- rep(NA,B)
+
+for( b in 1:B ){
+bootind3 = sample(1:n,size=n,replace=T)
+dfboot3 = nba.sam[bootind3,]
+ols<- lm(dfboot3$net_rating~ dfboot3$draftlevel)
+theta3[b] = ols$coef[2]
+}
+
+hist(theta3)
+
+sd(theta3)
+
+quantile(theta3,prob =c(.025,.975))
+
+```
+
+(o) Fill in the following table with information using your sub-sample estimates
 
 ```{=tex}
 \begin{tabular}{|c|c|p{3cm}|p{3cm}|p{3cm}|}
 \hline
 & $x$ & 1 & 2 & 3 \\
 \hline
-& $N_x$ & & &  \\
+& $N_x$ & 23 & 13 & 14 \\
 & & & &\\
-& $\hat{\mu}(x)$ & & & \\
+& $\hat{\mu}(x)$ & 0.713 & -3.82 & -14.47 \\
 & & & &\\
-& $\hat{\sigma}^2(x)$ & & & \\
+& $\hat{\sigma}^2(x)$ & 21.995 & 257.699 & 820.941\\
 & & & & \\
 \hline
 & & & &\\
- & $\alpha (x)$ & & & \\
+ & $\alpha (x)$ & $-\frac{1}{2}$ & 0  & $\frac{1}{2}$ \\
 & & & &\\
-avg. increment & $\alpha^2 (x)$ & & & \\
+avg. increment & $\alpha^2 (x)$ & $\frac{1}{4}$ & 0 & $\frac{1}{4}$\\
  & & & &\\
-& $\frac{\hat{\sigma}^2(x) \alpha^2 (x)}{N_x}$ & & & \\
-& & & &\\
-\hline
-& & & &\\
- & $\hat{\alpha}(x)$ & & & \\
- & & & &\\
-weighted increment & $\hat{\alpha}^2(x)$ & & & \\
- & & & &\\
-& $\frac{\hat{\sigma}^2(x) \hat{\alpha}^2 (x)}{N_x}$ & & & \\
+& $\frac{\hat{\sigma}^2(x) \alpha^2 (x)}{N_x}$ & 0.304 & 0  & 14.66 \\
 & & & &\\
 \hline
 & & & &\\
- & $\hat{\alpha}(x)$  & & & \\
+ & $\hat{\alpha}(x)$ & $-\frac{13}{27}$ & $\frac{13}{27} - \frac{14}{27}$ & $\frac{14}{27}$ \\
  & & & &\\
-least squares & $\hat{\alpha}^2(x)$ & & & \\
+weighted increment & $\hat{\alpha}^2(x)$ & 0.2318 & 0.00137 & 0.269\\
  & & & &\\
-& $\frac{\hat{\sigma}^2(x) \hat{\alpha}^2 (x)}{N_x}$ & & & \\
+& $\frac{\hat{\sigma}^2(x) \hat{\alpha}^2 (x)}{N_x}$ & 0.2821 & 0.02719 & 15.7657 \\
+& & & &\\
+\hline
+& & & &\\
+ & $\hat{\alpha}(x)$  & -0.533 & 0.06614 & 0.4669\\
+ & & & &\\
+least squares & $\hat{\alpha}^2(x)$ & 0.284 & 0.004 & 0.2180 \\
+ & & & &\\
+& $\frac{\hat{\sigma}^2(x) \hat{\alpha}^2 (x)}{N_x}$ & 0.3459 & 0.0867 & 12.7846 \\
 & & & &\\
 \hline
 \end{tabular}
@@ -154,31 +399,165 @@ The data set nba\textunderscore population includes the following variables from
 ```
 \bigskip
 
-(a) What are the sub-population mean net ratings among those drafted in the first round, second round, and undrafted? How do the sub-population means compare to your sub-sample means? How many players in the population are in each draft level? What is $\sigma^2 (x)$ for each draft level? Fill in the table to organize your results. 
+(a) What are the sub-population mean net ratings among those drafted in the first round, second round, and undrafted? How do the sub-population means compare to your sub-sample means? How many players in the population are in each draft level? What is $\sigma^2 (x)$ for each draft level? Fill in the table to organize your results.
 
+```{=tex}
 \begin{tabular}{|c|p{3cm}|p{3cm}|p{3cm}|}
 \hline
 $x$ & 1 & 2 & 3 \\
 \hline
- $m_x$ & & &  \\
+ $m_x$ & 279 & 144 & 182 \\
 & & &\\
- $\mu(x)$ & & & \\
+ $\mu(x)$ & -1.4279 & -7.0729 & -5.4555\\
  & & &\\
-$\sigma^2(x)$ & & & \\
+$\sigma^2(x)$ & 337.0019 & 315.3823 & 693.7344\\
 & & & \\
 \hline
 \end{tabular}
+```
+```{r}
+ggplot(nba.pop, aes(x=draftlevel, y=net_rating)) +geom_point  ()
+
+np1<- length(nba.pop$net_rating[nba.pop$draftlevel==1])
+np1
+np2<- length(nba.pop$net_rating[nba.pop$draftlevel==2])
+np2
+np3<- length(nba.pop$net_rating[nba.pop$draftlevel==3])
+np3
+
+np1+np2+np3
+
+mu1<- mean(nba.pop$net_rating[nba.pop$draftlevel==1])
+mu1
+mu2<- mean(nba.pop$net_rating[nba.pop$draftlevel==2])
+mu2
+mu3<- mean(nba.pop$net_rating[nba.pop$draftlevel==3])
+mu3
+
+vp1<- var(nba.pop$net_rating[nba.pop$draftlevel==1])
+vp1
+vp2<- var(nba.pop$net_rating[nba.pop$draftlevel==2])
+vp2
+vp3<- var(nba.pop$net_rating[nba.pop$draftlevel==3])
+vp3
+```
+The subsample means are quite different. The first round draft picks net rating is negative, on average, when it was positive in our sample. Our subsample mean of net ratings for undrafted players was also a lot lower than the population average-- when we see the variance among undrafted players, it makes sense that our sample could be pretty off (it is also pretty small).
+
 
 (b) What is the average incremental difference in mean net rating across the draft levels in the population using the draftlevel variable, $$\frac{1}{2} \sum_{x=2}^3 \{\mu(x) - \mu(x-1)\}$$ How does this compare to your estimate?
 
-(c) Create a sampling distribution of your average incremental difference estimator. What size (n) should your repeated samples from the population be? What is the standard error for this estimator? Visually compare (with histograms) the sampling distribution to your bootstrap estimated sampling distribution for this estimator. 
+\bigskip 
+
+```{r}
+(1/2)*(mu3 - mu1)
+
+```
+It is higher (closer to 0) than the sample. Our 95\% confidence interval from the bootstrap covers. 
+
+
+(c) Create a sampling distribution of your average incremental difference estimator. What size (n) should your repeated samples from the population be? What is the standard error for this estimator? Visually compare (with histograms) the sampling distribution to your bootstrap estimated sampling distribution for this estimator.
+
+\bigskip 
+
+The repeated sample should be of size 50 (the same size of the sample data), but the samples are taken from the population. 
+
+```{r}
+S=10000
+thetapop1<- rep(NA,S)
+n=50
+
+for( s in 1:S ){
+samind = sample(1:n,size=n,replace=T)
+dfsam = nba.pop[samind,]
+thetapop1[s] = (1/2)*mean(dfsam$net_rating[dfsam$draftlevel==3]) -(1/2)*mean(dfsam$net_rating[dfsam$draftlevel==1])
+}
+
+hist(thetapop1)
+
+sd(thetapop1)
+```
+
+The standard error is smaller than our estimated standard error. The sampling distribution looks a lot more normal than the bootstrap estimated sampling distribution (maybe our sample is a bit small)
+
+
 
 (d) What is the average incremental difference in mean net rating across the draft levels in the population weighted by the proportion of players drafted in each round (and undrafted)? $$\sum_{x=2}^3 p_x \{\mu(x) - \mu(x-1)\}$$ where $p_x = \frac{m_x}{\sum_{x=2}^3 m_x}$ How does this compare to your estimate?
 
+\bigskip
+
+What are our population $p$s? $p_2 = \frac{144}{326}$; $P_3 = \frac{182}{326}$
+
+$p_2 (\mu(2) - \mu(1) ) + p_3 (\mu(3) - \mu(2))$
+
+```{r}
+(np2/(np2+np3))*(mean(nba.pop$net_rating[nba.pop$draftlevel==2]) - mean(nba.pop$net_rating[nba.pop$draftlevel==1])) + (np3/(np2+np3))*(mean(nba.pop$net_rating[nba.pop$draftlevel==3]) - mean(nba.pop$net_rating[nba.pop$draftlevel==2]))
+```
+The true weighted increment average is higher than the sample, the 95\% confidence interval we calculated before covers this true estimand. 
+
+\bigskip 
+
 (e) Create a sampling distribution of your weighted average incremental difference estimator. What size (n) should your repeated samples from the population be? What is the standard error for this estimator? Visually compare (with histograms) the sampling distribution to your bootstrap estimated sampling distribution for this estimator.
+
+
+```{r}
+thetapop2<- rep(NA,S)
+
+for( s in 1:S ){
+samind2 = sample(1:n,size=n,replace=T)
+dfsam2 = nba.pop[samind2,]
+p2<- length(dfsam2$draftlevel==2)/(length(dfsam2$draftlevel==2) + length(dfsam2$draftlevel==3))
+p3<- length(dfsam2$draftlevel==3)/(length(dfsam2$draftlevel==2) + length(dfsam2$draftlevel==3))
+thetapop2[s] = (-p2)*mean(dfsam2$net_rating[dfsam2$draftlevel==1]) + (p2-p3)*mean(dfsam2$net_rating[dfsam2$draftlevel==2]) +  p3*mean(dfsam2$net_rating[dfsam2$draftlevel==3])
+}
+
+hist(thetapop2)
+
+sd(thetapop2)
+```
+More normal and tighter than the estimated, our estimated standard error was higher. 
+
 
 (f) What is the least squares difference in mean net rating across draft levels in the population? $$\sum_{x} \tilde{w}(x) \mu(x)$$ where $\tilde{w}(x) = \frac{m_x (x-\bar{X})}{\sum_i (X_i - \bar{X})^2}$ How does this compare to your estimate?
 
+```{r}
+xvarpop<- rep(NA, length(nba.pop$net_rating))
+for(i in 1:length(nba.pop$net_rating)){
+  xvarpop[i]<- (nba.pop$draftlevel[i] - mean(nba.pop$draftlevel))^2
+}
+denompop<- sum(xvarpop)
+```
+
+```{r}
+((np1*(1-mean(nba.pop$draftlevel)))/denompop)*mu1 + ((np2*(2-mean(nba.pop$draftlevel)))/denompop)*mu2 + ((np3*(3-mean(nba.pop$draftlevel)))/denompop)*mu3 
+
+#Just to check because it should be the same as the slope: 
+modpop<- lm(net_rating~draftlevel, data=nba.pop)
+summary(modpop)
+```
+The true least squares average increment is higher (closer to 0). 
+
+
 (g) Create a sampling distribution of your least squares estimator. What size (n) should your repeated samples from the population be? What is the standard error for this estimator? Visually compare (with histograms) the sampling distribution to your bootstrap estimated sampling distribution for this estimator.
 
+```{r}
+
+thetapop3<- rep(NA,S)
+
+for( s in 1:S ){
+samind3 = sample(1:n,size=n,replace=T)
+dfsam3 = nba.pop[samind3,]
+ols<- lm(dfsam3$net_rating~ dfsam3$draftlevel)
+thetapop3[s] = ols$coef[2]
+}
+
+hist(thetapop3)
+
+sd(thetapop3)
+
+```
+
+Sampling distribution is more normal and much tighter than estimated sampling distribution, standard error lower than estimated standard error. 
+
 (h) Overall, how did your estimates compare to the population? How similar were your estimated standard errors to the standard errors of your estimators? Why might the estimators have different standard errors?
+
+The subpopulations have pretty high variance and so do the subsamples. All of our estimators put a lot of weight on the undrafted players and the is the subsample (and subpopulation) with the greatest conditional variance. Our bootstrap estimated sampling distributions are not as similar to the actual sampling distributions (that we generated using the population) as we might want. Our sample is pretty small. All of our CIs covered the population estimands; our estimated standard errors were all larger than the standard errors of our estimators, but at least that means we are being more conservative. 
