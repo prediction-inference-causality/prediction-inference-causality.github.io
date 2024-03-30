@@ -1,48 +1,72 @@
 ---
 title: "Problem Set 2"
 subtitle: "QTM 220"
-execute:
-  echo: false
-  warning: false
 format: 
-  pdf:
+  html:
+    filters: 
+      - custom-callout.lua
+    df-print: kable
+    embed-resources: true
+    fig-format: svg
+    html-math-method: mathjax
     include-in-header: 
       text: |
-        \usepackage{amsmath}
-        \usepackage{setspace}
-        \onehalfspacing
-        \usepackage{amssymb}
-        \usepackage{physics}
-        \usepackage{color}
-        \usepackage{fullpage}
-        \usepackage{graphicx}
-        \usepackage{cancel}
-        \usepackage{physics}
-        \usepackage{mdframed}
-        \usepackage{fullpage}
-        \DeclareMathOperator{\E}{E}
-        \DeclareMathOperator{\Var}{V}
-        \DeclareMathOperator{\hVar}{\widehat{V}}
-        \DeclareMathOperator{\bias}{bias}
-        \newtheorem{exercise}{Exercise}
-        \usepackage{environ}
-        %\NewEnviron{solution}{}{}
-        \NewEnviron{solution}{\color{blue}\paragraph{Solution.}\BODY\color{black}}{}
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+        <style>
+          .callout.callout-style-default.callout-exercise>.callout-header { 
+            background-color: #ED8275
+          } 
+          .callout.callout-style-default.callout-solution>.callout-header { 
+            background-color: #75DFED
+          } 
+        </style>
+execute: 
+  echo: false
+  message: false
+  warning: false
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
 ---
 
-```{r setup} 
+```{r}
+#| echo: false
+#| message: false
+#| warning: false 
 library(ggplot2)
 library(tidyverse)
+library(scales)
+```
+
+```{r}
+
 if (knitr::is_latex_output())
   knitr::opts_chunk$set(dev = "cairo_pdf")
 theme_set(theme_minimal())
 ```
 
+::: hidden
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+$$
+:::
+
+
 # Summary
 This problem set will not be graded. But if you have the time, it might be worth doing---or at least looking over---before you take the practice exam. It's meant to prompt you to review the right things. That way, you'll be taking the practice exam in circumstances closer to those of the actual exam, having already done some targeted revision.
 
-That said, you only have some much time, so let me offer some guidance on what to focus on here.
-Exercises 1,2, and 7 are similar in character to stuff you might see on the exam. The rest of the stuff---the stuff in the middle---isn't. The exam will not talk about convergence in probability or Markov's inequality. That said, it is good practice working with expectations and thinking about how coverage probabilities are calculated and how interval estimates are calibrated, so if you've got the time, it might be worth a look.
+That said, you only have some much time, so let me offer some guidance on what to focus on here. @exr-mean, @exr-consistency, and @exr-sample-size are similar in character to stuff you might see on the exam. The rest of the stuff---the stuff in the middle---isn't. The exam will not talk about convergence in probability or Markov's inequality. That said, it is good practice working with expectations and thinking about how coverage probabilities are calculated and how interval estimates are calibrated, so if you've got the time, it might be worth a look.
 
 # Consistency
 
@@ -62,41 +86,29 @@ if by using a large enough sample size, we can make two things happen.
 One example of a consistent estimator, when we observe a sample with replacement $Y_1 \ldots Y_n$ from a population with mean $\mu$
 and standard deviation $\sigma$, is the sample mean $\hat \mu = \frac{1}{n}\sum_{i=1}^n Y_i$.
 
-::: exercise
-\begin{exercise}
+::: { #exr-mean  .callout-exercise}
 When we have a sample of size $n$, what is the bias of $\hat\mu?$ What is its standard deviation? 
-\end{exercise}
+:::
 
-\begin{solution}
+::: {.callout-solution}
 This is straight out of lectures 7 and 8. The estimator's bias is zero and its standard deviation is $\sigma/\sqrt{n}$. I didn't ask for proof, but I'll include a proof that the bias is zero, i.e. that $\E[\hat\mu]=\mu$, below. The estimator's standard deviation is the square root of its variance, $\sigma^2/n$, which was calculated below in the prompt for Practice Problem 4. 
 
 $$
 \begin{aligned}
 \E[\hat\mu] 
-&=\E\qty[\frac1n\sum_{i=1}^n Y_i] 
+&=\E\qty[\frac1n\sum_{i=1}^n Y_i]  && \text{ definition of $\hat\mu$} \\
 &= \frac1n\sum_{i=1}^n \E[Y_i]                      && \text{ via linearity } \\
 &= \frac1n\sum_{i=1}^n \frac{1}{m}\sum_{j=1}^m y_j  && \text{ because $Y_i=y_1\ldots y_m$ each w.p. $1/m$  } \\
 &= \frac1n\sum_{i=1}^n \mu                          && \text{ because $\mu$ is what we call the mean of $y_1\ldots y_m$} \\
 &= \frac1n \times n \times \mu = \mu.               && \text{ counting copies of $\mu$ in our sum and then dividing}
 \end{aligned}
 $$
-
-\end{solution}
 :::
 
 
 Now lets's try to get a sense of what consistency does and doesn't look like. The plot below shows the sampling distributions of three estimators at three sample sizes. 
 The vertical line indicates the mean of the sampling distribution. 
 
-::: exercise
-\begin{exercise}
-Which of these estimators are consistent? Circle zero or more: a, b, c.
-\end{exercise}
-
-\begin{solution}
-Estimators $a$ and $b$ are consistent. Estimator $c$ is not; it converges to $\mu+1$, not $\mu$.
-\end{solution}
-:::
 
 ```{r}
 #| echo: false
@@ -131,6 +143,13 @@ ggplot(plotdata) +
   facet_grid(n ~ estimator, labeller=labeller(n=label_both, estimator=label_both))  
 ```
 
+::: { #exr-consistency  .callout-exercise}
+Which of these estimators are consistent? Circle zero or more: a, b, c.
+:::
+
+::: {.callout-solution}
+Estimators $a$ and $b$ are consistent. Estimator $c$ is not; it converges to $\mu+1$, not $\mu$.
+:::
 
 # Convergence in Probability
 Now let's think about another notion of convergence. If an estimator's sampling distribution
@@ -185,11 +204,11 @@ how close $\hat\mu$ is to $\mu$, i.e., we're going to use it to calculate the co
 
 ## Proving Markov's Inequality
 
-::: exercise
-\begin{exercise}
+::: { #exr-markov  .callout-exercise}
 Prove Markov's inequality. 
-\end{exercise}
-\begin{solution}
+:::
+
+::: {.callout-solution}
 We can think of $P(X \ge t)$ as the expected value of a binary random variable --- an indicator $1_{\ge t}(X)$ 
 for $X$ exceeding $t$. After all, the expected value of any binary random variable $Z$ is just the probability that it's one:
 $\E[Z] = 0 P(Z=0) + 1 P(Z=1) = P(Z=1)$. And this indicator $1_{\ge t}(x)$ is smaller than $u(x)=x/t$ for all non-negative values of $x$, i.e., all values $X$ takes on. For $x < t$ the indicator is zero and $x/t$ is at least zero and for $x \ge t$
@@ -197,7 +216,7 @@ the indicator is one and $x/t$ is at least one. It follows that $\E[1_{\ge t}(X)
 $$
 P(X \ge t) = \E[1_{\ge t}(X)] \le \E[u(X)]= \frac{\E[X]}{t} \quad \text{ with the last step via linearity}
 $$
-\end{solution}
+
 :::
 
 To help you out, I'll outline the proof. You'll need to fill in the details. But treat this like an 'essay question', not a 'short-answer' thing. Write out the whole argument, so you can read it without the outline.
@@ -223,44 +242,38 @@ $$
 
 The reason we're always talking about intervals of the form $\hat\mu \pm 2 \sigma_{\hat\mu}$ is that, using this approximation, that yields 95% coverage. That is, $P(\abs{Z} < 2 \sigma_{\hat\mu}) \approx .95$. To see why we tend to use normal approximation instead of Markov's inequality, let's see what Markov's inequality tells us about the coverage of this interval.
 
-::: exercise
-\begin{exercise}
+::: { #exr-markov-interval  .callout-exercise}
 We'll start with an abstraction of the problem.
 Suppose $Z$ is a random variable, not necessarily normally distributed, 
 with mean zero and variance $\sigma_Z^2$. What does Markov's inequality tell 
 us about the probability that $P(\abs{Z} \ge t\sigma_Z)$ for $t=2$?
 And how big do we need to make $t$ for it to tell us that $P(\abs{Z} \ge t\sigma_Z)$ is less than .05?
-\end{exercise}
-\begin{solution}
+:::
+::: {.callout-solution}
 It tells us that $P(\abs{Z} \ge t\sigma_Z) \le 1/t^2$. 
 $$
 P(\abs{Z} \ge t\sigma_Z) = P\qty(Z^2 \ge t^2\sigma_Z^2) \le \frac{\E[Z^2]}{t^2\sigma_Z^2} = \frac{\sigma_Z^2}{t^2\sigma_Z^2} = \frac{1}{t^2}
 $$
 Taking $t=2$, this tell us that $P(\abs{Z} \ge 2\sigma_Z) \le 1/4$. And to make this bound $.05$, i.e. $1/20$, we solve $1/t^2=1/20$ for $t$: we get $t=\sqrt{20}\approx `r round(sqrt(20), 1)`$.
-\end{solution}
 :::
 
-::: exercise
-\begin{exercise}
+::: { #exr-markov-interval-practical  .callout-exercise}
 Now let's translate that into practical terms. In a previous exercise, you calculated the mean $\E[\mu]$ and variance $\sigma_{\hat\mu}^2$ of the sample mean $\hat\mu$ when we have a sample of size $n$ drawn with replacement from a population with mean $\mu$ and variance $\sigma^2$. What does Markov's inequality tell us about the coverage probability of the interval $\hat\mu \pm 2\sigma_{\hat\mu}$, i.e., the probability that $\abs{\hat\mu - \mu} < 2\sigma_{\hat\mu}$? And how big do we need to make $t$ for it to tell us that $\hat\mu \pm t\sigma_{\hat\mu}$ has coverage probability .95?
-\end{exercise}
-\begin{solution}
+:::
+::: {.callout-solution}
 It tells us that the first interval has coverage probability at least $1-1/4=.75$ and that, to get an interval for which it implies a coverage probability of at least .95, we need to make $t=\sqrt{20}\approx `r round(sqrt(20), 1)`$. 
 
 I didn't ask for this here, but let me offer an interpretation. Where normality of our estimator's sampling distribution would imply 95\% coverage for the interval $\hat\mu \pm 2\sigma_{\hat\mu}$,  Markov's inequality implies 75\%. Where to get a 95\% interval based on normality we'd use $\hat\mu \pm 2\sigma_{\hat\mu}$, to get a 95\% interval based on Markov's inequality we'd use $\hat\mu \pm `r round(sqrt(20), 1)`\sigma_{\hat\mu}$---an interval over twice as wide. That's why we don't use Markov's inequality for much if we have a better alternative, e.g., if normal approximation is justified or we can use the bootstrap. It's not wrong, but what we can say based on it is more conservative than what we can say based on other techniques.
-\end{solution}
 :::
 
 Finally, let's visualize it in the context of a real dataset. We'll be estimating the mean number of points NBA players scored over the course of a season. As our estimate, we'll us the corresponding mean of a sample of these players---the one in 'nba_sample_1.csv' from Problem Set 1.
 
-::: exercise
-\begin{exercise}
+::: { #exr-bootstrap-interval  .callout-exercise}
 As in Problem Set 1, draw 10,000 samples from the bootstrap sampling distribution of the sample mean $\hat\mu$.
 Make a histogram showing the bootstrap sampling distribution of the sample mean. Then plot three 95\% confidence intervals. The first should be, as in Problem Set 1, based on the width of the bootstrap sampling distribution;
 the second, an interval $\hat\mu \pm 2\hat\sigma_{\mu}$ based on normal approximation where $\hat\sigma_{\mu}$ is the standard deviation of your bootstrap samples; and the third, an interval $\hat\mu \pm t\sigma_{\hat\mu}$ for the appropriate threshold based on Markov's inequality. And give a short, e.g. one-sentence, answer to this question. Why do we usually prefer the intervals based on the bootstrap and normal approximation to the one based on Markov's inequality? 
-\end{exercise}
-\begin{solution}
-
+:::
+::: {.callout-solution}
 ```{r width-code}
 width = function(samples, center=mean(samples), alpha=.05) {
   covg.dif = function(w) { 
@@ -273,8 +286,6 @@ width = function(samples, center=mean(samples), alpha=.05) {
 ```
 
 From bottom to top, we see 95\% intervals calibrated via the bootstrap, normal approximation, and Markov's inequality. We prefer the first two --- as long as they actually do get 95\% coverage, which they will for everything we talk about in this class --- because they're narrower. Markov's inequality is more conservative, i.e., it gives us a wider interval. 
-\end{solution}
-:::
 
 ```{r}
 Y = read.csv('nba_sample_1.csv')$PTS
@@ -296,11 +307,13 @@ ggplot() +
   geom_pointrange(aes(x=muhat, y=.6*height, xmin=muhat-wmarkov/2, xmax=muhat+wmarkov/2))
 ```
 
+:::
+
+
 # Sample Size and Precision
 
 
 ```{r}
-library(scales)
 approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
 our.seed = 0
 width = function(samples, alpha=.05) {
@@ -445,14 +458,13 @@ $$
 
 Now let's think about how we might get a better estimate of the effect of the program. 
 
-::: exercise
-\begin{exercise}
+::: { #exr-sample-size  .callout-exercise}
 The program is over, so we can't *treat* anyone else. $N_1$ is what it is. But we could, conceivably, make a comparison to a larger group of people we *didn't treat*. That is, we could increase $N_0$. Suppose that, when running this study, we actually randomized `r sum(X==1)` people to treatment 
 and $`r sum(X==0)` \times 4 = `r sum(X==0)*4`$ people to control but, to save our interviewers time late in the game, we only followed up with `r sum(X==0)` of the people we randomized to control. That is, suppose that it's possible to make some calls and effectively increase our sample size
 to `r sum(X==0)*4`. Roughly what would the variance of our estimate be then? And how much narrower would the resulting interval be, i.e., what is the ratio of the width of this new interval to the width of the old one based on a control group of `r sum(X==0)` people?
-\end{exercise}
+:::
 
-\begin{solution}
+::: {.callout-solution}
 The variance of our estimate would be roughly this.
 $$
 \hVar[\hat\mu(1) - \hat\mu(0)] = \frac{`r approx(sigma.1^2)`}{`r sum(X==1)`} + \frac{`r approx(sigma.0^2)`}{`r 4*sum(X==0)`} = `r approx(sigma.1^2/sum(X==1))` + `r approx(sigma.0^2/(4*sum(X==0)))` = `r approx(sigma.1^2/sum(X==1) + sigma.0^2/(4*sum(X==0)))` 
@@ -467,5 +479,4 @@ $$
 
 Note that increasing $N_0$ isn't helping that much. That's because the second term in the variance---the one increasing $N_0$ reduces---is smaller than the first term to begin with.
 Reducing it that term---even dramatically---doesn't make that much of a difference overall.
-\end{solution}
 :::

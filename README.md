@@ -1,6 +1,8 @@
 # qtm220
 Materials for QTM220
 
+There is a script, renderhw.sh, in the shared-code directory. If you call it on a .qmd file in the Problem Sets directory, it will render both an assignment version and a solution version to HTML.
+
 # file organization
 
 - Move all lectures into one folder: lectures/Lecturex.qmd
