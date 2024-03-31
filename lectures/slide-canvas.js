@@ -70,13 +70,17 @@ function initializePenSettings() {
   var sizeSlider = sizeSelector.childNodes[0]
   var sizeMarker = sizeSelector.childNodes[1]
   sizeSlider.setAttribute('id', 'size-slider')
+  sizeSlider.setAttribute('name', 'size-slider')
   sizeSlider.setAttribute('min', '5')
   sizeSlider.setAttribute('max', '50')
   sizeSlider.setAttribute('value', '15')
   sizeMarker.setAttribute('id', 'size-marker')
+  sizeMarker.setAttribute('name', 'size-marker')
   sizeSlider.oninput = function() { 
+        sizeMarker.style.left = (this.value-this.min) / (this.max-this.min) * 100 + '%';
         toolsize = this.value; 
   }
+  sizeSlider.oninput()
   hueSelector.parentNode.insertBefore(sizeSelector, hueSelector)
 }
 
@@ -116,17 +120,16 @@ function drawOnCanvas(stroke) {
 }
 
 function eraserOnCanvas (eraserstroke) {
-    var newStrokeHistory = [];
-    strokeHistory.forEach(stroke => {
+    var now = Date.now();
+    strokeHistory.forEach(strokeRecord => {
         var erase = false;
-        stroke.forEach(strokepoint => {
+        strokeRecord.points.forEach(strokepoint => {
             eraserstroke.forEach(eraserpoint => {
                 erase = erase || ((eraserpoint.x - strokepoint.x) ** 2 + (eraserpoint.y - strokepoint.y) ** 2 < toolsize ** 2) 
             })
         })
-        if(!erase) newStrokeHistory.push(stroke);
+        if(erase) strokeRecord.erased = now;
     })
-    strokeHistory = newStrokeHistory;
     redraw();
 }
 
@@ -168,18 +171,23 @@ function undoDraw () {
   redraw();
 }
 
-function redraw() {
+function redraw(time) {
+  if(time === undefined) 
+    time = Date.now()
+  
   context.clearRect(0, 0, canvas.width, canvas.height)
-
-  strokeHistory.map(function (stroke) {
-    if (stroke.length > 1) {
-        context.beginPath()
-        let strokePath = [];
-        stroke.map(function (point) {
-            strokePath.push(point)
-            penOnCanvas(strokePath)
-        })
-    }
+  strokeHistory.map(function (strokeRecord) {
+    let stroke = strokeRecord.points;
+    if(strokeRecord.drawn <= time && 
+       (strokeRecord.erased === null || time < strokeRecord.erased) && 
+       stroke.length > 1) {
+          context.beginPath()
+          let strokePath = [];
+          stroke.map(function (point) {
+              strokePath.push(point)
+              penOnCanvas(strokePath)
+          })
+        }
   })
 }
 
@@ -262,7 +270,11 @@ for (const ev of ['touchend', 'touchleave', 'mouseup']) {
 
     isMousedown = false
     if(tool==='pen') {
-        requestIdleCallback(function () { strokeHistory.push([...points]); points = []})
+        strokeRecord = { points: [...points], drawn: Date.now(), erased: null }
+        requestIdleCallback(function () { 
+          strokeHistory.push(strokeRecord);
+          points = []
+        })
     }
     if(tool==='eraser') { points = []; }
     lineWidth = 0
