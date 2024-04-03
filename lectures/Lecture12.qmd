@@ -1,8 +1,11 @@
 ---
-title: "QTM 220: Lecture 12"
-subtitle: "Causal Inference with a Multivalued Treatment"
+title: "QTM 220 Lecture 12"
+subtitle: "Adjustment and Causalilty"
 format: 
   clean-revealjs:
+    controls: true
+    controls-layout: bottom-right
+    embed-resources: true
     height: 1000
     width: 1290
     theme: [default, "class.scss"]
@@ -10,15 +13,18 @@ format:
     slide-number: true
     pdf-separate-fragments: true
     fig-format: svg
+    default-image-extension: png
     html-math-method: mathjax
     include-in-header: 
       text: |
+        <link rel="stylesheet" href="Coloris/src/coloris.css"></script>
+        <script src="Coloris/src/coloris.js"></script>
+        <script src="slide-canvas.js"></script>
         <script>
           window.MathJax = {
           loader: {load: ['[tex]/physics']},
           tex: {packages: {'[+]': ['physics']}}
           }
-    
         </script>
 knitr:
   opts_chunk:
@@ -27,838 +33,384 @@ knitr:
       bg: transparent
 ---
 
+## Income Inequality in California
 
-```{r load-libraries}
-library(purrr)
-library(tibble)
-library(dplyr)
-library(magrittr)
-library(stringr)
-library(ggplot2)
-library(htmltools)
-library(kableExtra)
-library(scales)
-
-percent = label_percent(accuracy=1)
-approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
-```
-
-```{r ggplot-themes}
-fontsize = 16
-textcolor = "#888888"
-
-class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
-        panel.background = element_rect(fill = "transparent", colour = NA),
-                    legend.background = element_rect(fill="transparent", colour = NA),
-                    legend.box.background = element_rect(fill="transparent", colour = NA),
-                    legend.key = element_rect(fill="transparent", colour = NA),
-        axis.ticks.x = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.x  = element_text(colour = textcolor, size=fontsize),
-        axis.text.y  = element_text(colour = textcolor, size=fontsize),
-        axis.title.x  = element_text(colour = textcolor),
-        axis.title.y  = element_text(colour = textcolor, angle=90)
-)
-
-theme_set(class.theme)
-theme_update(axis.title.x  = element_blank(),
-             axis.title.y  = element_blank())
-simplified.theme = theme_get()
-
-theme_update(axis.text.x   = element_blank(), 
-              axis.text.y   = element_blank())
-blank.theme = theme_get()
-
-theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
-           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
-grid.theme = theme_get()
-
-theme_set(simplified.theme)
-```
-
-
-```{r table-styling}
-ellipsis <- function(df, nhead=5L, ntail=2) {
-    rownames(df) = as.character(1:nrow(df))
-    stopifnot("data.frame" %in% class(df))
-    els <- rep(NA, ncol(df)) %>% 
-        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
-        data.frame(stringsAsFactors=FALSE) %>% 
-        tibble::as_tibble()
-    rownames(els) = "⋮"
-    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
-}
-```
-
-
-## Today
-
-::: {.hidden}
-$$
-\newcommand{\alert}[1]{\textcolor{red}{#1}}
-\DeclareMathOperator{\E}{E}
-\DeclareMathOperator{\V}{V}
-\DeclareMathOperator{\Var}{\V}
-\newcommand{\inred}[1]{\textcolor{red}{#1}}
-\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
-$$ 
-:::
-
-- We're going to talk about causal inference with a multivalued treatment.
-- Our context will be a randomized experiment with three treatments.
-- A large employer is experimenting with a new benefit for their employees: subsized gym memberships.
-- They're randomly selecting employees to participate in a trial program.
-- Then randomizing these participants into three plans.
-  - Plan 1: No gym membership. It costs them \$0/month.
-  - Plan 2: A gym membership that covers entry but not classes. It costs \$50/month.
-  - Plan 3: A gym membership that covers entry but and classes. It costs \$100/month.
-- And surveying them to see how often they go to the gym, e.g. in days/month.
-- They'll be able to use this information to decide what plan to offer everyone next year.
-
-## How We Think
-
-- We'll think about this using potential outcomes.
-- We imagine, for each employee, that there's a number of times they'd go to the gym given each plan.
-  - $y_j(0)$: The number of days/month they'd go to the gym if they had no membership.
-  - $y_j(50)$: The number of days/month they'd go to the gym if they had a \$50 membership.
-  - $y_j(100)$: The number of days/month they'd go to the gym if they had a \$100 membership.
-- And we'll think about the effect of each plan on each employee.
-  - $\tau_j(50)  = y_j(50)  - y_j(0)$: The effect of a \$50 gym membership vs none.
-  - $\tau_j(100) = y_j(100) - y_j(50)$: The effect of a \$100 gym membership vs \$50.
-
-$$
-\small{
-\begin{array}{c|ccc|cc}
-j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
-1 & 5  & 10 & 10 & 5 & 0 \\
-2 & 10 & 10 & 10 & 0 & 0 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-327 & 0 & 0  &  20 & 0 & 20 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-358 & 15 & 18 & 20 & 3 & 2 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-m & 10 & 10 & 5  & 0 & -5 \\
-\end{array}
-}
-$$
-
-## What We Want To Know
-
-- What we want to know is the population-level average treatment effect.
-  - i.e. the average increase in monthly gym visits if we offered these plans to every employee.
-
-$$
-\small{
-\begin{aligned}
-\tau(50)  &= \frac{1}{m} \sum_{j=1}^m \tau_j(50)  && \quad \text{this is the first increment---the effect of \$50 vs. \$0} \\
-\tau(100) &= \frac{1}{m} \sum_{j=1}^m \tau_j(100) && \quad \text{this is the second increment---the effect of \$100 vs. \$50} \\
-\end{aligned}
-}
-$$
-
-- What's hard about this?
-  - *Sampling*. We only observe information about a fraction of these people.
-  - *Missing Data*. For that fraction, we only observe one of the potential outcomes.
-
-
-$$
-\small{
-\begin{array}{c|ccc|cc}
-j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
-\color{gray}1 & \color{gray}5  & \color{gray}10 & \color{gray}10 & \color{gray}5 & \color{gray}0 \\
-2 & 10 & \color{gray}10 & \color{gray}10 & \color{gray}0 & \color{gray}0 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-327 & \color{gray}0 & \color{gray}0  &  20 & \color{gray}0 & \color{gray}20 \\
-\color{gray}\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-358 & \color{gray}15 & 18 & \color{gray}20 & \color{gray}3 & \color{gray}2 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{gray}m & \color{gray}10 & \color{gray}10 & \color{gray}5  & \color{gray}0 & \color{gray}-5 \\
-\end{array}
-}
-$$
-
-## Sampling
-
-:::: columns
-::: column
-### Our Population 
-$$
-\small{
-\begin{array}{c|ccc|cc}
-j & y_j(0) & y_j(50) & y_j(100) & \tau_j(50) & \tau_j(100) \\
-\color{gray} 1 & \color{gray}5  & \color{gray}10 & \color{gray}10 & \color{gray}5 & \color{gray}0 \\ 
-\color{blue}2 & \color{blue}10 & \color{blue}10 & \color{blue}10 & \color{blue}0 & \color{blue}0 \\
-\vdots & \vdots  & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}327 & \color{purple}15 & \color{purple}18 & \color{purple}20 & \color{purple}3 & \color{purple}2 \\
-\vdots & \vdots  & \vdots & \vdots & \vdots & \vdots \\
-\color{green}358 & \color{green}0 & \color{green}0  &  \color{green}20 & \color{green}0 & \color{green}20 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{gray}m & \color{gray}10 & \color{gray}10 & \color{gray}5  & \color{gray}0 & \color{gray}-5 \\
-\end{array}
-}
-$$
-
-:::
-::: column
-### Our Sample
-$$
-\small{
-\begin{array}{c|ccc|cc}
-i &  Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
-\color{blue}1 & \color{blue}10 & \color{blue}10 & \color{blue}10 & \color{blue}0 & \color{blue}0 \\
-\color{green}2 & \color{green}0 & \color{green}0  &  \color{green}20 & \color{green}0 & \color{green}20 \\
-\vdots & \vdots  & \vdots & \vdots & \vdots \\
-\color{purple}n & \color{purple}15 & \color{purple}18 & \color{purple}20 & \color{purple}3 & \color{purple}2 \\
-\end{array}
-}
-$$
-
-:::
-::::
-
-- We don't want to trouble all of our employees with a survey, so we sample a subset of them.
-- Each employee in our sample is drawn, with replacement, from our population of employees---all $m$ of them.
-- That means each row of our *sample table* is a random row from our *population table*.
-  - I've colored them so we can track them from population into the sample.
-
-## Missing Data
-
-- We assign a treatment to each sampled employee.
-  - That tells us which potential outcome we observe.
-  - It's the one corresponding to the treatment that actually happens: $Y_i=Y_i(D_i)$.
-
-$$
-\small{
-\begin{array}{c|cc|ccc|cc}
-i & D_i & Y_i   & Y_i(0) & Y_i(50) & Y_i(100) & \tau_i(50) & \tau_i(100) \\
-\color{blue}1   &  \color{blue}0 & \color{blue}10 & \color{blue}10 & \color{gray}10 &  \color{gray}10 &  \color{gray}0 &  \color{gray}0 \\
-\color{green}2  &  \color{green}100& \color{green} 20 &  \color{gray}0  &  \color{gray}0  &  \color{green}20 &  \color{gray}0 &  \color{gray}20 \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{purple}n &  \color{purple}50& \color{purple}18  & \color{gray}15 &  \color{purple}18 &  \color{gray}20 &  \color{gray}3 &  \color{gray}2 \\
-\end{array}
-}
-$$
-
-- We'll do this *randomly*, e.g. by rolling a die. In effect, this is just *another sampling step*.
-- Think of the group that receives each treatment as being drawn from our population by a two-stage process.
-  - First, roll an $m$-sided die to choose a row from our population table *to consider*.
-  - Then, roll a 3-sided die to decide whether we're included in the subsample with $D_i=d$.
-
-
-:::: columns
-::: {.column width="30%"}
-$$
-\small{
-\begin{array}{c|cc}
-i & D_i & Y_i    \\
-\color{blue}1   &  \color{blue}0 & \color{blue}10 \\
-\vdots & 0 & \vdots  \\
-\end{array}
-}
-$$
-:::
-::: {.column width="30%"}
-$$
-\small{
-\begin{array}{c|cc}
-i & D_i & Y_i    \\
-\vdots & 50 & \vdots \\
-\color{purple}n &  \color{purple}50& \color{purple}18 \\
-\end{array}
-}
-$$
-:::
-::: {.column width="30%"}
-$$
-\small{
-\begin{array}{c|cc}
-i & D_i & Y_i    \\
-\vdots & 100 & \vdots \\
-\color{green}2  &  \color{green}100& \color{green} 20  \\
-\end{array}
-}
-$$
-:::
-::::
-
-
-
-## Getting By With What We Have
-
-
-- If we had all the potential outcomes... 
-- We could approximate a population-level average treatment effect by a sample average.
-
-$$
-\small{
-\frac{1}{m} \sum_{j=1}^m y_j(50) - y_j(0) \approx \frac{1}{n} \sum_{i=1}^n Y_i(50) - Y_i(0) 
-}
-$$
-
-- This works because of the law of large numbers. Sample averages approximate population averages.
-- By the same logic, we can do the same using *each treatment group*. 
-- When we randomize, these are random samples from the population, too.
-
-$$
-\small{
-\frac{1}{m} \sum_{j=1}^m y_j(50) - y_j(0) \approx \frac{1}{N_d} \sum_{i:D_i=d}^n Y_i(50) - Y_i(0) = \frac{1}{N_d} \sum_{i:D_i=d} Y_i(50) - \frac{1}{N_d}\sum_{i:D_i=d} Y_i(0)
-}
-$$ 
-
-- This still isn't something we can use. We don't have all the potential outcomes. But it just takes one tweak. 
-- We use *different subsamples* to approximate the averages of diferent potential outcomes. 
-- In particular, we use the subsample in which that potential outcome is observed.
-
-$$
-\small{
-\frac{1}{m} \sum_{j=1}^m y_j(50) - y_j(0) \approx \frac{1}{N_d} \sum_{i:D_i=50} Y_i(50) - \frac{1}{N_0}\sum_{i:D_i=0} Y_i(0)  = \frac{1}{N_d} \sum_{i:D_i=50} Y_i - \frac{1}{N_0}\sum_{i:D_i=0} Y_i
-}
-$$
-
-
-## Formal Identification
-
-- Here, in formal language, is the crux of this argument. As a result of sampling and randomization, ...
-- Subsample averages of realized outcomes are *unbiased and consistent* estimators of population averages of potential outcomes.
-- That's because *randomized assignment* ensures that the treatment $D_i$ is *independent* of the potential outcomes.
-
-$$
-\small{
-\begin{aligned}
-\frac{1}{m}\sum_j y_j(d) 
-  &= \E[Y_i(d)]            && \text{sampling} \\
-  &= \E[Y_i(d) \mid D_i=d] && \text{irrelevance of independent conditioning variables} \\
-  &= \E[Y_i \mid D_i=d]=\mu(d)    && \text{$Y_i(d)=Y_i$ \ when \ $D_i=d$ } \\
-&\approx \hat\mu(d) = \frac{1}{N_d}\sum_{i:D_i=d} Y_i && \text{law of large numbers}
-\end{aligned}
-}
-$$
-
-- If we can express what we want to estimate as a linear combination of potential outcome means...
-- This means we can *rewrite it* as a linear combination of *subpopulation means*.
-
-$$
-\small{
-\begin{aligned}
-\tau(50) &= \frac{1}{m}\sum_j y_j(50) - y_j(0) = \mu(50) - \mu(0) \\
-\tau(100) &= \frac{1}{m}\sum_j y_j(100) - y_j(50) = \mu(100) - \mu(50) \\
-&\frac{1}{m}\sum_j \alpha(100)y_j(100) + \alpha(50)y_j(50) + \alpha(0)y_j(0) = \alpha(100)\mu(100) + \alpha(50)\mu(50) + \alpha(0)\mu(0) \\
-\end{aligned}
-}
-$$
-
-## Where This Leaves Us
-
-$$
-\small{
-\begin{aligned}
-\tau(50) &= \frac{1}{m}\sum_j y_j(50) - y_j(0) = \mu(50) - \mu(0) \\
-\tau(100) &= \frac{1}{m}\sum_j y_j(100) - y_j(50) = \mu(100) - \mu(50) \\
-&\frac{1}{m}\sum_j \alpha(100)y_j(100) + \alpha(50)y_j(50) + \alpha(0)y_j(0) = \alpha(100)\mu(100) + \alpha(50)\mu(50) + \alpha(0)\mu(0) \\
-\end{aligned}
-}
-$$
-
-- Once we've done this, we can put away our causal thinking.
-- We know, in terms of the distribution of our observations ($D_i,Y_i$), what we want to estimate.
-- And there's nothing especially causal about that. We can just use the techniques we've already learned.
-
-
-## Today's Focus
-```{r}
-#| out-height: 300px
-#| fig-asp: .3 
-set.seed(3)
-
-# Sampling 250 employees. Our population is an even mix of ...
-#   'blue guys', who go 1/4 days no matter what
-#   'green guys', who go more if it's free but --- unlike the ones in our table earlier --- don't care about classes
-
-n=250
-is.blue = rbinom(n,1, 1/2)
-Yblue   = rbinom(n, 30, 1/4) 
-Ygreen0 = rbinom(n, 30, 1/10)
-Ygreen50 = rbinom(n, 30, 1/5)
-
-Y0   = ifelse(is.blue, Yblue, Ygreen0)
-Y50  = ifelse(is.blue, Yblue, Ygreen50)
-Y100 = Y50   ### <--- this tells us we've got no effect.
-
-# Randomizing by rolling two dice. R is their sum
-R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
-D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
-Y = case_match(D, 0~Y0, 50~Y50, 100~Y100)
-
-# Randomizing by rolling two dice. R is their sum
-R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
-D = case_match(R,
-  1:6~0,
-  7:10~50,
-  11:12~100)
-Y = case_match(D,
-  0~Y0,
-  50~Y50,
-  100~Y100)
-
-real.data = tibble(D=D, Y=Y)
-summaries = tibble(D=D, Y=Y) %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
-
-scatter = ggplot() + geom_point(aes(x=D, y=Y), color="red", data=tibble(D=D,Y=Y),
-                                     position=position_jitter(w=10,h=0), alpha=.3) +
-           geom_pointrange(aes(x=D, y=mean, ymin=mean-2*sd, ymax=mean+2*sd), data=summaries) +
-           scale_x_continuous(breaks=c(0,50,100)) + labs(x="D", y="Y") + ylim(-3,15)
-scatter
-``` 
-
-- Let's talk about estimating $\tau(100)$, the effect of a \$100 gym membership vs. a \$50 membership.
-  - We really don't want to spend \$100/month if we don't have to.
-  - So we're hoping it's not much better than spending \$50/month.
-- The statistical challenge is we've leaned into that preference in our experiment too.
-- We've designed our experiment so not many people are in the \$100 group.
-- In particular, for each employee in our sample, we're rolling two dice
-  - If the sum is 11 or 12, they get the \$100 plan.
-  - If the sum if 7,8,9, or 10, they get the \$50 plan.
-  - If the sum is 1-6, they get the \$0 plan.
-
-## We Know How To Do This
-```{r}
-#| out-height: 300px
-#| fig-asp: .3 
-point.estimate = summaries$mean[summaries$D==100] - summaries$mean[summaries$D==50]
-scatter
-``` 
-
-$$
-\tau(100) = \mu(100) - \mu(50)
-$$
-
-- We can use a simple difference in subsample means as a point estimate.
-
-$$
-\hat\tau(100) = \hat\mu(100) - \hat\mu(50) = `r approx(summaries$mean[summaries$D==100])` - `r approx(summaries$mean[summaries$D==50])` \approx `r approx(point.estimate)`
-$$
-
-- And we can use an estimate of its sampling distribution to calibrate an interval estimate.
+{{< include shared-code.qmd >}}
+{{< include ca-income.qmd >}}
 
 ```{r}
-data = tibble(D=D, Y=Y)
-boot.distn = function(data, B=1000) { 
-  rows = purrr::map(1:B, function(i) {
-    data.boot = data[sample(1:nrow(data), replace=TRUE),]
-    summaries.boot = data.boot %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
-    model = lm(Y ~ D, data=data.boot)
-    muhat = predict(model, newdata=data.frame(D=c(0,50,100)))
-
-    tauhat.dif = mean(data.boot$Y[data.boot$D==100]) - mean(data.boot$Y[data.boot$D==50]) 
-    tauhat.slope = muhat[3]-muhat[2]
-    data.frame(dif=tauhat.dif, slope=tauhat.slope)
-  })
-  rows %>% bind_rows() 
-}
-boots = boot.distn(data)
+filtered = \(rows) rows[rows$income < 5e5 & rows$race %in% c('White only', 'Black only'),]
+  
+pop = pop.earnings |> filtered()
+sam = earnings |> filtered()
 ```
 
-```{r plotting-code}
-width = function(samples, center=mean(samples), alpha=.05) {
-  covg.dif = function(w) { 
-    actual = mean( center - w/2 <= samples & samples <= center + w/2)
-    nominal = 1-alpha 
-    actual - nominal  
-  }
-  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-center))))$root
+```{r}
+xco = function(w,x) {
+  w=as.numeric(w)
+  x + .15*(2*w-1)
 }
 
-distribution.plot = function(boot.samples, point.estimate, w=width(boot.samples), interval.replications=0, point.replications=0) { 
-  drange = c(0, dnorm(0, mean=0, sd=sd(boot.samples)))
-  p = ggplot(data.frame(samples=boot.samples)) + 
-    geom_histogram(aes(x=samples, y=after_stat(density)), alpha=.3, bins=50)  +
-    geom_pointrange(aes(y=dnorm(2*sd(samples), mean=0, sd=sd(samples)), 
-      x=point.estimate, xmin=point.estimate - w/2, xmax=point.estimate + w/2)) + 
-      geom_vline(xintercept=mean(boot.samples), color='blue') + 
-      geom_vline(xintercept=quantile(boot.samples, c(.025,.975)), color='blue', linetype='dotted') 
-  if(interval.replications > 0) { 
-    K = interval.replications
-    p = p + geom_pointrange(aes(y=y, x=x, xmin=xmin, xmax=xmax), 
-          data=data.frame(y=seq(min(drange), max(drange), length.out=K), 
-                  x=boot.samples[1:K], xmin=boot.samples[1:K] - w/2, xmax=boot.samples[1:K] + w/2), color='purple', alpha=.2)
-  }
-  if(point.replications > 0) { 
-    K = point.replications
-    p = p + geom_point(aes(y=y, x=x), 
-          data=data.frame(y=seq(min(drange), max(drange), length.out=K), 
-                  x=boot.samples[1:K], xmin=boot.samples[1:K] - w/2, xmax=boot.samples[1:K] + w/2), color='purple', alpha=.2)
-  }
-  p
+sam.dot = list(size=1,    alpha=.3)
+pop.dot = list(size=.25,    alpha=.05)
+
+scatter.by.race = function(rows, 
+                           dot=sam.dot,
+                           width=sd) { 
+  ggplot(rows[rows$race %in% c('Black only', 'White only'), ]) + 
+    geom_point(aes(x=xco(race=='White only',education), y=income, color=race), 
+               size=dot$size, position=position_jitter(seed=0,w=.15), alpha=dot$alpha) + 
+    stat_summary(aes(x=xco(race=='White only',education), y=income, color=race), geom="pointrange", alpha=.7,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - width(x), 
+                 fun.max = function(x) mean(x) + width(x))  +
+    scale_x() + scale_y() + guides(color='none')
 }
 ```
 
 ```{r}
-#| out-height: 250px
-#| fig.asp: .25
-#| layout-ncol: 2
+#| out-height: 350px
+#| fig-asp: .4
 
-se = sqrt( var(Y[D==100])/sum(D==100) + var(Y[D==50])/sum(D==50) )
-x = seq(point.estimate-4*se, point.estimate+4*se, length.out=1000)
-normal.distribution.plot = ggplot() + 
-    geom_area(aes(x=x, y=dnorm(x, mean=point.estimate, sd=se)), color='purple', fill='purple', alpha=.08) +
-    geom_vline(aes(xintercept=point.estimate), color='purple', linetype='solid') +
-    geom_vline(aes(xintercept=point.estimate + c(-1,1)*1.96*se), color='purple', linetype='dotted') +
-    geom_pointrange(aes(y=dnorm(2*se, mean=0, sd=se), x=point.estimate, xmin=point.estimate - 1.96*se, xmax=point.estimate + 1.96*se))
+W = as.numeric(sam$race == 'White only')
+X = sam$education
+Y = sam$income 
+muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
 
-distribution.plot(boots$dif, point.estimate) + xlim(min(x), max(x))
-normal.distribution.plot + xlim(min(x), max(x))
-``` 
-
-## But We're Not Happy With Our Precision
-```{r}
-#| out-height: 250px
-#| fig.asp: .25
-normal.distribution.plot + xlim(min(x), max(x))
-``` 
-
-- It's worth it to spend the extra money if it gets us at least 1 day/month for the average employee.
-  - And we can't rule that out.
-  - But we can't 'rule it in' either. 
-- We just don't have compelling evidence in one direction or the other.
-- So let's look at why that is. What did we do wrong when designing this experiment? 
-
-
-## Variance
-```{r}
-#| out-height: 250px
-#| fig.asp: .25
-normal.distribution.plot + xlim(min(x), max(x))
-``` 
-
-- Let's calculate the variance of our point estimate to see where the problem is.
-$$
-\Var\qty[\sum_d \alpha(d) \hat\mu(d)]  = \sum_d \sigma^2(d) \alpha^2(d) \times \E\qty[ \frac{1}{N_d} ]
-$$
-
-- We can use this table.
-
-$$
-\begin{array}{c|ccc}
-d & 0 & 50 & 100 \\
-\hline
-\hat\sigma^2(d) & `r approx(var(Y[D==0]))` & `r approx(var(Y[D==50]))` & `r approx(var(Y[D==100]))` \\
-\alpha^2(d) &  &  &  \\
-N_d & `r approx(sum(D==0))` & `r approx(sum(D==50))` & `r approx(sum(D==100))` \\
-\frac{\hat\sigma^2(d) \alpha^2(d)}{N_d} &  &  &  \\
-\end{array}
-$$
-
-- What do you see?
-
-## Variance
-```{r}
-#| out-height: 250px
-#| fig.asp: .25
-normal.distribution.plot + xlim(min(x), max(x))
-``` 
-
-
-$$
-\begin{array}{c|ccc}
-d & 0 & 50 & 100 \\
-\hline
-\hat\sigma^2(d) & `r approx(var(Y[D==0]))` & `r approx(var(Y[D==50]))` & `r approx(var(Y[D==100]))` \\
-\alpha^2(d) & 0 & 1 & 1 \\
-N_d & `r approx(sum(D==0))` & `r approx(sum(D==50))` & `r approx(sum(D==100))` \\
-\frac{\hat\sigma^2(d) \alpha^2(d)}{N_d} & 0 & `r approx(var(Y[D==50])/sum(D==50))` & `r approx(var(Y[D==100])/sum(D==100))` \\
-\end{array}
-$$
-
-- What I see is that we don't have enough people randomized to the $D=100$ treatment.
-  - The variance we get from just that one term is $`r approx(var(Y[D==100])/sum(D==100))`$.
-  - Meaning the contribution to our standard error is 
-  $\sqrt{`r approx(var(Y[D==100])/sum(D==100))`} \approx `r approx(sqrt(var(Y[D==100])/sum(D==100)))`$ 
-  - And since we multiply standard error by 1.96 to get an 'arm' for our interval ...
-  - This ensures our arms are at least $1.96 \times `r approx(sqrt(var(Y[D==100])/sum(D==100)))`  \approx `r approx(1.96*sqrt(var(Y[D==100])/sum(D==100)))`$ days wide.
-
-## If We Could Do It Again
-```{r}
-#| out-height: 300px
-#| fig-asp: .3 
-
-n = 250
-D = sample(c(50,100), size=n, replace=TRUE) 
-Y = case_match(D,
-  0~Y0,
-  50~Y50,
-  100~Y100)
-
-summaries.new = tibble(D=D, Y=Y) %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
-point.estimate = summaries.new$mean[summaries.new$D==100] - summaries.new$mean[summaries.new$D==50]
-
-scatter.new = ggplot() + geom_point(aes(x=D, y=Y), color="red", data=tibble(D=D,Y=Y),
-                                     position=position_jitter(w=10,h=0), alpha=.3) +
-           geom_pointrange(aes(x=D, y=mean, ymin=mean-2*sd, ymax=mean+2*sd), data=summaries) +
-           scale_x_continuous(breaks=c(0,50,100)) + labs(x="D", y="Y") + ylim(-3,15)
-scatter.new
+a = \(x) approx(x, .01)
+scatter.by.race(sam)
 ```
 
-- We'd assign more people to the $D=100$ treament to get a more precise estimate.
-- Here's what we'd get if we assigned people to each of our 2 *relevant* treatments with probability $1/2$.
-- This does what we need it to do: it gives us a confidence interval that to the left of $1$.
+- Let's take a look at at income ($y$) broken down in terms of two variables.
+  1. Education ($x$), in years of schooling, is indicated by column in the plot.
+  2. Race ($w$) is indicated by color in the plot.  [$w=0$ for Black people]{.twocolor-red}  and [$w=1$ for white people]{.twocolor-green} in our sample.
+- To keep things simple, we'll look at the subset of CPS recipients who identify as either [Black only]{.twocolor-red} or [white only]{.twocolor-green}.
+- At most education levels, the [white people]{.twocolor-green} in our sample make more money than the [Black people]{.twocolor-red}.
+- We know that's a thing. If we want, we can report a summary or two.
+
+
+$$
+\begin{array}{lll}
+\text{raw income gap} \quad & \quad \text{adjusted income gap} & \\
+\displaystyle \hat \Delta = \ingreen{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} 
+\quad& \displaystyle \hat \tau = \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \inred{Y_i}
+\quad& \text{symbolically} \\
+        `{r} approx(mean(Y[W==1]) - mean(Y[W==0]), .01)`  
+        = \ingreen{`{r} a(mean(Y[W==1]))`} - \inred{`{r} a(mean(Y[W==0]))`}   
+\quad&  `{r} a(mean(muhat(1, X[W==0]) - muhat(0, X[W==0])))` 
+       = \ingreen{`{r} a(mean(muhat(1, X[W==0])))`} - \inred{`{r} a(mean(muhat(0, X[W==0])))`}   
+\quad& \text{numerically}
+\end{array} 
+$$
+
+
+## Statistical Inference
 
 ```{r}
-boots.ifwecould = boot.distn(tibble(D=D, Y=Y))
+W = as.numeric(sam$race == 'White only')
+X = sam$education
+Y = sam$income 
+muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
+the.adjusted.gap = mean(muhat(1, X[W==0]) - mean(muhat(0, X[W==0])))
+the.raw.gap = mean(Y[W==1]) - mean(Y[W==0])
+
+adjusted.gap = \(people) people |> group_by(education, race) |> 
+                    summarize(muhat=mean(income), N=n(), .groups='drop') |> 
+                  group_by(race) |>
+                    mutate(P = N/sum(N)) |>
+                   group_by(education) |>
+                    group_map(\(s,e) s$P[s$race=='Black only'] * 
+                    (s$muhat[s$race=='White only'] - s$muhat[s$race=='Black only'])) |>
+                  unlist() |> sum()
+raw.gap = \(people) mean(people$income[people$race=='White only']) - 
+                    mean(people$income[people$race=='Black only'])
+                    
+stopifnot(abs(the.adjusted.gap - adjusted.gap(sam)) < 1e-6)
+stopifnot(abs(the.raw.gap - raw.gap(sam)) < 1e-6)
+
+set.seed(0)
+B = 200
+bootstrap.gaps = \(sam) 1:B |> map(\(B) {
+  bootsam = sam[sample(1:nrow(sam), replace=TRUE), ]
+  list(raw=raw.gap(bootsam), adjusted=adjusted.gap(bootsam))
+}) |> bind_rows()
 ```
 
 ```{r}
-#| out-height: 250px
-#| fig.asp: .25
-#| layout-ncol: 2
-
-se = sqrt( var(Y[D==100])/sum(D==100) + var(Y[D==50])/sum(D==50) )
-x = seq(point.estimate-4*se, point.estimate+4*se, length.out=1000)
-normal.distribution.plot = ggplot() + 
-    geom_area(aes(x=x, y=dnorm(x, mean=point.estimate, sd=se)), color='purple', fill='purple', alpha=.08) +
-    geom_vline(aes(xintercept=point.estimate), color='purple', linetype='solid') +
-    geom_vline(aes(xintercept=point.estimate + c(-1,1)*1.96*se), color='purple', linetype='dotted') +
-    geom_pointrange(aes(y=dnorm(2*se, mean=0, sd=se), x=point.estimate, xmin=point.estimate - 1.96*se, xmax=point.estimate + 1.96*se))
-
-distribution.plot(boots.ifwecould$dif, point.estimate) + xlim(min(x), max(x))
-normal.distribution.plot + xlim(min(x), max(x))
-``` 
-
-## But We Can't
-
-```{r}
-#| out-height: 300px
-#| fig-asp: .3 
-
-model=lm(Y ~ D, data=real.data)
-mu.hat = predict(model, newdata=data.frame(D=c(0,50,100)))
-slope.point.estimate = mu.hat[3]-mu.hat[2]
-
-scatter + geom_line(aes(x=c(0,50,100), y=mu.hat), color='blue', linetype='dashed')
+#| cache: true
+ca.bootstrap.gaps = bootstrap.gaps(sam)
 ```
 
-- This is our data. We have to do what we can. So we get clever.
-- Instead of estimating each subpopulation mean separately, we *fit a line* to the data.
-- We take $\hat\mu(d)$ to be the height of the line at $d$ and $\hat\tau(d)=\hat\mu(100)-\hat\mu(50)$ as before.
-- And when we bootstrap it ... 
-  - We get a much narrower interval than the one we had before.
-  - But it's not in the same place at all.
-
-
 ```{r}
-#| out-height: 250px
-#| fig.asp: .25
+#| out-height: 350px
+#| fig-asp: .5
 #| layout-ncol: 2 
-#| fig-subcap:
-#|   - "Difference in Sample Means Sampling Dist"
-#|   - "Fitted-Line-Based Sampling Dist" 
-
-real.point.estimate = mean(real.data$Y[real.data$D==100]) - mean(real.data$Y[real.data$D==50])
-x = seq(slope.point.estimate-7*se, slope.point.estimate+7*se, length.out=1000)
-distribution.plot(boots$dif,   real.point.estimate) + xlim(min(x), max(x)) 
-distribution.plot(boots$slope, slope.point.estimate) + xlim(min(x), max(x))
+#| fig-cap: 
+#|  - "Sample"
+#|  - "Imagined Population" 
+scatter.by.race(sam)
+scatter.by.race(pop, dot=pop.dot)
 ```
 
-## What's Going On?
+- As usual, we can interpret these sample summaries as estimates of corresponding population summaries. 
+- And we can construct 95% confidence intervals as usual---by bootstrapping. Nothing new here.
+- What I want to talk about today is what these summaries mean and how they differ.
+  - Incidentally, in California the raw and adjusted gaps are very similar.
+  - But they are conceptually different and can be very different elsewhere. Let's look at Georgia.
 
+$$
+\begin{array}{lll}
+\text{raw income gap} \quad & \quad \text{adjusted income gap} & \\
+\displaystyle \hat \Delta = \ingreen{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} 
+\quad& \displaystyle \hat \tau = \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \inred{Y_i}
+\quad& \text{in sample} \\
+\displaystyle \Delta = \ingreen{\frac{1}{m_1}\sum_{j:w_j=1} y_j} - \inred{\frac{1}{m_0}\sum_{j:w_j=0} y_j} 
+\quad&\displaystyle \tau = \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \ingreen{\mu(1, x_j)} - \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \inred{y_j}
+\quad& \text{in population} \\
+        `{r} a(mean(Y[W==1]) - mean(Y[W==0]))` \pm `r a(2*sd(ca.bootstrap.gaps$raw))`
+\quad&  `{r} a(mean(muhat(1, X[W==0]) - muhat(0, X[W==0])))` \pm `r a(2*sd(ca.bootstrap.gaps$adjusted))` 
+\quad& \text{in 95\% of surveys}
+\end{array} 
+$$
+
+
+## Income Inequality in Georgia 
 ```{r}
-#| out-height: 300px
-#| fig-asp: .3 
-
-scatter + geom_line(aes(x=c(0,50,100), y=mu.hat), color='blue', linetype='dashed') + 
-  coord_cartesian(ylim=range(summaries$mean) + .5*c(-1,+1))
+#| cache: true
+georgia.state.code = 13
+ga.sam = income(georgia.state.code)$sample
+ga.bootstrap.gaps = bootstrap.gaps(ga.sam)
 ```
 
-- Let's zoom in. It looks like our like our blue line ...
-  - *overestimates* $\mu(100)$
-  - *underestimates* $\mu(50)$
-  - therefore *overestimates* $\tau(100)=\mu(100)-\mu(50)$.
-- That's what it looks like when we compare to the subsample means, anyway.
-- And that's why we get a bigger estimate than we did *using* the subsample means.
-- It looks like---although we haven't done the calculation---this line-based estimator is *biased*.
-
-## Implications
 ```{r}
-#| out-height: 250px
-#| fig.asp: .25
+#| out-height: 350px
+#| fig-asp: .4
+scatter.by.race(ga.sam)
+```
+
+- In Georgia, they're different. What are these two summaries?
+  1. **Raw**. How much more the average white person makes than the average Black person.
+  2. **Adjusted**. How much more, *for the average Black person*, a similarly-educated white person tends to make.
+- The adjusted gap explains *part of* the raw gap. But not all of it.
+- What's left over is, conceptually, about differences in the distribution of education.
+
+$$
+\begin{array}{lll}
+\text{raw income gap} \quad & \quad \text{adjusted income gap} & \\
+\displaystyle \hat \Delta = \ingreen{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} 
+\quad& \displaystyle \hat \tau = \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \inred{Y_i}
+\quad& \text{in sample} \\
+\displaystyle \Delta = \ingreen{\frac{1}{m_1}\sum_{j:w_j=1} y_j} - \inred{\frac{1}{m_0}\sum_{j:w_j=0} y_j} 
+\quad&\displaystyle \tau = \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \ingreen{\mu(1, x_j)} - \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \inred{y_j}
+\quad& \text{in population} \\
+        `{r} a(raw.gap(ga.sam))` \pm `r a(2*sd(ga.bootstrap.gaps$raw))`
+\quad&  `{r} a(adjusted.gap(ga.sam))` \pm `r a(2*sd(ga.bootstrap.gaps$adjusted))` 
+\quad& \text{in 95\% of surveys}
+\end{array} 
+$$
+
+
+## Revisiting A Computational Trick
+
+```{r}
+#| out-height: 350px
+#| fig-asp: .4
 #| layout-ncol: 2 
-#| fig-subcap:
-#|   - "Difference in Sample Means Sampling Dist"
-#|   - "Fitted-Line-Based Sampling Dist" 
+#| fig-cap:
+#|  - "Georgia"
+#|  - "California"
 
-distribution.plot(boots$dif,   real.point.estimate) + xlim(min(x), max(x))
-distribution.plot(boots$slope, slope.point.estimate)  + xlim(min(x), max(x))
+scatter.with.hist = scatter.by.race(ga.sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
+scatter.with.hist
+scatter.by.race(sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
 ```
 
-- This isn't a disaster if all we want to know is whether our effect $\tau(100)$ is &gt;1
-  - i.e, if we want to know whether the \$100 plan gives us an additional gym day over the \$50 one.
-  - No matter which approach we use, we get the same answer: we don't know.
-  - Our interval estimates both include numbers above and below 1.
-- But if what we wanted to know was whether $\tau(100) > 0$, we'd get different answers.
-  - The difference in subsample means approach would say we don't know.
-  - The fitted line approach would say we do know---in fact, that $\tau(100) > 1/2$.
-- And this is a problem. This is fake data, so I can tell you it's wrong. The actual effect is exactly zero.
-- In the data we're looking at, the potential outcomes $Y_i(50)$ and $Y_i(100)$ are *exactly the same*.
+- To make sense of our two summaries, it's helpful to revisit a counting trick we used before.
+  - When we want to average over the people in a sample, we can use a histogram to help us count.
+  - This reduces a sum over hundreds or thousands of people to a sum over a few dozen bins.
 
-## The Data
+$$
+\begin{aligned}
+\hat \Delta &= \sum_{x} \qty{ \ingreen{P_{1,x} \hat\mu(1,x)} \quad - \quad \inred{P_{0,x} \ \hat\mu(0,x)} }            && \qqtext{where} \ P_{w,x} = \frac{N_{w,x}}{N_w} \\
+\hat \tau   &= \sum_{x} \qty{ \inred{P_{0,x}} \ \ingreen{\hat\mu(1,x)} \quad - \quad \inred{P_{0,x} \ \hat\mu(0,x)} }    && \qqtext{for} \ \ \ N_w = \sum_{i:W_i=w} 1 \\ 
+\hat \Delta - \hat \tau &= \sum_{x} \qty{\ingreen{P_{1,x}} - \inred{P_{0,x}}} \hat\mu(1,x)                         && \qqtext{and} \ \ \ N_{w,x} = \sum_{i:W_i=w, X_i=x} 1
+\end{aligned}
+$$
 
+- Looking at what happens in each bin can help us understand what's going on.
+- Why were our raw and adjusted gaps similar in California but different in Georgia?
+  
+
+## Derivation: The Raw Gap
 ```{r}
-#| eval: false
-#| echo: true
-
-# Sampling 250 employees. Our population is an even mix of ...
-#   'blue guys', who go 1/4 days no matter what
-#   'green guys', who go more if it's free but --- unlike the ones in our table earlier --- don't care about classes
-
-n=250
-is.blue = rbinom(n,1, 1/2)
-Yblue   = rbinom(n, 30, 1/4) 
-Ygreen0 = rbinom(n, 30, 1/10)
-Ygreen50 = rbinom(n, 30, 1/5)
-
-Y0   = ifelse(is.blue, Yblue, Ygreen0)
-Y50  = ifelse(is.blue, Yblue, Ygreen50)
-Y100 = Y50   ### <--- this tells us we've got no effect.
-
-# Randomizing by rolling two dice. R is their sum
-R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
-D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
-Y = case_match(D, 0~Y0, 50~Y50, 100~Y100)
-``` 
-
-## Bias
-
-
-```{r}
-
-line.based.estimates = purrr::map(1:1000, function(b) {
-  n=250
-  is.blue = rbinom(n,1, 1/2)
-  Yblue   = rbinom(n, 30, 1/4) 
-  Ygreen0 = rbinom(n, 30, 1/10)
-  Ygreen50 = rbinom(n, 30, 1/5)
-
-  Y0   = ifelse(is.blue, Yblue, Ygreen0)
-  Y50  = ifelse(is.blue, Yblue, Ygreen50)
-  Y100 = Y50   ### <--- this tells us we've got no effect.
-
-  # Randomizing by rolling two dice. R is their sum
-  R = sample(c(1:6), size=n, replace=TRUE) + sample(c(1:6), size=n, replace=TRUE)
-  D = case_match(R, 1:6~0, 7:10~50, 11:12~100)
-  Y  = case_match(D, 0~Y0, 50~Y50, 100~Y100)
-
-  model=lm(Y ~ D, data=tibble(D=D, Y=Y))
-  mu.hat = predict(model, newdata=data.frame(D=c(0,50,100)))
-  data.frame(estimate =  mu.hat[3]-mu.hat[2], se = sqrt(vcov(model)[2,2])*50)
-}) %>% bind_rows()
-
+#| out-height: 350px
+#| fig-asp: .4
+scatter.with.hist
 ```
 
-```{r}
-#| out-height: 500px
+$$
+\begin{aligned}
+\hat \Delta &= \frac{1}{N_1}\sum_{i:W_i=1} Y_i \quad -  \quad \frac{1}{N_0}\sum_{i:W_i=0} Y_i  && \qfor  N_{w} = \sum_{i:W_i=w} 1\\
+            &= \sum_{x} \frac{1}{N_1}\sum_{i:W_i=1, X_i=x} Y_i   \quad - \quad \sum_{x}\frac{1}{N_0}\sum_{i:W_i=0, X_i=x} Y_i && \qqtext{summing within then over bins} \\
+            &= \sum_{x} \frac{1}{N_1} \ N_{1,x} \ \hat\mu(1,x)  \quad - \quad \sum_{x} \frac{1}{N_0} \ N_{0,x} \ \hat\mu(0,x)     && \qfor N_{w,x} = \sum_{i:W_i=w, X_i=x} 1  \\
+            &= \sum_{x} \ingreen{P_{1,x} \ \hat\mu(1,x)} \quad - \quad \sum_x \inred{P_{0,x} \ \hat\mu(0,x)}  && \qfor P_{w,x} = \frac{N_{w,x}}{N_w} \\
+\end{aligned}
+$$
 
-line.based.estimates$i = 1:nrow(line.based.estimates)
-slope.se = sqrt(vcov(model)[2,2])*50
-line.sampling.dist = ggplot() + 
-  geom_histogram(aes(x=estimate, y=after_stat(density)), bins=50, alpha=.2, data=line.based.estimates) + 
-  geom_vline(aes(xintercept=mean(estimate)), color='blue', data=line.based.estimates) +
-  geom_pointrange(aes(x=slope.point.estimate, y=dnorm(2*slope.se, mean=0, sd=slope.se), 
-                      xmin=slope.point.estimate - 1.96*slope.se, 
-                      xmax=slope.point.estimate + 1.96*slope.se))
-line.sampling.dist
-``` 
-
-- We can do a little simulation to calculate the bias of our line-based estimator.
-- We'll generate 1000 fake datasets like the one we've been looking at.
-  - And calculate our estimator for each one. This gives us draws from our estimator's *sampling distribution*. 
-  - I've used them to draw a histogram that approximates this sampling sampling distribution.
-- The mean of these point estimates is $`r approx(mean(line.based.estimates$estimate))`$. Since our actual effect is zero, that's our bias. The blue line.
-- Our actual point estimate is off in the same direction---but a bit more than usual.
-  - It's shown in black with a corresponding 95% interval.
-  - An interval that fails to cover the actual effect of zero.
-
-## Coverage
+## Derivation: The Adjusted Gap
 
 ```{r}
-#| out-height: 500px
-covers =  abs(line.based.estimates$estimate) <= 1.96*line.based.estimates$se 
-line.sampling.dist + geom_pointrange(aes(x=estimate, y=(8*i/100)*dnorm(2*slope.se, mean=0, sd=slope.se), 
-                      xmin=estimate - 1.96*se, 
-                      xmax=estimate + 1.96*se), data=line.based.estimates[1:100,], color='purple', alpha=.4)  
+#| out-height: 350px
+#| fig-asp: .4
+scatter.with.hist
 ```
 
-- We can construct 95% confidence intervals the same way in each fake dataset.
-  - I've drawn 100 of these intervals in purple. 
-  - You can see that they sometimes cover zero, but not as often as you'd like.
-- `r sum(covers)` / `r nrow(line.based.estimates)` &asymp; `r percent(mean(covers))` of them cover zero. That's not good. 
-- If that's typical of our analysis, people *really* shouldn't trust us. 
 
-## Where We're Headed 
+## Derivation: The Adjusted Gap
+```{r}
+#| out-height: 350px
+#| fig-asp: .4
+scatter.with.hist
+```
+
+$$
+\begin{aligned}
+\hat \tau &= \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} \\
+          &= \sum_{x} \frac{1}{N_0}\sum_{i:W_i=1, X_i=x} \hat\mu(1,x)   - \sum_{x}\frac{1}{N_0}\sum_{i:W_i=0, X_i=x} Y_i && \qqtext{summing within then over bins} \\
+          &= \sum_{x} \frac{1}{N_0} \ N_{0,x} \ \hat\mu(1,x)  - \sum_{x} \frac{1}{N_0} \ N_{0,x} \ \hat\mu(0,x)             && \qfor N_{w,x} = \sum_{i:W_i=w, X_i=x} 1  \\
+          &= \sum_{x} \ingreen{P_{1,x} \ \hat\mu(1,x)} \quad - \quad \sum_x \inred{P_{0,x} \ \hat\mu(0,x)}  && \qfor P_{w,x} = \frac{N_{w,x}}{N_w} \\ \\
+\end{aligned}
+$$
+
+## What To Adjust For?
 
 ```{r}
-#| out-height: 250px
-#| fig.asp: .25
+#| out-height: 350px
+#| fig-asp: .4
 #| layout-ncol: 2 
-#| fig-subcap:
-#|   - "Difference in Sample Means Sampling Dist (n=250)"
-#|   - "Fitted-Line-Based Sampling Dist (n=250)" 
+#| fig-cap:
+#|  - "Georgia"
+#|  - "California"
 
-xrange = c(-4,4)
-scale_x = scale_x_continuous(breaks=seq(min(xrange), max(xrange), by=1), limits=xrange)
-distribution.plot(boots$dif,   real.point.estimate) + scale_x
-distribution.plot(boots$slope, slope.point.estimate)  + scale_x
+scatter.with.hist = scatter.by.race(ga.sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
+scatter.with.hist
+scatter.by.race(sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
 ```
 
-:::: r-stack
+- If we're trying to think about discrimination, it's not entirely clear what we should adjust for.
+  - By looking at the adjusted gap, we're trying to make the people we compare 'similarly qualified'
+  - But discrimination also *causes* differences in education.
+  - So we're *adjusting away* some of the effect we're trying to measure.
+- We can try to formalize our comparisons in terms of potential outcomes. We'll imagine that ...
+  - for each Black person in our population, there's a person they'd be if they were white.
+  - and consequently, an income they'd have if they were white.
 
-::: {.fragment .fade-out data-fragment-index="0"}
+$$
+\begin{aligned}
+y_j(1) & \text{ income person $j$ would have if, possibly contrary to fact, they were white} \\
+y_j(0) & \text{ income person $j$ would have if, possibly contract to fact, they were Black}
+\end{aligned}
+$$
 
-- Next time, we're going to talk about why fitting lines **is** common practice and **isn't** a good idea.
-- It has to do with sample size. When sample sizes are small, we get wide intervals.
-  - And a small amount of bias may be negligible in comparison to it. 
-  - That means we can often get away with stuff like fitting lines.
-- You can see that in the sampling distribution plots below.
-  - We've done the same analysis using only $50$ of our $250$ observations.
-  - And the line-based estimate gives us a wider interval that covers the actual effect: zero.
--  We'll see exactly how much worse coverage gets as a function of sample size.
+
+## Then What?
+```{r}
+#| out-height: 350px
+#| fig-asp: .4
+#| layout-ncol: 2 
+#| fig-cap:
+#|  - "Georgia"
+#|  - "California"
+
+scatter.with.hist = scatter.by.race(ga.sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
+scatter.with.hist
+scatter.by.race(sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
+```
+
+$$
+\begin{aligned}
+y_j(1) & \text{ income person $j$ would have if, possibly contrary to fact, they were white} \\
+y_j(0) & \text{ income person $j$ would have if, possibly contract to fact, they were Black}
+\end{aligned}
+$$
+
+- The individual effect of 'whiteness' on income is the difference between these two.
+- We can summarize this by the average of these differences for the Black people in our population.
+
+$$
+\begin{aligned}
+\text{individual effect}_j 
+&= y_j(1) - y_j(0) \\
+\text{average effect} 
+&= \frac{1}{m_0}\sum_{j:w_j=0} \qty{ y_j(1) - y_j(0) }  = \frac{1}{m_0}\sum_{j:w_j=0} y_j(1) - \frac{1}{m_0}\sum_{j:w_j=0} y_j(0) 
+\end{aligned}
+$$
+
+- And $y_(1)$ being unobservable for the people in this average, we try to find some proxy for it.
+  - The adjusted-gap approach is to use the average income of white people with the same education level.
+  - But it's not clear that's the right proxy.
+- Fundamentally, the potential outcomes don't really make sense.
+
+## Audit Studies
+
+```{r}
+#| out-height: 350px
+#| fig-asp: .4
+#| layout-ncol: 2 
+#| fig-cap:
+#|  - "Georgia"
+#|  - "California"
+
+scatter.with.hist = scatter.by.race(ga.sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
+scatter.with.hist
+scatter.by.race(sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
+```
+
+- People try to work around this by reframing the question in terms of *perception* of race.
+- A common way to do this is to send out job applications that are identical except in one aspect.
+  - One has a 'Black name' and the other a 'white name'. You can get these by looking at what names are popular in the census.
+  - And then look at the difference in interview rates.
+
+$$
+\begin{aligned}
+y_j(1) & \text{ whether application $j$ would get an interview when using a `white name'} \\
+y_j(0) & \text{ whether application $j$ would get an interview when using a `Black name'}
+\end{aligned}
+$$
+
+- Fundamentally, this is a version of our adjusted gap, but with more bins---one bin per application.
+- While these potential outcomes make sense, they're missing a huge part of the perception of race.
+- The reason you'd be interested in this is because you're thinking of different potential outcomes.
+  - Potential outcomes closer to the ones we just said didn't make sense ...
+  - except in the application-reader's head instead of in the world.
+
+## Learning from Eddie Murphy
+
+::: {style="z-index:1000"}
+{{< video  https://www.youtube.com/watch?v=l_LeJfn_qW0 width="854px" height="480px">}}
 :::
-::: {.fragment .current-visible data-fragment-index="0"}
 
-- The reason fitting lines is common practice is historical.
-- Common practice is rooted in tradition dating back to the 1930s or so. 
-  - Nobody had computers. So samples were almost always small. 
-  - And working with lines usually wasn't such a big problem.
-- That changed in the 1970s. 
-  - And what statisticians were thinking about changed too.
-  - A lot of what are now called *machine learning methods* were developed at that time.
-- It's taking some time to cover the basics so we'll be prepared, but that's where we're going.
-:::
-::::
+- I want to take a few minutes to illustrate the complexity of this idea.
+  - Really, I'm going to let Eddie Murphy do it. 
+  - I'm going to show you a SNL sketch from the 1980s.
+- I'm borrowing this, and a lot of the ideas in this lecture, from [Issa Kohler-Hausmann](https://law.yale.edu/issa-kohler-hausmann).
+- I don't really do it justice, so I encourage you to read her paper if you're interested.
 
-
-```{r}
-#| out-height: 250px
-#| fig.asp: .25
-#| layout-ncol: 2 
-#| fig-subcap:
-#|   - "Difference in Sample Means Sampling Dist (n=50)"
-#|   - "Fitted-Line-Based Sampling Dist (n=50)" 
-
-ind = c(51:100) 
-# because 1:50 happened to give us an unusually large line-based estimate (of ~2)
-# and that didn't help make the point we want
-
-summaries.small = real.data[ind, ] %>% group_by(D) %>% summarize(mean=mean(Y), sd=sd(Y), n=length(Y))
-small.point.estimate = summaries.small$mean[summaries.small$D==100] - summaries.small$mean[summaries.small$D==50]
-smallboots = boot.distn(real.data[ind, ])
-
-model=lm(Y ~ D, data=real.data[ind,])
-mu.hat = predict(model, newdata=data.frame(D=c(0,50,100)))
-small.slope.point.estimate = mu.hat[3]-mu.hat[2]
-
-distribution.plot(smallboots$dif[is.finite(smallboots$dif)],   small.point.estimate) + scale_x
-distribution.plot(smallboots$slope, small.slope.point.estimate)  + scale_x
-# on the is.finite thing: 
-#  - we get some NAs when our bootstrap sample includes no D=100 points. 
-#  - It's pretty rare. We'll ignore it.
-```
-
+[Eddie Murphy and the Dangers of Counterfactual Causal Thinking About Detecting Racial Discrimination](https://openyls.law.yale.edu/bitstream/handle/20.500.13051/18009/Kohler-Hausmann,%20Eddie%20Murphy%20and%20the%20Dangers%20of%20Counterfactual%20Causal%20Thinking%20about%20Detecting%20Racial%20Discrimination.pdf?sequence=1) \
+[Kohler-Hausmann](https://law.yale.edu/issa-kohler-hausmann), 2018
