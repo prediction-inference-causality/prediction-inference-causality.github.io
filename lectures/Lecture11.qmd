@@ -16,8 +16,8 @@ format:
     html-math-method: mathjax
     include-in-header: 
       text: |
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/mdbassit/Coloris@latest/dist/coloris.min.css"/>
-        <script src="https://cdn.jsdelivr.net/gh/mdbassit/Coloris@latest/dist/coloris.min.js"></script>
+        <link rel="stylesheet" href="Coloris/src/coloris.css"></script>
+        <script src="Coloris/src/coloris.js></script>
         <script src="slide-canvas.js"></script>
         <script>
           window.MathJax = {
@@ -467,7 +467,7 @@ $$
 ```{r}
 #| cache: true
 
-data = sample.tab
+data = earnings
 
 average.over.people = function(summaries) {
   muhat = function(x) { summaries$mean[summaries$education==x] }
@@ -478,7 +478,8 @@ average.over.people = function(summaries) {
 average.over.years = function(summaries) {
   (summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4
 }
-run.boot = function(data, B=1000) { purrr::map(1:B, function(i) {
+run.boot = function(data, B=1000) { 
+  purrr::map(1:B, function(i) {
   # use tryCatch to handle errors that happen when we get no  
   # units at a given education level in our bootstrap sample
   tryCatch({
@@ -692,24 +693,26 @@ $$
 #|  - Interval Estimate for the Average over People 
 
 
-x = seq(-5000,10000, by=10)
-point.estimate = (summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8]) / 4
-w = 2*1.96*sd(boots$years) 
+x = seq(-10000,20000, by=10)
+point.estimate.years = average.over.years(summaries)
+w.years = 2*1.96*sd(boots$years) 
 normal.distribution.plot.years = ggplot() + 
     geom_area(aes(x=x, y=dnorm(x, mean=mean(boots$years), sd=sd(boots$years))), color='purple', fill='purple', alpha=.08) +
     geom_vline(aes(xintercept=mean(boots$years)), color='purple', linetype='solid') +
     geom_vline(aes(xintercept=xi), data=data.frame(xi=qnorm(c(.025,.975), mean=mean(boots$years), sd=sd(boots$years))), color='purple', linetype='dotted') +
-    geom_pointrange(aes(y=dnorm(2*sd(boots$years), mean=0, sd=sd(boots$years)), x=point.estimate, xmin=point.estimate - w/2, xmax=point.estimate + w/2)) + 
-    xlim(-5000,10000)
+    geom_pointrange(aes(y=dnorm(2*sd(boots$years), mean=0, sd=sd(boots$years)), 
+    x=point.estimate.years, xmin=point.estimate.years - w.years/2, xmax=point.estimate.years + w.years/2)) + 
+    coord_cartesian(xlim=c(-5000,15000))
 
-point.estimate = average.over.people(summaries)
-w = 2*1.96*sd(boots$people) 
+point.estimate.people = average.over.people(summaries)
+w.people = 2*1.96*sd(boots$people) 
 normal.distribution.plot.people = ggplot() + 
     geom_area(aes(x=x, y=dnorm(x, mean=mean(boots$people), sd=sd(boots$people))), color='purple', fill='purple', alpha=.08) +
     geom_vline(aes(xintercept=mean(boots$people)), color='purple', linetype='solid') +
     geom_vline(aes(xintercept=xi), data=data.frame(xi=qnorm(c(.025,.975), mean=mean(boots$people), sd=sd(boots$years))), color='purple', linetype='dotted') +
-    geom_pointrange(aes(y=dnorm(2*sd(boots$people), mean=0, sd=sd(boots$people)), x=point.estimate, xmin=point.estimate - w/2, xmax=point.estimate + w/2)) + 
-    xlim(-2000,8000)
+    geom_pointrange(aes(y=dnorm(2*sd(boots$people), mean=0, sd=sd(boots$people)), 
+    x=point.estimate.people, xmin=point.estimate.people - w.people/2, xmax=point.estimate.people + w.people/2)) + 
+    coord_cartesian(xlim=c(-5000,15000))
 
 normal.distribution.plot.years
 normal.distribution.plot.people
@@ -781,7 +784,7 @@ $$
   - but a coefficient of $`r round(alphahat(11),3)`$ that's roughly `r round(alphahat(11)/alpha(8))`x bigger, too.
 - Variance grows with the *square* of the coefficient divided by the sample size ... 
 - So this suggests variance would be roughly $3^2  / 4 \approx 2.25x$ bigger.
-- There's actually a bit more to it---$\sigma^2(11) \approx 2 \times \sigma^2(8)$ --- so it's really `r approx(sd(boots$people)^2/sd(boots$years)^2, 1)`x bigger.
+- That's not far off what we get when we compare bootstrap variance estimates. That's `r approx(sd(boots$people)^2/sd(boots$years)^2, .1)`x bigger.
 
 ## What About The Other Part?
 
@@ -799,7 +802,6 @@ $$
   - Our estimate for the first part only --- based on our table --- was `r approx(se.people.EV^2,.1)`.
   - That suggests that the second part should be roughly $`r approx(sd(boots$people)^2,.1)` - `r approx(se.people.EV^2,.1)` \approx `r approx(sd(boots$people)^2 - se.people.EV^2,100)`$.
   - That's impossible---the part is the variance of something, so it can't be negative---but it suggests it's not very big.
-  - Let's see why.
   
 
 
@@ -833,312 +835,4 @@ $$
 
 - Fundamentally, we're going to get an imprecise estimate *if a small subsample has a large weight*. 
 - By imprecise, we mean a large standard error and a wide confidence interval.
-
-
-## Application {.smaller}
-
-```{r}
-#| out-height: 150px
-#| fig-asp: .2
-
-summaries = earnings %>% group_by(education) %>% 
-          summarize(mean=mean(income), sd=sd(income))
-estimate = (summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4
-se = sqrt( summaries$sd[summaries$education==12]^2 / (16 * sum(earnings$education==12)) + summaries$sd[summaries$education==8]^2 / (16 * sum(earnings$education==8)) )
-
-blueline = data.frame(x=c(8,12), y=c(summaries$mean[summaries$education==8], summaries$mean[summaries$education==12]))
-aggregate.comparison.plot + geom_line(aes(x=x, y=y), data=blueline, color='blue', alpha=.4) + xlim(7.7,12.5)
-```
-
-- Let's use this to estimate the value of a year of high school in our population.
-- The one we've addressed is the average, over the four years of high school, of the increments.
-$$
-\small{
-\theta = \sum_{x=9}^{12} \frac14 \qty{ \mu(x) - \mu(x-1) } = \frac14 \qty{ \mu(12) - \mu(8) }
-}
-$$
-
-- That's the slope of the secant---blue line---in an analogous plot for the population.
-- We're estimating it by the slope of the secant in the plot of our sample above.
-$$
-\small{
-\hat\theta = \sum_{x=9}^{12} \frac14 \qty{ \hat\mu(x) - \hat\mu(x-1) } = \frac14 \qty{ \hat\mu(12) - \hat\mu(8) } = `r approx(estimate)`
-}
-$$
-
-- This is our estimate of its standard error, i.e., the square root of our estimate of its variance.
-
-$$
-\small{
-\hat\sigma_{\hat\theta}^2 
-= \frac{\hat\sigma^2(12) \times \qty(\frac{1}{4})^2}{ N_{12} } + \frac{\hat\sigma^2(8) \times \qty(\frac{1}{4})^2}{ N_{8} } 
-= \frac{`r approx(summaries$sd[summaries$education==12])`^2}{16 \times `r sum(earnings$education==12)`} 
-+ \frac{`r approx(summaries$sd[summaries$education==8])`^2}{16 \times `r sum(earnings$education==8)`} = `r approx(se^2)` \approx `r approx(se)`^2 
-}
-$$
-
-## This is the resulting interval.
-```{r}
-#| layout-ncol: 2
-#| out-height: 300px
-#| fig-asp: .3 
-#| fig-subcap:
-#|  - Interval Estimate for the Average over Years
-#|  - Interval Estimate for the Average over People 
-
-summaries = earnings[earnings$education <= 12, ] %>% group_by(education) %>% 
-  summarize(mean=mean(income), N=length(income), sd=sd(income))
-years.estimate = (summaries$mean[summaries$education==12] - summaries$mean[summaries$education==8])/4
-
-distribution.plot(boots$years, years.estimate) + xlim(-5000,10000)
-distribution.plot(boots$people, average.over.people(summaries)) + xlim(-5000,10000)
-```
-
-$$
-\small{
-\qty[ \hat \theta - 1.96\hat\sigma_{\hat\theta}, \ \hat \theta + 1.96\hat\sigma_{\hat\theta}] = \qty[`r approx(estimate - 1.96*se)` , `r approx(estimate + 1.96*se)`]
-}
-$$
-
-- This is for the average over years---the plot on the left.
-- At the moment, we don't know why it's narrower than the interval for the average over people.
-- That's because we haven't yet work out how to get a normal approximation for its distribution.
-- It's a linear combinations with coefficients that *depend on the covariate*. We'll do that next time.
-
-$$
-\small{
-\text{ average over people} = \sum_{x=9}^{12} P_x \qty{ \hat\mu(x) - \hat\mu(x-1)} = \sum_x \hat \alpha(x) \hat \mu(x) \qfor
-\hat\alpha(x) = \begin{cases}
-  P_{12} & \text{ if } x = 12 \\
-  P_{x} - P_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
-  -P_9 & \text{ if } x = 8 
-\end{cases}
-}
-$$
-
-
-# Appendix
-
-
-## Unbiasedness of Subsample Means
-
-- We'll start with something we've essentially shown before --- that $\hat\mu(x)$ is an unbiased estimator of $\mu(x)$. 
-  - $\E[\hat\mu(x)] = \mu(x)$
-- We'll show something stronger than that. We'll show that it's *covariate-conditional mean* is $\mu(x)$.
-  - $\E[\hat\mu(x) \mid X_1 \ldots X_n] = \mu(x)$
-- Unbiasedness follows from this by the law of iterated expectations.
-  - $\E[\hat\mu(x)] = \E[\E[\hat\mu(x) \mid X_1 \ldots X_n]] = \E[\mu(x)] = \mu(x)$
-
-
-::: fragment
-$$
-\small{
-\begin{aligned}
-&\E\qty[\hat\mu(x) \mid X_1 \ldots X_n] \\
-&= \E\qty[\frac{\sum_{i:X_i=x} Y_i}{\sum_{i:X_i=x} 1} \mid X_1 \ldots X_n]  && \\
-&= \E\qty[\frac{\sum_{i=1}^n 1_x(X_i) Y_i}{\sum_{i=1}^n 1_x(X_i)} \mid X_1 \ldots X_n] && \qfor 1_x(X) = \begin{cases} 1 & \text{ if } x = X  \\ 0 & \text{ otherwise} \end{cases} \\
-&= \frac{\sum_{i=1}^n 1_x(X_i) \E[ Y_i \mid X_1 \ldots X_n]}{\sum_{i=1}^n 1_x(X_i)} && \text{ by linearity of conditional expectations } \\
-&= \frac{\sum_{i=1}^n 1_x(X_i) \E[ Y_i \mid X_i]}{\sum_{i=1}^n 1_x(X_i)}          && \text{  by irrelevance of independent conditioning variables } \\
-&= \frac{\sum_{i=1}^n 1_x(X_i) \mu(X_i)}{\sum_{i=1}^n 1_x(X_i)}                     && \text{  is a matter of notation } \\
-&= \frac{\sum_{i=1}^n 1_x(X_i) \mu(x)}{\sum_{i=1}^n 1_x(X_i)}                       && \text{ by the \emph{indicator trick} } 1_x(X_i)\mu(X_i) = 1_x(X_i)\mu(x) \\
-&= \mu(x) \frac{\sum_{i=1}^n 1_x(X_i)}{\sum_{i=1}^n 1_x(X_i)} = \mu(x) 
-\end{aligned}
-}
-$$
-
-
-## Variance Calculation Step 1: Total Variance
-
-
-- We'll use the law of total variance to break the variance of our estimator into two parts.
-- One of these parts --- $\Var\E[\ldots]$ part --- has always been zero before.
-  - It isn't now. This part is how the *randomness of the coefficients* contributes.
-  - It was zero last time because the coefficients were constants.
-- What we'll get for the remaining $\E[\Var[\ldots]]$ part is almost exactly what we did before.
-  - We *sum* the conditional variances of the individual terms, then take the expectation of the result.
-  - All that changes is that, the coefficients being random, we can't pull them out of the expectation
-
-$$
-\small{
-\begin{aligned}
-\Var\qty[ \sum_x \alpha(x) \hat \mu(x) ] 
-&= \E\qty[ \Var\qty{ \sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] \quad &&+ \quad \Var\qty[ \E\qty{\sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n} ] \\
-&= \E\qty[ \Var\qty{ \sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] \quad &&+ \quad \Var\qty[ \sum_x  \hat\alpha(x) \E\qty{ \hat \mu(x) \mid X_1 \ldots X_n} ] \\
-&= \E\qty[ \Var\qty{ \sum_x \hat \alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] \quad &&+ \quad \Var\qty[ \sum_x \hat\alpha(x) \mu(x) ] \\
-&= \textcolor{blue}{\sum_x \E\qty[ \hat\alpha(x)^2 \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n}]} \quad &&+ \quad 
-\textcolor{blue}{\sum_x \sum_{x'} \mu(x) \mu(x') \Cov\qty[\hat\alpha(x),\ \hat\alpha(x')]} \\
-&=\textcolor{blue}{ \sum_x \sigma^2(x) \times \E\qty[ \frac{\hat\alpha(x)^2}{N_x} ]} \quad &&+ \quad 
-\textcolor{blue}{\sum_x \sum_{x'} \mu(x) \mu(x') \Cov\qty[\hat\alpha(x),\ \hat\alpha(x')]} 
-\end{aligned}
-}
-$$
-
-## Variance Calculation Step 2a: $\E[\Var[\ldots]]$ 
-
-$$\small{
-\begin{aligned}
-\E\qty[ \Var\qty{ \sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] 
-&=\E\qty[ \E\qty{ \qty(\sum_x \hat\alpha(x) \hat\mu(x) - \E\qty[\sum_x \alpha(x) \hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
-&=\E\qty[ \E\qty{ \qty(\sum_x \hat\alpha(x) \hat\mu(x) - \alpha(x) \E\qty[\hat\mu(x) \mid X_1 \ldots X_n])^2 \mid X_1 \ldots X_n }] \\
-&=\E\qty[ \E\qty{ \qty(\sum_x \hat\alpha(x) \qty{\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n]})^2 \mid X_1 \ldots X_n }] \\
-&=\E\qty[ \E\qty{ \qty(\sum_x \hat\alpha(x) Z_x)^2  \mid X_1 \ldots X_n }] \quad \text{ for } \quad  Z_x=\hat\mu(x) - \E\qty[\hat\mu(x) \mid X_1 \ldots X_n] 
-\end{aligned}
-}
-$$
-
-- Here $Z_x$ is a *conditionally centered* version of our subsample mean $\hat\mu(x)$.
-  - The *conditional variance* of $\hat\mu(x)$ is the conditional expectation of its square $Z_x^2$
-  - And the conditional expectation of *products* $Z_x Z_{x'}$ for different subsamples is zero.
-
-$$
-\begin{aligned} 
-\E[Z_x^2 \mid X_1 \ldots X_n] &= \Var[\hat\mu(x) \mid X_1 \ldots X_n] \\
-\E[Z_x Z_{x'} \mid X_1 \ldots X_n] &= 0 \quad \text{ for } \quad x \neq x'
-\end{aligned}
-$$
-
-## Variance Calculation Step 2b: $\E[\Var[\ldots]]$ and FOIL
-- To make progress from here, we have to square out our sum. We get one term for each combination of $x$s.
-
-$$
-\small{
-\qty(\sum_x \hat\alpha_x Z_x)^2 = \sum_x\sum_{x'} \hat\alpha_x Z_x \ \hat\alpha_{x'} Z_{x'} 
-}
-$$
-
-- Making this substitution, we can boil things down to something we've calculated before.
-
-$$\small{
-\begin{aligned}
-\E\qty[ \Var\qty{ \sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] 
-&=\E\qty[ \E\qty{ \qty(\sum_x \hat\alpha(x) Z_x)^2  \mid X_1 \ldots X_n }]  \\
-&=\E\qty[ \E\qty{ \sum_x\sum_{x'} \hat\alpha(x) \hat\alpha(x') Z_x Z_{x'} \mid X_1 \ldots X_n }] \\ 
-&=\E\qty[ \sum_x\sum_{x'} \hat\alpha(x) \hat \alpha(x') \E\qty{ Z_x Z_{x'} \mid X_1 \ldots X_n}] \\ 
-&=\E\qty[ \sum_x\sum_{x'} \hat\alpha(x) \hat \alpha(x') \begin{cases} \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n} & \text{ if } x=x' \\ 0 & \text{ otherwise} \end{cases} ] \\
-&=\E\qty[ \sum_x \hat\alpha(x)^2 \Var\qty{\hat\mu(x) \mid X_1 \ldots X_n}] \\
-\end{aligned}
-}
-$$
-
-## Conclusion for *This Part* of the Variance
-
-```{r}
-#| layout-ncol: 2
-#| out-height: 300px
-#| fig-asp: .3
-sample.scatter
-pop.scatter
-```
-
-- In the end, this part of the variance is essentially what it was last time.
-- It's a linear combination of the conditional variances of the subsample means.
-- We worked out how to [calculate those]{.fg style="color:blue"} before the midterm.
-
-$$ 
-\begin{aligned}
-\E\qty[ \Var\qty{ \sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] 
-&=  \E\qty[\sum_x  \hat\alpha(x)^2 \textcolor{blue}{\Var\qty{\hat\mu(x) \mid X_1 \ldots X_n}}] \\
-&=  \E\qty[\sum_x  \hat\alpha(x)^2  \textcolor{blue}{\frac{\sigma^2(x)}{N_x}}] \quad \text{ where } \quad \sigma^2(x) = \Var[Y_i \mid X_i=x]
-\\
-&= \sum_x \sigma^2(x) \times  \E\qty[ \frac{\hat\alpha(x)^2}{N_x} ]
-\end{aligned}
-$$
-
-
-## Estimating This Part
-
-```{r}
-#| layout-ncol: 2
-#| out-height: 300px
-#| fig-asp: .3
-sample.scatter 
-pop.scatter
-```
-
-$$
-\E\qty[ \Var\qty{ \sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n }] =
-\sum_x \sigma^2(x) \times \E\qty[ \frac{\hat\alpha(x)^2}{N_x} ] \quad \text{ where } \quad \sigma^2(x) = \Var[Y_i \mid X_i=x]
-$$
-
-:::: columns
-::: column
-
-- This has two quantities we don't know.
-  - The subpopulation variances $\sigma^2(x)$.
-  - The expected coefficient-squared over subsample size $\hat\alpha^2(x) / N_x$.
-- But there are natural estimators for them.
-  - Subsample variances are estimates of the subpopulation variances.
-  - A coefficient-squared over subsample size estimates its expectation.
-- Plugging them in gives us an estimate of *this part* of our summary's variance.
-- This is more useful than it sounds because ...
-  - It's a lower bound on the whole variance---the other part is positive.
-  - It's often the big part---the other part is often more-or-less irrelevant.
-
-::: 
-::: column
-
-$$
-\begin{aligned}
-\sigma^2(x) &\approx \hat\sigma^2(x) := \frac{1}{N_x} \sum_{i:X_i=x} \qty{Y_i - \hat\mu(x)}^2 \\
-\E\qty[\frac{\hat\alpha(x)^2}{N_x}] &\approx \frac{\hat\alpha(x)^2}{N_x} \\
-\hat\sigma_{\hat\theta}^2 &= \sum_x \frac{ \hat\alpha^2(x) \ \hat\sigma^2(x) }{ N_x } \quad + \quad ?
-\end{aligned}
-$$
-:::
-::::
-
-## Variance Calculation Step 3: The $\Var[\E[\ldots]]$ Part.
-
-- Now we'll calculate the new part --- the $\Var[\E[\ldots]]$ part. 
-- This **additional variance** is what we pay for using *estimates* of the population coefficients $\alpha(x)$.
-- We're going to use a formula for the variance of a linear combination of random variables that you may have seen before.
-$$
-\Var\qty[\sum_x a_x Z_x] = \sum_x \sum_{x'} a_x a_x' \Cov(Z_x,\ Z_y) \qfor \Cov(Z_x,\ Z_{x'}) = \E\qty[ \qty{Z_x - \E[Z_x]} \qty{Z_{x'} - \E[Z_{x'}]} ]
-$$
-
-- You may have seen a special case instead, where the $Z_x$ are *independent*---i.e. where $\Cov(Z_x,\ Z_{x'})=0$ for $x \neq x'$.
-- This gives us the simple statement *the variance of a sum is the sum of the variances*---but that's true only when the $Z_x$ are independent.
-- And ours, generally, won't be. $\hat\alpha(12)=P_{12}$ and $\hat\alpha(11)=P_{11}-P_{12}$ are *not* independent.
-- This general version is easy enough to prove, but we'll skip that. Here's what it tells us.
-
-$$
-\Var\qty[ \E{\sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n} ] 
-= \Var\qty[ \sum_x \mu(x) \hat \alpha(x)  ] \\
-= \sum_x \sum_{x'} \mu(x) \mu(x') \Cov\qty[\hat\alpha(x),\ \hat\alpha(x')] 
-$$
-
-## Variance Calculation Step 4?
-
-$$
-\Var\qty[ \E{\sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n} ] 
-= \Var\qty[ \sum_x \mu(x) \hat \alpha(x)  ] \\
-= \sum_x \sum_{x'} \mu(x) \mu(x') \Cov\qty[\hat\alpha(x),\ \hat\alpha(x')] 
-$$
-
-- These covariances are easy enough to calculate, but doing all of them is a bit tedious.
-- We'll just do enough to get a handle on the size of this additional variance.
-- And we'll use a simple *upper bound* on the covariances to do it.
-- The covariance of two random variables is no larger than *the product of their standard deviations*.
-$$
-\Cov\qty[\hat\alpha(x), \ \hat\alpha(x')] \le \sqrt{\Var[\hat\alpha(x)]} \times \sqrt{\Var[\hat\alpha(x')]}
-$$
-
-- Now let's calculate one of these standard deviations. We'll stick with a simple one: $\hat\alpha(12)=P_{12}$.
-- This is roughly the square root of $p_x (1-p_x) / \sum_x N_x$ for $x=12$
-  -  i.e., the standard deviation of an average of Bernoulli random variables with expectation $p_{12}$.
-- What's important is that *the denominator here is the sum of the sample sizes*. 
-  - It's not small like the denominators in the other part.
-  - As a result, this additional part of the variance is *much smaller* than the other one.
-
-## Variance Calculation Step 4: Never Worth It?
-
-$$
-\Var\qty[ \E{\sum_x \hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n} ] 
-= \Var\qty[ \sum_x \mu(x) \hat \alpha(x)  ] \\
-= \sum_x \sum_{x'} \mu(x) \mu(x') \Cov\qty[\hat\alpha(x),\ \hat\alpha(x')] 
-$$
-
-- I've just argued that the second part of the variance is small.
-- That had to do with the weights $\hat\alpha(x)$ not being all that variable.
-- This is the case for this example, but it's not always the case.
-- We'll see one or two later in the semester 
+- If we have random coefficients, the same is true: the formula estimates a lower bound on our estimator's variance.
