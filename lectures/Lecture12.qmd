@@ -51,7 +51,7 @@ xco = function(w,x) {
   x + .15*(2*w-1)
 }
 
-sam.dot = list(size=1,    alpha=.3)
+sam.dot = list(size=1,    alpha=.2)
 pop.dot = list(size=.25,    alpha=.05)
 
 scatter.by.race = function(rows, 
@@ -231,13 +231,13 @@ scatter.by.race(sam) +
 
 - To make sense of our two summaries, it's helpful to revisit a counting trick we used before.
   - When we want to average over the people in a sample, we can use a histogram to help us count.
-  - This reduces a sum over hundreds or thousands of people to a sum over a few dozen bins.
+  - This reduces a sum over hundreds or thousands of people to a sum over a few bins.
 
 $$
 \begin{aligned}
 \hat \Delta &= \sum_{x} \qty{ \ingreen{P_{1,x} \hat\mu(1,x)} \quad - \quad \inred{P_{0,x} \ \hat\mu(0,x)} }            && \qqtext{where} \ P_{w,x} = \frac{N_{w,x}}{N_w} \\
 \hat \tau   &= \sum_{x} \qty{ \inred{P_{0,x}} \ \ingreen{\hat\mu(1,x)} \quad - \quad \inred{P_{0,x} \ \hat\mu(0,x)} }    && \qqtext{for} \ \ \ N_w = \sum_{i:W_i=w} 1 \\ 
-\hat \Delta - \hat \tau &= \sum_{x} \qty{\ingreen{P_{1,x}} - \inred{P_{0,x}}} \hat\mu(1,x)                         && \qqtext{and} \ \ \ N_{w,x} = \sum_{i:W_i=w, X_i=x} 1
+\hat \Delta - \hat \tau &= \sum_{x} \qty{\ingreen{P_{1,x}} - \inred{P_{0,x}}} \ingreen{\hat\mu(1,x)}                         && \qqtext{and} \ \ \ N_{w,x} = \sum_{i:W_i=w, X_i=x} 1
 \end{aligned}
 $$
 
@@ -308,45 +308,30 @@ scatter.by.race(sam) +
 - If we're trying to think about discrimination, it's not entirely clear what we should adjust for.
   - By looking at the adjusted gap, we're trying to make the people we compare 'similarly qualified'
   - But discrimination also *causes* differences in education.
-  - So we're *adjusting away* some of the effect we're trying to measure.
-- We can try to formalize our comparisons in terms of potential outcomes. We'll imagine that ...
-  - for each Black person in our population, there's a person they'd be if they were white.
-  - and consequently, an income they'd have if they were white.
+  - So we're *adjusting away* some of the effect we might want to measure.
+- We can try to formalize our comparisons in terms of potential outcomes. 
+- We'll imagine that for each person in our population ... 
+  -  there's one income they'd have if they were 'treated' by being raced white.
+  -  and another income they'd have if they were 'treated' by being raced Black.
 
 $$
 \begin{aligned}
-y_j(1) & \text{ income person $j$ would have if, possibly contrary to fact, they were white} \\
-y_j(0) & \text{ income person $j$ would have if, possibly contract to fact, they were Black}
+y_j(1) & \text{ income person $j$ would have if they were 'treated' by being raced white} \\
+y_j(0) & \text{ income person $j$ would have if they were 'treated' by being raced Black}
 \end{aligned}
 $$
 
 
-## Then What?
-```{r}
-#| out-height: 350px
-#| fig-asp: .4
-#| layout-ncol: 2 
-#| fig-cap:
-#|  - "Georgia"
-#|  - "California"
-
-scatter.with.hist = scatter.by.race(ga.sam) +
-  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
-scatter.with.hist
-scatter.by.race(sam) +
-  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
-```
+## What Do We Do With These Potential Outcomes?
 
 $$
 \begin{aligned}
-y_j(1) & \text{ income person $j$ would have if, possibly contrary to fact, they were white} \\
-y_j(0) & \text{ income person $j$ would have if, possibly contract to fact, they were Black}
+y_j(1) & \text{ income person $j$ would have if they were 'treated' by being raced white} \\
+y_j(0) & \text{ income person $j$ would have if they were 'treated' by being raced Black}
 \end{aligned}
 $$
 
-- The individual effect of 'whiteness' on income is the difference between these two.
+- The individual effect of this treatment is the difference between these two.
 - We can summarize this by the average of these differences for the Black people in our population.
 
 $$
@@ -358,59 +343,48 @@ $$
 \end{aligned}
 $$
 
-- And $y_(1)$ being unobservable for the people in this average, we try to find some proxy for it.
+- And $y_j(1)$ being unobservable for the people in this average, we try to find some proxy for it.
   - The adjusted-gap approach is to use the average income of white people with the same education level.
-  - But it's not clear that's the right proxy.
-- Fundamentally, the potential outcomes don't really make sense.
+  - But what's the justification for this? Or something like this? There really isn't one. 
+  - We've just disguised a fundamental problem in mathematical notation that works in other contexts. 
+- You could argue that the problem is this 'treatment' isn't something you can assign, e.g., by randomization.
+- But that's not really the problem. The problem is that the potential outcomes don't make sense.
+- What does it mean to be person $j$,  except raced differently? It's meaningless.
 
-## Audit Studies
+## A Non-Solution --- Audit Studies
 
-```{r}
-#| out-height: 350px
-#| fig-asp: .4
-#| layout-ncol: 2 
-#| fig-cap:
-#|  - "Georgia"
-#|  - "California"
-
-scatter.with.hist = scatter.by.race(ga.sam) +
-  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
-scatter.with.hist
-scatter.by.race(sam) +
-  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
-```
-
-- People try to work around this by reframing the question in terms of *perception* of race.
-- A common way to do this is to send out job applications that are identical except in one aspect.
-  - One has a 'Black name' and the other a 'white name'. You can get these by looking at what names are popular in the census.
-  - And then look at the difference in interview rates.
+- People try to work around this by reframing the question in terms of *perception* of race. 
+  - Because that's manipulable. You can, for example, choose the name on a job application.
+  - You can randomize job applications to be 'Black' or 'white' by flipping a coin...
+  - and then, on the basis of that, selecting the name of a Black or white census respondent at random.
+- You can then mail these out and see who gets called back for an interview.
 
 $$
 \begin{aligned}
-y_j(1) & \text{ whether application $j$ would get an interview when using a `white name'} \\
-y_j(0) & \text{ whether application $j$ would get an interview when using a `Black name'}
+y_j(1) & \text{ whether application $j$ would get an interview when using a `random white name'} \\
+y_j(0) & \text{ whether application $j$ would get an interview when using a `random Black name'}
 \end{aligned}
 $$
 
-- Fundamentally, this is a version of our adjusted gap, but with more bins---one bin per application.
-- While these potential outcomes make sense, they're missing a huge part of the perception of race.
-- The reason you'd be interested in this is because you're thinking of different potential outcomes.
-  - Potential outcomes closer to the ones we just said didn't make sense ...
-  - except in the application-reader's head instead of in the world.
+- Fundamentally, this is a version of our adjusted gap, but with more levels of $X$---one per application.
+- The difference in interview rates is the called the 'effect of race' on *the decision-maker's actions*.
+- But really, it's just the effect of a specific race signifier on the decision-maker's actions. 
+  - If the idea of person $j$ except raced differently means nothing in the actual world...
+  - ... then why do we imagine that it means something in the decision-maker's head?
+- That doesn't mean that studies like this are useless. 
+  - But we shouldn't act as if they get around the fundamental problem.
+  - i.e., as if it works to think about discrimination using statistical tools alone.
 
-## Learning from Eddie Murphy
+## A Reference
 
 ::: {style="z-index:1000"}
 {{< video  https://www.youtube.com/watch?v=l_LeJfn_qW0 width="854px" height="480px">}}
 :::
 
-- I want to take a few minutes to illustrate the complexity of this idea.
-  - Really, I'm going to let Eddie Murphy do it. 
-  - I'm going to show you a SNL sketch from the 1980s.
-- I'm borrowing this, and a lot of the ideas in this lecture, from [Issa Kohler-Hausmann](https://law.yale.edu/issa-kohler-hausmann).
-- I don't really do it justice, so I encourage you to read her paper if you're interested.
+- This critique of potential outcomes for thinking about discrimination is paraphrased
+ from \
+ a paper by [Issa Kohler-Hausmann](https://law.yale.edu/issa-kohler-hausmann). Roughly paraphased. I encourage you to read it yourself.
+- The title refers to a 1984 SNL sketch in which Eddie Murphy conducts a revealing audit study. 
 
 [Eddie Murphy and the Dangers of Counterfactual Causal Thinking About Detecting Racial Discrimination](https://openyls.law.yale.edu/bitstream/handle/20.500.13051/18009/Kohler-Hausmann,%20Eddie%20Murphy%20and%20the%20Dangers%20of%20Counterfactual%20Causal%20Thinking%20about%20Detecting%20Racial%20Discrimination.pdf?sequence=1) \
 [Kohler-Hausmann](https://law.yale.edu/issa-kohler-hausmann), 2018

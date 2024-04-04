@@ -1,173 +1,83 @@
-```{r cps-setup}
-library(cpsR)
-census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
-# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
-```
+```{r setup, include=FALSE}
+library(ggplot2)
+source('income.R')
 
-
-```{r get-california-data}
-#| cache: true
-cps.sampling.ratio = 1/2500
-plotting.cps.sampling.ratio=1/12.5
 california.state.code = 6
-cps.data = cpsR::get_asec(year=2022, vars=c('pearnval', 'gestfips', 'h_numper', 'htotval', 'a_age', 'a_hga','gereg', 'a_maritl', 'a_sex','peafever','a_wkstat','gtco'), key=census.api.key)
+ca_income = income(california.state.code)
 ```
 
-```{r process-california-data}
-all.earnings = data.frame(age=cps.data$a_age,
-                          sex=cps.data$a_sex,
-                          state.code = cps.data$gestfips,
-                          county.code = cps.data$gtco,
-                          income=cps.data$pearnval, 
-                          education=case_match(cps.data$a_hga,
-                                          0  ~ 0,   # child
-                                          31 ~ 0,   # < grade 1
-                                          32 ~ 4,   #  grade 1-4
-                                          33 ~ 6,   #  grade 5-6
-                                          34 ~ 8,   #  grade 7-8 
-                                          35 ~ 9,   #  grade 9
-                                          36 ~ 10,  #  grade 10
-                                          37 ~ 11,  #  grade 11
-                                          38 ~ 11,  #  grade 12 no diploma
-                                          39 ~ 12,  #  high school grad
-                                          40 ~ 13,  #  some college
-                                          41 ~ 14,  #  associate degree(vocational)
-                                          42 ~ 14,  #  associate degree (academic)
-                                          43 ~ 16,  #  bachelors degree
-                                          44 ~ 18,  #  masters degree
-                                          45 ~ 20,  #  professional school degree
-                                          46 ~ 20)) #  doctorate
+```{r make-ca-maps}
+# Make maps of California with and without population density shown
 
-in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
-all.earnings$employed<- ifelse(cps.data$a_wkstat >5, 0,ifelse(cps.data$a_wkstat<2,NA,1))
-all.earnings$degree = factor(all.earnings$education >= 16,
-                    levels=c(FALSE, TRUE), 
-                    labels=c('no 4-year degree','4-year degree')) 
-all.earnings$sex = factor(all.earnings$sex, 
-                   levels=c(1,2),
-                   labels=c('male', 'female'))
-
-earnings = all.earnings[all.earnings$age %>% in.interval(c(25,35)) & 
-                        all.earnings$state.code == california.state.code &
-                        all.earnings$education >= 8, ]
-
-rownames(earnings)=NULL
-earnings$person = 1:nrow(earnings)
-n = nrow(earnings)
-```
-
-
-
-```{r maps}
-
-## All of this is just to make maps showing the sample and population.
-## And this code will be used later, so some of what's written here isn't 
-## used in the lecture. I wouldn't read it unless you're interested in drawing maps in R.
-
-# county info from https://en.wikipedia.org/wiki/List_of_counties_in_California
-# converted to csv using https://wikitable2csv.ggor.de
-to.number = function(s) { as.numeric(str_trim(gsub(",", "", s))) }
-ca_county_info = read.csv('california_county_info.csv') %>%
-  mutate(subregion = tolower(sub(' County', '', County))) %>%
-  mutate(pop = to.number(Population..2022.)) %>%
-  mutate(area = to.number(sub('sq.*', '', Area))) 
-
-earnings.county = left_join(earnings, ca_county_info[,c('FIPS.code', 'subregion')], by=c('county.code' = 'FIPS.code'))
-earnings$county = earnings.county$subregion
-earnings$county[is.na(earnings$county)]='unknown'
-  
-# To give our survey recipients a bit more reality, we'll give them fake locations on a map
-# And we'll make up a population of California residents that they're sampled from
-# maps are based on code from https://eriqande.github.io/rep-res-eeb-2017/map-making-in-R.html
-
-counties = map_data("county")
-ca_county = counties %>%
-  filter(region == "california")
-ca_county_centers = ca_county %>%
-  group_by(subregion) %>%
-  summarize(county.lat = mean(lat), county.long=mean(long))
-
-ca_county_more = left_join(ca_county_centers, ca_county_info, by="subregion")
-ca_all = left_join(ca_county, ca_county_more, by="subregion")
-
-
-ca.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+ca.plot = ggplot(data=ca_income$ca_info, mapping=aes(x=long, y=lat, group=group)) + 
   coord_quickmap() +
   geom_polygon(fill='gray', color = "white", alpha=.4) +
       scale_fill_gradient(trans="log10") + 
       theme_void()
 
-ca.pop.plot = ggplot(data=ca_all, mapping=aes(x=long, y=lat, group=group)) + 
+ca.pop.plot = ggplot(data=ca_income$ca_info, mapping=aes(x=long, y=lat, group=group)) + 
   coord_quickmap() +
   geom_polygon(aes(fill = pop/area), color = "white") +
       scale_fill_gradient(trans="log10") + 
       theme_void()
-
-## we'll make up a population as follows
-# 1. choose the number of people to be the number of people in our sample scaled up to account for the cps sampling ratio
-# 2. for each, sample a county with probability proportional to its finite.population
-# 3. for each, sample a latitude and longitude by taking a randomly weighted combination of the    
-#    county's vertices. As long as the county is convex, these points will be inside the county.
-# 4. we'll give them a degree too, chosen independently of all else from the empirical distribution on the sample
-npop = nrow(earnings) / plotting.cps.sampling.ratio
-
-# takes a list of subregions, possibly with duplicates
-# for each element, chooses random lat/long coordinates within the sample.subregion
-# by taking a random convex combination of the subregion's vertices
-sample.within.subregion = function(subregions) {
-  output = data.frame(subregion=subregions, lat=NA, long=NA)
-  for(subregion in unique(subregions)) { 
-      vertices = ca_county[ca_county$subregion==subregion, c('lat','long')]
-      U = sum(subregions==subregion)
-      V = nrow(vertices)
-      weights = abs(rt(U*V, 1))
-      dim(weights) = c(U,V)
-      weights = (1/rowSums(weights)) * weights
-      output[subregions==subregion, c('lat', 'long')] = 
-                 cbind(weights %*% vertices$lat, weights %*% vertices$long)
-    }
-    output
-}
-
-finite.population.subregion = sample(ca_county_more$subregion, size=npop, replace=TRUE, prob=ca_county_more$pop)
-finite.population = sample.within.subregion(finite.population.subregion)
-pop.rows = sample(1:nrow(earnings), nrow(finite.population), replace=TRUE)
-finite.population$degree = earnings$degree[pop.rows]
-finite.population$sex = earnings$sex[pop.rows]
-finite.population$group=1 # for plotting
-display.population = sample_n(finite.population, min(100000, nrow(finite.population)))
-
-# and we'll force the degree-distribution in the sample to match our survey responses
-our.sample = sample_n(finite.population, nrow(earnings))
-our.sample$degree=earnings$degree
-
-pop.plot = ca.plot + geom_point(aes(x=long, y=lat), data=display.population, size=.02, alpha=.1) 
-sample.plot = ca.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
-pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=display.population, size=.01, alpha=.1)  
-sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=our.sample, size=.2, alpha=.5)
 ```
 
-```{r fake-pop-and-sample-it}
-set.seed(11)
-pop.earnings = earnings[sample(nrow(earnings), nrow(display.population), replace=TRUE), ]
-pop.earnings$income = pop.earnings$income + 
-    ifelse(1:nrow(pop.earnings) <= nrow(earnings), 0, 3000*rnorm(nrow(pop.earnings)))
-pop.j = sample(nrow(pop.earnings))
-pop.earnings[pop.j, ] = pop.earnings
 
+```{r fake-ca-population}
+# For illustration purposes, we're going to make up a fake population that we can think of our sample as being drawn from. 
+# We'll make up a population as follows
+# 1. choose the number of people to be the number of people in our sample scaled up to account for the cps sampling ratio. 
+#    Or, really, a smaller ratio that's more usable visually.
+# 2. draw units with replacement from the sample to get a set of rows to *add to the sample* to get the population
+# 3. perturb the income in these new rows by income by multiplying by 1*.1U for U uniform on [-1, 1]. 
+# 4. combine the sample and the added rows to get the population, shuffling so the sample isn't at the top
+#    we'll save the indices of the sample rows in the population as 'J' so we can refer to them later.
+
+earnings = ca_income$sample
+cps.sampling.ratio = 1/2500            # the actual one
+plotting.cps.sampling.ratio=1/12.5     # works visually
+npop = nrow(earnings) / plotting.cps.sampling.ratio
+pop.seed = 1
+
+newtopop = earnings[(\()sample(1:nrow(earnings), npop-nrow(earnings), replace=TRUE)) |> with_seed(pop.seed), ]
+newtopop$income = newtopop$income*(1 + .1 * runif(nrow(newtopop), -1, 1))
+pop.earnings = rbind(earnings, newtopop)
+
+order = (\() sample(1:nrow(pop.earnings))) |> with_seed(pop.seed)
+J=order[1:nrow(earnings)]
+pop.earnings[order, ] = pop.earnings
+```
+
+
+```{r define-old-names-for-ca-stuff}
+# Now we'll define a bunch of stuff that's used in older lectures
+# where the fake population and sample had a more awkward relationship
+
+display.population = pop.earnings
 pop.tab = pop.earnings
-J = pop.j[1:nrow(earnings)]
-sample.tab = pop.tab[J, ]
+
+our.sample = earnings 
+sample.tab = earnings
 sample.tab$J = J
 ```
 
+```{r plot-ca-sample-and-population}
+# Now we'll plot the sample and the population on the map.
+# Probably in the future this should be done in the lecture file,
+# as we may want them colored differently lecture by lecture.
+sample.plot = ca.plot + geom_point(aes(x=long, y=lat), data=earnings, size=.2, alpha=.5)
+sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=earnings, size=.2, alpha=.5)
+pop.plot = ca.plot + geom_point(aes(x=long, y=lat), data=pop.earnings, size=.02, alpha=.1) 
+pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=pop.earnings, size=.01, alpha=.1)  
+```
 
 ```{r visualization-defaults}
-scale_y = function(limits=c(-.3e5, 3e5)) { 
-  list(scale_y_continuous(labels=label_dollar()),
+## default settings for our scatter plot
+
+scale_y = function(limits=c(0, 2e5)) { 
+  list(scale_y_continuous(breaks=seq(0, max(limits), by=25e3), labels=label_dollar()),
        coord_cartesian(ylim=limits))
 }
-
 years = 8:20
 scale_x = function(limits=c(min(years)-.5, max(years)+.5)) { 
   scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=limits)
