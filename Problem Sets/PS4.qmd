@@ -1,0 +1,448 @@
+---
+title: "Problem Set 4"
+subtitle: "QTM 220"
+format: 
+  html:
+    filters: 
+      - custom-callout.lua
+    df-print: kable
+    embed-resources: true
+    fig-format: svg
+    html-math-method: mathjax
+    include-in-header: 
+      text: |
+        <script>
+          window.MathJax = {
+          loader: {load: ['[tex]/physics']},
+          tex: {packages: {'[+]': ['physics']}}
+          }
+    
+        </script>
+        <style>
+          .callout.callout-style-default.callout-exercise>.callout-header { 
+            background-color: #ED8275
+          } 
+          .callout.callout-style-default.callout-solution>.callout-header { 
+            background-color: #75DFED
+          } 
+        </style>
+execute: 
+  echo: false
+  message: false
+  warning: false
+knitr:
+  opts_chunk:
+    fig.path: generated-figures/
+    dev.args:
+      bg: transparent
+---
+
+
+::: hidden
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+$$
+:::
+
+
+## Gerber, Green, and Larimer Michigan Voter Experiment
+
+Prior to the August 2006 primary election in Michigan, political scientists Gerber, Green, and Larimer conducted a large field experiment in which different mailers were sent to registered voters across Michigan. Because whether or not someone votes (though not who they vote for) is public record, the researchers then accessed the public voting information to measure their outcome-- whether an individual voted in the August 2006 primary. The different treatments are as follows:
+
+- Civic Duty: do your civic duty and vote! 
+\item Hawthorne: you are being studied + do your civic duty and vote! 
+\item Self: who votes is public information, here is your recent voting record + do your civic duty and vote! 
+\item Neighbors: what if your neighbors knew whether you voted? here is your recent voting record + your neighbors' recent voting record + do your civic duty and vote! 
+\item Control: no mailer 
+\end{itemize}
+```
+Households were randomized to receive a mailer (or not) and which type, but voting records are by individual.
+
+The attached data from their experiment has the following variables:
+
+```{=tex}
+\begin{itemize}
+\item hh\textunderscore id : the household id number 
+\item hh\textunderscore size : number of adults in household 
+\item sex : individual's sex according to voter record 
+\item yob: individual's year of birth 
+\item g2000 : whether or not the individual voted in the general election in 2000 
+\item g2002 : whether or not the individual voted in the general election in 2002 
+\item g2004 : whether or not the individual voted in the general election in 2004
+\item p2000 : whether or not the individual voted in the primary election in 2000 
+\item p2002 : whether or not the individual voted in the primary election in 2002 
+\item p2004 : whether or not the individual voted in the primary election in 2004
+\item treatment : the mailer that the household received (or Control for no mailer)
+\item voted : whether the individual voted in the 2006 primary (outcome)
+\end{itemize}
+```
+(a) Create a balance table showing the similarity of individuals assigned to treated and control across sex, age, household size, and turnout in previous elections.
+
+(b) Create a balance table showing the similarity of individuals assigned to each level of treatment and control across sex, age, household size, and turnout in previous elections. Be sure to note how many individuals are in each level of treatment.
+
+(c) Calculate the subsample 2006 primary turnout within each level of treatment (and control).
+
+(d) Let's define the following treatment effects of interest: $\hat{\tau}(civic) = \hat{\mu}(civic) - \hat{\mu}(control)$, $\hat{\tau}(hawthorne) = \hat{\mu}(hawthorne) - \hat{\mu}(civic)$, $\hat{\tau}(self) = \hat{\mu}(self) - \hat{\mu}(hawthorne)$, $\hat{\tau}(neighbor) = \hat{\mu}(neighbor) - \hat{\mu}(self)$. Calculate each of these and interpret each in plain language. Sanity check: 0.01789934 for $\hat{\tau}(civic)$
+
+(e) Create a bootstrap estimated sampling distribution for each of your $\tau$s and a 95% confidence interval for each.
+
+(f) Create four dummy variables-- one for each treatment-- where an observation is coded as 1 if the household received that treatment and 0 otherwise (other treatment or control). Run an additive linear regression of 2006 primary vote on the four treatment variables. Report your results in a table and provide plain language interpretations of your coefficent estimates.
+
+(g) Run an additive linear regression of 2006 primary vote on the four treatment variables and the pre-treatment turnout variables (i.e. general election voting in 2002 and 2000, primary election voting in 2004, 2002, and 2000). Report your results in a table (one table for both models is fine) and compare the coefficients on your treatment variables to your results in part (f).
+
+
+## Women's Health Initiative
+
+```{r}
+#| echo: false
+# create data with treatment status, age, and breast cancer (0,1) 
+#age<- c(rep("50-59",5520), rep("60-69",7509), rep("70-79",3579))
+#treat<- c(rep(1,2837), rep(0,2683), rep(1,3854), rep(0,3655), rep(1,1815), rep(0,1764))
+#breastcancer<- c(rep(1,55), rep(0,2782),rep(1,42),rep(0,2641), rep(1,97), rep(0,3757), rep(1,75),rep(0,3580),rep(1,54), rep(0,1761), rep(1,38), rep(0,1726))
+#whi<- data.frame(treat=treat, age=age, breastcancer=breastcancer)
+#write.csv(whi,"whidata.csv")
+#whi<- read.csv("whidata.csv")
+```
+
+The data based on the CEE+MPA arm of the WHI trial can be found in whidata.csv and contains the following variables:
+
+```{=tex}
+\begin{itemize}
+\item treat : binary indicating whether the participant received CEE+MPA or placebo 
+\item age : the age group that the participant is in at the beginning of the trial 
+\item breastcancer : binary indicating whether the participant developed invasive breast cancer during the trial 
+\end{itemize}
+```
+(a) Create a balance table showing the number of participants assigned to CEE+MPA and placebo by age group (column with Age Group, CEE+MPA Treatment, and Placebo).
+Why are balance tables reported in randomized experiments? How do they contribute to the validity of the study's findings? Based on the balance table provided for the WHI study, evaluate the balance of participants' ages between the CEE+MPA treatment group and the placebo group.mDo you think the age distribution is sufficiently balanced for the purposes of the study? Explain your reasoning.
+
+```{=tex}
+\begin{table}
+\begin{tabular}{|c|c|c|}
+\hline
+Age Group & CEE+MPA Treatment & Placebo \\
+\hline
+50-59 & & \\ 
+\hline
+60-69 & & \\
+\hline
+70-79 & & \\
+\hline 
+\end{tabular}
+\end{table}
+```
+\bigskip
+
+(b) Estimate the overall treatment effect (difference in proportions) of CEE+MPA on breast cancer and interpret your result.
+
+(c) Create a bootstrap estimated sampling distribution of your treatment effect and report your 95\% confidence interval. Interpret your confidence interval.
+
+
+
+(d) Estimate the treatment effect of CEE+MPA on breast cancer within each age group. Sanity check: difference in breastcancer among 50-59 year olds is 0.003732558
+
+(e) Create a bootstrap estimated sampling distribution for the within-age-group treatment effects and report your 95\% confidence interval for each age group. Interpret.
+
+(f) Using the 50-59 year olds as the reference category, run an additive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, and 70-79 year olds as your regressors. Report your results in a table.
+
+(g) Using the 50-59 year olds as the reference category, run an interactive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, 70-79 year olds, 60-69 year olds \* treatment, and 70-79 year olds \* treatment as your regressors. Report your results in a table (you can use one table for both models).
+
+(h) Write the equations for each or your models using $\beta_i$s as your parameters. Fill in the tables below using the $\beta$s from your models (not numbers, for example $\beta_0 + \beta_1$.) Let $BC(T=1)-BC(T=0)$ be the difference in the proportion of those who developed invasive breast cancer for those that received treatment and control. Then fill in the tables using the estimates from your models.
+
+```{=tex}
+\begin{table}
+\caption*{Additive Regression }
+\begin{tabular}{|c|c|c|c|c| }
+\hline
+ & Age Group & Prop. Breast Cancer T=1 & Prop. Breast Cancer T=0 & $BC(T=1)-BC(T=0)$ \\
+\hline
+$\beta$s & 50-59 & & & \\ 
+ \hline
+$\beta$s & 60-69 & & & \\
+\hline
+$\beta$s & 70-79 & & & \\
+\hline 
+numbers  & 50-59 & & & \\
+ \hline
+numbers & 60-69 & & & \\
+\hline
+numbers & 70-79 & & & \\
+\hline 
+\end{tabular}
+\end{table}
+```
+\bigskip
+
+```{=tex}
+\begin{table}
+\caption*{Interactive Regression }
+\begin{tabular}{|c|c|c|c|c| }
+\hline
+ & Age Group & Prop. Breast Cancer T=1 & Prop. Breast Cancer T=0 & $BC(T=1)-BC(T=0)$ \\
+\hline
+$\beta$s & 50-59 & & & \\ 
+ \hline
+$\beta$s & 60-69 & & & \\
+\hline
+$\beta$s & 70-79 & & & \\
+\hline 
+numbers  & 50-59 & & & \\
+ \hline
+numbers & 60-69 & & & \\
+\hline
+numbers & 70-79 & & & \\
+\hline 
+\end{tabular}
+\end{table}
+```
+
+
+
+(i) Compare the results from your models to the $\hat{ATE}$s by age group that you recovered in part (d). What is different between (f) and (g)? 
+
+\bigskip
+
+
+
+## Dogs
+
+The Giant Database of Dogs, a crowd-sourced dataset organized by Prof. Leanne Powner, includes the following variables:
+
+```{=tex}
+\begin{itemize}
+\item Obs – unique observation number for case identification
+\item Name – dog’s name as provided by the owner (excess text removed)
+\item Gender – \{male, female\} closed choice
+\item Fixed – “yes” if spayed or neutered, as appropriate; “no” if not
+\item Color – respondents selected one from \{light brown, dark brown, black, white, reddish,
+yellow/blond, no primary color, other\}. Other was not an open-ended response.
+\item Heritage – 1 = single breed, 2 = designer/deliberate mix, 3 = mixed/unknown
+\end{itemize}
+```
+Use dogs.csv for the following.
+
+(a) Recode gender and fixed into numerical binary variables. Regress dog's weight on gender and fixed. Report your results in a table.
+
+(b) Create a scatter plot with weight on the y-axis, fixed on the x-axis, and use different colors for male and female dogs (include a legend).
+
+(c) Regress dog's weight on gender, fixed, and gender\*fixed. Report your results in a table (one table for both models is fine).
+
+(d) Write the equations for each or your models using $\beta_i$s as your parameters. Fill in the following table with the $\beta$s from your models (not numbers, for example $\beta_0 + \beta_1$.)
+
+```{=tex}
+\begin{table}[H]
+\caption*{Weight: Additive Model $\beta$s}
+\begin{tabular}{c | c | c |}
+& Male & Female \\
+\hline
+Fixed & & \\
+\hline
+Not Fixed & & \\
+\hline 
+\end{tabular}
+\end{table}
+```
+```{=tex}
+\begin{table}[H]
+\caption*{Weight: Interactive Model $\beta$s}
+\begin{tabular}{c | c | c |}
+& Male & Female \\
+\hline
+Fixed & & \\
+\hline
+Not Fixed & & \\
+\hline 
+\end{tabular}
+\end{table}
+```
+(e) Fill in the table using the estimates from your models.
+
+```{=tex}
+\begin{table}[H]
+\caption*{Weight: Additive Model Estimates}
+\begin{tabular}{c | c | c |}
+& Male & Female \\
+\hline
+Fixed & & \\
+\hline
+Not Fixed & & \\
+\hline 
+\end{tabular}
+\end{table}
+```
+```{=tex}
+\begin{table}[H]
+\caption*{Weight: Interactive Model Estimates}
+\begin{tabular}{c | c | c |}
+& Male & Female \\
+\hline
+Fixed & & \\
+\hline
+Not Fixed & & \\
+\hline 
+\end{tabular}
+\end{table}
+```
+(g) Calculate the subsample mean weights among fixed females, unfixed females, fixed males, and unfixed males. Compare your results to your additive and interactive tables of predicted weights.
+
+
+
+
+
+\subsection{California CPS Revisited}
+
+(a) Using the California sample of 25-35 year olds, regress income on education and age (in an additive model). Report your results in a table, including the standard errors that R automatically calculates.
+
+
+(b) Extract the predicted values and residuals from your model using predict(model name) and residuals(model name), then create a scatter plot of your predicted values and residuals. What do you see? Would you guess the errors are homoskedastic or heteroskedastic? Why?
+
+
+
+(c) Install the sandwich package and compute heteroskdasticity consistent standard errors for your model using sandwich(model name). 
+
+
+
+
+(d) Use a bootstrap to estimate the standard errors for each of the $\beta$s. 
+
+
+
+(e) Compare the standard errors you got from R in part (a) to the robust (sandwich) you calculated in parts (d). Why are they different? How do these compare to what you estimated from the bootstrap?
+
+\subsection{Causal Warm Up: Bone Density }
+
+Doctors (and researchers) hypothesize that higher calcium intake causes greater bone density (stronger bones).  To test this, a clinic runs an experiment where patients are treated with a calcium supplement or a placebo for 1 year, after which their bone density is measured. Patients are first classified as old or young, then treatment assignment is randomized within the groups. Bone Density T-Scores indicate how “normal” someone’s bone density is—0 is typical, positive numbers are better, negative numbers are worse (a threshold score of -2.5 is used to diagnose osteoporosis). 
+
+The resulting (fake) data is below. 
+
+\begin{tabular}{|c|c|c|}
+\hline
+Age Classification & Calcium Supplement & Bone Density T-Score \\
+\hline
+Old & 1 & -2 \\
+\hline
+Old & 0 & -3 \\
+\hline
+Old & 1 & -2 \\
+\hline
+Old & 0 & 0 \\
+\hline
+Old & 1 & -1 \\
+\hline
+Old & 0 & 0 \\
+\hline
+Old & 0 & -2 \\
+\hline
+Old & 0 & 0 \\
+\hline
+Young & 0 & 0 \\
+\hline 
+Young & 1 & 1 \\
+\hline
+Young & 0 & -1 \\
+\hline 
+Young & 1 & 1.5 \\
+\hline
+\end{tabular}
+
+(a) What is the probability of receiving treatment for the young? What is the probability of receiving treatment for the old? 
+
+\bigskip
+
+
+
+\bigskip 
+
+(b) Using simple difference in means, what is the treatment effect of the calcium supplement on bone density among the young? What is the treatment effect of the calcium supplement among the old? 
+
+
+(c) What is the average of these treatment effects, weighting by the number of participants in each category? 
+
+
+
+(d) If you ignored the blocked randomization and calculated the ATE using the difference in means in treated and control, what would your estimate be? 
+
+
+(e) Input the data in R, creating a binary variable for age classification. Run two regressions: a simple additive of bone density score on treatment, and an interactive with age, treatment, and age*treatment. Write the equations for your two models using $\beta$s. Report your results in a table. Which model corresponds with which estimate of the treatment effect? Fill in the table below with the $\beta$s notation from your equations and the estimates from your model. 
+
+
+\begin{tabular}{|c|c|}
+\hline
+& $\beta$s \\
+\hline 
+Avg Bone Density [Treated, Old] & \\
+\hline 
+Avg Bone Density [Control, Old] & \\
+\hline 
+Avg Bone Density [Treated, Young] & \\
+\hline 
+Avg Bone Density [Control, Young] & \\
+\hline 
+$\hat{ATE}_{Old}$ & \\
+\hline 
+$\hat{ATE}_{Young}$ & \\
+\hline
+\end{tabular}
+
+\subsection{Menopausal Hormone Therapy}
+
+Review the WHI/WHI(MS) studies as well as the Kim et al. 2021 study on neurodegenerative diseases. 
+
+(a) Fill in the following table comparing WHI and Kim et al. 
+
+\begin{tabular}{|c|c|c|}
+\hline
+& \ \ \ \ \ \ \ \ WHI Study \ \ \ \ \ \ \ \ \ & \ \ \ \ \ \ \ \ Kim et al. \ \ \ \ \ \ \ \ \ \  \\
+\hline 
+& & \\
+Method/approach used & & \\
+& & \\
+& & \\
+\hline 
+& & \\
+Population/participants & & \\
+& & \\
+& & \\
+\hline 
+& & \\
+Are there relevant populations not included? & & \\
+Who? & & \\
+& & \\
+\hline
+& & \\
+Treatment(s) & & \\
+& & \\
+& & \\
+\hline 
+& & \\
+Outcome(s) & & \\
+& & \\
+& & \\
+\hline 
+\end{tabular}
+
+(b) What is a potential omitted variable from the Kim et al. study? Does omitting that variable bias their estimate of the treatment effect of hormone therapy? Use the formulae from class to discuss whether your think their estimate might be too high, too low, or accurate. 
+
+
+
+(c) Is there a concern about omitted variable bias in the WHI? Why or why not? Use the formulae from class to discuss whether your think their estimate might be too high, too low, or accurate. 
+
+
+
+\bigskip 
+
+(d) Review the Estrogens General Statement clinical reference and read the recent NYT magazine piece about menopausal hormone therapy, the WHI's response to the NYT piece, and JoAnn Manson (WHI Principal Investigator) and Andrew M. Kaunitz's perspective on menopause management (posted on Canvas). Write a 1-2 paragraph reflection on what your major takeaways from the case study have been. Some questions are listed below to guide you, but you do not need to answer them all. 
+
+Questions to consider: 
+\begin{itemize}
+\item How do you assess the medical guidelines? Are the certainties and uncertainties of the body of research communicated effectively?
+\item What information might a doctor need to decide whether their patient should be prescribed menopausal hormone therapy? 
+\item What aspects of our readings/case study did you find most convincing and why? 
+\item What incentives do researchers and pharmaceutical companies have in research on hormone therapy medications? 
+\item What incentives do doctors/providers have when making recommendations to their patients? 
+\item How do you think these incentives affect the accumulation of knowledge and patient outcomes? 
+\end{itemize}
+Problem Sets/PS4_new.qmd
