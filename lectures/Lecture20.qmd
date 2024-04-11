@@ -1102,20 +1102,6 @@ plot.predictions(sampled.leak, z~factor(x)*factor(y))
     - white = zero observations at that location.
 - It's ok near the center but bad elsewhere, where we sample less.  
 
-## Fitting A Plane Doesn't Work At All
-
-```{r}
-#| out-height: 250px
-#| fig-asp: 1
-#| layout-ncol: 2
- 
-plot.image(leak)
-plot.predictions(sampled.leak, z~x+y)
-```
-
-- There's no 'slant', so the best thing we can do is fit a plane 'parallel to the page', i.e., constant brightness.
-- That, if we ignore some plotting artifacts I can't presently explain, is what we see on the right.
-
 ## Piecewise-Constant Models
 
 ```{r}
@@ -1178,18 +1164,18 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
 
 ## Any set of pixels can be a bin
 
-![](figures/isl-fig8-3.png){height=500px}
+![](figs/isl-fig8-3.png){height=500px}
 
 - But we need some way to search for good partitions of the pixels into bins.
 - Trying all possible partitions is computationally infeasible. 
-- And it runs into a major statistical issue we haven't had time to address satisfactorily---overitting.
+- And it runs into a major statistical issue we haven't had time to address satisfactorily---overfitting.
 - To make things manageable computationally and statistically...
 - we need to make some restrictions on the set of possible partitions.
 - People have, for the most part, settled on this: bins are *axis-aligned rectangles*.
 
 ## Partioning as Tree-Search
 
-![](figures/isl-fig8-3.png){height=500px}
+![](figs/isl-fig8-3.png){height=500px}
 
 - We can describe any partition like this as the result of a tree of *splits* based on one covariate.
 - This aligns the problem naturally with *tree-search algorithms* from the AI/Optimization tradition in CS.
@@ -1200,7 +1186,7 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
 
 ## Fancy Trees
 
-![](figures/grf_logo_wbg_cropped.png){height=500px}
+![](figs/grf_logo_wbg_cropped.png){height=500px}
 
 - The fancy stuff is newer, but it's easy to use and getting popular.
 - It's implemented in the [Generalized Random Forest](https://grf-labs.github.io/grf/) package in **R**.
@@ -1216,7 +1202,8 @@ plot.predictions(sampled.leak, pc.formula.2d(seq(0,1, length.out=32+1), seq(0,1,
 #| fig-asp: 1  
 
 library(grf)
-model = regression_forest(X=cbind(sampled.leak$x, sampled.leak$y), Y=sampled.leak$z)
+model = regression_forest(X=cbind(sampled.leak$x, sampled.leak$y), Y=sampled.leak$z, 
+                          num.trees=1, honesty=FALSE)
 im.hat = leak; im.hat$z=predict(model, newdata=cbind(im.hat$x, im.hat$y))$predictions
 plot.image(leak)
 plot.image(im.hat)
@@ -1238,7 +1225,8 @@ rescale = function(hires) {
 puffin = image.from.array(rescale(puffin.hires))
 puffin.sampled = sample.px(puffin,5000, noise.level=.05)
 
-puffin.model = regression_forest(X=cbind(puffin.sampled$x, puffin.sampled$y), Y=puffin.sampled$z)
+puffin.model = regression_forest(X=cbind(puffin.sampled$x, puffin.sampled$y), Y=puffin.sampled$z, 
+                                 num.trees=1, honesty=FALSE)
 im.hat = puffin
 im.hat$z=predict(puffin.model, newdata=cbind(im.hat$x, im.hat$y))$predictions
 ```
@@ -1253,3 +1241,8 @@ im.hat$z=predict(puffin.model, newdata=cbind(im.hat$x, im.hat$y))$predictions
 plot.image(puffin)
 plot.image(im.hat)
 ```
+
+## Possible Additional Topic: Forests vs. Trees
+- Forests, i.e., averages of the predictions of multiple trees that we get by working with random subsets of the observations. 
+    - just use GRF with default parameters. 
+    - don't pass num.trees=1 or honesty=FALSE to regression_forest
