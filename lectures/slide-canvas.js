@@ -17,6 +17,11 @@ var canvases = {}
 var lineWidth;
 var isMousedown;
 
+function currentCanvas() {
+    var slide = Reveal.getCurrentSlide();
+    return canvases[slide.id][canvases[slide.id].length - 1];
+}
+
 const requestIdleCallback = window.requestIdleCallback || function (fn) { setTimeout(fn, 1) };
 document.addEventListener("DOMContentLoaded", function(event) {
     initializePenSettings()
@@ -28,7 +33,9 @@ function switchCanvas(event) {
     lineWidth = 0
     var slide = event.currentSlide;
     if(!(slide.id in canvases)) {
-        canvases[slide.id] = [addCanvas(slide)]
+      var canvas = new SlideCanvas(slide);
+      canvas.addEventListeners();
+      canvases[slide.id] = [canvas];
     }
 }
 
@@ -85,110 +92,36 @@ function initializePenSettings() {
 
 
 
-function addCanvas(slide) {
-    var outer_container   = document.createElement('div')
+SlideCanvas = function(slide, strokeHistory) {   
+  this.slide = slide;
+  this.strokeHistory = strokeHistory ?? [];
+
+  var outer_container   = document.createElement('div')
         outer_container.className = 'slide-container'
         outer_container.setAttribute('style', 'position: relative; width: 100%; height: 100%;')
-    var canvas = document.createElement('canvas')
+  var canvas = document.createElement('canvas')
         canvas.setAttribute('style', 'position:absolute; top:0; left:0; width:100%; height:100%; z-index: 2;')
-    var content_container = document.createElement('div')
+  var content_container = document.createElement('div')
         content_container.className = 'slide-content-container'
         content_container.setAttribute('style', 'position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1')
         Array.from(slide.childNodes).forEach(child => { content_container.append(child) })
+  outer_container.append(canvas)
+  outer_container.append(content_container)
+  slide.append(outer_container)
 
-    outer_container.append(canvas)
-    outer_container.append(content_container)
-    slide.append(outer_container)
+  canvas.width = outer_container.offsetWidth
+  canvas.height = outer_container.offsetHeight
 
-    canvas.width = outer_container.offsetWidth
-    canvas.height = outer_container.offsetHeight
-    var strokeHistory = []
-    addCanvasListeners(canvas, strokeHistory)
-    return { canvas: canvas, strokeHistory: strokeHistory }
+  this.canvas = canvas;
+  this.context = canvas.getContext('2d');
 }
 
-function addCanvasListeners(canvas, strokeHistory) {
-    var context = canvas.getContext('2d');
-    var points = []
+SlideCanvas.prototype.addEventListeners = function() { 
 
-function drawOnCanvas(stroke) {
-    if(tool === 'pen') 
-        penOnCanvas(stroke)
-    if(tool === 'eraser') 
-        eraserOnCanvas(stroke)
-}
-
-function eraserOnCanvas (eraserstroke) {
-    var now = Date.now();
-    strokeHistory.forEach(strokeRecord => {
-        var erase = false;
-        strokeRecord.points.forEach(strokepoint => {
-            eraserstroke.forEach(eraserpoint => {
-                erase = erase || ((eraserpoint.x - strokepoint.x) ** 2 + (eraserpoint.y - strokepoint.y) ** 2 < toolsize ** 2) 
-            })
-        })
-        if(erase) strokeRecord.erased = now;
-    })
-    redraw();
-}
-
-/**
- * This function takes in an array of points and draws them onto the canvas.
- * @param {array} stroke array of points to draw on the canvas
- * @return {void}
- */
-function penOnCanvas (stroke) {
-  context.strokeStyle = stroke[0].strokeStyle;
-  context.lineCap = 'round'
-  context.lineJoin = 'round'
-
-  const l = stroke.length - 1
-  if (stroke.length >= 3) {
-    const xc = (stroke[l].x + stroke[l - 1].x) / 2
-    const yc = (stroke[l].y + stroke[l - 1].y) / 2
-    context.lineWidth = stroke[l - 1].lineWidth
-    context.quadraticCurveTo(stroke[l - 1].x, stroke[l - 1].y, xc, yc)
-    context.stroke()
-    context.beginPath()
-    context.moveTo(xc, yc)
-  } else {
-    const point = stroke[l];
-    context.lineWidth = point.lineWidth
-    context.strokeStyle = point.color
-    context.beginPath()
-    context.moveTo(point.x, point.y)
-    context.stroke()
-  }
-}
-
-/**
- * Remove the previous stroke from history and repaint the entire canvas based on history
- * @return {void}
- */
-function undoDraw () {
-  strokeHistory.pop()
-  redraw();
-}
-
-function redraw(time) {
-  if(time === undefined) 
-    time = Date.now()
-  
-  context.clearRect(0, 0, canvas.width, canvas.height)
-  strokeHistory.map(function (strokeRecord) {
-    let stroke = strokeRecord.points;
-    if(strokeRecord.drawn <= time && 
-       (strokeRecord.erased === null || time < strokeRecord.erased) && 
-       stroke.length > 1) {
-          context.beginPath()
-          let strokePath = [];
-          stroke.map(function (point) {
-              strokePath.push(point)
-              penOnCanvas(strokePath)
-          })
-        }
-  })
-}
+var slideCanvas = this;
+var canvas = this.canvas;
+var context = canvas.getContext('2d');
+var points = [];
 
 for (const ev of ["touchstart", "mousedown"]) {
   canvas.addEventListener(ev, function (e) {
@@ -215,9 +148,9 @@ for (const ev of ["touchstart", "mousedown"]) {
     context.lineWidth = lineWidth// pressure * 50;
 
     points.push({ x, y, lineWidth, strokeStyle })
-    drawOnCanvas(points)
-  })
-}
+    slideCanvas.drawOnCanvas(points)
+    })
+  }
 
 for (const ev of ['touchmove', 'mousemove']) {
   canvas.addEventListener(ev, function (e) {
@@ -245,7 +178,7 @@ for (const ev of ['touchmove', 'mousemove']) {
     lineWidth = Math.log(pressure + 1) * toolsize * 0.2 + lineWidth * 0.8
     points.push({ x, y, lineWidth, strokeStyle })
 
-    drawOnCanvas(points);
+    slideCanvas.drawOnCanvas(points);
   })
 }
 
@@ -271,7 +204,7 @@ for (const ev of ['touchend', 'mouseup']) {
     if(tool==='pen') {
         strokeRecord = { points: [...points], drawn: Date.now(), erased: null }
         requestIdleCallback(function () { 
-          strokeHistory.push(strokeRecord);
+          slideCanvas.strokeHistory.push(strokeRecord);
           points = []
         })
     }
@@ -279,4 +212,75 @@ for (const ev of ['touchend', 'mouseup']) {
     lineWidth = 0
   })
 }
+}
+
+SlideCanvas.prototype.drawOnCanvas = function(stroke) {
+    if(tool === 'pen') 
+      this.penOnCanvas(stroke)
+    if(tool === 'eraser') 
+      this.eraserOnCanvas(stroke)
+}
+
+SlideCanvas.prototype.eraserOnCanvas =  function(eraserstroke) {
+    var now = Date.now();
+    this.strokeHistory.forEach(strokeRecord => {
+        var erase = false;
+        strokeRecord.points.forEach(strokepoint => {
+            eraserstroke.forEach(eraserpoint => {
+                erase = erase || ((eraserpoint.x - strokepoint.x) ** 2 + (eraserpoint.y - strokepoint.y) ** 2 < toolsize ** 2) 
+            })
+        })
+        if(erase) strokeRecord.erased = now;
+    })
+    this.redraw();
+  }
+
+SlideCanvas.prototype.penOnCanvas = function(stroke) {
+  var context = this.context;
+  context.strokeStyle = stroke[0].strokeStyle;
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+
+  const l = stroke.length - 1
+  if (stroke.length >= 3) {
+    const xc = (stroke[l].x + stroke[l - 1].x) / 2
+    const yc = (stroke[l].y + stroke[l - 1].y) / 2
+    context.lineWidth = stroke[l - 1].lineWidth
+    context.quadraticCurveTo(stroke[l - 1].x, stroke[l - 1].y, xc, yc)
+    context.stroke()
+    context.beginPath()
+    context.moveTo(xc, yc)
+  } else {
+    const point = stroke[l];
+    context.lineWidth = point.lineWidth
+    context.strokeStyle = point.color
+    context.beginPath()
+    context.moveTo(point.x, point.y)
+    context.stroke()
+  }
+}
+
+SlideCanvas.prototype.redraw = function(time) {
+  if(time === undefined) 
+    time = Date.now()
+  
+  var slideCanvas = this;
+  var canvas = this.canvas;
+  var context = this.context;
+  var strokeHistory = this.strokeHistory;
+
+  context.clearRect(0, 0, canvas.width, canvas.height)
+  strokeHistory.map(function (strokeRecord) {
+    let stroke = strokeRecord.points;
+    if(strokeRecord.drawn <= time && 
+       (strokeRecord.erased === null || time < strokeRecord.erased) && 
+       stroke.length > 1) {
+          context.beginPath()
+          let strokePath = [];
+          stroke.map(function (point) {
+              strokePath.push(point)
+              slideCanvas.penOnCanvas(strokePath)
+          })
+        }
+  })
 }
