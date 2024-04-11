@@ -20,7 +20,6 @@ var isMousedown;
 const requestIdleCallback = window.requestIdleCallback || function (fn) { setTimeout(fn, 1) };
 document.addEventListener("DOMContentLoaded", function(event) {
     initializePenSettings()
-    Reveal.on('ready', switchCanvas)
     Reveal.on('slidechanged', switchCanvas)
 }, false)
 
@@ -103,14 +102,14 @@ function addCanvas(slide) {
 
     canvas.width = outer_container.offsetWidth
     canvas.height = outer_container.offsetHeight
-    addCanvasListeners(canvas)
-    return canvas;
+    var strokeHistory = []
+    addCanvasListeners(canvas, strokeHistory)
+    return { canvas: canvas, strokeHistory: strokeHistory }
 }
 
-function addCanvasListeners(canvas) {
+function addCanvasListeners(canvas, strokeHistory) {
     var context = canvas.getContext('2d');
     var points = []
-    var strokeHistory = []
 
 function drawOnCanvas(stroke) {
     if(tool === 'pen') 
@@ -250,7 +249,7 @@ for (const ev of ['touchmove', 'mousemove']) {
   })
 }
 
-for (const ev of ['touchend', 'touchleave', 'mouseup']) {
+for (const ev of ['touchend', 'mouseup']) {
   canvas.addEventListener(ev, function (e) {
     let pressure = 0.1;
     let x, y;

@@ -1,8 +1,11 @@
 ---
-title: "QTM 220: Lectures 14-15"
-subtitle: "Descriptive Regression With Multiple Covariates"
+title: "QTM 220 Lecture 14"
+subtitle: "Least Squares Regression in Linear Models"
 format: 
   clean-revealjs:
+    controls: true
+    controls-layout: bottom-right
+    embed-resources: true
     height: 1000
     width: 1290
     theme: [default, "class.scss"]
@@ -14,13 +17,14 @@ format:
     html-math-method: mathjax
     include-in-header: 
       text: |
+        <link rel="stylesheet" href="Coloris/src/coloris.css"></script>
+        <script src="Coloris/src/coloris.js"></script>
+        <script src="slide-canvas.js"></script>
         <script>
           window.MathJax = {
           loader: {load: ['[tex]/physics']},
           tex: {packages: {'[+]': ['physics']}}
           }
-    
-        </script>
 knitr:
   opts_chunk:
     fig.path: generated-figures/
@@ -29,737 +33,672 @@ knitr:
 ---
 
 
-```{r load-libraries}
-library(purrr)
-library(tibble)
-library(dplyr)
-library(magrittr)
-library(stringr)
-library(ggplot2)
-library(htmltools)
-library(kableExtra)
-library(scales)
 
-percent = label_percent(accuracy=1)
-approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+# A Problem With Subsample Averages
+
+{{< include shared-code.qmd >}}
+{{< include ca-income.qmd >}}
+
+## Sometimes There Isn't Much to Average
+```{r}
+#| out-height: 400px
+
+ggplot(earnings) + 
+  geom_point(aes(x=education, y=income), color='#F7766D',size=dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.3)) +
+  scale_x() + scale_y() + guides(color='none')
 ```
 
-```{r ggplot-themes}
-fontsize = 16
-textcolor = "#888888"
+- Very few people in our California CPS sample have less than 11 years of education.
+  - There's a good reason for this: CA law requires residents stay in school until they're 18.
+  - And usually, if you're 18 year or older, you've gotten to 11th grade.
+- But that means our 8th-10th grade income averages are based on very few people.
+- And that makes them very sensitive to who, exactly, is in the sample.
 
-class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
-        panel.background = element_rect(fill = "transparent", colour = NA),
-                    legend.background = element_rect(fill="transparent", colour = NA),
-                    legend.box.background = element_rect(fill="transparent", colour = NA),
-                    legend.key = element_rect(fill="transparent", colour = NA),
-        axis.ticks.x = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.x  = element_text(colour = textcolor, size=fontsize),
-        axis.text.y  = element_text(colour = textcolor, size=fontsize),
-        axis.title.x  = element_text(colour = textcolor),
-        axis.title.y  = element_text(colour = textcolor, angle=90)
-)
+## Sensitivity
 
-theme_set(class.theme)
-theme_update(axis.title.x  = element_blank(),
-             axis.title.y  = element_blank())
-simplified.theme = theme_get()
+```{r}
+#| cache: true
 
-theme_update(axis.text.x   = element_blank(), 
-              axis.text.y   = element_blank())
-blank.theme = theme_get()
+loo.means = \(rows) map(1:nrow(rows), \(i) mean(rows[-i,]$income)) |> unlist() 
+loo = earnings |> group_by(education) |> 
+                  group_modify(\(rows, group) 
+                    data.frame(income = loo.means(rows)))
 
-theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
-           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
-grid.theme = theme_get()
-
-theme_set(simplified.theme)
+boot = map(1:100, \(bb) {
+  boot.sam = earnings[sample(nrow(earnings), replace=TRUE),]
+  boot.sam |> group_by(education) |> summarize(income=mean(income))
+}) |> bind_rows()
 ```
 
+```{r}
+#| out-height: 500px
+#| layout-ncol: 2
+#| fig-asp: .6
 
-```{r table-styling}
-ellipsis <- function(df, nhead=5L, ntail=2) {
-    rownames(df) = as.character(1:nrow(df))
-    stopifnot("data.frame" %in% class(df))
-    els <- rep(NA, ncol(df)) %>% 
-        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
-        data.frame(stringsAsFactors=FALSE) %>% 
-        tibble::as_tibble()
-    rownames(els) = "⋮"
-    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
-}
+earnings$type = 'individual incomes'
+loo$type = 'leave-one-out means'
+boot$type = 'bootstrap means'
+combined = rbind(earnings[, c('education','type','income')], loo, boot)
+combined$type = factor(combined$type, levels=c('individual incomes', 'leave-one-out means', 'bootstrap means'))
+education.levels = c(8,12,16,20)
+
+ggplot(combined[combined$education %in% education.levels & 
+                combined$type %in% c('individual incomes', 'leave-one-out means'), ]) + 
+  geom_point(aes(x=factor(type), color=factor(type), y=income), size=2*dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.2)) + 
+  facet_grid(cols=vars(education)) + guides(color='none') + scale_y(c(0,200000))
+
+ggplot(combined[combined$education %in% education.levels & 
+                combined$type %in% c('individual incomes', 'bootstrap means'), ]) + 
+  geom_point(aes(x=factor(type), color=factor(type), y=income), size=2*dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.2)) + 
+  facet_grid(cols=vars(education)) + guides(color='none') + scale_y(c(0,200000))
+```  
+
+- If we leave even one person out of our 8th grade average, it changes a fair amount.
+  - Each person's income is 1/`{r} sum(earnings$education==8)`th of that average.
+  - We can see those changes in the 'leave-one-out means' plot on the left.
+- That's not a problem with the 12th grade average.
+  - Each person's income is 1/`{r} sum(earnings$education==12)`th of that average.
+  - And the leave-one-out means barely change.
+- We see a more 'statistical' version of this by looking at the bootstrap means plot on the right.
+  - The spread of these bootstrap means is a good approximation to the spread \
+    we get in the actual sample means when we sample from the population.
+  - And it's *huge* for folks with 8th grade educations.
+
+
+## Sometimes There's Nothing to Average
+  
+```{r}
+#| out-height: 500px
+#| fig-asp: .4
+race.categories = c('White only', 'Black only', 'Asian only', 'Hawaiian/Pacific Islander only (HP)')
+mean_sd = function(x) { list(y=mean(x), ymin=mean(x)-sd(x), ymax=mean(x)+sd(x)) }
+ggplot(earnings[earnings$race %in% race.categories & earnings$education %in% education.levels, ]) + 
+  geom_point(aes(x=race, y=income, color=race), size=dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.3)) +
+  stat_summary(aes(x=race, y=income), geom="pointrange", fun.data=mean_sd, size=.5, alpha=.7) +
+
+  facet_grid(cols=vars(education)) + guides(color='none', x=guide_axis(angle=45)) + scale_y(c(0,200000)) 
 ```
 
-## Today
+- When we break things out in additional dimensions, e.g. by race, we see a bigger problem.
+- We can't even take an average of Black survey respondents with 8th grade educations.
+- There's nobody in that column to average.
 
-::: {.hidden}
-$$
-\newcommand{\alert}[1]{\textcolor{red}{#1}}
-\newcommand{\model}{\mathcal{M}}
-\newcommand{\R}{\mathbb{R}}
-\DeclareMathOperator{\E}{E}
-\DeclareMathOperator*{\argmin}{argmin}
-\DeclareMathOperator{\V}{V}
-\DeclareMathOperator{\Var}{\V}
-\newcommand{\inred}[1]{\textcolor{red}{#1}}
-\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
-\newcommand{X}{\mathbf{X}}
-\newcommand{Y}{\mathbf{Y}}
-$$ 
-:::
+## Often.
+```{r}
+#| out-height: 500px
+#| fig-asp: .4
+counties = c('alameda', 'san francisco', 'los angeles', 'orange')
+cearnings = earnings[earnings$county %in% counties, ]
+cearnings$county = factor(cearnings$county, levels=counties) 
+ggplot(cearnings[cearnings$education %in% education.levels & cearnings$county %in% counties, ]) +
+  geom_point(aes(x=county, y=income, color=county), size=dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.05)) +
+  stat_summary(aes(x=county, y=income), geom="pointrange", fun.data=mean_sd, size=.5, alpha=.7) +
+  facet_grid(cols=vars(education)) +
+  guides(color='none', x=guide_axis(angle=45)) + scale_y(c(0,200000)) 
+```
 
-- We'll talk about the mechanics of least squares regression with multiple covariates.
-- We'll use two common linear models, focusing on *descriptive analysis*. No populations today.
-- Here's an Outline
-  - Introductory Exercises
-  - The Additive Model
-  - The Fully-Interactive Model
-  - Omitted Variable Bias
-
-# Introductory Exercises
-
-## Exercise 1: One Regression Line
-
-![](figures/BoundRegMatchPosA){height=600px}
-
-- Here's a plot of some data with binary $X$ and $Y$. We've jittered the points a little.
-- **Exercise**. Draw the least squares regression line. What's the slope?
-- Hint. What are the means of the  X=1 and X=0 subsamples? What does this tell us?
-
-## Exercise 1: Solution
-
-![](figures/BoundRegMatchPosB){height=600px}
-
-- The slope is $1/3$ ($2/6$). 
-- The line goes through the subsample means:
-$2/6$ on the left and $4/6$ on the right.
-- So it rises by $4/6-2/6=2/6$ as it runs a distance of $1-0=1$.
-
-## Exercise 2: Two Regression Lines
-
-![](figures/BoundRegMatchPosA){height=600px}
-
-- Let's add a second binary covariate $Z \in \{a,b\}$. We'll choose Z. We'll label each point either $a$ or $b$.
-- Then we'll draw two regression lines: one each for the $Z=a$ and $Z=b$ subsamples.
-- **Exercise** Try labeling the points so that the slopes of both lines are zero. Then draw the lines.
-
-## Exercise 2: Solution
-
-![](figures/BoundRegMatchZero){height=600px}
+- When we break things out by county, we have empty columns too.
+- We've sampled nobody in San Francisco with an 8th grade education.
+- This isn't an edge case. This is common.
 
 
-## Exercise 3: Three Regression Lines
+## Extremely Common.
+```{r}
+#| out-height: 500px
+ggplot(cearnings[cearnings$education %in% education.levels & 
+                 cearnings$county %in% counties &
+                 cearnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=race, y=income, color=race), size=2*dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.05)) +
+  stat_summary(aes(x=race, y=income), geom="pointrange", fun.data=mean_sd, size=.5, alpha=.7) +
+  facet_grid(cols=vars(county), rows=vars(education)) +
+  guides(color='none', x=guide_axis(angle=45)) + scale_y(c(0,200000)) 
+```
 
-- Now let's make our covariate $Z$ three-valued: $Z \in \{a,b,c\}$.
-- We'll relabel our points and draw a line for each of our 3 $Z=x$ subsamples.
-- **Exercise** Try labeling the points so that we get ...
-  - two lines with zero slope
-  - one line with downward slope
+ - When we break things down in multiple dimensions, we have a lot of empty categories.
+ - Even using 3 dimensions---race, county, and education---we have a lot.
+     - Otherwise, there are population summaries we just can't estimate. 
+     - i.e. anything involving the mean of a group we haven't sampled
+ - So we need some way to make predictions for groups with no data.
 
-## Exercise 3: Solution
+## A Partial Solution
 
-![](figures/BoundRegMatchNeg){height=600px}
+```{r}
+#| out-height: 500px
+cearnings$degree = ifelse(cearnings$education < 16, 'no 4-year degree', '4-year degree')
+cearnings$degree = factor(cearnings$degree, levels=c('no 4-year degree', '4-year degree'))
+cearnings$area = ifelse(cearnings$county %in% c('alameda', 'san francisco'), 'sf bay area', 'la area')
+cearnings$area = factor(cearnings$area, levels=c('sf bay area', 'la area'))
+ggplot(cearnings[cearnings$education %in% education.levels & 
+                cearnings$county %in% counties &
+                cearnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=race, y=income, color=race), size=2*dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.05)) +
+  stat_summary(aes(x=race, y=income), geom="pointrange", fun.data=mean_sd, size=.5, alpha=.7) +
+  facet_grid(cols=vars(area), rows=vars(degree)) +
+  guides(color='none', x=guide_axis(angle=45)) + scale_y(c(0,200000)) 
+```
 
-- Let's think about the *average slope* here. 
-- There are two averages we might think of...
-  - The simple unweighted average, $\frac{1}{3}\sum_z \text{slope}_z$
-  - The subsample-size weighted average, $\sum_z P_z \ \text{slope}_z$ for $P_z=N_z/N$.
-- Both are negative. And that's interesting---when we drew one line ignoring $z$, the slope was positive.
+- We've already seen a partial solution to this problem: coarsening.
+- Here we've coarsened in two dimensions.
+  - We've coarsened education into two categories: 4-year degree  (>= 16 years) vs. no 4-year degree (<16 years).
+  - We've coarsened county into two areas: SF Bay Area (SF, Alameda) and LA Area (LA, Orange).
+- And it helps, but we have two problems.
+  1. We've renamed everything, so we'd have to redefine all our summaries. This is fixable.
+  2. We *still* have empty groups, although we have fewer. This is not.
 
-## Lesson
 
-![](figures/BoundRegMatchNeg){height=600px}
+## We Need A General Solution
+```{r}
+#| out-height: 500px
+ggplot(earnings[earnings$education %in% education.levels & earnings$county != 'unknown', ]) + 
+  geom_point(aes(x=race, y=income, color=race), size=2*dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.05)) +
+  stat_summary(aes(x=race, y=income), geom="pointrange", fun.data=mean_sd, size=.5, alpha=.7) +
+  facet_grid(cols=vars(county), rows=vars(education)) +
+  guides(color='none', x=guide_axis(angle=45)) + scale_y(c(0,200000)) 
+```
 
-- The *ignore-z slope* is not necessarily similar to the *average-z slope*.
-- This has huge implications. People often get confused because they mean one and use the other.
-- We'll explore this in some examples soon. Any questions now?
+- This empty groups problem is a much bigger deal than I've made it seem.
+- We've been looking at some of the most populous counties and common racial identities.
+- When we use all the counties in CA and all the identities the CPS includes, most groups are empty.
+- And the range of coarsening options is overwhelming.
 
-## What Regression Is {.small}
+# What We've Been Doing: A Least Squares Interpretation 
 
-- Regression is *choosing a curve* that predicts outcomes (Y) from covariates (X).
-- We choose from a set of curves we call a **regression model**.
-- Saying **least squares regression** specifies that we choose the best according to a particular criterion.
-- We pick the curve that minimizes the sum of squared errors.
+## Reinterpreting the Sample Mean
 
-$$
-\begin{aligned}
-\hat \mu &= \argmin_{m \in \model} \ell(m) \qfor \ell(m) = \sum_{i=1}^n \qty{m(X_i) - Y_i}^2 \quad \text{ where } \ 
-&& \model \ \text{ is the model} \\
-&&& m \ \text{ is a curve we're considering } \\
-&&& \ell(m) \ \text{ is the criterion we're using to choose} \\
-&&& \hat\mu \ \text{ is the curve we do choose}.
-\end{aligned}
-$$
+```{r}
+#| out-height: 400px
+Y = earnings$income[earnings$education==8]
+X = 1:length(Y) 
 
-- We can then use that curve to summarize the data.
-- We can make a prediction $Y \approx \hat\mu(X)$ at any value of $X$.
-- We can summarize the predictions at multiple values of $X$.
-  - e.g. average treatment effects in our gym subsidy example.
-  - e.g. average increase in income associated with a year of high school. 
-  
+ggplot() + 
+  geom_point(aes(x=X, y=Y), alpha=.5, size=3) +
+  geom_hline(yintercept=mean(Y), color='red') +
+  geom_segment(aes(x=X, xend=X, y=mean(Y), yend=Y), alpha=.2, color='red') +
+  geom_hline(yintercept=median(Y), color='orange')  +
+  geom_segment(aes(x=X+.1, xend=X+.1, y=median(Y), yend=Y), alpha=.2, color='orange') +
+  geom_hline(yintercept=0, color='blue')  + 
+  geom_segment(aes(x=X-.1, xend=X-.1, y=0, yend=Y), alpha=.2, color='blue') + 
+  scale_y(c(0,60000)) 
+```
 
-## Models for Data With More Than One Covariate
-
-- Often we want to work with subsamples defined in terms of multiple covariates.
-- As with continuous covariates, there are many ways to do this.
-- And as with continuous covariates, the choice matters: misspecification leads to big problems inferentially.
-- Today we will look at two common approaches to modeling data with two covariates.
-
-$$
-\begin{aligned}
-\model &= \qty{ m(x,z) = b_0 + b_1 x + b_2 z } && \text{ additive model } \\
-\model &= \qty{ m(x,z) = b_0 + b_1 x + b_2 z + \textcolor{blue}{b_{3} xz} } && \text{ fully-interacted model }
-\end{aligned}
-$$
-
-- In the *additive model*, the influences of each covariate add together. 
-  - This is essentially never how our covariates influence our outcome in reality.
-  - So this model is essentially always misspecified. 
-- In *fully-interacted model*, the influence of one covariate depends on the value of the other. 
-  - The [interaction term]{.fg style="color:blue"} captures this dependence.
-  - This isn't misspecified when our covariates are binary. It'll go through the 4 subsample means.
-- When we have more than two covariates, these are the extremes---there are models somewhere in between.
-
-##  A Note on Interpretation
+- Let's stop thinking about the sample mean *procedurally*, i.e., sum the dots and divide by their number.
+- Let's think of it as a *choice*, i.e., the best number for summarizing the data accordinating to some criterion.
+- What we're looking at here are the outcomes $Y_i$ for sampled Californians with 8 years of education.
+- And three summaries of the location of those outcomes.
+  1. The sample mode ([blue line]{.fg style="color:blue"})
+  2. The sample median ([orange line]{.fg style="color:orange"})
+  3. The sample mean ([red line]{.fg style="color:red"})
+- All of these are reasonable summaries. And the best choice according to some reasonable criterion. 
+- Criteria which, sensibly, look what's left over when we compare our observations to our location summary.
 
 $$
-\begin{aligned}
-\model &= \qty{ m(x,z) = b_0 + b_1 x + b_2 z } && \text{ additive model } \\
-\model &= \qty{ m(x,z) = b_0 + b_1 x + b_2 z + \textcolor{blue}{b_{3} xz} } && \text{ fully-interacted model }
-\end{aligned}
+\hat\varepsilon_i = Y_i - \hat\mu \qquad \text{ are the \textbf{residuals}}
 $$
 
-- Some people focus on the **estimated coefficients** in models like this. In my opinion, this is a mistake.
-- These coefficients *are* summaries of our curve $\hat\mu$. But **they're different summaries in different models**.
-- It makes sense to think about which model is best if you want to estimate an average treatment effect.
-- It doesn't make sense to think about which model is best if you want to estimate *the coefficient of $x$*.
-- We saw in our intro exercise that the least squares slopes can be totally different when ...
-  - we ignore $z$ 
-  - we find different slopes for each $z$ --- even if we then average them.
-- My advice: **focus on the curve**. 
-  - If someone talks about a coefficient ... 
-  - look at their model and see what it does to the curve.
 
-# The Additive Model
-
-
-## One Binary and One Continuous Covariate
-
-![](figures/psc){height=500px}
-
-- Here's what we draw when we have two covariates and ...
-  - one is binary 
-  - one is continuous (or continuous*ish* e.g. education in years) 
-- We put the continuous one on the x-axis and color points to show the binary one.
-
-## One Binary and One Continuous Covariate
-
-![](figures/em3D1){height=500px}
-
-- But what the math sees is this. It sees points in 3D space.
-  - One dimension for the outcome
-  - One dimension for the continuous covariate
-  - One dimension for the binary covariate. 
-- It just happens that all points lie on two sheets---one for each value of the binary covariate.
-
-
-## One Binary and One Continuous Covariate
-
-![](figures/em3D2){height=500px}
-
-- We can rotate this plot to get a better sense of things.
-- That's a useful thing to do with 3D visualization.
-- Like you might turn an apple instead of looking at it from a single perspective.
-
-## Regression Plane
-
-![](figures/em3D3){height=500px}
-
-
-$$
-\hat\mu(x,z) = b_0 + b_1 x + b_2 z
-$$
-
-:::: r-stack
-::: {.fragment .fade-out data-fragment-index="0"}
-
-- When we take this perspective, the additive regression model *fits a plane* to the data.
-- And when $z$ is binary, you can think of this as giving is *two regression lines*
-  - One where that plane intersects the sheet with $z=0$ 
-  - Another where it intersects the sheet with $z=1$.
-:::
-::: {.fragment .current-visible data-fragment-index="0"}
-
-- These lines are related because we have to be able to draw a plane through them.
-- Using the plane equation---if our geometric intution doesn't do it for us---we can see they have the same slope.
-
-$$
-\begin{aligned}
-\hat\mu(x,0) = b_0 + b_1 x + b_2 \cdot 0 = b_0 + b_1 x \\
-\hat\mu(x,1) = b_0 + b_1 x + b_2 \cdot 1 = (b_0+b_1) + b_1 x \\
-\end{aligned}
-$$
-
-:::
-::::
-
-## Misspecification Activity
-
-$$
-\hat\mu(x,z) = \hat\beta_0 + \hat\beta_1 x + \hat\beta_2 z
-$$
-
-- Draw the two regression lines implied by the least squares fit of the additive model.
-- Then draw the lines *you think* you should use to fit the data.
-
-:::: r-stack
-::: {.fragment .fade-out data-fragment-index="0"}
-![](figures/multAct){height=600px}
-:::
-::: {.fragment .current-visible data-fragment-index="0"}
-![](figures/multActSol){height=600px}
-:::
-::::
-
-## Regression Plane for Two Continuous Covariates
-
-![](figures/em3D4){height=600px}
-
-- All the same ideas apply when we have two continuous covariates.
-- What changes is there are no special 'sheets' to think about.
-- Fundamentally, we have to draw things in 2D
-
-
-
-# Examples of Additive Regression
-
-## Additive Regression with a Civil Liberties Outcome
-
-$$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} + b_2 \text{dem} $$
-
-![](figures/pscMarg){height=600px}
-
-## Recall: Simple Regression with SCscore
-
-$$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} $$
-
-![](figures/lmPlot){height=600px}
-
-## Recall: Simple Regression with Party
-
-$$ m(scscore, dem) = b_0 + b_1 \ \text{dem} $$
-
-![](figures/lmBin){height=600px}
-
-## Additive Regression
-
-$$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} + b_2 \text{dem} $$
-
-![](figures/pscMarg){height=600px}
-
-## Breaking Things Down: Federalism Outcome
-
-$$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} $$
-
-![](figures/pscMarg20){height=600px}
-
-::: aside
-We've changed the outcome so our lines are a bit further apart. It helps us see things.
-:::
-
-## Breaking Things Down: Federalism Outcome
-
-$$ m(scscore, dem) = b_0 + b_1 \ \text{dem} $$
-
-![](figures/pscMarg21){height=600px}
-
-
-## Breaking Things Down: Federalism Outcome
-
-$$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} + b_2 \text{dem} $$
-
-![](figures/pscMarg22){height=600px}
-
-
-## Predictions Using Additive Models
-
-$$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} + b_2 \text{dem} $$
-
-- The predicted outcomes for Republican and Democrat-appointed justices with zero SCscore.
-$$ \hat\mu(0,0) = \hat\beta_0 \qand \hat\mu(0,1) = \hat\beta_0 + \hat\beta_2$$
-
-- The predicted difference in outcomes between Democrat and Republican-appointed justices at $SCscore=s$.
-$$ 
-\hat \mu(s,1) - \hat \mu(s,0) = \qty(\hat\beta_0 + \hat\beta_1 s + \hat\beta_2) - \qty(\hat\beta_0 + \hat\beta_1 s) = \hat\beta_2 \qqtext{ for any } s.
-$$
-
-- What is this? And what's weird about it?
-$$ \hat\mu(s+1,z)-\hat\mu(s,z)=\hat\beta_1 $$
-
-::: fragment
-
-- It's the predicted difference in outcomes between justices 
-  - appointed by the same party (either)
-  - and with SCscore $s$ and $s+1$ (for any $s$)
-- You might think this should depend on party and $s$, but the model rules out that possibility.
-
-:::
-  
-
-# The Fully-Interacted Model
-
-
-## Breaking Down the Fully Interacted Model
-![](figures/pscInt){height=600px}
-
-$$ \hat\mu(scscore, dem) = \hat\beta_0 + \hat\beta_1 \cdot \text{scscore} + \hat\beta_2 \cdot \text{dem} + \hat \beta_4  \cdot \text{scscore} \cdot \text{dem} $$
-
-## Breaking Down the Fully Interacted Model
-![](figures/pscInt0){height=600px}
-$$ \hat\mu(scscore, dem) = \hat\beta_0 + \hat\beta_1 \cdot \text{scscore} + \hat\beta_2 \cdot \text{dem} + \hat \beta_4  \cdot \text{scscore} \cdot \text{dem} $$
-
-## Breaking Down the Fully Interacted Model
-![](figures/pscInt1){height=600px}
-$$ \hat\mu(scscore, dem) = \hat\beta_0 + \hat\beta_1 \cdot \text{scscore} + \hat\beta_2 \cdot \text{dem} + \hat \beta_4  \cdot \text{scscore} \cdot \text{dem} $$
-
-## Breaking Down the Fully Interacted Model
-![](figures/pscInt2){height=600px}
-$$ \hat\mu(scscore, dem) = \hat\beta_0 + \hat\beta_1 \cdot \text{scscore} + \hat\beta_2 \cdot \text{dem} + \hat \beta_4  \cdot \text{scscore} \cdot \text{dem} $$
-
-## Breaking Down the Fully Interacted Model
-![](figures/pscInt3){height=600px}
-$$ \hat\mu(scscore, dem) = \hat\beta_0 + \hat\beta_1 \cdot \text{scscore} + \hat\beta_2 \cdot \text{dem} + \hat \beta_4  \cdot \text{scscore} \cdot \text{dem} $$
-
-## Predictions Using The Fully-Interacted Model
-
-$$ m(scscore, dem) = b_0 + b_1 \ \text{scscore} + b_2 \text{dem} + b_3 \text{scscore} \ \text{dem}  $$
-
-- The predicted outcomes for Republican and Democrat-appointed justices with zero SCscore.
-$$ \hat\mu(0,0) = \hat\beta_0 \qand \hat\mu(0,1) = \hat\beta_0 + \hat\beta_2$$
-
-- The predicted difference in outcomes between Democrat and Republican-appointed justices at $SCscore=s$.
-$$ 
-\hat \mu(s,1) - \hat \mu(s,0) = \qty(\hat\beta_0 + \hat\beta_1 s + \hat\beta_2 + \textcolor{blue}{\hat\beta_3 s}) - \qty(\hat\beta_0 + \hat\beta_1 s) = \hat\beta_2 + \textcolor{blue}{\hat\beta_3 s}
-$$
-
-- What's the predicted difference in outcomes for two justices appointed by Democrats with scscores $s+1$ and $s$.
-
-::: fragment
+## Residuals
+
+```{r}
+#| layout-ncol: 3
+#| out-height: 400px
+#| fig-asp: 1
+
+signsq = function(x) { sign(x)*x^2 / 40000 }
+ggplot() + 
+  geom_point(aes(x=X,y=Y-0), size=3, color='blue') +
+  geom_hline(yintercept=0, alpha=.1, linewidth=2) + scale_y(c(-40000, 60000)) +
+  geom_segment(aes(x=X, xend=X, y=0, yend=signsq(Y-0)), alpha=.2)
+
+
+ggplot() + 
+  geom_point(aes(x=X,y=Y-median(Y)), size=3, color='orange') +
+  geom_hline(yintercept=0, alpha=.1, linewidth=2) + scale_y(c(-40000, 60000)) + 
+  geom_segment(aes(x=X, xend=X, y=0, yend=signsq(Y-median(Y))), alpha=.2)
+
+ggplot() + 
+  geom_point(aes(x=X,y=Y-mean(Y)), size=3, color='red') +  
+  geom_hline(yintercept=0, alpha=.1, linewidth=2) + scale_y(c(-40000, 60000)) +
+  geom_segment(aes(x=X, xend=X, y=0, yend=signsq(Y-mean(Y))), alpha=.2)
+```
+
+- Here we're looking at the residuals for each of our location summaries $\hat\mu$.
+  1. $\hat\varepsilon_i = Y_i - \hat\mu$ when $\hat\mu$ is the mode ([blue points]{.fg style="color:blue"}). It has the largest number of *zero residuals*.
+  2. $\hat\varepsilon_i = Y_i - \hat\mu$ when $\hat\mu$ is the sample median ([orange points]{.fg style="color:orange"}). It has the *smallest sum of absolute residuals*.
+  3. $\hat\varepsilon_i = Y_i - \hat\mu$ when $\hat\mu$ is the sample mean ([red points]{.fg style="color:red"}). It has the *smallest sum of squared residuals*. 
+- For better or for worse, the sum of squared residuals is the criterion we tend to use.
 
 $$ 
-\begin{aligned}
-\hat\mu(s+1,1)-\hat\mu(s,1)
-&= \qty{\hat\beta_0 + \hat\beta_1 (s+1) + \hat \beta_2 + \hat \beta_3 (s+1)} 
--\qty{\hat\beta_0 + \hat\beta_1 s    + \hat \beta_2 + \hat \beta_3  s} \\
-&= (\hat\beta_1+\hat\beta_3)\qty{(s+1)-s} = \hat\beta_1+\hat\beta_3
-\end{aligned}
+\textcolor{red}{\hat \mu} = \argmin_{\text{numbers}\ m} \sum_{i=1}^n \qty{ Y_i - m }^2 \quad \text{ is the \textbf{least squares estimate}}
 $$
 
-- What about Republican-appointees?
-  
-:::
-  
-## Going Backward: Interpreting Coefficients
+## The Least Squares Location Summary
 
-$$\hat\mu(scscore,dem) = \hat\beta_0 + \hat\beta_1 \cdot scscore + \hat\beta_2 \cdot dem + \hat \beta_4  \cdot scscore \cdot dem$$
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2
+ggplot() + 
+  geom_point(aes(x=X,y=Y-mean(Y)), size=3, color='red') +  
+  geom_hline(yintercept=0, alpha=.1, linewidth=2) + scale_y(c(-40000, 60000)) +
+  geom_segment(aes(x=X, xend=X, y=0, yend=signsq(Y-mean(Y))), alpha=.2)
 
-![](figures/pscInt3){height=600px}
-
-
-## Summary Activity
-We'll draw the following things.
-
-1. The least squares regression line, ignoring z.
-2. The least squares fit of the additive model.
-3. The least squares fit of the fully-interacted model.
-4. The sample-proportion-weighted average of the two lines from (3).
-
-![](figures/finalAct){height=600px}
-
-## Summary Activity
-
-![](figures/finalAct){height=900px}
-
-## Summary Activity
-![](figures/finalAct1){height=900px}
-
-## Summary Activity
-![](figures/finalAct2){height=900px}
-
-## Summary Activity
-![](figures/finalAct3){height=900px}
-
-## Summary Activity
-![](figures/finalAct4){height=900px}
-
-
-# Omitted Variable Bias
-
-Adding and Removing Covariates in the Additive Model
-
-## Question
-
-![](figures/finalAct2){height=600px}
-
-- Suppose we want the slope coefficient $\hat\beta_1$ from the additive model.
-- But we run a regression of $Y$ on $X$ alone. How far off are we?
-  
-## Starting Point: Residuals and Covariates are Uncorrelated
-
+ssr = Vectorize(\(m) sum((Y-m))^2)
+x = seq(-40000, 80000, length.out=1000)
+ggplot() + geom_line(aes(x=x, y=ssr(x)))  +
+  geom_point(aes(x=mean(Y), y=ssr(mean(Y))), color='red', size=4) + 
+  geom_point(aes(x=median(Y), y=ssr(median(Y))), color='orange', size=4) +
+  geom_point(aes(x=0, y=ssr(0)), color='blue', size=4)  
+```
+$$ 
+\hat \mu = \argmin_{\text{numbers}\ m} \sum_{i=1}^n \qty{ Y_i - m }^2 \quad \text{ satisfies the \textbf{zero-derivative condition} }
 $$
-\hat\beta = \argmin_{\beta \in \R^3} \ell(\beta) \qfor \ell(\beta) = \sum_{i=1}^n \qty{b_0 + b_1 X_i + b_2 Z_i - Y_i}^2
-$$
-
-$$
+$$ 
 \begin{aligned}
 0 
-&= \frac{\partial}{\partial b_j}\mid_{b=\hat\beta} \ell(b) \\
-&= \sum_{i=1}^n \frac{\partial}{\partial b_j}\mid_{b=\hat\beta} \qty{b_0 + b_1 X_i + b_2 Z_i - Y_i}^2 \\
-&= \sum_{i=1}^n 2 \times \qty{\hat\beta_0 + \hat\beta_1 X_i + \hat\beta_2 Z_i - Y_i} \times \frac{\partial}{\partial b_j}\qty{b_0 + b_1 X_i + b_2 Z_i - Y_i}
+= \frac{d}{dm} \sum_{i=1}^n \qty{ Y_i - m }^2  \ \ \mid_{m=\hat\mu} \quad 
+= \sum_{i=1}^n \frac{d}{dm} \qty{ Y_i - m }^2  \ \ \mid_{m=\hat\mu} \quad 
+= \sum_{i=1}^n 2 \qty{ Y_i - m } \ \ \mid_{m=\hat\mu} \quad 
+= \sum_{i=1}^n 2 \qty{ Y_i - \hat\mu } 
 \end{aligned}
 $$
 
-so ...
-
-\begin{align*}
-0=\frac{\partial \ell}{\partial b_0}\mid_{b=\hat\beta} &=  -2 \sum_{i=1}^n \hat\varepsilon_i  \qfor \hat\varepsilon_i = Y_i - \hat\mu(X_i,Z_i) \\
-0=\frac{\partial \ell}{\partial b_1}\mid_{b=\hat\beta} &=  -2 \sum_{i=1}^n \hat\varepsilon_i X_i \\
-0=\frac{\partial \ell}{\partial b_2}\mid_{b=\hat\beta} &=  -2 \sum_{i=1}^n \hat\varepsilon_i Z_i \\
-\end{align*}
-$$
-
-and therefore
-$$
-\begin{aligned}
-0= 0 - 0\bar X &= \sum_{i=1}^n \hat\varepsilon_i X_i - \sum_{i=1}^n \hat\varepsilon \bar X =
-\sum_{i=1}^n \hat\varepsilon (X_i - \bar X) \\
-0= 0 - 0\bar X &= \sum_{i=1}^n \hat\varepsilon_i X_i - \sum_{i=1}^n \hat\varepsilon \bar X =
-\sum_{i=1}^n \hat\varepsilon (X_i - \bar X) \\
-\end{aligned}
-$$
-
-## Deriving A Formula For Omitted Variable Bias
-
-
-
+- This says the least squares residuals [$\hat\varepsilon = Y_i - \hat \mu$]{.fg style="color:red"} *sum to zero*. 
+- With a bit of algebra, this tells us that the least squares estimator $\hat\mu$ is the sample mean.
 
 $$
-\begin{aligned}
-\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
-&= \frac{\sum_{i=1}^n (X_i - \bar X) \qty(\hat\beta_0 + \hat\beta_1 X_i + \hat \beta_2 Z_i + \hat\varepsilon_i)}{\sum_{i=1}^n (X_i - \bar X)^2} \\
-&= ...
-\end{aligned}
+0 = \sum_{i=1}^n 2\qty{ Y_i - \hat\mu } \quad \iff \quad 2\sum_{i=1}^n Y_i = 2\sum_{i=1}^n \hat\mu \quad \iff \quad \sum_{i=1}^n Y_i = \hat\mu\sum_{i=1}^n 1 \quad \iff \quad \hat\mu = \frac{1}{n} \sum_{i=1}^n Y_i
 $$
 
-## Deriving A Formula For Omitted Variable Bias
+- It's not just the best choice of the 3 locations summaries we've looked at. 
+- It's the best choice --- in terms of the sum of squared errors criterion --- of all numbers outright.
 
-Suppose we want $\hat\beta_1$ from the additive model, but we run a regression
-of $Y$ on $X$ alone. How far off are we?
+## Two Locations
 
-$$
-\begin{aligned}
-\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
-&= \frac{\sum_{i=1}^n (X_i - \bar X) \qty(\hat\beta_0 + \hat\beta_1 X_i + \hat \beta_2 Z_i + \hat\varepsilon_i)}{\sum_{i=1}^n (X_i - \bar X)^2} \\
-&= \hat\beta_0 \frac{\sum_{i=1}^n (X_i - \bar X)}{\sum_{i=1}^n (X_i - \bar X)^2}
-+ \hat\beta_1 \frac{\sum_{i=1}^n (X_i - \bar X) X_i}{\sum_{i=1}^n (X_i - \bar X)^2} \\
-&+ \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
-+ \frac{\sum_{i=1}^n (X_i - \bar X) \hat\varepsilon_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
-\end{aligned}
-$$
+```{r}
+#| out-height: 400px
+estimate_mode = function(x, na.rm = FALSE) {
+  if(na.rm){
+    x = x[!is.na(x)]
+  }
+  ux <- unique(x)
+  return(ux[which.max(tabulate(match(x, ux)))])
+}
+Y = earnings$income[earnings$education %in% c(8,12)]
+X = earnings$education[earnings$education %in% c(8,12)]
 
-Here's an expanded version.
+ggplot(data.frame(X=X,Y=Y)) + 
+  geom_point(aes(x=X,y=Y), alpha=.2, size=1, position=position_jitter(w=.5)) + 
+  stat_summary(aes(x=X, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  scale_y(c(0,60000)) 
+```
 
-- Are any of these terms zero? Why?
-- Do we know the values of any of the other sums?
-
-::: fragment
-- The first term is zero because $\sum_{i=1}^n X_i = \sum_{i=1}^n \bar X$: $\sum_{i=1}^n \bar X = n \bar X = n \times \frac{1}{n}\sum_{i=1}^n X_i$ 
-- The last term is zero because the residuals are uncorrelated with $X$: $\sum_{i=1}^n (X_i - \bar X_i) \hat\varepsilon_i = 0$
-- The second term is $\hat\beta_1$ because $\sum_{i=1}^n (X_i - \bar X) X_i = \sum_{i=1}^n (X_i - \bar X)X_i - \sum_{i=1}^n (X_i - \bar X) \bar X = \sum_{i=1}^n (X_i-\bar{X})^2
-  - How is this related to what we said about the first term?
-
-:::
-
-## A Formula for Omitted Variable Bias
-$$
-\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
-=\hat\beta_1 + \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_i}{\sum_{i=1}^n (X_i - \bar X)^2}\\
-= \hat \beta_{YX} + \hat\beta_{YZ}\hat\beta_{ZX}
-$$
-
-- The first term is the coefficient on $X$ in the additive model.
-- The second, which we call **omitted variable bias**, is ...
-  - the coefficient on $Z$ 
-  - times the coefficient in the simple linear regression of $Z$ on $X$.
-- Story: when we leave $Z$ out of our regression, the effect of $Z$ on $Y$ is --- insofar as $X$ predicts $Z$ --- baked into the effect of $X$ in $Y$.
-- This is why, if you're discussing coefficients, it's so important to be clear about what model you're using.
-
-## OVB and Covariate Balance
-
-$$
-\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
-=\hat\beta_1 + \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_i}{\sum_{i=1}^n (X_i - \bar X)^2}\\
-= \hat \beta_{YX} + \hat\beta_{YZ}\hat\beta_{ZX}
-$$
-
-- Now we'll use this OVB formula to explain something people do in real experiments that might seem confusing.
-  - They look at the coefficient on treatment ($X$) in different models---models that include additional covariates ($X$).  
-  - And they act pleased that it's the same. Shouldn't it be different?
-
-- We'll look at an experiment that looked at the effect of various mail treatments on turnout.
-
-#  The Social Pressure Experiment
-
-
-![](figures/abstractGGL.png)
-
-## The Civic Duty Treatment
-
-![](figures/CivicDutyGGL.png)
-
-## The Hawthorne Treatment
-
-![](figures/HawthorneGGL.png)
-
-## The Self Treatment
-
-![](figures/SelfGGL.png)
-
-## The Neighbors Treatment
-
-![](figures/NeighborsGGL.png)
-
-## Balance on Pre-treatment Variables
-
-![](figures/GGL.png)
-
-## Including Covariates 
-![](figures/GGL2.png)
-
-## Why doesn't the coefficient on treatment change?
-$$
-\frac{\sum_{i=1}^n (X_i - \bar X) Y_i}{\sum_{i=1}^n (X_i - \bar X)^2} 
-=\hat\beta_1 + \hat\beta_2 \frac{\sum_{i=1}^n (X_i - \bar X) Z_i}{\sum_{i=1}^n (X_i - \bar X)^2}\\
-= \hat \beta_{YX} + \hat\beta_{YZ}\hat\beta_{ZX}
-$$
-
-::: fragment
-
-- Because treatment $X$ *isn't predictive* of the covariate $Z$.
-- We can see from the table that $\hat\beta_{ZX} \approx 0$ so OVB must be zero.
-
-:::
-
-![](figures/GGL.png)
-
-
-## What We've Left Out
-
-- This is a half-truth. Our OVB formula is for *one omitted covariate* $Z$.
-- But what's really getting omitted is many covariates.
-- The OVB formula for many covariates is---if we were to try to write it the same way---much more complicated.
-- But it looks *exactly like the 1-covariate case* when we use matrix notation.
-- Most things do. That's why we use it. We're going to get started now.
-
-# Regression in Matrix Notation
-
-## Scalar vs. Vector Notation
-
-$$
-\begin{aligned}
-Y_1 & = \hat \beta_0 + \hat \beta_1 X_{11} + \hat \beta_2 X_{21} + ... \hat \beta_K X_{K1} + \hat\varepsilon_1 \\
-Y_2 & = \hat \beta_0 + \hat \beta_1 X_{12} + \hat \beta_2 X_{22} + ... \hat \beta_K X_{K2} + \hat\varepsilon_2 \\
-& \vdots \\
-Y_n & = \hat \beta_0 + \hat \beta_1 X_{1n} + \hat \beta_2 X_{2n} + ... \hat \beta_K X_{Kn} + \hat\varepsilon_n \\
-\end{aligned}
-$$
-
-is just a less compact way of writing ...
-
-$$
-\begin{aligned}
-Y_1 &= \X_{1}^T \hat \beta + \hat\varepsilon_1 \\
-Y_2 &= \X_{2}^T \hat \beta + \hat\varepsilon_2 \\
-&\vdots \\
-Y_n &= \X_{n}^T \hat \beta + \hat\varepsilon_n \\
-\end{aligned}
-\qfor
-\X_i = \begin{pmatrix} 1 \\ X_{1i} \\ X_{2i} \\ \vdots \\ X_{Ki} \end{pmatrix}
-\qand
-\hat\beta = \begin{pmatrix} \hat \beta_0 \\ \hat \beta_1 \\ \hat \beta_2 \\ \vdots \\ \hat \beta_K \end{pmatrix}
-$$
-
-## Scalar vs. Matrix Notation
-
-$$
-\begin{aligned}
-Y_1 & = \hat \beta_0 + \hat \beta_1 X_{11} + \hat \beta_2 X_{21} + ... \hat \beta_K X_{K1} + \hat\varepsilon_1 \\
-Y_2 & = \hat \beta_0 + \hat \beta_1 X_{12} + \hat \beta_2 X_{22} + ... \hat \beta_K X_{K2} + \hat\varepsilon_2 \\
-& \qquad \qquad \qquad \quad  ... \\
-Y_n & = \hat \beta_0 + \hat \beta_1 X_{1n} + \hat \beta_2 X_{2n} + ... \hat \beta_K X_{Kn} + \hat\varepsilon_n \\
-\end{aligned}
-$$
-
-is just a less compact way of writing ...
-
-$$
-\begin{aligned}
-\underbrace{\left( \begin{array}{c} Y_1 \\ Y_2 \\ \vdots \\ Y_n \end{array} \right)}_{\Y} 
-&=  \underbrace{\left( \begin{array}{ccccc} 1 & X_{11} & X_{21} & ... & X_{K1} \\ 1 & X_{12} & X_{22} & ... & X_{K2} \\ \vdots &  \vdots &  \vdots & \ddots &  \vdots \\  1 & X_{1n} & X_{2n} & ... & X_{Kn} \end{array} \right)}_{\X} 
-\underbrace{\left( \begin{array}{c} \hat \beta_0 \\ \hat \beta_1 \\ \hat \beta_2 \\ \vdots \\ \hat \beta_K \end{array} \right)}_{\hat\beta} 
-+ \underbrace{\left( \begin{array}{c} \hat\varepsilon_1 \\  \hat\varepsilon_2 \\ \vdots \\  \hat\varepsilon_n \end{array} \right)}_{\bf\hat\varepsilon}
-\end{aligned}
-\Y = \X \hat \beta + {\bf\hat \varepsilon}
-$$
-
-i.e., $\Y = \X \hat \beta + {\bf\hat \varepsilon}$.
-
-
-## Least Squares Solution
-
-$$
-\hat\beta  = (\X'\X)^{-1} \X^T \Y \qqtext{solves} 
-\argmin_{b \in \R^{K+1}}  \norm{ X b - Y}^2
-$$
-
-- Let's prove it. As before, we'll characterize $\hat\beta$ as the vector $b$ where **all partial derivatives are zero**.
-- It's easier to do it in **vector notation**. We can convert to **matrix notation** in the end.
-
-$$
-\hat\beta = \qty(\sum_{i=1}^n \X_i \X_i^T)^{-1} \sum_i \X_i Y_i  \text{ solves } = \argmin_{b \in \R^{K+1}}  \sum_{i=1}^n  \qty{\X_i^T b - Y_i}^2
-$$
-
-
-## A Simple Summary: A Prediction at a Point x
+- If we have two groups, we can find the best location for each by this criterion.
+- We can think of the *subsample means* as the best **function of x** for predicting **y**.
+- Again, letting *best*  mean the one that minimizes the sum of squared residuals. 
 
 $$ 
-\hat \mu(x) = x^T \hat \beta \qfor \hat\beta  = (\X^T\X)^{-1} \X^T \Y 
+\hat \mu = \argmin_{\text{functions}\ m(x)} \sum_{i=1}^n \qty{ Y_i - m(X_i) }^2 
 $$
 
-- What is the variance of this prediction?
+
+## Two Locations
+```{r}
+#| out-height: 200px
+#| fig-asp: .2
+ggplot(data.frame(X=X,Y=Y)) + 
+  geom_point(aes(x=X,y=Y), alpha=.2, size=1, position=position_jitter(w=.5)) + 
+  stat_summary(aes(x=X, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  scale_y(c(0,60000)) 
+```
+
+- A function of $X$ is just a number for each value of $X$.
+- So to see that the subsample means are the solution, we can break our sum into pieces where $X$ is the same.
+
+$$
+\hat \mu = \argmin_{\text{functions}\ m(x)} \sum_{i:X_i=8} \qty{ Y_i - m(8) }^2  + \sum_{i:X_i=12} \qty{ Y_i - m(12) }^2
+$$
+
+- And observe that the first sum depends only on $m(8)$ and the second only on $m(12)$.
+  - So we get $\hat\mu(8)$ by minimizing squared error on the $x=8$ subsample over all possible locations.
+  - And we get $\hat\mu(12)$ by minimizing squared error on the $x=12$ subsample over all possible locations.
+- The minimizers --- which we can solve for exactly as before --- are the means of each subsample.
 
 $$
 \begin{aligned}
-\E \qty{ x^T\hat\beta- \E x^T \hat\beta)}^2 
-&=\E \qty{x^T (\hat\beta-\E\hat\beta)}^2 \\ 
-&=\E \qty{x^T (\hat\beta-\E\hat\beta)}\qty{(\hat\beta-\E\hat\beta)^T x} \\
-&=x^T \qty{\E (\hat\beta-\E\hat\beta) (\hat\beta-\E\hat\beta)^T} x 
+\hat \mu(8)   &= \argmin_{\text{numbers}\ m} \sum_{i:X_i=8} \qty{ Y_i - m }^2  = \frac{\sum_{i:X_i=8} Y_i}{\sum_{i:X_i=8} 1 } \\
+\hat \mu(12)  &= \argmin_{\text{numbers}\ m} \sum_{i:X_i=12} \qty{ Y_i - m }^2 = \frac{\sum_{i:X_i=12} Y_i}{\sum_{i:X_i=12} 1 }
 \end{aligned}
 $$
 
-- Here $\E (\hat\beta-\E\hat\beta) (\hat\beta-\E\hat\beta)^T$ is called 
-the **covariance matrix** of $\hat\beta$. 
-- And we can calculate it using our formula for $\hat\beta$.
+## Many Locations
 
-##
+```{r}
+#| out-height: 400px
+X = earnings$education
+Y = earnings$income
+ggplot(data.frame(X=X,Y=Y)) + 
+  geom_point(aes(x=X,y=Y), alpha=.2, size=1, position=position_jitter(w=.3)) + 
+  stat_summary(aes(x=X, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  scale_y(c(0,150000)) + scale_x() 
+```
 
-
-## Bias?
-
-- What is the **mean** of this prediction?
-
-$$ 
-\hat \mu(x) = x^T \hat \beta \qfor \hat\beta  = (\X^T\X)^{-1} \X^T \Y 
+- There's nothing special about two locations. We can do this for as many locations as we like.
+- We break our sum into pieces where $X$ is the same.
 $$
+\hat \mu = \argmin_{\text{functions}\ m(x)} \sum_x \sum_{i:X_i=x} \qty{ Y_i - m(x) }^2 
+$$
+
+- And we get the best location at each $x$, in terms of squared error, by minimizing each piece.
+- The solution is, as before, the mean of each subsample.
+
+$$
+\hat \mu(x) = \argmin_{\text{numbers}\ m} \sum_{i:X_i=x} \qty{ Y_i - m }^2  = \frac{\sum_{i:X_i=x} Y_i}{\sum_{i:X_i=x} 1 }
+$$
+
+## Coarsening
+
+```{r}
+#| out-height: 200px
+#| fig-asp: .2
+X = earnings$education
+Y = earnings$income
+Xcoarse = ifelse(X < 16, mean(X[X<16]), mean(X[X>=16]))
+df.small = data.frame(x=unique(X[X<16]), y=mean(Y[X<16]))
+df.big = data.frame(x=unique(X[X>=16]), y=mean(Y[X>=16]))
+ggplot(data.frame(X=X,Y=Y,Xcoarse=Xcoarse)) + 
+  geom_point(aes(x=X,y=Y, color=factor(Xcoarse)), alpha=.2, size=1, position=position_jitter(w=.3)) + 
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  geom_point(aes(x=x, y=y), data=df.small, color='red') +
+  geom_line(aes(x=x, y=y), data=df.small, color='red') +
+  geom_point(aes(x=x, y=y), data=df.big, color='red') +
+  geom_line(aes(x=x, y=y), data=df.big, color='red') + 
+  coord_cartesian(ylim=c(0,150000)) + guides(color='none') 
+```
+
+- When we coarsen, we're in effect restricting the set of functions we're considering.
+- We're restricting them to be functions of the coarsened groups $c(x)$, i.e. the color in the plot.
+- Now we break our sum into pieces where the coarsened group $c(x)$ is the same.
+
+$$
+\begin{aligned}
+\hat \mu(c(x)) 
+&= \argmin_{\text{functions}\ m(c(x)) } \sum_{c(x)} \sum_{i:c(X_i)=c(x)} \qty{ Y_i - m(c(x)) }^2 \\
+&= \argmin_{\text{functions}\ m(c(x)) } \inred{\sum_{i:c(X_i)=\text{red}} \qty{ Y_i - m(\text{red}) }^2} + \ingreen{\sum_{i:c(X_i)=\text{green}} \qty{ Y_i - m(\text{green}) }^2}
+\end{aligned}
+$$
+
+- And we get the best location at each coarsened $x$, in terms of squared error, by minimizing each piece.
+- And the solution is the mean of each coarsened group.
+
+$$
+\hat \mu(x) = \argmin_{\text{numbers}\ m} \sum_{i:c(X_i)=c(x)} \qty{ Y_i - m }^2  = \frac{\sum_{i:c(X_i)=c(x)} Y_i}{\sum_{i:c(X_i)=c(x)} 1 }
+$$
+
+- This says the prediction we make at each $x$ is the mean of the $y$ values in the coarsened group it belongs to.
+  
+## Least Squares Regression
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2
+X = earnings$education
+Y = earnings$income
+dfXY = data.frame(X=X,Y=Y)
+ggplot(dfXY) + 
+  geom_point(aes(x=X,y=Y), alpha=.2, size=1, position=position_jitter(w=.3)) + 
+  stat_summary(aes(x=X, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  scale_y(c(0,150000)) + scale_x()
+
+X = earnings$education
+Y = earnings$income
+Xcoarse = ifelse(X < 16, mean(X[X<16]), mean(X[X>=16]))
+df.small = data.frame(x=unique(X[X<16]), y=mean(Y[X<16]))
+df.big = data.frame(x=unique(X[X>=16]), y=mean(Y[X>=16]))
+ggplot(data.frame(X=X,Y=Y,Xcoarse=Xcoarse)) + 
+  geom_point(aes(x=X,y=Y, color=factor(Xcoarse)), alpha=.2, size=1, position=position_jitter(w=.3)) + 
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  geom_point(aes(x=x, y=y), data=df.small, color='red') +
+  geom_line(aes(x=x, y=y), data=df.small, color='red') +
+  geom_point(aes(x=x, y=y), data=df.big, color='red') +
+  geom_line(aes(x=x, y=y), data=df.big, color='red') + 
+  coord_cartesian(ylim=c(0,150000)) + guides(color='none') 
+```
+
+- We can think of both *uncoarsened* and *coarsened* subsample means as least squares estimators.
+- Each is the best choice, within some set of functions, for predicting $Y$ from $X$.
+- But the set of functions we're choosing from is different in each case.
+  - In the uncoarsened case, we're choosing from all functions of $X$.
+  - In the coarsened case, we're choosing from functions of the coarsened $X$.
+- We call the set of functions we're choosing from a **regression model**.
+- And we call the minimizer of squared error, $\hat\mu$, is the least squares estimator in that model.
+
+$$
+\hat\mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(X_i) }^2 \qquad \text{ where } \quad \mathcal{M} \ \ \text{ is our model.}
+$$
+
+
+# Least Squares Regression in Linear Models 
+
+## Least Squares Regression
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+muhat.monotone = as.stepfun(isoreg(X,Y))
+muhat.lin = lm(Y ~ X)
+lsq.plot = ggplot(data.frame(x=X, y=Y)) + geom_point(aes(x=X,y=Y), alpha=.1, size=1, position=position_jitter(w=.3)) + 
+  stat_summary(aes(x=X+.1, y=Y), fun=mean, geom='point', color='red', alpha=.5) + 
+  stat_summary(aes(x=X+.1, y=Y), fun=mean, geom='line', color='red', alpha=.3) + 
+  geom_point(aes(X-.1, predict(muhat.lin)),  color='blue', alpha=.3) +
+  geom_line(aes(X-.1, predict(muhat.lin)),  color='blue', alpha=.3) +
+  geom_point(aes(x=X, y=muhat.monotone(X)), color='magenta', alpha=.3) + 
+  geom_line(aes(x=X, y=muhat.monotone(X)), color='magenta', alpha=.3) + 
+  scale_y(c(0,150000)) + scale_x()
+lsq.plot
+```
+
+- Regression, generally, is choosing a function of covariates $X_i$ to predict outcomes $Y_i$. 
+- We choose from a set of functions $\model$ that we call a **regression model**.
+
+$$
+Y_i \approx \hat\mu(X_i) \qfor \hat\mu \in \model 
+$$
+
+- Least Squares Regression is a special case in which we choose by minimizing the sum of squared residuals.
+
+$$
+\hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(X_i) }^2
+$$
+
+- Given a model, we can find the least squares estimator by doing this minimization.
+- And we can do this for any model we like, so long as we can solve the minimization problem. 
+$$
+\begin{aligned}
+\textcolor{red}{\model} &= \qty{ \text{all functions} \  m(x) }                               \\
+\textcolor{blue}{\model} &= \qty{ \text{all lines} \ m(x)=ax + b }  \\
+\textcolor{magenta}{\model} &= \qty{ \text{all increasing functions} \  m(x) }   \\
+\end{aligned}
+$$
+
+## Linear Models
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+lsq.plot
+```
+
+- In this class, we're going to focus on **linear models**.
+  - These are sets of functions that are 'closed' under addition, subtraction, and scaling by constants.
+  - This means when we add, subtract, and scale functions in the model, we get another function in the model.
+$$
+a(x), b(x) \in \model \implies a(x) + b(x), a(x) - b(x), c a(x) \in \model \quad \text{ for any constant $c$ }
+$$
+
+- **Q.** Which of these models are linear? 
+
+$$
+\begin{aligned}
+\textcolor{red}{\model} &= \qty{ \text{all functions} \  m(x) }                               \\
+\textcolor{blue}{\model} &= \qty{ \text{all lines} \ m(x)=ax + b }  \\
+\textcolor{magenta}{\model} &= \qty{ \text{all increasing functions} \  m(x) }   \\
+\end{aligned}
+$$
+
+# Multivariate Regression Models
+
+## Additive Models 
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+ 
+grid = expand.grid(education=unique(earnings$education), race=race.categories) 
+muhat = function(model) { function(ed,race) { predict(model, newdata=data.frame(education=ed, race=race)) } }
+
+additive.fit   = lm(income ~ race+factor(education), data=earnings[earnings$race %in% race.categories,])
+ggplot(earnings[earnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=education, y=income), size=1, 
+             alpha=.1, position=position_jitter(seed=0,w=.3)) +
+  geom_point(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid, alpha=.5) +
+  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
+```
+
+- Here we let our predictions be arbitrary functions of education ($x$) as before.
+- But we're requiring that race ($w$) only shift that function up and down---it can't change the function's shape.
+- The result, in visual terms, are predictions for different values of $w$ are 'parallel curves'.
+
+$$\small{
+\begin{aligned}
+\textcolor{blue}{\model} &= \qty{ m(w,x) = m_0(w) + m_1(x) \ \ \text{for univariate functions} \ \ m_0, m_1 }  &&\text{additive bivariate model} \\
+\end{aligned}
+}
+$$
+
+
+## The Parallel Lines Model 
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+ 
+additive.line.fit   = lm(income ~ race+education, data=earnings[earnings$race %in% race.categories,])
+ggplot(earnings[earnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=education, y=income), size=1, 
+             alpha=.1, position=position_jitter(seed=0,w=.3)) +
+  geom_point(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid, alpha=.5) +
+  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
+```
+
+- Here we impose the additional restriction that the function of education ($x$) is a line.
+- This means that the predictions for different values of $w$ are parallel lines.
+
+$$\small{
+\begin{aligned}
+\textcolor{red}{\model} &= \qty{ m(w,x) = a(w) + b x   }                 &&\text{parallel lines} \\
+\end{aligned}
+}
+$$
+
+## The Not-Necessarily-Parallel Lines Model 
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+ 
+additive.line.fit   = lm(income ~ race+education, data=earnings[earnings$race %in% race.categories,])
+interacted.line.fit = lm(income ~ race*education, data=earnings[earnings$race %in% race.categories,])
+ggplot(earnings[earnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=education, y=income), size=1, 
+             alpha=.1, position=position_jitter(seed=0,w=.3)) +
+  geom_point(aes(x=education, y=muhat(interacted.line.fit)(education,race)),  color='magenta', data=grid) +
+  geom_line(aes(x=education, y=muhat(interacted.line.fit)(education,race)),   color='magenta', data=grid, alpha=.5) +
+  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
+```
+
+- Here we stick with the lines thing, but drop the additivity restriction.
+- For each value of $w$, we can get a totally different line.
+
+$$\small{
+\begin{aligned}
+\textcolor{magenta}{\model} &= \qty{ m(w,x) = a(w) + b(w) x  }                 &&\text{lines} \\
+\end{aligned}
+}
+$$
+
+
+## Where This Leaves Us
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+ 
+ggplot(earnings[earnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=education, y=income), size=1, 
+             alpha=.1, position=position_jitter(seed=0,w=.3)) +
+  geom_point(aes(x=education, y=muhat(interacted.line.fit)(education,race)),  color='magenta', data=grid) +
+  geom_line(aes(x=education, y=muhat(interacted.line.fit)(education,race)),   color='magenta', data=grid, alpha=.5) +
+  geom_point(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid, alpha=.5) +
+  geom_point(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid, alpha=.5) +
+  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
+```
+
+- Each of these approaches allows us to make predictions everywhere---even in columns we haven't sampled.
+- Fundamentally, it's because they're using information from one column to make predictions in another.
+- This solves the empty-groups problem, but it introduces a new one. What is it?
+
+## Where We're Going
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+ 
+ggplot(earnings[earnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=education, y=income), size=1, 
+             alpha=.1, position=position_jitter(seed=0,w=.3)) +
+  geom_point(aes(x=education, y=muhat(interacted.line.fit)(education,race)),  color='magenta', data=grid) +
+  geom_line(aes(x=education, y=muhat(interacted.line.fit)(education,race)),   color='magenta', data=grid, alpha=.5) +
+  geom_point(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid, alpha=.5) +
+  geom_point(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid, alpha=.5) +
+  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
+```
+
+- There's no *right model* to use. Each has its own strengths and weaknesses.
+- In the next couple days, we'll look into the issues surrounding model choice.
+  - Implications of bad model choice.
+  - A good model to use 'by default'.
+  - How to automate model choice.
+
+
+
+
+
+
+
+
+
 
