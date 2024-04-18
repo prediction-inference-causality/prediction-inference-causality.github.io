@@ -589,8 +589,7 @@ $$
 \end{aligned}
 $$
 
-
-## The ATT
+## The ATT and ATC
 
 $$
 \begin{array}{cccc|ccc}
@@ -605,25 +604,43 @@ i & X_i & W_i & Y_i & Y_i(1) & Y_i(0) & Y_i(1)-Y_i(0) \\
 \end{array}
 $$
 
-- We can, if we prefer, average the CATE over *the distribution of treated units*. 
-- This changes our weights. And gives us a different summary. It's the ATT.
+- We can, if we prefer, average the CATE over different distributions of units.
+- This changes our weights. And therefore gives us different summaries of the effect.
+
+:::: columns
+::: column
+
 $$
 \begin{aligned}
 \text{ATT} 
 &= \E\qty[ \E\qty{ Y_i(1) - Y_i(0) \mid X_i } \mid W_i = 1] \\
 &= \E\qty[ \E\qty{ Y_i \mid W_i=1, X_i } - \E\qty{ Y_i \mid W_i=0, X_i } \mid W_i=1] \\
-&= \E\qty[ CATE(X_i) \mid W_i=1] 
-\end{aligned}
-$$
-
-- We can estimate this with a weighted average of our two estimates.
-$$
-\begin{aligned}
+&= \E\qty[ CATE(X_i) \mid W_i=1] \\
+& \\
 \widehat{ATT} &= \textcolor{blue}{\frac{1}{2}} \widehat{CATE}(60) + \textcolor{magenta}{\frac{1}{2}} \widehat{CATE}(70) \\
 &=\textcolor{blue}{\frac{1}{2}} \cdot \left\{\frac{70}{1} -  \frac{60+70+80}{1}\right\} + \textcolor{magenta}{\frac{1}{2}} \cdot \left\{\frac{80}{1} -  \frac{70}{1}\right\} \\
 &= \frac{10}{2}
 \end{aligned}
 $$
+
+:::
+::: column
+
+$$
+\begin{aligned}
+\text{ATC} 
+&= \E\qty[ \E\qty{ Y_i(1) - Y_i(0) \mid X_i } \mid W_i = 0] \\
+&= \E\qty[ \E\qty{ Y_i \mid W_i=0, X_i } - \E\qty{ Y_i \mid W_i=0, X_i } \mid W_i=0] \\
+&= \E\qty[ CATE(X_i) \mid W_i=0] \\
+& \\
+\widehat{ATC} &= \textcolor{blue}{\frac{3}{4}} \widehat{CATE}(60) + \textcolor{magenta}{\frac{1}{4}} \widehat{CATE}(70) \\
+&=\textcolor{blue}{\frac{3}{4}} \cdot \left\{\frac{70}{1} -  \frac{60+70+80}{1}\right\} + \textcolor{magenta}{\frac{1}{4}} \cdot \left\{\frac{80}{1} -  \frac{70}{1}\right\} \\
+&= \frac{10}{4}
+\end{aligned}
+$$
+
+:::
+::::
 
 ## Working With All the Data
 ```{r}
@@ -639,19 +656,36 @@ summarized.counterfactual.pop
 
 $$
 \begin{aligned}
-\E[Y(1) \mid W_i=1] &=  \E[ \E[Y_i \mid W_i=1, X_i]] = \sum_x p(1,x)\mu(1,x)  \approx \sum_x \hat p(1,x) \hat\mu(1,x) \\
-\E[Y(0) \mid W_i=1] &=  \E[ \E[Y_i \mid W_i=0, X_i]] = \sum_x p(1,x)\mu(0,x) \approx \sum_x \hat p(1,x) \hat\mu(0,x) \\
-\text{ATT} = \sum_{x} p(1,x)\qty{ \mu(1,x) - \mu(0,x) } \approx \sum_{x} \hat p(1,x)\qty{ \hat\mu(1,x) - \hat\mu(0,x) }.
+\E[Y(1) \mid W_i=1] &=  \E[ \E[Y_i \mid W_i=1, X_i]] = \sum_x \ingreen{p(1,x)\mu(1,x)}  \approx \sum_x \ingreen{\hat p(1,x) \hat\mu(1,x)} \\
+\E[Y(0) \mid W_i=1] &=  \E[ \E[Y_i \mid W_i=0, X_i]] = \sum_x \ingreen{p(1,x)}\inred{\mu(0,x)} \approx \sum_x \ingreen{\hat p(1,x)} \inred{\hat\mu(0,x)} \\
+\text{ATT} &= \sum_{x} \ingreen{p(1,x)}\qty{ \ingreen{\mu(1,x)} - \inred{\mu(0,x)} } \approx \sum_{x} \ingreen{\hat p(1,x)}\qty{ \ingreen{\hat\mu(1,x)} - \inred{\hat\mu(0,x)} } && \text{ and similarly } \\
+\text{ATC} &= \sum_{x} \inred{p(0,x)}\qty{ \ingreen{\mu(1,x)} - \inred{\mu(0,x)} } \approx \sum_{x} \ingreen{\hat p(1,x)}\qty{ \ingreen{\hat\mu(1,x)} - \inred{\hat\mu(0,x)} }.
 \end{aligned}
 $$
 
-- So the adjusted gap we were talking about last time *is* the ATT. Given randomization.
-- And we can calculate it pretty easily.
+- So the adjusted gap we were talking about last time *is* the ATC.
+- Given randomization. And we can calculate an estimate pretty easily. 
+
+```{r}
+x = ages
+Y = data$Y
+X = data$X
+W = data$W
+```
 
 ```{r}
 #| echo: true
-summaries = data %>% group_by(X, W) %>% summarize(mean=mean(Y), n=n())
+mu.hat = function(w,x) { mean(Y[X==x & W==w]) }         |> Vectorize()
+p.hat  = function(w,x) { sum(X==x & W==w) / sum(W==w) } |> Vectorize()
+ATC.hat = sum(p.hat(0,x)*(mu.hat(1,x) - mu.hat(0,x)))
+ATT.hat = sum(p.hat(1,x)*(mu.hat(1,x) - mu.hat(0,x)))
 ```
+
+- The ATT and ATC are `{r} approx(ATT.hat)` and `{r} approx(ATC.hat)` respectively.
+
+
+
+
 
 
 
