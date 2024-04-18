@@ -284,7 +284,7 @@ twolevel.pop.scatter + twolevel.coord
 
 :::: r-stack
 
-::: {.fragment .fade-out data-fragment-index="0"}
+::: {.fragment .fade-out fragment-index="0"}
 ```{r}
 #| out-height: 500px
 #| fig-asp: .4 
@@ -294,19 +294,9 @@ potential.outcome.plot = ggplot(twolevel.pop) +
   geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3) + 
   geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
   guides(color='none') + scale_x_continuous(breaks=ages) + twolevel.coord
-}
-
-potential.outcome.plot
-```
-:::
-::: {.fragment .current-visible data-fragment-index="0"}
-
-```{r}
-#| out-height: 500px
-#| fig-asp: .4 
 
 population.plot = function(seed=1) {
-  twolevel.pop$W = 0 + (runif(m) <= pi(twolevel.pop$X))
+  twolevel.pop$W =(\() rbinom(nrow(twolevel.pop), 1, pi(twolevel.pop$X))) |> with_seed(seed)
   twolevel.pop$fW = factor(twolevel.pop$W)
   twolevel.pop$Y = twolevel.pop$Y0*(1-twolevel.pop$W) + twolevel.pop$Y1*twolevel.pop$W
   ggplot(twolevel.pop) + 
@@ -316,11 +306,40 @@ population.plot = function(seed=1) {
     geom_point(aes(x=plotX2(W,jX), y=Y, color=fW), alpha=.5, size=3) +  
     guides(color='none') + scale_x_continuous(breaks=ages) + twolevel.coord
 }
+
+sample.plot = function(randomization.seed=1, sample.seed=1) {  
+  twolevel.pop$W =(\() rbinom(nrow(twolevel.pop), 1, pi(twolevel.pop$X))) |> with_seed(randomization.seed)
+  twolevel.pop$fW = factor(twolevel.pop$W)
+  twolevel.pop$Y = twolevel.pop$Y0*(1-twolevel.pop$W) + twolevel.pop$Y1*twolevel.pop$W
+
+  sample.ind = (\() sample(nrow(twolevel.pop), 50, replace=TRUE)) |> with_seed(sample.seed)
+  twolevel.pop$sampled = sapply(1:nrow(twolevel.pop), function(i) sum(sample.ind==i))
+
+  ggplot(twolevel.pop) + 
+    geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3, shape=1, data=twolevel.pop[twolevel.pop$sampled==0,]) + 
+    geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3, shape=1, data=twolevel.pop[twolevel.pop$sampled==0,]) + 
+    geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
+    geom_point(aes(x=plotX2(W,jX), y=Y, color=fW), alpha=.5, size=3, shape=13, data=twolevel.pop[twolevel.pop$sampled==0,]) +  
+    geom_point(aes(x=plotX2(W,jX), y=Y, color=fW, size=sampled), alpha=.8) +  
+    guides(color='none', size='none') + scale_x_continuous(breaks=ages) + scale_size_area() + twolevel.coord
+  
+}
+
+potential.outcome.plot
+```
+
+:::
+::: {.fragment .current-visible fragment-index="0"}
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
 population.plot(1)
 ```
 
 :::
-::: {.fragment .current-visible data-fragment-index="1"}
+::: {.fragment .current-visible fragment-index="1"}
 
 ```{r}
 #| out-height: 500px
@@ -330,7 +349,7 @@ population.plot(2)
 ```
 
 :::
-::: {.fragment .current-visible data-fragment-index="2"}
+::: {.fragment .current-visible fragment-index="2"}
 
 ```{r}
 #| out-height: 500px
@@ -340,133 +359,56 @@ population.plot(3)
 ```
 
 :::
-::: {.fragment .current-visible data-fragment-index="3"}
+::: {.fragment .current-visible fragment-index="3"}
 
 ```{r}
 #| out-height: 500px
 #| fig-asp: .4 
 
-set.seed(1)
-sample.ind = sample(nrow(twolevel.pop), 50, replace=TRUE) 
-twolevel.pop$sampled = sapply(1:nrow(twolevel.pop), function(i) sum(sample.ind==i))
-
-twolevel.pop.scatter = ggplot(twolevel.pop) + 
-  geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3, shape=1, data=twolevel.pop[twolevel.pop$sampled==0,]) + 
-  geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3, shape=1, data=twolevel.pop[twolevel.pop$sampled==0,]) + 
-  geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
-  geom_point(aes(x=plotX2(W,jX), y=Y, color=fW), alpha=.5, size=3, shape=13, data=twolevel.pop[twolevel.pop$sampled==0,]) +  
-  geom_point(aes(x=plotX2(W,jX), y=Y, color=fW, size=sampled), alpha=.8) +  
-  guides(color='none', size='none') + scale_x_continuous(breaks=ages) + scale_size_area() 
-twolevel.pop.scatter + twolevel.coord
+sample.plot(3, 1)
 ```
+
+:::
+::: {.fragment .current-visible fragment-index="4"}
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+sample.plot(3, 2)
+```
+
+:::
+::: {.fragment .current-visible fragment-index="5"}
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+sample.plot(3, 3)
+```
+
 :::
 ::::
 
-::: {.fragment .semi-fade-out data-fragment-index="0"}
+::: {.fragment .semi-fade-out fragment-index="0"}
 1. We start with two potential outcomes for each person in our population.
    - Those are the connected dots we see in the plot.
 :::
-::: {.fragment .fade-in-then-semi-out data-fragment-index="0"}
+::: {.fragment .fade-in fragment-index="0"}
+::: {.fragment .semi-fade-out fragment-index="3"}
 2. Each one flips a coin --- one with weight depending on their age --- to determine whether they're treated.
    - The winning outcomes --- the ones that actually happen --- are the ones that don't fade out.
+   - This is, of course, random. So different this happen each time we do it.
 :::
-::: {.fragment .fade-in data-fragment-index="1"}
+:::
+::: {.fragment .fade-in fragment-index="3"}
 3. Then we sample --- with replacement --- from our population. 
     - &olcross; marks a person who isn't sampled.
     - small dots mark people sampled once.
-    - big dots mark people sampled `{r} max(twolevel.pop$sampled)` times.
+    - bigger dots mark people sampled 2,3,... times.
+    - This is random, too.
 :::
 
-##
-TODO --- ADD IN NOT WITHIN GROUP MEANS....
-
-## Randomization and Sampling
-
-:::: r-stack
-
-::: {.fragment .fade-out data-fragment-index="0"}
-```{r}
-#| out-height: 500px
-#| fig-asp: .4 
-
-mean_sd = function(x) { list(y=mean(x), ymin=mean(x)-sd(x), ymax=mean(x)+sd(x)) }
-
-twolevel.pop.scatter = ggplot(twolevel.pop) + 
-  geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3) + 
-  geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3) + 
-  geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
-  guides(color='none') + scale_x_continuous(breaks=ages) + 
-  stat_summary(aes(x=plotX2(0,X)-1, y=Y0), geom="pointrange", fun.data=mean_sd, size=1.5, alpha=.8) +
-  stat_summary(aes(x=plotX2(1,X)+1, y=Y1), geom="pointrange", fun.data=mean_sd, size=1.5, alpha=.8) 
-twolevel.pop.scatter + twolevel.coord
-```
-
-:::
-::: {.fragment .current-visible data-fragment-index="0"}
-
-```{r}
-#| out-height: 500px
-#| fig-asp: .4 
-
-twolevel.pop.scatter = ggplot(twolevel.pop) + 
-  geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3, shape=1) + 
-  geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3, shape=1) + 
-  geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
-  geom_point(aes(x=plotX2(W,jX), y=Y, color=fW), alpha=.5, size=3) +  
-  guides(color='none') + scale_x_continuous(breaks=ages) +
-  stat_summary(aes(x=plotX2(0,X)-1, y=Y0), geom="pointrange", fun.data=mean_sd, size=1.5, alpha=.4, shape=1) +
-  stat_summary(aes(x=plotX2(1,X)+1, y=Y1), geom="pointrange", fun.data=mean_sd, size=1.5, alpha=.4, shape=1) + 
-  stat_summary(aes(x=plotX2(W,X)+.5*(2*W-1), y=Y),  geom="pointrange",  fun.data=mean_sd,  size=1.5, alpha=.8) 
-twolevel.pop.scatter + twolevel.coord
-```
-
-:::
-::: {.fragment .current-visible data-fragment-index="1"}
-
-```{r}
-#| out-height: 500px
-#| fig-asp: .4 
-
-twolevel.pop.scatter = ggplot(twolevel.pop) + 
-  geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3, shape=1, data=twolevel.pop[twolevel.pop$sampled==0,]) + 
-  geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3, shape=1, data=twolevel.pop[twolevel.pop$sampled==0,]) + 
-  geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
-  geom_point(aes(x=plotX2(W,jX), y=Y, color=fW), alpha=.5, size=3, shape=13, data=twolevel.pop[twolevel.pop$sampled==0,]) +  
-  geom_point(aes(x=plotX2(W,jX), y=Y, color=fW, size=sampled), alpha=.8) +  
-  guides(color='none', size='none') + scale_x_continuous(breaks=ages) + scale_size_area() + 
-  stat_summary(aes(x=plotX2(0,X)-1, y=Y0), geom="pointrange", fun.data=mean_sd, size=1.5, alpha=.4, shape=1) +
-  stat_summary(aes(x=plotX2(1,X)+1, y=Y1), geom="pointrange", fun.data=mean_sd, size=1.5, alpha=.4, shape=1) + 
-  stat_summary(aes(x=plotX2(W,X)+.5*(2*W-1), y=Y) ,  geom="pointrange",  fun.data=mean_sd, size=1.5, alpha=.4, shape=13) +
-  stat_summary(aes(x=plotX2(W,X), y=Y),  geom="pointrange",  fun.data=mean_sd, size=1.5,  alpha=.8, data=twolevel.pop[sample.ind,]) 
-twolevel.pop.scatter + twolevel.coord
-```
-:::
-::::
-
-::: {.fragment .semi-fade-out data-fragment-index="0"}
-1. We start with two potential outcomes for each person in our population.
-   - Those are the connected dots we see in the plot.
-   - We can draw in the *mean* of each potential outcome within each age group.
-:::
-::: {.fragment .fade-in-then-semi-out data-fragment-index="0"}
-2. Each one flips a coin --- one with weight depending on their age --- to determine whether they're treated.
-   - The winning outcomes --- the ones that actually happen --- are the ones that don't fade out.
-   - The means of the realized outcomes, within each group, are essentially the same.
-:::
-::: {.fragment .fade-in data-fragment-index="1"}
-3. Then we sample --- with replacement --- from our population. 
-    - &olcross; marks a person who isn't sampled and the within-population mean.
-   - The mean of the sampled outcomes, again within each group, are essentially the same too.
-:::
-
-## Implications
-
-
-
-
-
-
-## A Table I HATE
+## Implications (TODO: IMPROVE/MAKE VISUAL)
 
 $$
 \begin{array}{cccc|ccc}
@@ -485,9 +427,6 @@ $$
 - Among those with $\textcolor{blue}{X=60}$ and $\textcolor{magenta}{X=70}$ ...
   - Everything we've said before about randomized experiments is true.
   - We can think of the people who do and don't do MHT as being drawn from the same population.
-  - 
-
-
   - That means that --- if we ignore $W_i$ and $Y_i$ --- they have the same distribution.
   - We have to ignore this stuff to get idenitical distribution because it's *downstream of randomization*.
 - This allows us to get at the *distribution of our missing data*. 
@@ -711,9 +650,8 @@ $$
 
 ```{r}
 #| echo: true
-
 summaries = data %>% group_by(X, W) %>% summarize(mean=mean(Y), n=n())
+```
 
-can estimate the ATT by averaging the differences in means within each age group.
 
 
