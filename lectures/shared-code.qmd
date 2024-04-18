@@ -1,4 +1,5 @@
-```{r load-libraries}
+```{r}
+#| label: load-libraries
 #| include: false
 library(tidyverse)
 library(htmltools)
@@ -14,7 +15,8 @@ approx  = function(x,accuracy=.01) {
 ```
 
 
-```{r ggplot-themes}
+```{r}
+#| label: ggplot-themes
 class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
         panel.background = element_rect(fill = "transparent", colour = NA),
                     legend.background = element_rect(fill="transparent", colour = NA),
@@ -45,7 +47,8 @@ theme_set(simplified.theme)
 ```
 
 
-```{r define-colors}
+```{r}
+#| label: define-colors
 twocolor.red = rgb(248,118,109, maxColorValue=255)
 twocolor.green = rgb(0,191,196, maxColorValue=255)
 ```
@@ -71,7 +74,8 @@ $$
 :::
 
 
-```{r table-styling}
+```{r}
+#| label: table-styling
 ellipsis = function(df, nhead=5L, ntail=2) {
     rownames(df) = as.character(1:nrow(df))
     stopifnot("data.frame" %in% class(df))
@@ -85,7 +89,8 @@ ellipsis = function(df, nhead=5L, ntail=2) {
 options(knitr.kable.NA = '')
 ```
 
-```{r with-seed}
+```{r}
+#| label: with-seed
 with_seed = function(thunk, seed) {
     current.seed = .Random.seed
     set.seed(seed)
@@ -96,6 +101,20 @@ with_seed = function(thunk, seed) {
 ```
 
 ```{r}
+#| label: test-with-seed
+#| eval: false
+set.seed(1)
+sample(1:5)
+sample(1:5)
+
+set.seed(1)
+sample(1:5)
+(\() sample(1:5) ) |> with_seed(1)
+sample(1:5)
+```
+
+```{r}
+#| label: coarsen
 coarsen = function(x, group, seed=0) {
   function(seed) { 
     x.coarsened = rep(NA, length(x))
@@ -108,19 +127,8 @@ coarsen = function(x, group, seed=0) {
 ```
 
 
-```{r test-with-seed}
-#| eval: false
-set.seed(1)
-sample(1:5)
-sample(1:5)
-
-set.seed(1)
-sample(1:5)
-(\() sample(1:5) ) |> with_seed(1)
-sample(1:5)
-```
-
-```{r calibrated-width}
+```{r}
+#| label: calibrated-width
 width = function(samples, center=mean(samples), alpha=.05) { 
     limits = c(0, 2*max(abs(samples-center)))
     covg_dif = function(w) { 
@@ -141,7 +149,8 @@ width_cdf = function(cdf, center, limits, alpha=.05) {
 }
 ```
 
-```{r distribution-plot-annotations}
+```{r}
+#| label: distribution-plot-annotations
 
 default.dot.size = 2
 default.height = function(samples) { dnorm(0, mean=0, sd=sd(samples)) }
@@ -209,15 +218,3 @@ with_annotations = function(samples,
 }
 ```
 
-```{r}
-coarsen = function(x, group, seed=0) {
-  current.seed = .Random.seed
-  set.seed(seed)
-  x.coarsened = rep(NA, length(x))
-  for(gg in unique(group)) {
-    x.coarsened[group==gg] = runif(sum(group==gg), min(x[group==gg]), max(x[group==gg]))
-  }
-  set.seed(current.seed)
-  x.coarsened
-} 
-```
