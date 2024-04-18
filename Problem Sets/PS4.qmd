@@ -41,408 +41,479 @@ knitr:
 ::: hidden
 $$
 \DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\CATE}{CATE}
 \DeclareMathOperator{\Var}{V}
 \DeclareMathOperator{\hVar}{\widehat{V}}
 \DeclareMathOperator{\bias}{bias}
+\DeclareMathOperator*{\argmin}{argmin}
+\newcommand{\model}{\mathcal{M}}
 $$
 :::
+
+## Summary
+In this problem set, we're going to get practice using some new regression models to do the kinds of analysis we've been doing all semester. While we do this, we'll pay a bit of attention to bias---a new phenomenon, because it's not something that happens when we use the 'all curves' model we've been using.
+
+Here are the libraries we'll need.
+```{r}
+#| echo: true
+library(ggplot2)
+library(tidyverse)
+library(rpart)
+```
+
+And some settings to configure how our plots and code output looks.
+```{r}
+#| echo: true
+theme_set(theme_minimal())
+options(scipen = 1, digits = 2)
+```
+
+There are a few exercises here that'll either require you 
+
+
+## Bone Density 
+
+Researchers hypothesize that higher calcium intake causes greater bone density (stronger bones).  To test this, a clinic 
+runs an experiment where patients are treated with a calcium supplement or a placebo for 1 year, after which their bone density is measured. 
+Bone Density T-Scores indicate how good someone’s bone density is---0 is typical, positive numbers are better, negative numbers are worse (a threshold score of -2.5 is used to diagnose osteoporosis). The (fake) data from this imaginary study is shown below. 
+
+To get a random sample from its patient population in which treatment is randomized, the following procedure is used.
+
+1. Patients in our population are classified as old (age 65+) or young (age 64-). We'll call this $X$: $X=0$ if young, $X=1$ if old.
+2. For each patient in our population, we flip a coin to assign them to treatment or placebo. An age-group-specific weighted coin, so that patients are assigned treatment or placebo 
+with probability depending on their age group. We'll call this $W$: $W=1$ if treatment, $W=0$ if placebo.
+3. We then sample with replacement from the population.^[Note that we don't really need to treat patients *who aren't in the sample* according to the coin flip. Flipping a coin for each patient in the population just helps us think about what our sample looks like.]
+
+Here's a table of the data.
+```{r}
+#| echo: true
+bone.data = data.frame(age        = c(1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0),
+                       supplement = c(1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1),
+                       bone_density = c(-2, -3, -2, 0, -1, 0, -2, 0, 1, 1, -1, 1.5))
+bone.data
+```
+
+And here's a plot. We'll show the individual points, the mean and standard deviation of bone density for each age/treatment group (as points with arms), and the proportion of patients in each group that received treatment (as bar heights). Because we're used to seeing data in which $y$ is non-negative, we'll plot bone density plus 3, so that our plot looks a bit more familiar.
+
+```{r}
+#| echo: true
+plotX = function(w,x) { x + 0.15*(w-0.5) } 
+
+bone.plot = 
+  ggplot(bone.data) + 
+    geom_point(aes(x=plotX(supplement, age), y=bone_density+3, color=factor(supplement)),
+               alpha=1, size=2, position=position_jitter(width=0.05, height=0, seed=2)) + 
+    stat_summary(aes(x=plotX(supplement, age), y=bone_density+3, color=factor(supplement)), 
+                 geom='pointrange', fun=mean, 
+                                    fun.min=\(x)mean(x)-sd(x), 
+                                    fun.max=\(x)mean(x)+sd(x), alpha=.5) +    
+    geom_bar(aes(x=plotX(supplement, age), y=after_stat(prop), fill=factor(supplement), color=factor(supplement)), 
+             position='identity', alpha=.3, linewidth=.2) + 
+    scale_x_continuous(breaks=c(0,1), labels=c('Young', 'Old')) + xlab('') 
+     
+bone.plot
+```
+
+
+Let's start with some exercises where we estimate population summaries by taking appropriate averages of subsample means. 
+These should be familiar from the last problem set, although there's more of a causal flavor to their interpretation.
+
+::: {#exr-conditional-treatment-effects .callout-exercise}
+Using a simple difference of column means, estimate the **Conditional Average Treatment Effect**, $\CATE(x) = \mu(1,x)-\mu(0,x)$,
+for the young patients (i.e. for $x=0$) and the old patients ($x=0)$. 
+Here $\mu(w,x)$ is the average bone density of patients in our population assigned to treatment $w$ and age group $x$.
+:::
+
+::: {#exr-average-treatment-effects .callout-exercise}
+Estimate two summaries of the Conditional Average Treatment Effect.
+$$
+\begin{aligned}
+\text{ATT} &= \frac{\sum_{j:w_j=1} \CATE(x_j)}{\sum_{j:w_j=1} 1} && \text{Average Treatment Effect on the Treated Subpopulation} \\
+\text{ATE} &= \frac{\sum_{j=1}^m \CATE(x_j)}{\sum_{j=1}^m 1}     && \text{Average Treatment Effect on the Whole Population}
+\end{aligned}
+$$
+
+To do this, average your estimate of the CATE from the previous exercise over *the treated subsample* and over *the whole sample* respectively. 
+:::
+
+::: {.callout-solution}
+```{r}
+#| echo: true
+all.functions.model.fit = lm(bone_density ~ supplement * age, data=bone.data)
+muhat.all = function(w,x) { predict(all.functions.model.fit, newdata=data.frame(supplement=w, age=x)) }
+
+CATEhat = function(x) { muhat.all(1,x) - muhat.all(0,x) }
+
+W = bone.data$supplement
+X = bone.data$age
+ATThat = mean(CATEhat(X[W==1]))
+ATEhat = mean(CATEhat(X))
+
+# print the estimates. Include the previous point estimates for comparison
+data.frame(CATE0=CATEhat(0), CATE1=CATEhat(1), ATThat=ATThat, ATEhat=ATEhat)
+```
+:::
+
+
+::: {#exr-diff-in-means .callout-exercise}
+
+Suppose that instead of these average treatment effect estimates, you simply took the difference in means of bone density between the treated and control groups. What is this difference in means? 
+
+:::
+
+::: {.callout-solution}
+
+```{r}
+#| echo: true
+Y = bone.data$bone_density
+Deltahat = mean(Y[W==1]) - mean(Y[W==0])
+data.frame(CATE0=CATEhat(0), CATE1=CATEhat(1), ATThat=ATThat, ATEhat=ATEhat, Delta=Deltahat)
+```
+
+:::
+
+::: {#exr-diff-in-means-interpretation .callout-exercise}
+What does this difference in means really estimate, i.e., what is the expected value of this difference in means? Express your answer in terms of $\mu(w,x)$ and the proportion $p_{w,x}=m_{w,x}/m_w$ of patients --- among those assigned to treatment $w$ --- that are in age group $x$. Is this the ATT, ATE, or something else? Is it necessarily
+the average of the conditional average treatment effect $\CATE(x)$ over any group of patients? Explain why or why not.
+
+**Hint**. See [this slide from Lecture 11](https://davidahirshberg.bitbucket.io/static/Lecture11.html#/the-average-over-people) and [this slide from Lecture 12](https://davidahirshberg.bitbucket.io/static/Lecture12.html#/revisiting-a-computational-trick). 
+
+:::
+
+
+Now let's recall an interpretation of what we've been doing Lecture 14. Using the subsample mean $\hat\mu(w,x)$ to estimate the corresponding subpopulation mean $\mu(w,x)$
+is, equivalently, estimating **the function** $\mu$ by the the function $\hat\mu$ that minimizes the sum of squared residuals among all functions outright, i.e.,
+$$ 
+\hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2 \qfor \model = \qty{ \text{ all functions } \ \ m(w,x) }
+$$
+
+And we can, if we prefer, use the least squares estimator within a smaller set of functions, e.g.,
+$$
+\begin{aligned}
+\model &= \qty{ \text{ all functions of \emph{coarsened covariates} } \ \ m(w,x)=f(c(w,x)) } && \text{ is a piecewise-constant model } \\
+\model &= \qty{ m(w,x) = m_0(w) + m_1(x) \ \ : \ \ m_0, m_1 \text{ are functions of one variable } } && \text{ is the additive model } \\
+\model &= \qty{ m(w,x) = a(w) + b x \ \ : \ \ a \text{ is a function of one variable and } \ \  b  \\ \text{ is a number } } && \text{ is the parallel lines model }\\
+\model &= \qty{ m(w,x) = a(w) \ \ : \ \ a \text{ is a function of one variable } \ } && \text{ is the horizontal lines model }\\
+\end{aligned}
+$$
+
+Here's code to find and plot you the least squares estimator $\hat\mu$ within each model. 
+To choose the coarsening $c(w,x)$ in the piecewise-constant model, we'll use a tree as implemented in the `rpart` package.
+
+Here's some generic code for making predictions and plotting given what **R** calls a 'model fit object'.
+```{r}
+#| echo: true
+prediction.function = function(model.fit) { function(w,x) { predict(model.fit, newdata=data.frame(supplement=w, age=x)) } }
+plot.predictions = function(muhat) { 
+  grid = expand.grid(supplement=c(0,1), age=c(0,1))
+  bone.plot +
+    geom_point(aes(x=age, y=muhat(supplement, age)+3, color=factor(supplement)), data=grid) + 
+    geom_line(aes(x=age,  y=muhat(supplement, age)+3, color=factor(supplement)), data=grid)
+}
+```
+
+And here's some code to actually fit the models and plot the fits. The `rpart` stuff is its own thing, but for the rest of them, we're using the **R** built-in function `lm` with an 
+appropriate **regression formula** describing our model. The formula language takes a bit of getting used to and we're not going to go get into that here. But if you're curious,
+feel free to come to hours and ask about it.
+
+```{r}
+#| echo: true
+#| layout-nrow: 2
+#| layout-ncol: 2
+#| fig-cap:
+#| - "Piecewise-constant model"
+#| - "Additive model"
+#| - "Parallel lines model"
+#| - "Horizontal lines model" 
+
+
+## The piecewise-constant model
+# Tell rpart to not to worry about having more than 1 observation per level of the coarsened covariate 
+# (or, in more evocative terms, per 'bucket')
+rpart.settings = rpart.control(minbucket=1)  
+# Then fit and plot
+piecewise.constant.model.fit = rpart(bone_density ~ supplement + age, data=bone.data, control=rpart.settings)
+muhat.piecewise.constant = prediction.function(piecewise.constant.model.fit)
+plot.predictions(muhat.piecewise.constant)
+
+## The additive model
+additive.model.fit = lm(bone_density ~ factor(supplement) + factor(age), data=bone.data)
+muhat.additive = prediction.function(additive.model.fit)
+plot.predictions(muhat.additive)
+
+## The parallel lines model
+parallel.lines.model.fit = lm(bone_density ~ factor(supplement) + age, data=bone.data)
+muhat.parallel = prediction.function(parallel.lines.model.fit)
+plot.predictions(muhat.parallel)
+
+## The horizontal lines model
+horizontal.lines.model.fit = lm(bone_density ~ factor(supplement), data=bone.data)
+muhat.horizontal = prediction.function(horizontal.lines.model.fit)
+plot.predictions(muhat.horizontal)
+```
+
+::: {#additive-model-equivalence .callout-note}
+If you look at these plots closely, you can see that the least squares estimators in the additive model and the parallel lines model are the same.
+In fact, when $w$ and $x$ are binary, these two models are the same---i.e., they're two ways of describing the same set of functions. If you like,
+try to prove it.
+:::
+
+
+Now let's use a few of these models and take a moment to think about what happens. 
+
+::: {#exr-repeat-using-models .callout-exercise}
+Repeat @exr-conditional-treatment-effects - @exr-diff-in-means using the predictions of the **additive model** and the **horizontal lines model**
+instead of those of the **all functions model**. When you do this, you'll get identical estimates of different summaries of the population. Explain why this happens and why it didn't happen when we used the all functions model.
+:::
+
+::: {.callout-solution}
+```{r}
+prediction.functions = list(all=muhat.all, additive=muhat.additive, horizontal=muhat.horizontal)
+map(prediction.functions, function(muhat) { 
+  CATEhat = function(x) { muhat(1,x) - muhat(0,x) } 
+  data.frame(CATE0 = CATEhat(0), 
+             CATE1 = CATEhat(1),
+             ATT =  mean(CATEhat(X[W==1])), 
+             ATE =  mean(CATEhat(X)),
+             Delta = mean(muhat(1,X[W==1])) - mean(muhat(0,X[W==0])))
+}) |> bind_rows(.id='model')
+```
+:::
+
+Unless you actually believe these different summaries of the population are the same, this seems like a problem. And 
+although our sample size is small, it's not a small-sample-size problem. Using these models, we'll get identical estimates
+of these different summaries no matter what sample size we have. This means at least one of the matching summary estimates has to be biased.
+This might be a sign that we're using the wrong model and, in a sense, motivates our decision to use the 'all functions' model that we
+started with.
+
+But before we move on, I want to call your attention to something. Unless you have a bug in your code (this is a good time to check),
+the raw difference in means you calculated in @exr-diff-in-means and the corresponding part of @exr-repeat-using-models
+should be the same for every model. Let's think about why that's happening.
+
+To make sense of this phenomenon, we're going to think about the residuals we get when we predict $Y_i$ using two functions in our model: the least squares estimator $\hat \mu$ and a 'perturbed version' $\hat\mu + \delta m$ for any other function $m$ in our model. Or, to be precise, we're going to think about the residuals we get when we predict $Y_i$ using functions like this for a range of values of $\delta$, i.e., for functions
+
+$$ 
+m_\delta(w,x) = \hat \mu(w,x) + \delta m(w,x) \quad \text{ for numbers } \ \ \delta \ \ \text{ near zero } 
+$$
+
+We know that the least squares estimator $\hat \mu$ is the curve that minimizes the sum of squared residuals among all functions in our model, so we know that---if we think of the sum of squared residuals as a function of $\delta$ for curves like this---the minimum occurs at $\delta=0$ where $m_\delta=\hat\mu$. Let's see what the 'zero-derivative' condition characterizing this minimum tells us.
+
+$$
+\begin{aligned}
+0 
+&= \frac{d}{d\delta} \sum_{i=1}^n \qty{ Y_i - m_\delta(W_i,X_i) }^2 \Big|_{\delta=0}  
+&& \text{ is the zero-derivative condition} \\
+&= \sum_{i=1}^n 2\qty{ Y_i - m_\delta(W_i,X_i) } \times  -\frac{d}{d\delta} m_{\delta}(W_i,X_i) \Big|_{\delta=0} 
+&& \text{ using the chain rule } \\
+&= -2 \sum_{i=1}^n  \qty{ Y_i - \hat\mu(W_i,X_i) } m(W_i,X_i) 
+&& \text{ differentiating } \ m_{\delta} \ \text{ and evaluating at } \ \delta=0 \\
+\end{aligned}
+$$
+
+This tells us that, for any function $m$ in our model, if we multiply the least squares residuals $\hat\varepsilon_i=Y_i-\hat\mu(W_i,X_i)$ by the corresponding values $m(W_i,X_i)$ of that function and sum them up, we get zero. This is a generalization of the equation we used to show that the sample mean was the least squares estimator [here in Lecture 14](https://davidahirshberg.bitbucket.io/static/Lecture14.html#/the-least-squares-location-summary), where there was no multiplication by $m(W_i,X_i)$---where we just summed up the residuals. Now let's think about what this tells us when we take $m$ to be the constant function $m(w,x)=1$ --- assuming we're in a model which, like every one we've discussed so far, includes that function. It tells us, in effect, the same thing.
+$$
+0 = \sum_{i=1}^n \qty{ Y_i - \hat\mu(W_i,X_i) } \times 1 \quad \text{ so } \quad \frac{1}{n}\sum_{i=1}^n \hat\mu(W_i,X_i) = \frac{1}{n}\sum_{i=1}^n Y_i 
+$$
+
+It tells us that the average of our predictions $\hat\mu(W_i,X_i)$ over the people in our sample is the same as the average of their outcomes $Y_i$. This is true *for any model* that includes the constant function $m(w,x)=1$---the all-functions model, the additive model, the parallel lines model, the horizontal lines model, and most other models you can think of. We can say something similar about the average of our predictions $\hat\mu(W_i,X_i)$ for people with a specific treatment status $W_i=w$. If we use any model that includes an *indicator for that treatment status*---including any of the aforementioned four---then the average of our predictions $\hat\mu(W_i,X_i)$ over the people in our sample with treatment status $W_i=w$ is the same as the average of their outcomes $Y_i$. 
+$$
+\begin{aligned}
+0 &= \sum_{i=1}^n \qty{ Y_i - \hat\mu(W_i,X_i) } \times \begin{cases} 1 & \text{ if } W_i=w \\ 0 & \text{ if } W_i \neq w \end{cases} \\
+  &= \sum_{i:W_i=w} \qty{ Y_i - \hat\mu(w,X_i) } \quad  \text{ so } \frac{1}{N_w}\sum_{i:W_i=w} \hat\mu(w,X_i) = \frac{1}{N_w}\sum_{i:W_i=w} Y_i \qfor N_w=\sum_{i:W_i=w} 1
+\end{aligned}
+$$
+  
+
+::: {#exr-delta-model-invariant .callout-exercise}
+Use this fact to explain why the difference in means you calculated in @exr-diff-in-means and the corresponding part of @exr-repeat-using-models is the same for every model. 
+:::
+
+::: {.callout-tip}
+Recall that the difference in means we're talking about looks like this.
+
+$$
+\frac{1}{N_w}\sum_{i:W_i=w} \hat\mu(w,X_i) - \frac{1}{N_{w'}}\sum_{i:W_i=w'} \hat\mu(w',X_i) \quad \text{for} \quad  w=1 \ \text{ and } \ w'=0
+$$
+
+What do we know about each of the terms in this difference?
+:::
+
 
 
 ## Gerber, Green, and Larimer Michigan Voter Experiment
 
-Prior to the August 2006 primary election in Michigan, political scientists Gerber, Green, and Larimer conducted a large field experiment in which different mailers were sent to registered voters across Michigan. Because whether or not someone votes (though not who they vote for) is public record, the researchers then accessed the public voting information to measure their outcome-- whether an individual voted in the August 2006 primary. The different treatments are as follows:
+Now let's move on to a different dataset. This one is from a field experiment conducted by Gerber, Green, and Larimer in Michigan---the same one we discussed in Lecture 6. 
 
-- Civic Duty: do your civic duty and vote! 
-\item Hawthorne: you are being studied + do your civic duty and vote! 
-\item Self: who votes is public information, here is your recent voting record + do your civic duty and vote! 
-\item Neighbors: what if your neighbors knew whether you voted? here is your recent voting record + your neighbors' recent voting record + do your civic duty and vote! 
-\item Control: no mailer 
-\end{itemize}
-```
-Households were randomized to receive a mailer (or not) and which type, but voting records are by individual.
+Let's start by loading the data. $Y$ will be an indicator for whether the voter turned out in the 2006 election, $X$ be the voter's age at the time of the election, and $W$ be an indicator for whether the voter received the treatment. $W=1$ indicates that they received the treatment---a letter encouraging them to turn out---and $W=0$ indicates that they did not. To make the data a bit easier to work with, I'm going to drop voters who are 96+ years old. What's nice about this is that it ensures we've got voters in both treatment groups at every remaining age.
 
-The attached data from their experiment has the following variables:
-
-```{=tex}
-\begin{itemize}
-\item hh\textunderscore id : the household id number 
-\item hh\textunderscore size : number of adults in household 
-\item sex : individual's sex according to voter record 
-\item yob: individual's year of birth 
-\item g2000 : whether or not the individual voted in the general election in 2000 
-\item g2002 : whether or not the individual voted in the general election in 2002 
-\item g2004 : whether or not the individual voted in the general election in 2004
-\item p2000 : whether or not the individual voted in the primary election in 2000 
-\item p2002 : whether or not the individual voted in the primary election in 2002 
-\item p2004 : whether or not the individual voted in the primary election in 2004
-\item treatment : the mailer that the household received (or Control for no mailer)
-\item voted : whether the individual voted in the 2006 primary (outcome)
-\end{itemize}
-```
-(a) Create a balance table showing the similarity of individuals assigned to treated and control across sex, age, household size, and turnout in previous elections.
-
-(b) Create a balance table showing the similarity of individuals assigned to each level of treatment and control across sex, age, household size, and turnout in previous elections. Be sure to note how many individuals are in each level of treatment.
-
-(c) Calculate the subsample 2006 primary turnout within each level of treatment (and control).
-
-(d) Let's define the following treatment effects of interest: $\hat{\tau}(civic) = \hat{\mu}(civic) - \hat{\mu}(control)$, $\hat{\tau}(hawthorne) = \hat{\mu}(hawthorne) - \hat{\mu}(civic)$, $\hat{\tau}(self) = \hat{\mu}(self) - \hat{\mu}(hawthorne)$, $\hat{\tau}(neighbor) = \hat{\mu}(neighbor) - \hat{\mu}(self)$. Calculate each of these and interpret each in plain language. Sanity check: 0.01789934 for $\hat{\tau}(civic)$
-
-(e) Create a bootstrap estimated sampling distribution for each of your $\tau$s and a 95% confidence interval for each.
-
-(f) Create four dummy variables-- one for each treatment-- where an observation is coded as 1 if the household received that treatment and 0 otherwise (other treatment or control). Run an additive linear regression of 2006 primary vote on the four treatment variables. Report your results in a table and provide plain language interpretations of your coefficent estimates.
-
-(g) Run an additive linear regression of 2006 primary vote on the four treatment variables and the pre-treatment turnout variables (i.e. general election voting in 2002 and 2000, primary election voting in 2004, 2002, and 2000). Report your results in a table (one table for both models is fine) and compare the coefficients on your treatment variables to your results in part (f).
-
-
-## Women's Health Initiative
 
 ```{r}
-#| echo: false
-# create data with treatment status, age, and breast cancer (0,1) 
-#age<- c(rep("50-59",5520), rep("60-69",7509), rep("70-79",3579))
-#treat<- c(rep(1,2837), rep(0,2683), rep(1,3854), rep(0,3655), rep(1,1815), rep(0,1764))
-#breastcancer<- c(rep(1,55), rep(0,2782),rep(1,42),rep(0,2641), rep(1,97), rep(0,3757), rep(1,75),rep(0,3580),rep(1,54), rep(0,1761), rep(1,38), rep(0,1726))
-#whi<- data.frame(treat=treat, age=age, breastcancer=breastcancer)
-#write.csv(whi,"whidata.csv")
-#whi<- read.csv("whidata.csv")
+#| echo: true
+social.pressure = read.csv('social-pressure-data.csv')
+keep = social.pressure$treatment %in% c(' Control', ' Neighbors') & (2006 - social.pressure$yob)< 96
+turnout.data = data.frame(W=as.numeric(social.pressure[keep,'treatment'] == ' Neighbors'),
+                          X=2006-social.pressure[keep, 'yob'],
+                          Y = as.numeric(social.pressure[keep,'voted'] == 'Yes'))
 ```
 
-The data based on the CEE+MPA arm of the WHI trial can be found in whidata.csv and contains the following variables:
+Here's a plot a lot like the one we made for the bone density data. We'll show the individual points, the mean and standard deviation of turnout for each age/treatment group (as points with arms), and the proportion of patients in each group that received treatment (as bar heights). Here the raw data is a bit harder to look at for a few reasons.
 
-```{=tex}
-\begin{itemize}
-\item treat : binary indicating whether the participant received CEE+MPA or placebo 
-\item age : the age group that the participant is in at the beginning of the trial 
-\item breastcancer : binary indicating whether the participant developed invasive breast cancer during the trial 
-\end{itemize}
-```
-(a) Create a balance table showing the number of participants assigned to CEE+MPA and placebo by age group (column with Age Group, CEE+MPA Treatment, and Placebo).
-Why are balance tables reported in randomized experiments? How do they contribute to the validity of the study's findings? Based on the balance table provided for the WHI study, evaluate the balance of participants' ages between the CEE+MPA treatment group and the placebo group.mDo you think the age distribution is sufficiently balanced for the purposes of the study? Explain your reasoning.
+1. There are way more points.
+2. There are way more columns.
+3. The outcome is binary, so all the points in each column stack on top of each other.
 
-```{=tex}
-\begin{table}
-\begin{tabular}{|c|c|c|}
-\hline
-Age Group & CEE+MPA Treatment & Placebo \\
-\hline
-50-59 & & \\ 
-\hline
-60-69 & & \\
-\hline
-70-79 & & \\
-\hline 
-\end{tabular}
-\end{table}
-```
-\bigskip
+To make the plot more readable, we'll make the points transparent and jitter them a bit---both horizontally and vertically --- so they're not quite on top of each other. It helps, but it's still a bit hard to look at the raw data. The means and proportions are still easy enough to see, though.
 
-(b) Estimate the overall treatment effect (difference in proportions) of CEE+MPA on breast cancer and interpret your result.
+```{r}
+#| echo: true
 
-(c) Create a bootstrap estimated sampling distribution of your treatment effect and report your 95\% confidence interval. Interpret your confidence interval.
+plotX = function(w,x) { x + 0.75*(w-0.5) } 
 
+turnout.summary.plot = 
+  ggplot(turnout.data) + 
+    stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W)),
+                 geom='pointrange', fun=mean, 
+                                    fun.min=\(x)mean(x)-sd(x), 
+                                    fun.max=\(x)mean(x)+sd(x), alpha=.2, size=.5, linewidth=.5) +    
+    geom_bar(aes(x=plotX(W, X), y=10*after_stat(prop), fill=factor(W), color=factor(W)), 
+             position='identity', alpha=.1, linewidth=.1) + xlab('') 
 
+turnout.plot = turnout.summary.plot + 
+  geom_point(aes(x=plotX(W, X), y=Y,  color=factor(W)),
+            alpha=.01, size=.01, position=position_jitter(width=0.25, height=.1, seed=2))  
 
-(d) Estimate the treatment effect of CEE+MPA on breast cancer within each age group. Sanity check: difference in breastcancer among 50-59 year olds is 0.003732558
-
-(e) Create a bootstrap estimated sampling distribution for the within-age-group treatment effects and report your 95\% confidence interval for each age group. Interpret.
-
-(f) Using the 50-59 year olds as the reference category, run an additive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, and 70-79 year olds as your regressors. Report your results in a table.
-
-(g) Using the 50-59 year olds as the reference category, run an interactive linear regression with breast cancer as your outcome and treatment, 60-69 year olds, 70-79 year olds, 60-69 year olds \* treatment, and 70-79 year olds \* treatment as your regressors. Report your results in a table (you can use one table for both models).
-
-(h) Write the equations for each or your models using $\beta_i$s as your parameters. Fill in the tables below using the $\beta$s from your models (not numbers, for example $\beta_0 + \beta_1$.) Let $BC(T=1)-BC(T=0)$ be the difference in the proportion of those who developed invasive breast cancer for those that received treatment and control. Then fill in the tables using the estimates from your models.
-
-```{=tex}
-\begin{table}
-\caption*{Additive Regression }
-\begin{tabular}{|c|c|c|c|c| }
-\hline
- & Age Group & Prop. Breast Cancer T=1 & Prop. Breast Cancer T=0 & $BC(T=1)-BC(T=0)$ \\
-\hline
-$\beta$s & 50-59 & & & \\ 
- \hline
-$\beta$s & 60-69 & & & \\
-\hline
-$\beta$s & 70-79 & & & \\
-\hline 
-numbers  & 50-59 & & & \\
- \hline
-numbers & 60-69 & & & \\
-\hline
-numbers & 70-79 & & & \\
-\hline 
-\end{tabular}
-\end{table}
-```
-\bigskip
-
-```{=tex}
-\begin{table}
-\caption*{Interactive Regression }
-\begin{tabular}{|c|c|c|c|c| }
-\hline
- & Age Group & Prop. Breast Cancer T=1 & Prop. Breast Cancer T=0 & $BC(T=1)-BC(T=0)$ \\
-\hline
-$\beta$s & 50-59 & & & \\ 
- \hline
-$\beta$s & 60-69 & & & \\
-\hline
-$\beta$s & 70-79 & & & \\
-\hline 
-numbers  & 50-59 & & & \\
- \hline
-numbers & 60-69 & & & \\
-\hline
-numbers & 70-79 & & & \\
-\hline 
-\end{tabular}
-\end{table}
+turnout.plot
 ```
 
+Now let's fit a few models and plot those in. We'll actually leave the individual points out because there are so many that the plots get a bit busy, so what we'll be plotting over are the means and proportions. We'll use the all-functions model, additive model, the parallel lines model, and the horizontal lines model. We already know the least squares fit of the all-functions model is going to go through the column means we've already plotted, so we don't really need to plot that. But to set up later code, we'll plot it anyway. 
 
+```{r}
+#| echo: true
+#| layout-ncol: 2
+#| layout-nrow: 2
+#| fig-cap:
+#| - "All functions model"
+#| - "Additive model"
+#| - "Parallel lines model"
+#| - "Horizontal lines model" 
 
-(i) Compare the results from your models to the $\hat{ATE}$s by age group that you recovered in part (d). What is different between (f) and (g)? 
+prediction.function = function(model.fit) { function(w,x) { predict(model.fit, newdata=data.frame(W=w, X=x)) } }
+plot.predictions = function(muhat) { 
+  grid = expand.grid(W=c(0,1), X=min(turnout.data$X):max(turnout.data$X))
+  turnout.summary.plot +
+    geom_line(aes(x=X,  y=muhat(W, X), color=factor(W)), data=grid)
+}
 
-\bigskip
+all.functions.model.fit = lm(Y ~ factor(W)*factor(X), data=turnout.data)
+muhat.all = prediction.function(all.functions.model.fit)
+plot.predictions(muhat.all)
 
+additive.model.fit = lm(Y ~ factor(W) + factor(X), data=turnout.data)
+muhat.additive = prediction.function(additive.model.fit)
+plot.predictions(muhat.additive)
 
+parallel.lines.model.fit = lm(Y ~ factor(W) + X, data=turnout.data)
+muhat.parallel = prediction.function(parallel.lines.model.fit)
+plot.predictions(muhat.parallel)
 
-## Dogs
-
-The Giant Database of Dogs, a crowd-sourced dataset organized by Prof. Leanne Powner, includes the following variables:
-
-```{=tex}
-\begin{itemize}
-\item Obs – unique observation number for case identification
-\item Name – dog’s name as provided by the owner (excess text removed)
-\item Gender – \{male, female\} closed choice
-\item Fixed – “yes” if spayed or neutered, as appropriate; “no” if not
-\item Color – respondents selected one from \{light brown, dark brown, black, white, reddish,
-yellow/blond, no primary color, other\}. Other was not an open-ended response.
-\item Heritage – 1 = single breed, 2 = designer/deliberate mix, 3 = mixed/unknown
-\end{itemize}
+horizontal.lines.model.fit = lm(Y ~ factor(W),     data=turnout.data)
+muhat.horizontal = prediction.function(horizontal.lines.model.fit)
+plot.predictions(muhat.horizontal)
 ```
-Use dogs.csv for the following.
 
-(a) Recode gender and fixed into numerical binary variables. Regress dog's weight on gender and fixed. Report your results in a table.
+You can see that these models give us pretty different predictions at each age $x$ and treatment status $w$. Let's go ahead and plot an estimate of the **Conditional Average Treatment Effect** $\CATE(x) = \mu(1,x)-\mu(0,x)$ for each model, too.
 
-(b) Create a scatter plot with weight on the y-axis, fixed on the x-axis, and use different colors for male and female dogs (include a legend).
-
-(c) Regress dog's weight on gender, fixed, and gender\*fixed. Report your results in a table (one table for both models is fine).
-
-(d) Write the equations for each or your models using $\beta_i$s as your parameters. Fill in the following table with the $\beta$s from your models (not numbers, for example $\beta_0 + \beta_1$.)
-
-```{=tex}
-\begin{table}[H]
-\caption*{Weight: Additive Model $\beta$s}
-\begin{tabular}{c | c | c |}
-& Male & Female \\
-\hline
-Fixed & & \\
-\hline
-Not Fixed & & \\
-\hline 
-\end{tabular}
-\end{table}
+```{r}
+x = min(turnout.data$X):max(turnout.data$X)
+CATE.data = data.frame(x=x, 
+                       all.functions    = muhat.all(1,x) - muhat.all(0,x),
+                       additive         = muhat.additive(1,x) - muhat.additive(0,x),
+                       parallel.lines   = muhat.parallel(1,x) - muhat.parallel(0,x),
+                       horizontal.lines = muhat.horizontal(1,x) - muhat.horizontal(0,x)) |>
+              pivot_longer(-x, names_to='model', values_to='CATE')
+CATE.data$model = factor(CATE.data$model, levels=c('all.functions', 'additive', 'parallel.lines', 'horizontal.lines'))
+ggplot(CATE.data) + geom_line(aes(x=x, y=CATE, color=model) ) + ylab('CATE(x)') + facet_wrap(~model, ncol=4) + guides(color=FALSE) 
 ```
-```{=tex}
-\begin{table}[H]
-\caption*{Weight: Interactive Model $\beta$s}
-\begin{tabular}{c | c | c |}
-& Male & Female \\
-\hline
-Fixed & & \\
-\hline
-Not Fixed & & \\
-\hline 
-\end{tabular}
-\end{table}
+
+Now let's do a few exercises mirroring the major ones we did for the bone density data.
+
+
+::: {#exr-average-treatment-effects .callout-exercise}
+Using the four estimates of $\CATE(x)$ plotted above, calculate corresponding estimates of the **Average Treatment Effect on the Treated Subpopulation** and the **Average Treatment Effect on the Whole Population**.
+$$
+\begin{aligned}
+\text{ATT} &= \frac{\sum_{j:w_j=1} \CATE(x_j)}{\sum_{j:w_j=1} 1} && \text{Average Treatment Effect on the Treated Subpopulation} \\
+\text{ATE} &= \frac{\sum_{j=1}^m \CATE(x_j)}{\sum_{j=1}^m 1}     && \text{Average Treatment Effect on the Whole Population}
+\end{aligned}
+$$
+
+To do this, average your estimate of the CATE over *the treated subsample* and over *the whole sample* respectively. You should get 8 estimates in total---an estimate of the ATT and ATE for each of the four models. 
+:::
+
+::: {.callout-tip}
+If you run the code above, then say `muhat.all(1,x)-muhat.all(0,x)`, you'll get an estimate of $\CATE(x)$ based on the all-functions model.
+And similarly for the other models.
+:::
+
+::: {.callout-solution}
+```{r}
+X = turnout.data$X
+W = turnout.data$W
+prediction.functions = list(all=muhat.all, additive=muhat.additive, parallel = muhat.parallel, horizontal=muhat.horizontal)
+map(prediction.functions, function(muhat) { 
+  CATEhat = function(x) { muhat(1,x) - muhat(0,x) } 
+  data.frame(ATT =  mean(CATEhat(X[W==1])), 
+             ATE =  mean(CATEhat(X)),
+             Delta = mean(muhat(1,X[W==1])) - mean(muhat(0,X[W==0])))
+}) |> bind_rows(.id='model')
 ```
-(e) Fill in the table using the estimates from your models.
+:::
 
-```{=tex}
-\begin{table}[H]
-\caption*{Weight: Additive Model Estimates}
-\begin{tabular}{c | c | c |}
-& Male & Female \\
-\hline
-Fixed & & \\
-\hline
-Not Fixed & & \\
-\hline 
-\end{tabular}
-\end{table}
-```
-```{=tex}
-\begin{table}[H]
-\caption*{Weight: Interactive Model Estimates}
-\begin{tabular}{c | c | c |}
-& Male & Female \\
-\hline
-Fixed & & \\
-\hline
-Not Fixed & & \\
-\hline 
-\end{tabular}
-\end{table}
-```
-(g) Calculate the subsample mean weights among fixed females, unfixed females, fixed males, and unfixed males. Compare your results to your additive and interactive tables of predicted weights.
+When you see this, you'll notice that *every estimate is the roughly the same*, no matter which model you use and which summary you're estimating.
+When we saw matching estimates like this before, we took it as a sign that we were using the wrong model and therefore were getting bias. But we 
+know that can't be what's going on here.
 
+::: {#exr-no-bias .callout-exercise}
+Explain how you know that the estimates we get using one of these models can't be biased.
+:::
 
+::: {.callout-tip}
+Were we worried about bias earlier in the semester? What bearing does that have on this question?
+:::
 
+::: {#exr-diff-in-means-2 .callout-exercise}
+Suppose that instead of these average treatment effect estimates, you simply took the difference in turnout predictions for the treated and control groups. 
+That is, you calculate --- letting $\hat\mu$ be the least squares estimator of $\mu$ based on each of your four models --- this raw difference in mean predictions.
+$$
+\hat\Delta = \frac{1}{N_1}\sum_{i:W_i=1} \hat\mu(1,X_i) - \frac{1}{N_0}\sum_{i:W_i=0} \hat\mu(0,X_i).
+$$
 
+Report these estimates and compare them to the estimates of the ATT and ATE you calculated in the previous exercise.
+Did you really have to calculate them to know how they'd compare? Explain why or why not.
+You may want to refer to [this slide from Lecture 12](https://davidahirshberg.bitbucket.io/static/Lecture12.html#/revisiting-a-computational-trick)
+and the proportions $P_{w,x}$ drawn into our plots as bar heights.
+:::
 
-\subsection{California CPS Revisited}
+Now I'm going to ask a few questions that are a bit more open-ended. They're meant to get you thinking about the implications of these pieces.
+This first one is pretty straightforward.
 
-(a) Using the California sample of 25-35 year olds, regress income on education and age (in an additive model). Report your results in a table, including the standard errors that R automatically calculates.
+::: {#exr-open-ended-1 .callout-exercise}
+In this study, treatment was randomized with probabilities that did not depend on age, 
+so we knew even before looking at the data that these proportions $P_{0,x}$ and $P_{1,x}$, 
+the heights of the red and green bars respectively, would be roughly the same in each column.
+This is enough to tell you that it wasn't going to matter which model you used to estimate the ATT and ATE.
+Using your work on @exr-diff-in-means-2 and @exr-delta-model-invariant, explain why.
+:::
 
+This second one is more challenging. I'll make it extra credit, but I encourage you to give it a shot.
+You'll probably learn something from it. And, after we review the solutions, both will be in-bounds as exam material. 
+You'll get a sense of what that means on the practice exam.
 
-(b) Extract the predicted values and residuals from your model using predict(model name) and residuals(model name), then create a scatter plot of your predicted values and residuals. What do you see? Would you guess the errors are homoskedastic or heteroskedastic? Why?
-
-
-
-(c) Install the sandwich package and compute heteroskdasticity consistent standard errors for your model using sandwich(model name). 
-
-
-
-
-(d) Use a bootstrap to estimate the standard errors for each of the $\beta$s. 
-
-
-
-(e) Compare the standard errors you got from R in part (a) to the robust (sandwich) you calculated in parts (d). Why are they different? How do these compare to what you estimated from the bootstrap?
-
-\subsection{Causal Warm Up: Bone Density }
-
-Doctors (and researchers) hypothesize that higher calcium intake causes greater bone density (stronger bones).  To test this, a clinic runs an experiment where patients are treated with a calcium supplement or a placebo for 1 year, after which their bone density is measured. Patients are first classified as old or young, then treatment assignment is randomized within the groups. Bone Density T-Scores indicate how “normal” someone’s bone density is—0 is typical, positive numbers are better, negative numbers are worse (a threshold score of -2.5 is used to diagnose osteoporosis). 
-
-The resulting (fake) data is below. 
-
-\begin{tabular}{|c|c|c|}
-\hline
-Age Classification & Calcium Supplement & Bone Density T-Score \\
-\hline
-Old & 1 & -2 \\
-\hline
-Old & 0 & -3 \\
-\hline
-Old & 1 & -2 \\
-\hline
-Old & 0 & 0 \\
-\hline
-Old & 1 & -1 \\
-\hline
-Old & 0 & 0 \\
-\hline
-Old & 0 & -2 \\
-\hline
-Old & 0 & 0 \\
-\hline
-Young & 0 & 0 \\
-\hline 
-Young & 1 & 1 \\
-\hline
-Young & 0 & -1 \\
-\hline 
-Young & 1 & 1.5 \\
-\hline
-\end{tabular}
-
-(a) What is the probability of receiving treatment for the young? What is the probability of receiving treatment for the old? 
-
-\bigskip
-
-
-
-\bigskip 
-
-(b) Using simple difference in means, what is the treatment effect of the calcium supplement on bone density among the young? What is the treatment effect of the calcium supplement among the old? 
-
-
-(c) What is the average of these treatment effects, weighting by the number of participants in each category? 
-
-
-
-(d) If you ignored the blocked randomization and calculated the ATE using the difference in means in treated and control, what would your estimate be? 
-
-
-(e) Input the data in R, creating a binary variable for age classification. Run two regressions: a simple additive of bone density score on treatment, and an interactive with age, treatment, and age*treatment. Write the equations for your two models using $\beta$s. Report your results in a table. Which model corresponds with which estimate of the treatment effect? Fill in the table below with the $\beta$s notation from your equations and the estimates from your model. 
-
-
-\begin{tabular}{|c|c|}
-\hline
-& $\beta$s \\
-\hline 
-Avg Bone Density [Treated, Old] & \\
-\hline 
-Avg Bone Density [Control, Old] & \\
-\hline 
-Avg Bone Density [Treated, Young] & \\
-\hline 
-Avg Bone Density [Control, Young] & \\
-\hline 
-$\hat{ATE}_{Old}$ & \\
-\hline 
-$\hat{ATE}_{Young}$ & \\
-\hline
-\end{tabular}
-
-\subsection{Menopausal Hormone Therapy}
-
-Review the WHI/WHI(MS) studies as well as the Kim et al. 2021 study on neurodegenerative diseases. 
-
-(a) Fill in the following table comparing WHI and Kim et al. 
-
-\begin{tabular}{|c|c|c|}
-\hline
-& \ \ \ \ \ \ \ \ WHI Study \ \ \ \ \ \ \ \ \ & \ \ \ \ \ \ \ \ Kim et al. \ \ \ \ \ \ \ \ \ \  \\
-\hline 
-& & \\
-Method/approach used & & \\
-& & \\
-& & \\
-\hline 
-& & \\
-Population/participants & & \\
-& & \\
-& & \\
-\hline 
-& & \\
-Are there relevant populations not included? & & \\
-Who? & & \\
-& & \\
-\hline
-& & \\
-Treatment(s) & & \\
-& & \\
-& & \\
-\hline 
-& & \\
-Outcome(s) & & \\
-& & \\
-& & \\
-\hline 
-\end{tabular}
-
-(b) What is a potential omitted variable from the Kim et al. study? Does omitting that variable bias their estimate of the treatment effect of hormone therapy? Use the formulae from class to discuss whether your think their estimate might be too high, too low, or accurate. 
-
-
-
-(c) Is there a concern about omitted variable bias in the WHI? Why or why not? Use the formulae from class to discuss whether your think their estimate might be too high, too low, or accurate. 
-
-
-
-\bigskip 
-
-(d) Review the Estrogens General Statement clinical reference and read the recent NYT magazine piece about menopausal hormone therapy, the WHI's response to the NYT piece, and JoAnn Manson (WHI Principal Investigator) and Andrew M. Kaunitz's perspective on menopause management (posted on Canvas). Write a 1-2 paragraph reflection on what your major takeaways from the case study have been. Some questions are listed below to guide you, but you do not need to answer them all. 
-
-Questions to consider: 
-\begin{itemize}
-\item How do you assess the medical guidelines? Are the certainties and uncertainties of the body of research communicated effectively?
-\item What information might a doctor need to decide whether their patient should be prescribed menopausal hormone therapy? 
-\item What aspects of our readings/case study did you find most convincing and why? 
-\item What incentives do researchers and pharmaceutical companies have in research on hormone therapy medications? 
-\item What incentives do doctors/providers have when making recommendations to their patients? 
-\item How do you think these incentives affect the accumulation of knowledge and patient outcomes? 
-\end{itemize}
-Problem Sets/PS4_new.qmd
+::: {#exr-open-ended-2 .callout-exercise}
+**Extra Credit**.
+Suppose that treatment was randomized with probabilities that depends on a coarsened version of age---the probability
+differs for those with $age \le 50$ and $age > 50$ but not within those groups. Suppose I claim that you'll get roughly the
+same estimates of the ATT and ATE using the **all-functions model** and the **not-necessarily-parallel lines model** $\model=\qty{m(w,x)=a(w)+b(w)x}$.
+Do you agree? If so, explain why using the same reasoning you used in @exr-open-ended-1. If not, provide a counterexample by
+simulating an experiment with these properties and showing that the estimates differ.
+:::
