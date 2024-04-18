@@ -1,6 +1,6 @@
 ---
-title: "QTM 220: Lectures 17"
-subtitle: "Least Squares Regression in Linear Models: Part 2"
+title: "QTM 220: Lecture 19"
+subtitle: "Inverse Probability Weighting"
 format: 
   clean-revealjs:
     height: 1000
@@ -9,8 +9,8 @@ format:
     smaller: true
     slide-number: true
     pdf-separate-fragments: true
-    fig-format: svg
-    default-image-extension: svg
+    fig-format: png
+    default-image-extension: png
     html-math-method: mathjax
     include-in-header: 
       text: |
@@ -80,7 +80,7 @@ theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)
            panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
 grid.theme = theme_get()
 
-theme_set(class.theme)
+theme_set(simplified.theme)
 ```
 
 
@@ -97,67 +97,89 @@ ellipsis <- function(df, nhead=5L, ntail=2) {
 }
 ```
 
-```{r get-data}
-#| cache: true
-#| 
-# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
-census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
-cps.sampling.ratio = 1/25 # Not true. 1/2500 households are surveyed. But for the sake of plotting, it's ok.
 
-years = c(2019,2020,2021,2022)
-cps.data = purrr::map(years, function(year) { 
-  data=get_asec(year=year, vars=c('pearnval', 'a_age', 'a_hga', 'gestfips', 'gtco', 'gtcbsasz'), key=census.api.key)
-  data$year=year
-  data
+```{r population}
+set.seed(1) 
+m = 100000
+pi = function(x) { 1/(1+exp(-sinpi((x-60)/60))) }
+mu = function(w, x) { 2 - 2*((x-50)/30)^3/3 + w*((x-50)/30)^2 }  
+
+X = 50+round(30*runif(m))
+W = rbinom(m, 1, pi(X))
+eps = .5*rnorm(m)
+for(x in unique(X)) {
+  for(w in c(0,1)) {
+    eps[X==x & W==w] = eps[X==x & W==w] - mean(eps[X==x & W==w])
+  }
+}
+Y = mu(W,X) + eps
+
+pop = data.frame(X=X, W=W, Y=Y, Y.counterfactual=Y-mu(W,X)+mu(1-W,X))
+```
+
+```{r estimands}
+#| cache: true
+
+calculate.summaries = function(muhat, data) { 
+  data.frame(cate78 = muhat(1,78) - muhat(0,78),
+             att    =  mean(muhat(1, data$X[data$W==1]) - muhat(0, data$X[data$W==1])),
+             att1 = mean(muhat(1, data$X[data$W==1])),
+             att0 = mean(muhat(0, data$X[data$W==1]))) 
+}
+
+mu.formulas = c('Y~W*X', 'Y~W+X', 'Y~W')
+pi.formulas = c('known', 'W~X', 'W~1')
+formula.grid = expand.grid(mu.formula=mu.formulas, pi.formula=pi.formulas, stringsAsFactors = FALSE)
+
+formula.summaries = function(mu.formula, pi.formula, data) {
+    pihat = if (pi.formula=='known') { pi }  else { 
+      pi.model = glm(pi.formula, family='binomial', data=data)
+      function(x) { predict(pi.model, newdata=data.frame(X=x), type='response') }
+    }
+    data$weights = data$W + (1-data$W)*pihat(data$X)/(1-pihat(data$X))
+    mu.model = lm(formula=mu.formula, weights=weights, data=data)
+    muhat = function(w,x) { predict(mu.model, newdata=data.frame(W=w, X=x)) }
+    
+    summaries = calculate.summaries(muhat, data)
+    summaries$mu.formula = mu.formula
+    summaries$pi.formula = pi.formula
+    summaries
+}
+
+estimands = calculate.summaries(mu, pop)
+pop.estimates =  purrr::pmap(formula.grid, function(mu.formula, pi.formula) {
+    formula.summaries(mu.formula, pi.formula, pop)
 }) %>% bind_rows()
 ```
 
-```{r transform-data}
-#| cache: false
-#| 
-all.earnings = data.frame(state.code = cps.data$gestfips,
-                          county.code = cps.data$gtco,
-                          year=cps.data$year,
-                          age=cps.data$a_age,
-                          income=cps.data$pearnval,
-                          education.code=cps.data$a_hga,
-                          education=case_match(cps.data$a_hga,
-                                           0  ~ 0,   # child
-                                           31 ~ 0,   # < grade 1
-                                           32 ~ 4,   #  grade 1-4
-                                           33 ~ 6,   #  grade 5-6
-                                           34 ~ 8,   #  grade 7-8 
-                                           35 ~ 9,   #  grade 9
-                                           36 ~ 10,  #  grade 10
-                                           37 ~ 11,  #  grade 11
-                                           38 ~ 11,  #  grade 12 no diploma
-                                           39 ~ 12,  #  high school grad
-                                           40 ~ 13,  #  some college
-                                           41 ~ 14,  #  associate degree (vocational)
-                                           42 ~ 14,  #  associate degree (academic)
-                                           43 ~ 16,  #  bachelors degree
-                                           44 ~ 18,  #  masters degree
-                                           45 ~ 20,  #  professional school degree
-                                           46 ~ 20)) #  doctorate
+```{r estimates}
+#| cache: true
 
-all.earnings$degree = factor(all.earnings$education >= 16, 
-                     levels=c(FALSE, TRUE), 
-                     labels=c('no 4-year degree','4-year degree')) 
+# This takes ~5 minutes to run
 
-coarsen = function(x, group, seed=0) {
-  current.seed = .Random.seed
-  set.seed(seed)
-  x.coarsened = rep(NA, length(x))
-  for(gg in unique(group)) {
-    x.coarsened[group==gg] = runif(sum(group==gg), min(x[group==gg]), max(x[group==gg]))
-  }
-  set.seed(current.seed)
-  x.coarsened
-} 
+ns = c(100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000)  
+grid = expand.grid(n=ns, rep=1:200)
+
+estimates = purrr::pmap(grid, function(n, rep) {
+    set.seed(rep)
+    data = pop[sample(1:nrow(pop), n, replace=TRUE), ]
+    summaries = purrr::pmap(formula.grid, function(mu.formula, pi.formula) {
+      formula.summaries(mu.formula, pi.formula, data)
+    }) %>% bind_rows()
+    summaries$n = n
+    summaries$rep = rep
+    summaries
+})  %>% bind_rows()
+
+cate.summaries = estimates %>% group_by(n,  mu.formula, pi.formula) %>% summarize(bias=mean(cate78)-estimands$cate78, se=sd(cate78))
+att.summaries  = estimates %>% group_by(n,  mu.formula, pi.formula) %>% summarize(bias=mean(att)-estimands$att, se=sd(att))
+att1.summaries = estimates %>% group_by(n,  mu.formula, pi.formula) %>% summarize(bias=mean(att1)-estimands$att1, se=sd(att1))
+att0.summaries = estimates %>% group_by(n,  mu.formula, pi.formula) %>% summarize(bias=mean(att0)-estimands$att0, se=sd(att0))
 ```
 
-# Linear Regression Models 
+# Statistical Inference for Summaries
 
+## An Example
 ::: {.hidden}
 $$
 \newcommand{\alert}[1]{\textcolor{red}{#1}}
@@ -167,688 +189,1266 @@ $$
 \DeclareMathOperator*{\argmin}{argmin}
 \DeclareMathOperator{\V}{V}
 \DeclareMathOperator{\Var}{\V}
-\newcommand{\inred}[1]{\textcolor{red}{#1}}
 \newcommand{\inblue}[1]{\textcolor{blue}{#1}}
+\newcommand{\inred}[1]{\textcolor[RGB]{248,118,109}{#1}}
+\newcommand{\ingreen}[1]{\textcolor[RGB]{0,191,196}{#1}}
+\newcommand{\ingray}[1]{\textcolor[RGB]{150,150,150}{#1}}
 \newcommand{X}{\mathbf{X}}
 \newcommand{Y}{\mathbf{Y}}
 $$ 
 :::
 
-
-## Least Squares Regression with Linear Models {.smaller}
-
-$$
-\hat \mu = \argmin_{m \in \model} \frac{1}{n}\sum_{i=1}^n \qty{ m(\textbf{X}_i) - Y_i}^2 \qqtext{ for } \model = \qty{ m(x) = \sum_k b_k \phi_k(x) : b \in \R^{K+1} }
-$$
-
-- In this class, we focus on fitting **linear models** via least squares.
-- You can think of linear models, generally speaking, as the set of **all linear combinations** of a set of **features**.
-- We've been doing this for a while, but it was only last class that we talked about it in general.
-- Let's go through a few familiar examples.
-
-
-## The Saturated Model
 ```{r}
 #| out-height: 400px
- 
-earnings = all.earnings %>% filter(education >= 8 & state.code==36 & county.code==61)
-group.summaries = earnings %>% group_by(year, degree) %>% summarize(mean=mean(income), sd=sd(income), n=n())
-summaries = earnings %>% group_by(year) %>% summarize(mean=mean(income), sd=sd(income), n=n())
+#| fig-asp: .4 
 
-saturated.model.plot = ggplot(earnings) + 
-  geom_point(aes(x=year, y=income, color=degree), alpha=.4, size=.5, position=position_jitter(width=.1)) +
-  geom_pointrange(aes(x=year, y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n), color=degree), data=group.summaries) +
-  scale_y_continuous(labels=dollar_format(), limits=c(0, 200000)) 
-saturated.model.plot
-```
-
-- This is the model we've worked with most.
-- In this model, we have a feature for every level of $x$.
-- That feature is just a binary indicator that $X_i$ takes on that value.
-- The least squares curve in this model is just the **subsample mean** of $Y_i$ at each level of $x$
-
-$$
-\small{
-\hat \mu(x) = \frac{1}{N_x}\sum_{i:X_i=x} Y_i \qqtext{ for } \model = \qty{ m(x) = \sum_j b_k 1_{x_k}(x) : b_k \in \R } 
-}
-$$    
-
-
-## Lines and Polynomials {.smaller}
-
-```{r}
-#| out-height: 400px
- 
-line.fit = lm(income ~ year, data=earnings)
-quad.fit = lm(income ~ poly(year,2), data=earnings)
-cube.fit = lm(income ~ poly(year,3), data=earnings)
-x = seq(min(earnings$year), max(earnings$year), by=.01)
-newdata = data.frame(year = x)
-newdata$muhat.line  =  predict(line.fit, newdata)
-newdata$muhat.quad  =  predict(quad.fit, newdata)
-newdata$muhat.cube  =  predict(cube.fit, newdata)
-
-saturated.model.plot +
- geom_pointrange(aes(x=year, y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n)), data=summaries) +
- geom_line(aes(x=year, y=muhat.line), data=newdata, alpha=.6, color='blue') +
- geom_line(aes(x=year, y=muhat.quad), data=newdata, alpha=.8, color='red') + 
- geom_line(aes(x=year, y=muhat.cube), data=newdata, alpha=.6, color='magenta') 
-```
-
-- We've also worked with the set of **lines**.
-- But with many-valued $x$, we started having to worry about **misspecification**.
-- To reduce misspecification, people often use higher-order **polynomials** instead.
-
-$$\small{
-\begin{aligned}
-\model &= \qty{ m(x) = b_0 + b_1 x : b \in \R^2 } && \textcolor{blue}{\text{lines}} \\
-\model &= \qty{ m(x) = b_0 + b_1 x + b_2 x^2: b \in \R^3 } && \textcolor{red}{\text{quadratic polynomials}} \\
-\model &= \qty{ m(x) = b_0 + b_1 x + b_2 x^2 + b_3 x^3 : b \in \R^4 } && \textcolor{magenta}{\text{cubic polynomials}}
-\end{aligned}
-}
-$$
-
-## Bivariate Line-Based Models Models {.smaller}
-
-```{r}
-#| out-height: 400px
- 
-additive.line.fit   = lm(income ~ degree+poly(year,1), data=earnings)
-interacted.line.fit = lm(income ~ degree*poly(year,1), data=earnings)
-newdata = expand.grid(year = x, degree=unique(earnings$degree))
-newdata$muhat.additive    =  predict(additive.line.fit, newdata)
-newdata$muhat.interacted  =  predict(interacted.line.fit, newdata)
-
-saturated.model.plot +
- geom_pointrange(aes(x=year, y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n)), data=summaries) +
- geom_line(aes(x=year, y=muhat.additive, color=degree), data=newdata, size=.5, alpha=.6, linetype='solid') +
- geom_line(aes(x=year, y=muhat.interacted, color=degree), data=newdata, size=.5, alpha=.6, linetype='dashed')
-```
-
-- In the last two classes, we've talked about two *bivariate models*.
-- In additive models, we get *parallel lines* for each level of $z$.
-- In interacted models, we get *totally different lines* for each level of $z$.
-- In this case, they look very similar.
-
-$$\small{
-\begin{aligned}
-\model &= \qty{ m(x,z) = b_0 + b_1x + b_2 z : b \in \R^3 }                 &&\text{additive bivariate lines} \\
-\model &= \qty{ m(x,z) = b_0 + b_1x + b_2 z + b_3 x z: b \in \R^4 }      &&\text{interacted bivariate lines} \\
-\end{aligned}
-}
-$$
-
-
-
-## Bivariate Polynomial Models {.smaller}
-
-```{r}
-#| out-height: 400px
- 
-additive.line.fit   = lm(income ~ degree+poly(year,3), data=earnings)
-interacted.line.fit = lm(income ~ degree*poly(year,3), data=earnings)
-newdata = expand.grid(year = x, degree=unique(earnings$degree))
-newdata$muhat.additive    =  predict(additive.line.fit, newdata)
-newdata$muhat.interacted  =  predict(interacted.line.fit, newdata)
-
-saturated.model.plot +
- geom_pointrange(aes(x=year, y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n)), data=summaries) +
- geom_line(aes(x=year, y=muhat.additive, color=degree), data=newdata, size=.5, alpha=.6, linetype='solid') +
- geom_line(aes(x=year, y=muhat.interacted, color=degree), data=newdata, size=.5, alpha=.6, linetype='dashed')
-```
-
-
-- We can also do this with *polynomials*. Here we're doing cubics.
-- In additive models, we get *parallel polynomials* for each level of $z$. They differ by a constant.
-- In interacted models, we get *totally different polynomials* for each level of $z$.
-- These are different. With different cubics, we can go through the subsample means. But with parallel ones, we can't.
-
-$$\small{
-\begin{aligned}
-\model &= \qty{ m(x,z) = b_0 + b_1x + b_2 x^2 + b_3 x^3 + b_4 z : b \in \R^5 }                 &&\text{additive bivariate cubics} \\
-\model &= \qty{ m(x,z) = b_0 + b_1x + b_2 x^2 + b_3 x^3 + b_4 z + b_5 x^2z + b_6 x^2 z + b_7 x^3 z: b \in \R^8 } &&\text{interacted bivariate cubics} \\
-\end{aligned}
-}
-$$
-
-
-## Saturated Models Can Be Too Big {.smaller}
-
-```{r}
-#| out-height: 400px
- 
-earnings = all.earnings %>% filter(education >= 8 & state.code==36 & county.code==61)
-group.summaries = earnings %>% group_by(education, year) %>% summarize(mean=mean(income), sd=sd(income), n=n())
-summaries = earnings %>% group_by(education) %>% summarize(mean=mean(income), sd=sd(income), n=n())
-mean.year = mean(unique(earnings$year))
-
-
-additive.line.fit   = lm(income ~ factor(year)+poly(education,8), data=earnings)
-interacted.line.fit = lm(income ~ factor(year)*poly(education,8), data=earnings)
-small.interacted.fit = lm(income ~ factor(year)*poly(education,3), data=earnings)
-piecewise.fit = lm(income ~ factor(year)*(I(education > 12) + I(education > 16)), data=earnings)
-newdata = expand.grid(year = factor(unique(earnings$year)), education = seq(7.5,20.5, by=.01))
-newdata$muhat.additive    =  predict(additive.line.fit, newdata)
-newdata$muhat.interacted  =  predict(interacted.line.fit, newdata)
-newdata$muhat.smallinteracted  =  predict(small.interacted.fit, newdata)
-newdata$muhat.piecewise   = predict(piecewise.fit, newdata)
-
-edandyear.plot = ggplot(earnings) + 
-  geom_point(aes(x=education, y=income, color=factor(year)), alpha=.4, size=.5, position=position_jitter(width=.3)) +
-  geom_pointrange(aes(x=education+.1*(2*(year-mean.year)-1), y=mean, ymin=mean-sd/sqrt(n), ymax=mean+sd/sqrt(n), color=factor(year)), data=group.summaries) +
-  scale_y_continuous(labels=dollar_format(), limits=c(-1500, 300000)) 
-edandyear.plot
-```
-
-- So far, we've had relatively few levels of the covariates.
-  - This meant we could usually get away with using saturated models. 
-  - And it seemed like a good idea because the consequences of misspeccification are pretty bad.
-- But when we use more covariates---or covariates with more levels---we get noisy estimates.
-- Here we're plotting income (y) against education level (x) and year (z) for surveyed Manhattan residents.
-  
-
-## Saturated Models Can Be Too Big {.smaller}
-```{r}
-#| out-height: 400px
-
-edandyear.plot
-``` 
-- There are 10 levels of education and 4 years, so we have 40 levels of the covariates---40 subsamples.
-  - Some of these are very small. As a result, who happens to get surveyed has a big effect on the subsample mean.
-  - And we see that they jump around a lot. That's probably not what's going on in the population.
-- It's even possible that we get 'subsamples' of zero people. 
-  - i.e., possible levels of the covariates that we don't get in the sample.
-- To get around this, *we have to use models with fewer features*. 
-
-
-## Smaller Models {.smaller}
-
-```{r}
-#| out-height: 400px
- 
-edandyear.plot + 
-geom_line(aes(x=education, y=muhat.interacted, color=year), data=newdata, size=.5, alpha=.6)
-```
-
-- Here's an interacted model with 8th-order polynomials.
-  - This has $4 \times 9 = 36$ features.
-  - That's almost as big as the saturated model.
-- And we see it's similarly messy.
-
-## Smaller Models {.smaller}
-
-```{r}
-#| out-height: 400px
- 
-edandyear.plot + 
-geom_line(aes(x=education, y=muhat.smallinteracted, color=year), data=newdata, size=.5, alpha=.6)
-```
-
-- Here's an interacted model with 3rd-order polynomials.
-  - This has $4 \times 4 = 16$ features.
-  - That's much smaller. And it's less noisy.
-
-## Smaller Models {.smaller}
-
-```{r}
-#| out-height: 400px
- 
-edandyear.plot + 
-geom_line(aes(x=education, y=muhat.additive, color=year), data=newdata, size=.5, alpha=.6)
-```
-
-- Here's an additive model with 8th-order polynomials.
-  - This has $4 + 8 = 12$ features.
-  - That's even smaller. And it's not too noisy either.
-- Note that it looks ok *at observed levels of the covariate* but does weird stuff *in between.*
-- High-order polynomials do that. Be careful if you want predictions at unobserved levels of the covariate.
-
-## Smaller Models {.smaller}
-
-```{r}
-#| out-height: 400px
-
-edandyear.plot + 
-geom_line(aes(x=education, y=muhat.piecewise, color=year), data=newdata, size=.5, alpha=.6)
-```
-
-- An alternative to polynomials is *piecewise-constant models*.
-- These are sets of curves that are constant between specified levels of the covariate---where they jump.
-- We have seen this already.
-  - We spoke for a while about using 4-year degree status instead of education.
-  - This is a piecewise-constant model with a jump at $x=16$.
-
-## Summary
-
-```{r}
-edandyear.plot + 
-geom_line(aes(x=education, y=muhat.piecewise, color=year), data=newdata, size=.5, alpha=.6)
-```
-
-- When you have many covariates or many-valued covariates, you may not want a saturated model.
-- There are lots of models you can choose from.
-- We'll talk about *how to choose* in a few weeks.
-- But before we get there, we'll talk about the *consequences of our choice*.
-
-# Least Squares with Linear Models
-
-
-## Orthogonality of Residuals to Features
-
-- The residuals $\hat\varepsilon_i = Y_i - \hat\mu(X_i)$ are **orthogonal** to the every feature $\phi_k(X_i)$.
-- That is, the dot product between the [**vector of residuals**]{.fg style="color:orange"} and the [**vector of feature observations**]{.fg style="color:blue"} is zero.
-$$
-\small{
-\begin{aligned}
-\hat\varepsilon^T \phi_k(X) 
-= \begin{pmatrix} \hat\varepsilon_1 & \hat\varepsilon_2 & \ldots & \hat\varepsilon_n \end{pmatrix} 
-\begin{pmatrix} \phi_k(X_1) \\ \phi_k(X_2) \\ \vdots \\ \phi_k(X_n) \end{pmatrix} 
-= \sum_{i=1}^n \hat\varepsilon_i \phi_k(X_i) = 0 \qfor k=0,1,\ldots,K 
-\end{aligned}
-}
-$$
-
-- This is what that looks like in 2D, i.e., when we have two observations. 
-  - We plot the feature and residual for one observation on the $x$-axis and the other on the $y$-axis.
-  - We've used only one feature in each regression. 
-  - If we used more, our plot would be less interesting. Why?
-
-```{r}
-#| out-height: 400px
-#| layout-ncol: 2
- 
-Y = c(3/4, 3/2)
-X = c(1,1)
-residuals = lm(Y~X-1)$residuals
-ggplot() + 
-  geom_segment(aes(x=0, xend=residuals[1], y=0, yend=residuals[2]), color='orange') +
-  geom_point(aes(x=residuals[1], y=residuals[2]), color='orange') +
-  geom_segment(aes(x=0, xend=X[1], y=0, yend=X[2]), color='blue')  +
-  geom_point(aes(x=X[1], y=X[2]), color='blue') + 
-  geom_point(aes(x=0, y=0), color='gray') +
-  coord_fixed() + xlab('i=1') + ylab('i=2') 
-
-Y = c(1,  1)
-X = c(1, 0)
-residuals = lm(Y~X-1)$residuals
-ggplot() + 
-  geom_segment(aes(x=0, xend=residuals[1], y=0, yend=residuals[2]), color='orange') +
-  geom_point(aes(x=residuals[1], y=residuals[2]), color='orange') +
-  geom_segment(aes(x=0, xend=X[1], y=0, yend=X[2]), color='blue')  +
-  geom_point(aes(x=X[1], y=X[2]), color='blue') + 
-  geom_point(aes(x=0, y=0), color='gray') + 
-  coord_fixed() + xlab('i=1') + ylab('i=2')
-```
-
-## Orthogonality of Residuals to Curves
-
-- This means they're **orthogonal** to every curve $m(x)$ in the model.
-$$
-\small{
-\begin{aligned}
-\hat\varepsilon^T \phi_k(X) 
-= \begin{pmatrix} \hat\varepsilon_1 & \hat\varepsilon_2 & \ldots & \hat\varepsilon_n \end{pmatrix} 
-\begin{pmatrix} m(X_1) \\ m(X_2) \\ \vdots \\ m(X_n) \end{pmatrix} 
-= \sum_{i=1}^n \hat\varepsilon_i m(X_i) = 0 \qfor m \in \model.
-\end{aligned}
-}
-$$
-
-- That's because curves in the models are linear combinations of features.
-- And linear combinations of zeros are zero.
-
-$$
-\small{
-\begin{aligned}
-\sum_{i=1}^n \hat\varepsilon_i m(X_i) 
-&= \sum_{i=1}^n \hat\varepsilon_i \qty{ \sum_k b_k \phi_k(X_i) } && \text{ for some $b_0,b_1,\ldots$ for any $m \in \model$ } \\
-&= \sum_{i=1}^n \sum_k b_k \hat\varepsilon_i \phi_k(X_i) && \text{ distributing } \\
-&= \sum_{k} b_k \sum_{i=1}^n \hat\varepsilon_i \phi_k(X_i) && \text{ re-ordering sums and pulling out constants } \\
-&= \sum_{k} b_k \times 0 = 0                               && \text{ because residuals are orthogonal to features}. 
-\end{aligned}
-}
-$$
-
-## Uncorrelatedness of Residuals
-
-- If the constant $1$ is in the model, this means they're **uncorrelated** with every curve in the model. Why?
-
-::: fragment
-- Because the *covariance* of the residuals and $m$ is the dot product of the residuals and another function $m-\bar m$.
-$$
-\sum_{i=1}^n \qty{m(X_i) - \bar m} \hat\varepsilon_i = \sum_{i=1}^n \tilde m(X_i) \hat\varepsilon_i \qfor \tilde m(x) = m(x)-\bar m.
-$$
-
-- And that function is in the model too, as it's a linear combination of two curves in the model.
-$$
-\small{
-m \in \model \qqtext{ and } 1 \in \model \implies m - \bar m \times 1 \in \model \qqtext{ for the `coefficient' } \bar m = \frac{1}{n}\sum_{i=1}^n m(X_i)
-}
-$$
-
-:::
-
-
-## Residual Plots
-[ TODO: incoporate old plots]
-
-- When we have more than two observations, we can't plot one observation on each axis.
-- Instead, we plot residuals on the $y$-axis and features on the $x$.
-- It's a bit harder to see orthogonality/uncorrelatedness, as we don't actually get a right angle in the plot.
-- This is what it looks like.
-
-
-## Orthogonality Proof
-
-$$
-\small{
-\qqtext{Let's prove that } \sum_{i=1}^n \hat\varepsilon_i \phi_k(X_i) = 0 \qfor k=0,1,\ldots,K
-}
-$$
-
-::: fragment
-$$
-\begin{aligned}
-0 &= \frac{\partial}{\partial b_k}\mid_{b=\hat\beta}  \frac{1}{n}\sum_{i=1}^n \qty{ \sum_{j=0}^K b_j \phi_j(X_i) - Y_i}^2 \\
-&= \frac{1}{n}\sum_{i=1}^n 2 \qty{ \sum_{k=0}^K \beta_k \phi_k(X_i) - Y_i } \phi_k(X_i) \\
-&= \frac{1}{n}\sum_{i=1}^n 2 \qty{ \hat\mu(X_i) - Y_i } \phi_k(X_i)  \\
-&= \frac{1}{n}\sum_{i=1}^n 2 \qty{ -\hat\varepsilon_i } \phi_k(X_i)  \\ 
-&= -\frac{2}{n}\sum_{i=1}^n \hat\varepsilon_i \phi_k(X_i)  
-\end{aligned}
-$$
-
-- Versions of this proof come up *a lot*. It's an important one to remember.
-- You can work out almost everything there is to know about least squares from it.
-
-:::
-
-
-## Limits
-
--  Suppose our observations $(X_1,Y_1) \ldots (X_n,Y_n)$ are sampled with replacement from a population $(x_1, y_1) \ldots (x_m,y_m)$.
-- The **law of large numbers** tells you that, for any curve $m$, ... 
-  - Mean squared error in the sample approximates its expected value.
-  - And that expected value is mean squared error in the population.
-$$
-\frac{1}{n}\sum_{i=1}^n \qty{ m(X_i) - Y_i }^2 \approx \E\qty{ m(X_i) - Y_i}^2 = \frac{1}{m}\sum_{j=1}^m \qty{ m(x_j) - y_j }^2 
-$$
-
-- That suggests that if we minimize these two errors over curves in the same model, we should get similar curves.
-- i.e., our least squares estimator approximates the population least squares curve.
-$$
-\hat\mu = \argmin_{m \in \model} \frac{1}{n}\sum_{i=1}^n \qty{ m(X_i) - Y_i }^2
-\qqtext{approximates}
-\tilde\mu = \argmin_{m \in \model} \frac{1}{m}\sum_{j=1}^m \qty{ m(x_j) - y_j }^2.
-$$ 
-
-- This is --- roughly speaking --- what actually happens.
-- For the models we'll use in this class, this approximation is very good.
-- There are some subtleties here that come up when you use very large models. 
-- You can learn about them, e.g. in my Machine Learning Theory class.
-
-## Population Least Squares
-
-- We can say all this residual orthogonality stuff for **least squares in the whole population**.
-- All curves in the model are **orthogonal** to the **population residuals**.
-
-$$
-\begin{aligned}
-\tilde \mu &= \argmin_{m \in \model} \frac{1}{m}\sum_{j=1}^m \qty{ m(x_j) - y_j }^2 
-&& \text{the population least squares curve} \\
-\tilde \varepsilon_j &= y_j - \tilde \mu(x_j) 
-&& \text{the population residuals} \\
-0 &= \sum_{j=1}^m  \tilde \varepsilon_j m(x_j) 
-&& \text{ for all $m \in \model$ }
-\end{aligned}
-$$
-
-- We can see something interesting when we write this in terms of random variables and expectations.
-- The **errors** our population least squares estimator makes---as an estimator of the conditional mean $\mu(x)$---are orthogonal to all curves in the model.
-
-::: fragment
-
-$$
-\small{
-\begin{aligned}
-\tilde \mu = \argmin_{m \in \model} \E[ \qty{ m(X_i) - Y_i }^2 ]
-\qqtext{ satisfies }
-0 &= \E\qty[ \qty{Y_i - \tilde \mu(X_i)} m(X_i) ] && \text{for all} \quad m \in \model \\
-  &= \E\qty[ \E\qty[ \qty{Y_i - \tilde \mu(X_i)} m(X_i) \mid X_i ]]  &&\text{via iterated expectations} \\
-  &= \E\qty[ \qty{\E\qty[Y_i \mid X_i] - \tilde\mu(X_i)} m(X_i)  ]  &&\text{via linearity of cond. expectations} \\
-  &= \E\qty[ \qty{\mu(X_i) - \tilde\mu(X_i)} m(X_i)  ]              &&\text{by definition of $\mu$}
-\end{aligned}
-}
-$$
-
-:::
-
-- This suggests that the population least squares estimator *doesn't depend on variation* $Y_i-\mu(X_i)$ around the subsample means.
-- It's the curve in the model that *best fits* the subpopulation means. We can see that more directly, too.
-
-## Proof: Population Least Squares as **Noiseless** 
-
-$$
-\text{Our claim: }
-\tilde\mu 
-= \underset{\text{\color{gray}'noisy' population least squares}}{\argmin_{m \in \model} \E[ \qty{ m(X_i) - Y_i }^2 ]} 
-= \underset{\text{\color{gray}'noiseless' population least squares}}{\argmin_{m \in \model} \E[ \qty{ m(X_i) - \mu(X_i) }^2]}
-$$
-
-
-::: fragment
-$$
-\small{
-\begin{aligned}
-&\E\qty[ \qty( m(X_i) - Y_i )^2 ] \\ 
-&= \E\qty[ \qty( \qty{m(X_i) - \mu(X_i)} + \qty{\mu(X_i) - Y_i} )^2 ] 
-&& \text{ adding and subtracting }\\
-&= \E\qty[ \qty{m(X_i) - \mu(X_i)}^2 + 2\qty{m(X_i) - \mu(X_i)} \qty{\mu(X_i) - Y_i} + \qty{\mu(X_i) - Y_i}^2 ] 
-&& \text{ via FOIL } \\
-&= \E \qty{m(X_i) - \mu(X_i)}^2 + 2\textcolor{blue}{\E\qty{m(X_i) - \mu(X_i)} \qty{\mu(X_i) - Y_i}} + \textcolor{red}{\E\qty{\mu(X_i) - Y_i}^2}  
-&& \text{ via linearity of expectations } 
-\end{aligned}
-}
-$$
-
-
-- Here the [third term]{.fg style="color:red"} doesn't depend on $m$, so it doesn't change the minimizer. 
-- And the [second term]{.fg style="color:blue"} is zero.
-$$
-\small{
-\begin{aligned}
-&\textcolor{blue}{\E \qty{m(X_i) - \mu(X_i)} \qty{\mu(X_i) - Y_i}} \\
-&= \E\qty[ \E\qty[ \qty{m(X_i) - \mu(X_i)} \qty{\mu(X_i) - Y_i}  \mid X_i]] && \text{ via iterated expectations} \\
-&=  \E\qty[ \qty{m(X_i) - \mu(X_i)} \qty{\mu(X_i) - \E[Y_i \mid X_i]}] && \text{ via linearity } \\
-&= \E \qty{m(X_i) - \mu(X_i)} \E\qty{\mu(X_i) - \mu(X_i)} = 0 &&.
-\end{aligned}
-}
-$$
-
-:::
-
-## Example
-
-
-
-```{r}
-#| cache: true
-#| out-height: 400px
-#| layout-ncol: 2
- 
-scale_y = function(limits=c(-.3e5, 3e5)) { 
-  scale_y_continuous(labels=label_dollar(), limits=limits)
-}
-
-years = 8:20
-scale_x = function(limits=c(min(years)-.5, max(years)+.5)) { 
-  scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=limits)
-}
-default.dot.size = 2
-
-
-# make a fake population by sampling with replacement from the sample then adding fuzz to incomes
-# the actual sampled proportion in CPS is about 1/2500, so by doing 25x more dots,
-# we're letting each dot  stand in for 100 people in the population
-earnings.pop = earnings[sample(1:nrow(earnings), nrow(earnings)*25, replace=TRUE),]
-earnings.pop$income = earnings.pop$income + .3*earnings.pop$income*runif(nrow(earnings.pop), min=-1,max=1)
-earnings.pop = earnings.pop[earnings.pop$education <= 12,]
+set.seed(1)
 
 n = 1000
-theme_set(simplified.theme)
-set.seed(2)
-earnings.samp = earnings.pop[sample(1:n, n, replace=TRUE), ]
+data = pop[sample(nrow(pop), n, replace=TRUE),]
 
-plot.earnings = function(earnings, dot.size=default.dot.size, formula=NULL) {
-  summaries = earnings %>% group_by(education) %>% summarize(mean=mean(income), sd=sd(income), n=n())
-  p = ggplot(earnings) + 
-    geom_point(aes(x=education, y=income), color='#F7766D',
-               size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.15) +
-    geom_pointrange(aes(x=education, y=mean, ymin=mean-2*sd/sqrt(n), ymax=mean+2*sd/sqrt(n)), data=summaries) +
-    scale_x(c(7.5, 12.5)) + scale_y(c(-.3e5, 1.5e5)) + guides(color=FALSE)
+plotX = function(X,W) { X + .15*(2*W-1) }
+scaleY = scale_y_continuous(limits=c(0,4), breaks=seq(0,4,by=1))
 
-  if(!is.null(formula)) {
-    model = lm(formula, data=earnings)
-    x = seq(min(earnings$education), max(earnings$education), by=.01)
-    linedata = data.frame(education=x, income=predict(model, data.frame(education=x)))
-    p = p + geom_line(aes(x=education, y=income), data=linedata, color='blue', alpha=.5)
-  }
+pop.scatter = ggplot(pop) + 
+  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.035, position=position_jitter(w=.15, h=0), size=.1) + 
+  guides(color=FALSE) + scaleY
+counterfactual.pop.scatter = ggplot(pop) +
+  geom_point(aes(x=plotX(X,!W), y=Y.counterfactual, color=factor(W)), alpha=.035, position=position_jitter(w=.15, h=0), size=.1) + 
+  guides(color=FALSE) + scaleY
 
-  p
-}
-
-plot.earnings(earnings.pop, dot.size=default.dot.size/10)
-plot.earnings(earnings.samp[1:1000,])
+scatter = ggplot(data) + 
+  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.1, position=position_jitter(w=.15, h=0)) + 
+  guides(color=FALSE) + scaleY
+pop.scatter
 ```
 
 
 
-- Let's look at this stuff in the context of some data. 
-- We'll use fake data so we have the population. That's what we're showing here.
-- We'll base it on the California CPS data we've used to talk about education.
-- We'll focus on residents with no more than 12 years of education.
-- And we'll look --- starting on the next slide---at samples of three sizes: 50, 200, and 1000.
+- Researchers hypothesize that MHT increases bone density. 
+- We'll think about how to look into this. We'll be working with fake data.
+- Above, we've got a population of `r format(m,scientific=FALSE)` people eligible for some form of MHT.
+  - Their age at the time the study begins is on the $x$-axis.
+  - Bone density, measured 2 years later, is on the $y$-axis.
+  - Color indicates whether they [did]{.twocolor-green} or [didn't]{.twocolor-red} do MHT.
+- What we want to know is how well MHT works, on average, for the people who take it.
+- That means comparing green folks---people who take MHT---to versions of themselves who didn't.
 
-## Our Data
-```{r}
-#| out-height: 150px
-#| layout-ncol: 2
-#| layout-nrow: 2
+::: aside
+To make things easier to look at, I'm drawing people who did and didn't receive treatment side-by-side. 
+This shift isn't meaningful. Age is a round number: 60, 61, ...
+:::
 
-formula = NULL
-plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
-plot.earnings(earnings.samp[1:1000,], formula=formula)
-plot.earnings(earnings.samp[1:50,], formula=formula)
-plot.earnings(earnings.samp[1:200,], formula=formula)
-```
-
-- We're plotting the subsample means +- 2 standard errors in black.
-
-## Fitting Lines
-```{r}
-#| out-height: 150px
-#| layout-ncol: 2
-#| layout-nrow: 2
-
-formula = income~education
-plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
-plot.earnings(earnings.samp[1:1000,], formula=formula)
-plot.earnings(earnings.samp[1:50,], formula=formula)
-plot.earnings(earnings.samp[1:200,], formula=formula)
-```
-
-- As sample size increases, our least squares lines get close to the population least squares line.
-- But the population least squares line is not all that close to some of the subpopulation means.
-
-## Fitting A Piecewise-Constant Model
-
-```{r}
-#| out-height: 150px
-#| layout-ncol: 2
-#| layout-nrow: 2
-
-formula = income~I(education>=11) 
-plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
-plot.earnings(earnings.samp[1:1000,], formula=formula)
-plot.earnings(earnings.samp[1:50,], formula=formula)
-plot.earnings(earnings.samp[1:200,], formula=formula)
-```
-
-- This is a piecewise-constant model with a jump at $x=11$.
-- It's a bit better than the line in that it never predicts *negative income*.
-
-## Fitting A Cubic Polynomial
-
-```{r}
-#| out-height: 150px
-#| layout-ncol: 2
-#| layout-nrow: 2
-
-formula = income~poly(education,3)
-plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
-plot.earnings(earnings.samp[1:1000,], formula=formula)
-plot.earnings(earnings.samp[1:50,], formula=formula)
-plot.earnings(earnings.samp[1:200,], formula=formula)
-```
-
-- This gets close to the subsample means. 
-- But it has some weird wiggles in our smallest sample
-
-## Fitting A Quartic Polynomial
-
-```{r}
-#| out-height: 150px
-#| layout-ncol: 2
-#| layout-nrow: 2
-
-formula = income~poly(education,4)
-plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
-plot.earnings(earnings.samp[1:1000,], formula=formula)
-plot.earnings(earnings.samp[1:50,], formula=formula)
-plot.earnings(earnings.samp[1:200,], formula=formula)
-```
-
-- This *goes through* the subsample means.
-- There's a 4th-order polynomial through any 5 points.
-
-## Bias
+## Counterfactuals
 
 ```{r}
 #| out-height: 400px
-#| layout-ncol: 2
-formula = income~education
-plot.earnings(earnings.pop, dot.size=default.dot.size/10, formula=formula)
-plot.earnings(earnings.samp[1:1000,], formula=formula)
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+pop.scatter
+counterfactual.pop.scatter
 ```
 
-- As sample size increases, the least squares line gets increasingly close to the population least squares line.
-- But the population least squares line is not close to all the subpopulation means.
-- As a result, no matter what sample size we use, we'll get bias.
-- It's useful to think of our error at having two pieces.
-  - *estimation error*. This is random. It depends on the sample.
-  - *modeling error*.  This isn't. It depends only on the model and the population.
-- Estimation error goes away in large samples. Modeling error doesn't.
+- We can't observe these *counterfactual* versions of people.
+- But we can think about what the data would look like if we did.
+  - On the left, we've got our real population.
+  - On the right, we've got a hypothetical one where everyone who did MHT didn't and vice versa.
+  - Note we're keeping the colors the same---counterfactual green people are still green.
+- We can think of the average difference as the *average effect of MHT for those who took it*.
 
 $$
-\hat\mu(x) - \mu(x) = \underset{\text{estimation error}}{\qty{ \hat\mu(x) - \tilde\mu(x) }} + 
-  \underset{\text{modeling error}}{\qty{ \tilde\mu(x) - \mu(x) }}
+\begin{aligned}
+\frac{\sum_{j:d_j=1} y_j(1) - y_j(0)}{\sum_{j:d_j=1} 1} = 
+\frac{\sum_{j:d_j=1} y_j(1)}{\sum_{j:d_j=1} 1} - \textcolor{blue}{\frac{\sum_{j:d_j=1} y_j(0)}{\sum_{j:d_j=1} 1}}
+\end{aligned}
 $$
 
-- All this passes through to summaries. What are the two parts of the average-over-years summary?
+- We call this the *average treatment effect on the treated* (ATT). It's a difference of two means. 
+- One is observable (if we have the population). [The other isn't]{.fg style="color:blue"}.
 
+## Summarizing these Populations
 
-## Inference
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+#| 
+pop.summary = pop %>% group_by(X, W) %>% summarize(mean=mean(Y), counterfactual.mean = mean(Y.counterfactual), n=n())
+summarized.pop = pop.scatter + 
+  geom_point(aes(x=plotX(X,W), y=mean, color=factor(W)), data=pop.summary) + 
+  geom_line(aes(x=plotX(X,W), y=mean, color=factor(W)), data=pop.summary) + 
+  geom_bar(aes(x=X, y=30*after_stat(prop), fill=factor(W)), 
+    position='identity', alpha=.15, data=pop) + 
+  guides(fill=FALSE, color=FALSE)
+
+summarized.counterfactual.pop = counterfactual.pop.scatter + 
+  geom_point(aes(x=plotX(X,!W), y=counterfactual.mean, color=factor(W)), data=pop.summary) + 
+  geom_line(aes(x=plotX(X,!W),  y=counterfactual.mean, color=factor(W)),  data=pop.summary) + 
+  geom_bar(aes(x=X, y=30*after_stat(prop), fill=factor(W)), 
+    position='identity', alpha=.15, data=pop) + 
+  guides(fill=FALSE, color=FALSE)
+
+summarized.pop
+summarized.counterfactual.pop
+```
+
+- The scatter plot is hard to read. To help, I've overlaid some summaries.
+  - Mean bone density for each age and treatment group: connected dots $\ingreen{\mu(1,x)}$ and  $\inred{\mu(0,x)}$.
+  - The frequency of each age within each treatment group: histograms $\ingreen{f_1(x)}$
+  and $\inred{f_0(x)}$.
+  - Note that where the histograms overlap, the colors mix into gray.
+- We can think of what we're doing in terms of these summaries. 
+- The observable mean is the average of the green curve over the distribution of the green points.
+  - i.e., the green histogram.
 
 $$
-\hat\mu(x) - \mu(x) = \underset{\text{estimation error}}{\qty{ \hat\mu(x) - \tilde\mu(x) }} + 
-  \underset{\text{modeling error}}{\qty{ \tilde\mu(x) - \mu(x) }}
+\begin{aligned}
+\text{observable mean} 
+= \frac{\sum_{j:d_j=1} y_j}{\sum_{j:d_j=1} 1} 
+= \sum_x \frac{\sum_{j:d_j=1, x_j=x} 1}{\sum_{j:d_j=1} 1} \frac{\sum_{j:d_j=1, x_j=x} y_j}{\sum_{j:d_j=1, x_j=x} 1} 
+= \sum_x \ingreen{f_1(x) \ \mu(1,x)}
+\end{aligned}
 $$
 
-- The estimation error has mean zero and is approximately normal with variance proportional to $1/\sqrt{n}$.
-- And the modeling error does not depend on the sample at all---it's constant. It's the bias.
-- This is exactly the scenario we looked at on the last question on Midterm 2. 
-- That, fundamentally, is what happens when you do least squares with linear models.
-- In homework, we'll look into ... 
-  - how to get a sense of what modeling error will be.
-  - the tradeoff between modeling error and estimation error and its impact on inference.
 
+- The counterfactual mean is the same thing, but in the counterfactual plot.
+
+## Working With Summaries
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+summarized.pop
+summarized.counterfactual.pop
+```
+
+
+- This seems like it'd be a problem, since we don't actually see the counterfactual plot. 
+- But, comparing our plots, we see something helpful: the green curve on the left looks like the red curve on the left.
+- In other words, we can use *what actually happened to the red people* to estimate *what would have happened to the green people*.
+
+$$
+\begin{aligned}
+\text{observable mean} &= \sum_x \ingreen{f_1(x)}\ingreen{\mu(1,x)} \\
+\text{counterfactual mean} &= \sum_x \ingreen{f_1(x)}\inred{\mu(0,x)}
+\end{aligned}
+$$
+
+- In real data, there's no counterfactual plot, so we can't do this comparison visually.
+- But *we've proven* that these curves look the same *in conditionally randomized experiments*.
+
+## Working With Summaries
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+summarized.pop
+summarized.counterfactual.pop
+```
+
+### In short
+
+- To calculate the ATT in a conditionally randomized experiment, we ...
+  - average the green curve over the distribution of the green points
+  - average the red curve over the distribution of the green distribution
+  - subtract 
+
+$$
+ATT = \sum_x \ingreen{f_{1}(x)}\ingreen{\mu(1,x)} - \sum_x \ingreen{f_{1}(x)}\inred{\mu(0,x)}
+$$
+
+- That's what we'd do if we had the population.
+- But we have a sample from it, so we'll do the same with *estimates*.
+
+## Working With A Sample
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+#| fig-subcap:
+#|   - "A Sample from the Population" 
+#|   - "A Population: Green People Did MHT, Red People Didn't"
+summary = data %>% group_by(X, W) %>% summarize(mean=mean(Y), sd=sd(Y), n=n())
+summarized.scatter = scatter + 
+  geom_pointrange(aes(x=plotX(X,W), y=mean, ymin=mean-2*sd/sqrt(n), ymax=mean+2*sd/sqrt(n), 
+  color=factor(W)), data=summary, alpha=.5) + 
+  geom_bar(aes(x=X, y=30*after_stat(prop), fill=factor(W)), 
+    position='identity', alpha=.15, data=data) + 
+  guides(fill=FALSE, color=FALSE) 
+summarized.scatter
+summarized.pop
+```
+
+- This is what we actually have. It's a sample of `r n` people. 
+- To give you a sense of the uncertainty, I've drawn 95% confidence intervals for each subpopulation mean
+around the subsample means.
+
+$$
+\widehat{ATT} = \sum_x \ingreen{\hat f_1(x)}\ingreen{\hat\mu(1,x)} - \sum_x \ingreen{\hat f_1(x)}\inred{\hat\mu(0,x)}
+$$
+
+- To reduce variance, we often use other estimates of the subpopulation means $\inred{\mu(0,x)}$.
+- These estimates are often biased and, as a result, our ATT estimator usually will be too.
+
+## Working With A Sample
+
+```{r}
+sample.model = lm(Y ~ W*X, data=data)
+pop.model = lm(Y ~ W*X, data=pop)
+grid = expand.grid(X=seq(50,80,by=.1), W=c(0,1))
+grid$muhat = predict(sample.model, newdata=grid)
+grid$mutilde = predict(pop.model, newdata=grid)
+grid$mu = mu(grid$W, grid$X)
+
+summarized.scatter.annotated.nopop = summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') + 
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7) 
+summarized.scatter.annotated = summarized.scatter.annotated.nopop +
+  geom_line(aes(x=X, y=mutilde, group=factor(W)), data=grid, linetype='solid', color='black', alpha=.4)
+```
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+summarized.scatter.annotated.nopop
+```
+
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+summarized.scatter.annotated
+```
+
+:::
+::::
+
+- Here we've fit separately to each group, i.e., the interacted bivariate model.
+    - The solid curves are, as before, the subpopulation means
+    - The dashed lines are what we'd use to estimate them: the model fit on the sample.
+- In large samples, these estimates approach a limit: the model fit on the population. 
+  - We call this the $\ingray{\text{population regression } \tilde\mu(d,x)}$. 
+  - We'll plot it in gray. You'll have to infer $d$---the treatment status---from context. 
+
+$$ 
+\begin{aligned}
+\hat \mu &= \argmin_{m \in \model} \frac{1}{n}\sum_{i=1}^n \qty{ m(D_i, X_i) - Y_i }^2 \\
+&\approx \\
+\tilde \mu &= \argmin_{m \in \model} \E \qty{ m(D_i, X_i) - Y_i }^2 
+\end{aligned}
+$$
+
+## Types of Error
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+
+summarized.scatter.annotated
+```
+
+$$
+\hat\mu(d,x) - \mu(d,x) = \underset{\text{estimation error}}{\qty{ \hat\mu(d,x) - \tilde\mu(d,x) }} + 
+  \underset{\text{modeling error}}{\qty{ \tilde\mu(d,x) - \mu(d,x) }}
+$$
+
+- It's helpful to decompose error into two parts: one that depends on the sample and one that doesn't.
+- The first part is the difference between our predictions and those we'd get in the large-sample limit.
+    - It's the difference between the colored and gray dashed lines. 
+    - This has mean zero and we have techniques to understand it---confidence intervals.
+- The second part is the difference between the predictions we'd get in the large-sample limit and the ones we want.
+    - It's the difference between the gray dashed lines and the solid colored ones. 
+    - This is the bias of our prediction. It depends on the population and the model, but not the sample.
+    - This is what we're going to focus on today.
+- All this passes through to summaries like the CATE and ATT
+
+
+## Bias for the CATE
+
+```{r}
+sample.dist.plot = function(estimate.samples, pop.estimate, estimand) { 
+  data = data.frame(estimates=estimate.samples)
+  p = ggplot(data) + geom_histogram(aes(x=estimates, y=after_stat(density)), fill='black', bins=30, alpha=.2) + 
+           geom_vline(aes(xintercept=mean(estimates)), color='blue') +
+           geom_vline(aes(xintercept=mean(estimates) - 2*sd(estimates)), color='blue', linetype='dotted') +
+           geom_vline(aes(xintercept=mean(estimates) + 2*sd(estimates)), color='blue', linetype='dotted') +
+            geom_vline(aes(xintercept=mean(estimates) - sd(estimates)), color='blue', linetype='dashed') +
+           geom_vline(aes(xintercept=mean(estimates)  + sd(estimates)), color='blue', linetype='dashed') +
+           geom_vline(aes(xintercept=estimand), color='black', alpha=.5, linewidth=2)
+  if(!is.na(pop.estimate)) {
+    p = p + geom_vline(aes(xintercept=pop.estimate), color='red', alpha=.5, linewidth=2)
+  }
+  p
+}
+plot.sample.dist = function(outcome, mu.formula, pi.formula, n) {
+  estimate.samples = estimates[estimates$mu.formula == mu.formula & 
+                               estimates$pi.formula == pi.formula & 
+                               estimates$n == n, outcome]
+  pop.estimate = pop.estimates[pop.estimates$mu.formula == mu.formula & 
+                               pop.estimates$pi.formula == pi.formula, outcome]
+  sample.dist.plot(estimate.samples, pop.estimate, estimands[[outcome]])
+}
+```
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+summarized.scatter.annotated
+```
+
+- We can see that our CATE estimate should be fairly biased for older folks (large $x$).
+- That's because our fitted line $\inred{\hat\mu(0,x)}$ gives a poor estimate of our subpopulation means there.
+
+$$
+\begin{aligned}
+\widehat{CATE}(x) - CATE(x) = & \ingreen{\qty{\hat\mu(1, x) - \ingray{\tilde\mu(1, x)}}} - \inred{\qty{\hat\mu(0,x) - \ingray{\tilde\mu(0,x)}}} && \text{estimation error} \\
+                            +& \ingreen{\qty{\ingray{\tilde\mu(1, x)} - \mu(1, x)}} - \inred{\qty{\ingray{\tilde\mu(0,x)} - \mu(0,x)}}  && \text{modeling error} \\ 
+\end{aligned}
+$$
+
+## Implications for Inference
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .8 
+#| layout-ncol: 3 
+
+mu.formula = 'Y~W*X'
+pi.formula = 'W~1'
+outcome = 'cate78'
+
+scale_x = coord_cartesian(xlim = c(.5, 1)) 
+plot.sample.dist(outcome, mu.formula, pi.formula, n=500) + scale_x
+plot.sample.dist(outcome, mu.formula, pi.formula, n=1000) + scale_x
+plot.sample.dist(outcome, mu.formula, pi.formula, n=2000) + scale_x
+```
+
+- Above, we're looking at sampling distributions for our CATE estimate at age $x=78$. 
+  - From left to right, we have sample sizes $n=500,1000,2000$
+- We have vertical lines indicating ...
+  - its mean (in blue) +- 1 and 2 standard errors (dashed and dotted respectively)
+  - an estimate based on the population regression (in red) 
+  - the CATE itself (in black)
+- At $n=500$, our bias is about 1.5 standard errors. At $n=2000$, it's twice that.
+- Why twice? And what are the inferential implications?
+
+
+## Bias for the ATT
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+summarized.scatter.annotated
+```
+
+- Our ATT estimate should also be fairly biased because it's an average of the CATE for older folks.
+
+$$
+\begin{aligned}
+\widehat{ATT} - ATT &=   \sum_x \ingreen{f_1(x)} \ingreen{\qty{\hat\mu(1, x) - \ingray{\tilde\mu(1, x)}}} - \sum_x \ingreen{f_1(x)} \inred{\qty{\hat\mu(0,x) - \ingray{\tilde\mu(0,x)}}} &&\text{estimation error}  \\
+                    &+ \sum_x \ingreen{f_1(x)} \ingreen{\qty{\ingray{\tilde\mu(1, x)} - \mu(1, x)}} - \sum_x \ingreen{f_1(x)} \inred{\qty{\ingray{\tilde\mu(0,x)} - \mu(0,x)}} &&\text{modeling error}
+\end{aligned}
+$$
+
+## Implications for Inference
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .8 
+#| layout-ncol: 3 
+
+mu.formula = 'Y~W*X'
+pi.formula = 'W~1'
+outcome = 'att'
+
+
+scale_x = coord_cartesian(xlim=c(.2, .5)) 
+plot.sample.dist(outcome, mu.formula, pi.formula, n=500) + scale_x
+plot.sample.dist(outcome, mu.formula, pi.formula, n=1000) + scale_x
+plot.sample.dist(outcome, mu.formula, pi.formula, n=2000) + scale_x
+```
+
+- Above, we're looking at sampling distributions for our ATT estimate.
+  - On the left, we have sample size $n=500$.
+  - On the right, we have sample size $n=2000$.
+- We have vertical lines indicating ...
+  - its mean (in blue) +- 2 standard errors (dotted)
+  - an estimate based on the population regression (in red) 
+  - the ATT itself (in black)
+- At $n=500$, bias is very small relative to standard error. At $n=2000$, it's still not bad. 
+- But you can see where it's headed. At roughly what sample size will be have $\approx 50\%$ coverage?
+
+## Things Are Worse If You Use The Additive Model
+```{r}
+#| out-height: 400px
+#| fig-asp: .8 
+#| layout-ncol: 3 
+#| layout-nrow: 2 
+
+mu.formula = 'Y~W*X'
+pi.formula = 'W~1'
+outcome = 'att'
+
+scale_x = coord_cartesian(xlim=c(.2, .5)) 
+plot.sample.dist(outcome, mu.formula, pi.formula, n=500) + scale_x
+plot.sample.dist(outcome, mu.formula, pi.formula, n=1000) + scale_x
+plot.sample.dist(outcome, mu.formula, pi.formula, n=2000) + scale_x
+
+mu.formula = 'Y~W+X'
+plot.sample.dist(outcome, mu.formula, pi.formula, n=500) + scale_x
+plot.sample.dist(outcome, mu.formula, pi.formula, n=1000) + scale_x
+plot.sample.dist(outcome, mu.formula, pi.formula, n=2000) + scale_x
+```
+
+Sampling distributions for ATT estimates based on the interacted (top) and additive (bottom) bivariate models.
+
+## It Doesn't Fit Very Well
+```{r}
+sample.model.additive = lm(Y ~ W+X, data=data)
+pop.model.additive = lm(Y~W+X, data=pop)
+grid$muhat.additive = predict(sample.model.additive, newdata=grid)
+grid$mutilde.additive = predict(pop.model.additive, newdata=grid)
+
+summarized.scatter.annotated.nopop  +
+  geom_line(aes(x=X, y=muhat.additive, color=factor(W)), data=grid, linetype='dotted') 
+```
+
+- Interacted (dashed) and additive (dotted) bivariate models fit to the sample. 
+- Solid lines are the population means.
+
+
+## Conclusion
+
+- When you do least squares regression ...
+  - your predictions $\hat\mu(d,x)$ will be *biased estimates* of the corresponding subpopulation means $\mu(d,x)$.
+  - unless you use a saturated model, i.e., unless your predictions are the correspondig subsample means.
+- And if you use them to estimate the ATT---or any other summary---that estimate will be biased too.
+- That means that, in large enough samples, you'll be claiming coverage much better than what you actually have.
+- In the next section, we'll talk about how to fix this. 
+  - To prepare, we'll need to review some ideas from probability.
+  - Before we do that, let's review our notation and pictures.
+
+## Review Exercise 1
+
+```{r}
+#| out-height: 600px
+ 
+sample.model.additive = lm(Y ~ W+X, data=data)
+pop.model.additive = lm(Y ~ W+X, data=pop)
+grid$muhat.additive = predict(sample.model.additive, newdata=grid)
+grid$mutilde.additive = predict(pop.model.additive, newdata=grid)
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat.additive, color=factor(W)), linetype='dashed', data=grid) +
+  geom_line(aes(x=X, y=mutilde.additive, group=factor(W)), data=grid, linetype='dashed', color='black', alpha=.7) 
+```
+
+- In the plot above, we're working with the additive bivariate model.
+  - Label $\hat\mu(d, x)$, $\tilde\mu(d, x)$, $\hat\mu(d, x)$ for $d=0$ and $d=1$
+  - Illustrate $CATE(x)$, $\widehat{CATE}(x)$, and the bias of $\widehat{CATE}(x)$.
+- Describe all of those things in words.
+- Explain, in terms of the the plot, how to calculate $\widehat{ATT}$.
+
+## Review Exercise 2
+
+```{r}
+#| out-height: 600px
+
+plot.sample.dist(outcome, mu.formula, pi.formula, n=500) + scale_x 
+```
+
+- This is a plot of the sampling distribution of $\widehat{ATT}$.
+  - Label $\widehat{ATT}$, $ATT$, and the bias of $\widehat{ATT}$.
+  - Illustrate a calculation of the coverage of the interval $\widehat{ATT} \pm 2\text{se}$.
+  - Based on your illustration, give a rough approximation to this coverage.
+
+# Probability Review
+
+## Orthogonality of Population Regression Errors
+
+- The population residuals, $\tilde \varepsilon = Y - \tilde \mu(X)$, are orthogonal to the features 
+$\phi_k(X)$ used in the regression.
+- As a result, they're orthogonal to any curve in the model.
+$$
+\begin{aligned}
+0&=\sum_j \tilde \varepsilon_j \phi_k(x_j =\E\qty[ \tilde \varepsilon_i \phi_k(X_i) ] && \qfor k=0,1,2,\ldots \\
+\implies 
+0&=\sum_j \tilde \varepsilon_j m(x_j) =\E\qty[ \tilde \varepsilon_i m(X_i) ] && \qqtext{ for any } m \in \model 
+\end{aligned}
+$$
+
+- This implies the *population regression errors*, $\mu(X)-\tilde\mu(X)$ are orthogonal, too.
+$$
+\begin{aligned}
+0 &= \E\qty[ \tilde \varepsilon_i m(X_i) ] && \text{from above} \\
+  &= \E\qty[ \qty{Y_i - \tilde \mu(X_i)} m(X_i) ] && \text{definitionally} \\
+  &= \E\qty[ \E(\qty{Y_i - \tilde \mu(X_i)} m(X_i) \mid X_i) ] && \text{law of iterated expectations} \\
+  &= \E\qty[ \qty{\E\qty(Y_i \mid X_i) - \tilde \mu(X_i)} m(X_i) ] && \text{linearity of conditional expectations} \\
+  &= \E\qty[ \qty{\mu(X_i) - \tilde \mu(X_i)} m(X_i) ] && \text{definitionally} 
+\end{aligned}
+$$
+
+- This is when we think of $X$ as everything we condition on, including the treatment indicator $D$. 
+- Usually, we'd write it this way.
+
+$$
+\begin{aligned}
+0 &= \E\qty[ \qty{\mu(D_i, X_i) - \tilde \mu(D_i, X_i)} m(D_i, X_i) ] \qqtext{ for any curve $m \in \model$ } \\
+ &= \E\qty[ g(D,X) ] \qfor g(D,X) = \qty{\mu(D, X) - \tilde \mu(D, X)} m(D, X)
+\end{aligned}
+$$
+
+- To think about what this is, let's think of it as an average of an arbitrary function $g(D,X)$.
+
+## Calculating Expectations With Binary Treatment
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+pop.model = lm(Y ~ W*X, data=pop) 
+mutilde = predict(pop.model, newdata=grid)
+summarized.pop.annotated = summarized.pop + 
+  geom_line(aes(x=X, y=mutilde, group=factor(W)), 
+  data=grid, color='black', alpha=.4)
+summarized.pop.annotated
+```
+
+
+- When $D$ is binary, there's a convenient way to think about expectations like this.
+  (a) We use the law of iterated expectations, conditioning on $D$.
+  (b) This makes it an average of a random variable taking on two values.
+  (c) And these two values are the averages of $g(D,X)$ over the populations with $D=0$ and $D=1$.
+
+$$
+\begin{aligned}
+\E\qty[ g(D,X) ] 
+&\overset{(a)}{=} \E\qty[ \E\qty{ g(D,X) \mid D } ] \\
+&\overset{(b)}{=} P(D=0) \E\qty[ g(D,X) \mid D=0] \quad + \quad P(D=1)\E\qty[ g(D,X) \mid D=1]  \\
+&\overset{(c)}{=} P(D=0) \sum_x \inred{f_0(x)} g(0,x)  \quad + \quad P(D=1) \sum_x \ingreen{f_1(x)} g(1,x) \\
+\end{aligned}
+$$
+
+# Bias and Inverse Probability Weighting
+
+## Understanding Bias 
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+summarized.pop.annotated
+```
+
+$$
+\begin{aligned}
+\text{modeling error} &= \sum_x \ingreen{f_1(x)} \qty{\ingreen{\tilde\mu(1, x) - \mu(1, x)}} - \sum_x \ingreen{f_1(x)} \qty{\inred{\tilde\mu(0,x) - \mu(0,x)}} \\
+\qfor \tilde \mu &= \argmin_{m \in \model} \E \qty{ m(D_i, X_i) - Y_i }^2 
+\end{aligned}
+$$
+
+- Let's break this bias down as a sum of two terms.
+ - One associated with our estimate of the [mean outcome with treatment]{.twocolor-green} 
+ - One associated with our estimate of the [mean outcome without]{.twocolor-red}
+- The first looks like less of a problem. The curve $\ingreen{\mu(1,x)}$ looks like a line and we've fit a line.
+- The second curve $\inred{\mu(0,x)}$ we want to estimate is curved---it's not a line.
+- And the line we fit to it is a decent approximation *on the left side of the plot*.
+    - That's what least squares is telling it to do. It's where most of our red points are.
+    - But it's not what we want. We're averaging it over the distribution of the green points, which are mostly on the right.
+
+## The First Term Is Not A Problem
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+
+summarized.scatter.annotated
+```
+
+$$
+\text{modeling error} = \sum_x \ingreen{f_1(x)} \ingreen{\qty{\ingray{\tilde\mu(1, x)} - \mu(1, x)}} - \textcolor{lightgray}{\sum_x f_1(x) \qty{\tilde\mu(0,x) - \mu(0,x)}}
+$$
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+
+- And it's not just because we're fitting a line to data with a linear trend.
+- In fact, this bias term will zero *for any model with group-specific intercepts*.
+- We can prove it by thinking about the population regression errors $\mu(D,X) - \tilde\mu(D,X)$.
+    - We'll use the property that they're orthogonal to every curve in the model.
+    - And the property that an indicator for the group---the curve $m(d,x)=d$---is in the model.
+
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+
+$$
+\begin{aligned}
+0 &= \E\qty[ D \ \qty{\mu(D,X)-\tilde\mu(D, X)} ]    
+&& \text{orthogonality of errors} \\
+&= P(D=0) \E\qty[D \ \qty{\mu(D,X)-\tilde\mu(D, X)} \mid D=0] 
+&& \\
+&+ P(D=1) \E\qty[D \ \qty{\mu(D,X)-\tilde\mu(D, X)} \mid D=1] 
+&& \text{iterated expectations} \\
+&= P(D=0) \sum_x  \inred{f_0(x)}   \cdot  0 \cdot \textcolor{lightgray}{\qty{\mu(0,x) - \tilde\mu(0,x)} }  
+&& \\
+&+ P(D=1) \sum_x \ingreen{f_1(x)}   \cdot 1 \cdot \qty{\ingreen{\mu(1,x) - \ingray{\tilde\mu(1,x)}}}  
+&& \text{calculating expectations} \\
+\end{aligned}
+$$
+
+:::
+::::
+
+## Sampling Distributions: Interacted Bilinear Model
+```{r}
+#| cache: true
+formulas = list(interacted=Y~X*W, additive=Y~X+W, intercepts=Y~W)
+term.grid = expand.grid(n=c(500, 1000, 2000), rep=1:500, formula=names(formulas))
+
+term.estimates = rep(list(), nrow(term.grid))
+for(ii in 1:nrow(term.grid)) { 
+    n = term.grid$n[ii]
+    rep = term.grid$rep[ii]
+    formula = term.grid$formula[ii]
+
+    set.seed(rep)
+    data = pop[sample(1:nrow(pop), n, replace=TRUE), ]
+    data$weights = data$W + (1-data$W)*pi(data$X)/(1-pi(data$X))
+
+    model = lm(formula=formulas[[formula]], data=data) 
+    att1 = mean(predict(model, newdata=data.frame(X=data$X[data$W==1], W=1)))
+    att0 = mean(predict(model, newdata=data.frame(X=data$X[data$W==1], W=0)))
+
+    wmodel = lm(formula=formulas[[formula]], data=data, weights = weights) 
+    watt1 = mean(predict(wmodel, newdata=data.frame(X=data$X[data$W==1], W=1)))
+    watt0 = mean(predict(wmodel, newdata=data.frame(X=data$X[data$W==1], W=0)))
+    term.estimates[[ii]] = data.frame(n=n, rep=rep, formula=formula, att1=att1, att0=att0, watt1=watt1, watt0=watt0)
+} 
+term.estimates = term.estimates %>% bind_rows() 
+```
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+#| layout-nrow: 2 
+#| layout-ncol: 2
+sample.model = lm(Y ~ W*X, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+
+scale_x = coord_cartesian(xlim=c(2,2.3))
+sample.dist.plot(subset(term.estimates, n==500 & formula=='interacted')$att1,
+                 NA, estimands$att1)  + scale_x
+sample.dist.plot(subset(term.estimates, n==1000 & formula=='interacted')$att1, 
+                 NA, estimands$att1)  + scale_x
+sample.dist.plot(subset(term.estimates, n==2000 & formula=='interacted')$att1, 
+                 NA, estimands$att1)  + scale_x 
+```
+
+- Here we're seeing the interacted model fit at sample size $n=`r n`$
+- And sampling distributions at sample sizes 500, 1000, and 2000
+
+
+## Sampling Distributions: Additive Bilinear Model
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+#| layout-nrow: 2 
+#| layout-ncol: 2
+sample.model = lm(Y ~ W+X, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+
+scale_x = coord_cartesian(xlim=c(2,2.3))
+sample.dist.plot(subset(term.estimates, n==500 & formula=='additive')$att1,
+                 NA, estimands$att1)  + scale_x
+sample.dist.plot(subset(term.estimates, n==1000 & formula=='additive')$att1, 
+                 NA, estimands$att1)  + scale_x
+sample.dist.plot(subset(term.estimates, n==2000 & formula=='additive')$att1, 
+                 NA, estimands$att1)  + scale_x 
+```
+
+## Sampling Distributions: Two-Intercepts Model
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+#| layout-nrow: 2 
+#| layout-ncol: 2
+sample.model = lm(Y ~ W, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+
+scale_x = coord_cartesian(xlim=c(2,2.3))
+sample.dist.plot(subset(term.estimates, n==500 & formula=='intercepts')$att1,
+                 NA, estimands$att1)  + scale_x
+sample.dist.plot(subset(term.estimates, n==1000 & formula=='intercepts')$att1, 
+                 NA, estimands$att1)  + scale_x
+sample.dist.plot(subset(term.estimates, n==2000 & formula=='intercepts')$att1, 
+                 NA, estimands$att1)  + scale_x 
+```
+
+
+## The Second Term 
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4  
+
+summarized.pop + geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dashed') 
+```
+
+- The second term is more troublesome.
+- If we repeat this argument as-is, replacing our indicator $D$ with $1-D$, we won't get what we want.
+
+$$
+\begin{aligned}
+0 &= \E\qty[ (1-D) \ \qty{\mu(D,X)-\tilde\mu(D, X)} ]    
+&& \text{orthogonality of errors} \\
+&= P(D=0) \E\qty[(1-D) \ \qty{\mu(D,X)-\tilde\mu(D, X)} \mid D=0] 
+&& \\
+&+ P(D=1) \E\qty[(1-D) \ \qty{\mu(D,X)-\tilde\mu(D, X)} \mid D=1] 
+&& \text{iterated expectations} \\
+&= P(D=0) \sum_x   \inred{f_0(x)} \cdot 1 \cdot \inred{\qty{\mu(0,x) - \ingray{\tilde\mu(0,x)}} f_0(x)}  
+&& \\
+&+  P(D=1) \sum_x  \ingreen{f_1(x)} \cdot 0 \cdot \textcolor{lightgray}{\qty{\mu(1,x) - \tilde\mu(1,x)}} 
+&& \text{calculating expectations} \\
+\end{aligned}
+$$
+
+- That says the red curve's modeling error would be zero if we were averaging it over the red distribution.
+- But we're not. We're averaging it over the green distribution. And we can see this is a problem.
+
+
+## The Problem: Interacted Bilinear Model
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+#| layout-nrow: 2 
+#| layout-ncol: 2
+sample.model = lm(Y ~ W*X, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+
+scale_x = coord_cartesian(xlim=c(1.65,1.95))
+sample.dist.plot(subset(term.estimates, n==500 & formula=='interacted')$att0,
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==1000 & formula=='interacted')$att0, 
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==2000 & formula=='interacted')$att0, 
+                 NA, estimands$att0)  + scale_x 
+```
+
+- Here we're seeing the interacted model fit at sample size $n=`r n`$
+- And sampling distributions at sample sizes 500, 1000, and 2000
+- This isn't all that bad because our bias is small relative to standard error.
+  - The line doesn't fit terribly.
+  - Although you can imagine that, at larger sample sizes, it becomes a bigger deal.
+
+
+## The Problem: Additive Bilinear Model
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+#| layout-nrow: 2 
+#| layout-ncol: 2
+sample.model = lm(Y ~ W+X, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+
+scale_x = coord_cartesian(xlim=c(1.65,1.95))
+sample.dist.plot(subset(term.estimates, n==500 & formula=='additive')$att0,
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==1000 & formula=='additive')$att0, 
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==2000 & formula=='additive')$att0, 
+                 NA, estimands$att0)  + scale_x 
+```
+
+- Here we're seeing the additive model fit at sample size $n=`r n`$
+- And sampling distributions at sample sizes 500, 1000, and 2000
+- This is bad.
+  - The [red line]{.twocolor-red} fits terribly.
+  - And bias is large relative to standard error.
+
+
+
+## The Problem: Two-Intercepts Model
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+#| layout-nrow: 2 
+#| layout-ncol: 2
+sample.model = lm(Y ~ W, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+
+scale_x = coord_cartesian(xlim=c(1.65,1.95))
+sample.dist.plot(subset(term.estimates, n==500 & formula=='intercepts')$att0,
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==1000 & formula=='intercepts')$att0, 
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==2000 & formula=='intercepts')$att0, 
+                 NA, estimands$att0)  + scale_x 
+```
+
+- Here we're seeing the two-intercepts model fit at sample size $n=`r n`$
+- And sampling distributions at sample sizes 500, 1000, and 2000
+- This is worse.
+  - The [red line]{.twocolor-red} fits terribly.
+  - And bias is large relative to standard error.
+
+## How Do We Fix This?
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3 
+sample.model = lm(Y ~ W*X, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+```
+
+- We're fitting the red curve in the wrong place for our summary.
+- What can we do to fit it in the right place?
+
+
+## Weighted Least Squares
+
+```{r}
+#| out-height: 300px
+#| fig-asp: .3  
+
+summarized.pop + geom_line(aes(x=X, y=mutilde, color=factor(W)), data=grid, linetype='dotted') 
+```
+
+$$
+\text{modeling error} = \textcolor{lightgray}{\sum_x f_1(x) \qty{\tilde\mu(1, x) - \mu(1, x)}} - \sum_x \ingreen{f_1(x)} \inred{\qty{\ingray{\tilde\mu(0,x)} - \mu(0,x)}}
+$$
+
+- What will work is *weighted least squares regression*.
+- The population regression errors from this have an orthogonality property in terms of a *weighted* average.
+- To get the what we want, we'll use weights $w(x) = \ingreen{f_1(x)}/\inred{f_0(x)}$.
+
+$$
+\begin{aligned}
+0 &= \E\qty[ w(X) \ (1-D) \ \qty{\mu(D,X)-\tilde\mu(D, X)} ]    
+&& \text{orthogonality of errors} \\
+&= P(D=0) \E\qty[ w(X) \ (1-D) \ \qty{\mu(D,X)-\tilde\mu(D, X)} \mid D=0] 
+&& \\
+&+ P(D=1) \E\qty[ w(X) \ (1-D) \ \qty{\mu(D,X)-\tilde\mu(D, X)} \mid D=1] 
+&& \text{iterated expectations} \\
+&=  P(D=0) \sum_x   \inred{f_0(x)} \frac{\ingreen{f_1(x)}}{\inred{f_0(x)}} \cdot 1 \cdot \inred{\qty{\mu(0,x) - \ingray{\tilde\mu(0,x)}}}  
+&& \\
+&+  P(D=1) \sum_x \ingreen{f_1(x)} \frac{\ingreen{f_1(x)}}{\inred{f_0(x)}} \cdot 0 \cdot \textcolor{lightgray}{\qty{\mu(1,x) - \tilde\mu(1,x)} } 
+&& \text{calculating expectations} 
+\end{aligned}
+$$
+
+
+## This Works: Interacted Bilinear Model
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+#| layout-nrow: 2 
+#| layout-ncol: 2
+
+formula = 'interacted'
+
+weights = pi(data$X)/ (1-pi(data$X)) 
+sample.model = lm(formulas[[formula]], weights=weights, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+unweighted.model = lm(formulas[[formula]],  data=data)
+grid$muhat.unweighted = predict(unweighted.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=muhat.unweighted, color=factor(W)), data=grid, linetype='dotted') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+
+scale_x = coord_cartesian(xlim=c(1.65, 1.95))
+sample.dist.plot(subset(term.estimates, n==500 & formula==formula)$watt0,
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==1000 & formula==formula)$watt0, 
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==2000 & formula==formula)$watt0, 
+                 NA, estimands$att0)  + scale_x 
+```
+
+- Here we're seeing the interacted model fit at sample size $n=`r n`$ with weights (dashed) and without (dotted)
+- And $\widehat{ATT}$ sampling distributions based on our weighted regression at sample sizes 500, 1000, and 2000
+- The impact of the weights is subtle visually, but it'll be huge inferentially at larger sample sizes.
+
+## This Works: Additive Bilinear Model
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+#| layout-nrow: 2 
+#| layout-ncol: 2
+
+formula = 'additive'
+
+weights = pi(data$X)/ (1-pi(data$X)) 
+sample.model = lm(formulas[[formula]], weights=weights, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+unweighted.model = lm(formulas[[formula]],  data=data)
+grid$muhat.unweighted = predict(unweighted.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=muhat.unweighted, color=factor(W)), data=grid, linetype='dotted') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+
+scale_x = coord_cartesian(xlim=c(1.65, 1.95))
+sample.dist.plot(subset(term.estimates, n==500 & formula==formula)$watt0,
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==1000 & formula==formula)$watt0, 
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==2000 & formula==formula)$watt0, 
+                 NA, estimands$att0)  + scale_x 
+```
+
+## This Works: Two-Intercepts Model
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+#| layout-nrow: 2 
+#| layout-ncol: 2
+
+formula = 'intercepts'
+
+weights = pi(data$X)/ (1-pi(data$X)) 
+sample.model = lm(formulas[[formula]], weights=weights, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+unweighted.model = lm(formulas[[formula]],  data=data)
+grid$muhat.unweighted = predict(unweighted.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=muhat.unweighted, color=factor(W)), data=grid, linetype='dotted') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+
+scale_x = coord_cartesian(xlim=c(1.65, 1.95))
+sample.dist.plot(subset(term.estimates, n==500 & formula==formula)$watt0,
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==1000 & formula==formula)$watt0, 
+                 NA, estimands$att0)  + scale_x
+sample.dist.plot(subset(term.estimates, n==2000 & formula==formula)$watt0, 
+                 NA, estimands$att0)  + scale_x 
+```
+
+
+## Getting Both Terms at Once
+
+$$
+\text{modeling error} = \sum_x \ingreen{f_1(x)} \ingreen{\qty{\ingray{\tilde\mu(1, x)} - \mu(1, x)}} - \sum_x \ingreen{f_1(x)} \inred{\qty{\ingray{\tilde\mu(0,x)} - \mu(0,x)}}
+$$
+
+- To be precise, we use this weighted regression. This uses weight ...
+  - $1$ for the $D=1$ observations, so our no-bias argument for the first term works.
+  - $\ingreen{f_1(x)}/\inred{f_0(x)}$ for the $D=0$ observations, so the one for the second term works, too.
+
+$$
+\hat\mu = \argmin_{m \in \model} \frac{1}{n} \sum_{i=1}^n w(D_i, X_i) \qty{ m(D_i, X_i) - Y_i }^2 \qfor w(D,X) = D + (1-D)\frac{\ingreen{f_1(X)}}{\inred{f_0(X)}}
+$$
+
+- It may be inobvious that we can do this because we don't know these densities $\ingreen{f_1(x)}$ and $\inred{f_0(x)}$.
+- But --- in a conditionally randomized experiment --- we do know their ratio. 
+- We can calculate it from the within-group assignment probability $\pi(x)$ using *Bayes' rule*.
+- Up to constant factors. And that's all we need---a constant here doesn't change the solution $\hat\mu$.
+
+## The Equivalent, Implementable Form
+
+$$
+\begin{aligned}
+\hat\mu = \argmin_{m \in \model} \frac{1}{n} \sum_{i=1}^n w(D_i, X_i) \qty{ m(D_i, X_i) - Y_i }^2 
+&\qfor             w(D,X) &= D + (1-D)\frac{\ingreen{f_1(X)}}{\inred{f_0(X)}} \\
+&\qqtext{or  } \   w(D,X) &= D + (1-D) \frac{\pi(X)}{1-\pi(X)} 
+\end{aligned}
+$$
+
+- To show these weights are equivalent up to constant factors, we use Bayes' rule.
+$$
+\begin{aligned}
+P(A|B) &= \frac{P(B|A)P(A)}{P(B)} && \qqtext{ is Bayes' rule} \\
+\frac{P(A|B)}{P(A|B')} &= \frac{P(B|A)}{P(B'|A)} \times \frac{P(B')}{P(B)} && \qqtext{ follows from it.}
+\end{aligned}
+$$
+
+- In particular, we take ...
+  - $A$ to be the event that $X=x$ 
+  - $B$ to be the event that $D=1$
+  - $B'$ to be the event that $D=0$
+- Plugging these in ...
+
+$$
+\begin{aligned}
+\frac{f_1(x)}{f_0(x)} 
+&= \frac{P(X=x \mid D=1)}{P(X=x \mid D=0)} && \text{ is just notation } \\ 
+&= \frac{P(D=1 \mid X=x)}{P(D=0 \mid X=x)} \times \frac{P(D=0)}{P(D=1)} && \text{ is Bayes' Rule} \\
+&= \frac{\pi(x)}{1-\pi(x)} \ \frac{P(D=1)}{P(D=0)} && \text{ is just notation again } \\
+\end{aligned}
+$$
+
+
+## IPW and Point Estimation
+
+```{r}
+#| out-height: 600px
+
+att.summaries$weighted = att.summaries$pi.formula %in% c('W~X', 'known')
+att.summaries$estimated.weights = att.summaries$pi.formula %in% c('W~X')
+
+mu.formula = 'Y~W*X' 
+pop.est = pop.estimates[pop.estimates$pi.formula == 'W~1' &
+                        pop.estimates$mu.formula == mu.formula, 'att'] 
+
+rmse.plot = ggplot(att.summaries[att.summaries$pi.formula %in% c('W~1', 'known') & 
+                                 att.summaries$mu.formula == mu.formula, ]) + 
+  geom_line(aes(x=n, y=sqrt(bias^2 + se^2), color=factor(weighted)), alpha=.5) +
+  geom_point(aes(x=n, y=sqrt(bias^2 + se^2), color=factor(weighted)), alpha=.5) + 
+  geom_hline(aes(yintercept=0), alpha=.3, linewidth=2) +
+  geom_hline(aes(yintercept=abs(pop.est-estimands$att)), color='black', alpha=.2) +
+  scale_x_sqrt(breaks=ns, labels=label_comma()) + 
+  theme_update(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  guides(color=FALSE)
+rmse.plot
+```
+
+- Here's a simulation study comparing ATT estimators based on [unweighted]{.twocolor-red} and [weighted]{.twocolor-green} least squares fits of the interacted bivariate model.
+- I'm plotting the square root of mean squared error (RMSE) at a range of sample sizes.
+- We can see that, except in very small samples, the weighted one performs better.
+- And the error curve of the [unweighted]{.twocolor-green} one is flattening out.
+- It's not converging to zero. What is it converging to?
+
+## IPW and Point Estimation
+
+```{r}
+#| out-height: 600px
+rmse.plot 
+```
+
+- It's converging to the error we get using the **population least squares fit**.
+- I've plotted that as a [thin gray horizontal line]{.fg style="color:gray"}
+
+## IPW in Observational Studies 
+
+```{r}
+#| out-height: 600px
+rmse.plot 
+```
+
+- Often, we analyze observational studies as if they were conditionally randomized experiments.
+  - This works if, among groups with identical covariates, people select treatment with the same probability.
+  - This is usually an imperfect approximation, but often it's the best we can do,
+- What this means, implementation-wise, is that we don't know the randomization probabilities.
+- And we have to make do with estimates. How well do you think this works?
+
+$$
+\hat\mu = \argmin_{m \in \model} \frac{1}{n} \sum_{i=1}^n w(D_i, X_i) \qty{ m(D_i, X_i) - Y_i }^2 \qfor \hat w(D,X) = D + (1-D)\frac{\hat\pi(X)}{1-\hat\pi(X)}
+$$
+
+
+## It Usually Works Pretty Well
+
+```{r}
+#| out-height: 600px
+
+mu.formula = 'Y~W*X' 
+pop.est = pop.estimates[pop.estimates$pi.formula == 'W~1' &
+                        pop.estimates$mu.formula == mu.formula, 'att'] 
+
+rmse.plot.all = ggplot(att.summaries[att.summaries$mu.formula == mu.formula, ]) + 
+  geom_line(aes(x=n, y=sqrt(bias^2 + se^2), color=factor(weighted), linetype=factor(estimated.weights)), alpha=.5) +
+  geom_point(aes(x=n, y=sqrt(bias^2 + se^2), color=factor(weighted), shape=factor(estimated.weights)), alpha=.5) + 
+  geom_hline(aes(yintercept=0), alpha=.3, linewidth=2) +
+  geom_hline(aes(yintercept=abs(pop.est-estimands$att)), color='black', alpha=.2) +
+  scale_x_sqrt(breaks=ns, labels=label_comma()) + 
+  theme_update(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  guides(color=FALSE, shape=FALSE, linetype=FALSE) 
+rmse.plot.all
+```
+
+- In this instance it works very well. I've drawn the fit with estimated weights using a [dashed green line]{.twocolor-green}.
+- At this scale, we can't see the difference between what we get with the actual or estimated weights.
+- Even though we've used a misspecified logit-linear model to estimate the assignment probabilities $\pi(x)$.
+
+## It Usually Works Pretty Well
+```{r}
+#| out-height: 600px
+rmse.plot.all + coord_cartesian(xlim=c(20000-10000, 100000+1000), ylim=c(0, .015)) 
+```
+
+- Zooming in, we see that we're doing a bit *better* with the estimated weights.
+
+
+## Estimated Treatment Probabilities and Weights
+
+```{r}
+#| out-height: 600px
+#| layout-ncol: 2
+#| fig-asp: .6 
+ 
+x=seq(50,80,by=.01)
+pimodel = glm(W~X, family=binomial(), data) 
+pihat = function(x) { predict(pimodel, newdata=data.frame(X=x), type='response') }
+ggplot() + geom_line(aes(x=x, y=pi(x))) + geom_line(aes(x=x, y=pihat(x)), color='blue')
+ggplot() + geom_line(aes(x=x, y=pi(x)/(1-pi(x)))) + geom_line(aes(x=x, y=pihat(x)/(1-pihat(x))), color='blue')
+```
+
+- On the left, we're showing the probabilities $\pi(x)$ vs. estimates [$\hat\pi(x)$]{.fg style="color:blue"}
+- On the right, the corresponding weights $\pi(x)/\{1-\pi(x)\}$ and [$\hat\pi(x)/\{1-\hat\pi(x)\}$]{.fg style="color:blue"}.
+- We do pretty well, but we're far from perfect. Like we do when we fit of our interacted model to the outcomes.
+- You can think of IPW as combining two regressions in a way that *amplifies* their accuracy.
+- We'll dig into this a bit more on Friday.
+
+## What Happens With An Additive Model
+```{r}
+#| out-height: 600px
+
+mu.formula = 'Y~W+X' 
+pop.est = pop.estimates[pop.estimates$pi.formula == 'W~1' &
+                        pop.estimates$mu.formula == mu.formula, 'att'] 
+
+rmse.plot.all = ggplot(att.summaries[att.summaries$mu.formula == mu.formula, ]) + 
+  geom_line(aes(x=n, y=sqrt(bias^2 + se^2), color=factor(weighted), linetype=factor(estimated.weights)), alpha=.5) +
+  geom_point(aes(x=n, y=sqrt(bias^2 + se^2), color=factor(weighted), shape=factor(estimated.weights)), alpha=.5) + 
+  geom_hline(aes(yintercept=0), alpha=.3, linewidth=2) +
+  geom_hline(aes(yintercept=abs(pop.est-estimands$att)), color='black', alpha=.2) +
+  scale_x_sqrt(breaks=ns, labels=label_comma()) + 
+  theme_update(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  guides(color=FALSE, shape=FALSE, linetype=FALSE) 
+
+rmse.plot.all
+```
+
+## What Happens With An Additive Model --- Zoomed In
+```{r}
+#| out-height: 600px
+rmse.plot.all + coord_cartesian(xlim=c(20000-10000, 100000+1000), ylim=c(0, .015)) 
+```
+
+## A Comparison
+```{r}
+#| out-height: 600px
+
+mu.formula = c('Y~W+X', 'Y~W*X') 
+pi.formula = c('W~1', 'known')
+rmse.plot.all = ggplot(att.summaries[(att.summaries$mu.formula %in% mu.formula) &
+                                     (att.summaries$pi.formula %in% pi.formula), ]) +
+  geom_line(aes(x=n, y=sqrt(bias^2 + se^2),  color=factor(pi.formula), linetype=factor(mu.formula)), alpha=.5) +
+  geom_point(aes(x=n, y=sqrt(bias^2 + se^2), color=factor(pi.formula), shape=factor(mu.formula)), alpha=.5) + 
+  geom_hline(aes(yintercept=0), alpha=.3, linewidth=2) +
+  scale_x_sqrt(breaks=ns, labels=label_comma()) + 
+  theme_update(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  guides(color=FALSE, shape=FALSE, linetype=FALSE) 
+
+rmse.plot.all
+```
+
+- As before, we're showing weighted (green) and unweighted (red) least squares fits.
+- But now we're comparing the interacted model (solid) to the additive model (dashed).
+  - Without weights, the additive model is terrible.
+  - With weights, it's worse than the interacted one, but not bad.
+- To see much of a difference, we need to zoom in.
+
+## A Comparison -- Zoomed In
+
+```{r}
+#| out-height: 600px
+rmse.plot.all + coord_cartesian(xlim=c(20000-10000, 100000+1000), ylim=c(0, .015)) 
+```
+
+## Advice
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+#| layout-ncol: 2
+
+formula = 'interacted'
+
+weights = pi(data$X)/ (1-pi(data$X)) 
+sample.model = lm(formulas[[formula]], weights=weights, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+unweighted.model = lm(formulas[[formula]],  data=data)
+grid$muhat.unweighted = predict(unweighted.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=muhat.unweighted, color=factor(W)), data=grid, linetype='dotted') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+
+formula = 'additive'
+
+weights = pi(data$X)/ (1-pi(data$X)) 
+sample.model = lm(formulas[[formula]], weights=weights, data=data)
+grid$muhat = predict(sample.model, newdata=grid)
+
+unweighted.model = lm(formulas[[formula]],  data=data)
+grid$muhat.unweighted = predict(unweighted.model, newdata=grid)
+
+summarized.scatter + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=grid, linetype='dashed') +
+  geom_line(aes(x=X, y=muhat.unweighted, color=factor(W)), data=grid, linetype='dotted') +
+  geom_line(aes(x=X, y=mu, color=factor(W)), data=grid, linetype='solid', alpha=.7)  
+```
+
+- Use inverse probability weighted regression, estimating $\pi$ if necessary.
+- Use a good regression model, too. One that can fit the data.
+
+$$
+\begin{aligned}
+\hat\mu = \argmin_{m \in \model} \frac{1}{n} \sum_{i=1}^n w(D_i, X_i) \qty{ m(D_i, X_i) - Y_i }^2 
+\qfor  &w(D,X) = D + (1-D) \frac{\pi(X)}{1-\pi(X)} \\
+\qqtext{ or } &w(D,X) = D + (1-D) \frac{\hat\pi(X)}{1-\hat\pi(X)}
+\end{aligned}
+$$
+
+- You need different inverse probability weights to estimate different summaries: ATT, ATC, ATE, etc.
+- More on this Friday, too,
 
