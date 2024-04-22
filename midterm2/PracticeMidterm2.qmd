@@ -18,6 +18,7 @@ $$
 \DeclareMathOperator{\Var}{V}
 \DeclareMathOperator{\hVar}{\widehat{V}}
 \DeclareMathOperator{\bias}{bias}
+\newcommand{\model}{\mathcal{M}}
 $$
 :::
 
@@ -144,19 +145,17 @@ $$
 \text{se} = \sigma \sqrt{\frac{n}{(n-k)^2}}.
 \end{aligned}
 $$
-
 Specializing to the case $\mu=\sigma=1$ we're considering, we get a mean of 
 $1 + 2/(n-2)$ and standard error of $\sqrt{n/(n-2)^2}$ for $\tilde{Y}_2$ and
 a mean of $1 + \sqrt{n}/(n-\sqrt{n})=1+1/(\sqrt{n}-1)$ and standard error of
 $\sqrt{n/(n-\sqrt{n})^2}=1/(\sqrt{n}-1)$ for $\tilde{Y}_{\sqrt{n}}$.
 
-
 Now let's draw some pictures. I'll do it with code, so they'll be a bit more precise than what I'd expect on an exam. We'll have $k=2$ on the left and $k=\sqrt{n}$ on the right, with sample size increasing as we go downward. I'm scaling the $x$-axis so the sampling distributions all look about the same size---the spacing between the ticks is $1/\sqrt{n}$.
 
 I've drawn a normal approximation to the estimator's sampling distribution in gray. 
-The black line is $\E[\tilde Y]$ and the blue line is $\mu=1$. The dotted lines indicate $\E[\tilde Y] \pm 1.96\sigma_n$. 95\% of the sampling distribution is between them. And if we draw arms of length $1.96\sigma_n$ on a point estimate $\hat\mu$ drawn from this sampling distribution, we'll get an interval covering $\mu$ if and only if arms of the same length drawn around $\mu$ touch the point estimate $\hat\mu$ --- i.e., if they're within the range $\mu \pm 1.96\sigma_n$ where we've colored the sampling distribution yellow. Thus, the coverage probability is the area we've colored yellow---the mass of the sampling distribution that's in this range. 
+The blue line is $\E[\tilde Y]$ and the green line is $\mu=1$. The dotted blue lines indicate $\E[\tilde Y] \pm 1.96\sigma_n$. 95\% of the sampling distribution is between them. And if we draw arms of length $1.96\sigma_n$ on a point estimate $\hat\mu$ drawn from this sampling distribution, we'll get an interval covering $\mu$ if and only if arms of the same length drawn around $\mu$ touch the point estimate $\hat\mu$ --- i.e., if they're within the range $\mu \pm 1.96\sigma_n$ where we've colored the sampling distribution yellow. Thus, the coverage probability is the area we've colored yellow---the mass of the sampling distribution that's in this range. 
 
-For $k=2$, this coverage probability is well above 50\% but less than 95\% at $n=10$ and gets closer to 95\% as $n$ increases (and therefore bias decreases). For $k=\sqrt{n}$ we get essentially the same coverage probability as $n$ increases because $bias/se = \{ 1/(\sqrt{n}-1) \} / \{ 1/(\sqrt{n}-1) \} = 1$ for all $n$. This is a bit worse than the coverage probability for $k=2$ at $n=10$ because $\sqrt{10} \approx 3>2$, but still closer to 95\% than
+For $k=2$, this coverage probability is well above 50\% but less than 95\% at $n=10$ and gets closer to 95\% as $n$ increases (and therefore bias decreases). For $k=\sqrt{n}$ we get essentially the same coverage probability as $n$ increases because $\text{bias}/{se} = \{ 1/(\sqrt{n}-1) \} / \{ 1/(\sqrt{n}-1) \} = 1$ for all $n$. This is a bit worse than the coverage probability for $k=2$ at $n=10$ because $\sqrt{10} \approx 3>2$, but still closer to 95\% than
 to 50\%.
 
 
@@ -176,28 +175,26 @@ bias = function(n,k) { k*mu/(n-k) }
 se = function(n,k) { sqrt(n*sigma^2 / (n-k)^2) }
 
 theplot=function(n,k) {
-    breaks = seq(mu-5/sqrt(n), mu+5/sqrt(n), by=1/sqrt(n)) 
-    signs  = case_when(
-      breaks < 0 ~ '-', 
-      breaks == 0 ~ '',
-      breaks > 0 ~ '+')
-    offsets = case_when(
-      breaks != 0 ~ sprintf('%d/sqrt(n)', round(abs(breaks*sqrt(n)))),
-      breaks == 0 ~ '')
-    labels.abstract = sprintf('mu %s %s', signs, offsets)
-  x = seq(min(breaks), max(breaks), by=.01/sqrt(n))
-  thek = if(k=='two') { 2 } else { sqrt(n) }
-  xin = x[mu - 2*se(n,thek) <= x & x <= mu + 2*se(n,thek)]
+    thek = if(k=='two') { 2 } else { sqrt(n) }
+    breaks = mu + seq(-5,5, by=1)*se(n,thek)
+    x      = mu + seq(-5,5, by=.01)*se(n,thek)
+    labels.abstract = case_when(
+      breaks == mu ~ 'mu',
+      breaks == mu + se(n,thek) ~ 'mu + se',
+      breaks == mu - se(n,thek) ~ 'mu - se',
+      breaks > mu ~ sprintf('mu + %s se', abs(round((breaks-mu)/se(n,thek)))),
+      breaks < mu ~ sprintf('mu - %s se', abs(round((breaks-mu)/se(n,thek)))))
+    xin = x[mu - 1.96*se(n,thek) <= x & x <= mu + 1.96*se(n,thek)]
   p = ggplot() + 
     geom_area(aes(x=x, y=dnorm(x, mean=mu+bias(n,thek), sd=se(n,thek))), alpha=.1) +
     geom_area(aes(x=xin, y=dnorm(xin, mean=mu+bias(n,thek), sd=se(n,thek))), alpha=.2, fill='yellow') +
-    geom_vline(aes(xintercept=mu+bias(n,thek))) +
-    geom_vline(aes(xintercept=mu+bias(n,thek)+c(-2,2)*se(n,thek)), linetype='dotted') + 
-    geom_vline(aes(xintercept=mu), color='blue') +
-    scale_x_continuous(breaks=breaks, limits=range(breaks)) +
-    scale_y_continuous(limits=c(0, dnorm(0, sd=se(n,2)))) +
-    theme_bw() + theme(axis.text.x = element_blank(), axis.text.y=element_blank()) +
-    xlab('') + ylab('')
+    geom_vline(aes(xintercept=mu+bias(n,thek)), color='blue') +
+    geom_vline(aes(xintercept=mu+bias(n,thek)+c(-2,2)*se(n,thek)), linetype='dotted', color='blue') + 
+    geom_vline(aes(xintercept=mu), color='green') +
+    scale_x_continuous(breaks=breaks, limits=range(breaks), labels=labels.abstract) +
+    scale_y_continuous(limits=c(0, dnorm(0, sd=se(n,2)))) + 
+    theme(axis.text.x=element_text(angle=60)) +
+    xlab('') + ylab('') 
   p
 }
 
@@ -359,5 +356,138 @@ Explain, in terms your cousin can understand, how it's possible that the average
 
 
 # Problem 4
+Below, I've shown least squares fits of six regression models to data from a randomized experiment.
+In this experiment, patients in our population were assigned to treatment ($w=1$, green) or control ($w=0$, red) with probability 
+depending only on whether their age ($x$) was less than or equal to 65. Then, to get the patients who actually participated in our
+experiment, we sampled with replacement from this population.
 
-Check back soon. I'll add one.
+
+::: {.callout-solution}
+Here's some code that makes up this imaginary patient
+population and randomizes everybody to treatment.
+```{r}
+#| out-width: 100% 
+#| echo: true
+ 
+set.seed(1) 
+m = 1e6 
+pi = function(x) { ifelse(x <= 65, .2, .8) }
+mu = function(w, x) { 2 - (x-50)/30 + w*((x-50)/30)^2/2 }  
+
+X = 50+round(30*runif(m))
+W = 0 + (runif(m) <= pi(X))
+epsilon0 = rnorm(m)
+epsilon1 = rnorm(m)
+Y0 = mu(0,X) + .15*epsilon0
+Y1 = mu(1,X) + .15*epsilon1
+
+pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
+```
+
+And here's code that draws a sample, fits a bunch of regression models to it,
+and uses each one to predict the mean outcome for each combination of treatment and age.
+```{r}
+#| echo: true
+n = 10000
+data = pop[sample(nrow(pop), n, replace=TRUE),]
+
+prediction.function = function(model) { 
+  function(w, x) { 
+    predict(model, newdata=data.frame(W=w, X=x))
+  }
+}
+
+fits = list(
+B =  lm(Y ~ X, data=data),
+D =  lm(Y ~ W, data=data), 
+E =  lm(Y ~ W + I(X <= 65), data=data),
+A =  lm(Y ~ W + X, data=data),
+C =  lm(Y ~ W * I(X <= 65), data=data),
+F =  lm(Y ~ W * X, data=data))
+muhats = fits |> map(prediction.function)
+
+grid = expand_grid(W=c(0,1), X=seq(50,80,by=.01))
+predictions = muhats |> map(\(muhat) { 
+  grid$muhat = muhat(grid$W, grid$X)
+  grid
+}) |> bind_rows(.id='model') 
+```
+
+:::
+
+```{r} 
+#| out-width: 100%
+
+mht.plot = scatter = ggplot(data) + 
+  geom_point(aes(x=plotX(W,X), y=Y, color=factor(W)), alpha=.025, size=.05, position=position_jitter(w=.15, h=0)) + 
+  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W)), geom="pointrange", alpha=.3, size=.5,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - sd(x), 
+                 fun.max = function(x) mean(x) + sd(x)) +
+  geom_bar(aes(x=plotX(W,X), y=15*after_stat(prop), fill=factor(W), color=factor(W)), 
+          alpha=.5, linewidth=.2) + 
+          xlab('') + ylab('') + 
+          guides(color='none', fill='none') +
+          scale_x_continuous(breaks=seq(50,80,by=5))
+
+mht.plot + 
+  geom_line(data=predictions, aes(x=X, y=muhat, color=factor(W)), linewidth=.5) + 
+  facet_wrap(~model, ncol=2)
+```
+
+Here are the models.
+$$
+\begin{aligned}
+\model_1 &= \qty{ m(w,x) = a    + bx \ : \ \text{ any numbers }\  a,b }   && \text{ one line } \\
+\model_2 &= \qty{ m(w,x) = a(w)        : \ \text{ any function }\  a(w) }   && \text{ horizontal lines } \\
+\model_3 &= \qty{ m(w,x) = a(w) + bx \ : \ \text{ any function }\ a(w) \ \text{ and number }\ b } && \text{ parallel lines } \\
+\model_4 &= \qty{ m(w,x) = a(w) + b(w)x \ : \ \text{ any functions }\ a(w),\ b(w) } && \text{ lines } \\
+\model_5 &= \qty{ m(w,x) = a(w) + b \operatorname*{1_{\le 65}}(x)  \ : \ \text{ any function } a(w) \ \text{ and number }\ b } && \text{ additive piecewise-constant } \\
+\model_6 &= \qty{ m(w,x) = a(w) + b(w) \operatorname*{1_{\le 65}}(x)  \ : \ \text{ any functions } a(w),\ b(w) } && \text{ piecewise-constant } 
+\end{aligned}
+$$
+for
+$$
+1_{\le 65}(x) = \begin{cases} 1 & \text{ if } x \le 65 \\ 0 & \text{ otherwise} \end{cases}.
+$$
+
+## Part A
+
+For each plot, identify the model that's plotted. That is, for each plot A...F, give a model number 1...6.
+
+::: {.callout-solution}
+
+A) $\model_3$, parallel lines. 
+B) $\model_1$, one line.
+C) $\model_5$, piecewise-constant.
+D) $\model_2$, horizontal lines.
+E) $\model_6$, additive piecewise-constant.
+F) $\model_4$, lines.
+
+:::
+
+## Part B
+
+Suppose we want to estimate the average treatment effect on the treated, 
+$$
+\text{ATT} = \frac{1}{m_1}\sum_{j:w_j=1} \qty{ \mu(1,x_j) - \mu(0,x_j)} \qfor \mu(w,x) = \frac{\sum_{j: w_j,x_j=w,x } y_j}{\sum_{j: w_j,x_j=w} 1} \qand m_w = \sum_{j: w_j=1} 1.
+$$
+
+You do this by using a sample version of the same summary and using our least squares predicition $\hat\mu(w,x)$ in place of $\mu(w,x)$.
+$$
+\widehat{\text{ATT}} = \frac{1}{N_1}\sum_{i:W_i=1} \qty{ \hat\mu(1,X_i) - \hat\mu(0,X_i) } \qfor  N_w = \sum_{i: W_i=1} 1. 
+$$
+
+For each model, state whether this'll give you an unbiased estimate of the ATT.  If your answer is yes, prove it. 
+If you answer is no, explain why not. 
+
+**Hint**. Recall from Homework 4 that the least squares residuals are orthogonal to all functions in the model, i.e.,
+$$
+\sum_{i=1}^n \qty{Y_i - \hat\mu(W_i,X_i)} m(W_i,X_i)  = 0 \qqtext{ for every } m \in \model.
+$$
+
+
+**This is Extra Credit**. We're not going to review this one in class. 
+However, each correct answer is worth 1 point on your exam, so you can get up to 6 points of extra credit for this.If you get the 'whether' part right but the 'why' part wrong, you'll get 1/2 point.
+I'll provide you with the data and code used to generate the plot above, 
+so you should be able to use to check your claims.
