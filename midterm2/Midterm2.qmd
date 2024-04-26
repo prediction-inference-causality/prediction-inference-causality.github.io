@@ -1,30 +1,27 @@
 ---
-title: "SOLUTIONS Exam 2 (November 9/13)"
+title: "Midterm 2"
 subtitle: "QTM 220"
-execute:
-  echo: false
-  warning: false
-format: 
-  pdf:
-    include-in-header: 
-      text: |
-        \usepackage{amsmath}
-        \usepackage{setspace}
-        \onehalfspacing
-        \usepackage{amssymb}
-        \usepackage{physics}
-        \usepackage{color}
-        \usepackage{fullpage}
-        \usepackage{graphicx}
-        \usepackage{cancel}
-        \usepackage{physics}
-        \usepackage{fullpage}
-        \DeclareMathOperator{\E}{E}
-        \DeclareMathOperator{\Var}{V}
-        \DeclareMathOperator{\bias}{bias}
-        \newenvironment{answer}{\ \\ \color{red}}{\color{black}}
-        % replace 'red' with 'white' above  to hide solutions (in printout)
 ---
+
+```{r}
+#| echo: false
+library(tidyverse) 
+library(scales)
+
+theme_set(theme_minimal())
+options(scipen = 1, digits = 2)
+```
+
+::: hidden
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+\DeclareMathOperator*{argmin}{argmin}
+\newcommand{\model}{\mathcal{M}}
+$$
+:::
 
 ```{r}
 #| echo: false
@@ -34,32 +31,19 @@ library(tidyverse)
 library(patchwork)
 ```
 
-\subsection*{Problem 1}
-Suppose we have a sample of $Y_1 \ldots Y_n$ and $X_1 \ldots X_n$  stored in an \textbf{R} dataframe `df' with $n$ rows. $X$ can take the values of 1,2,3,4 or 5. We run this code.
+# Problem 1
 
+Suppose we have a sample of $(X_1,Y_1) \ldots (X_n,Y_n)$ drawn with replacement from a population. It's stored in vectors $X$ and $Y$ of length $n$. $X_i$ can take the values of 1,2,3,4 or 5. 
 ```{r}
 #| echo: false
 set.seed(123)
 n = 1000
-Y= rep(NA,n)
 X = c(rep(1,350), rep(2,300),rep(3,200),rep(4,100),rep(5,50))
-for(i in 1:n){
-  Y[i] = X[i] + rnorm(1,0,2) 
-}
+Y = X + rnorm(n,0,2)
 df<- data.frame(x=X,y=Y)
-
 ```
 
-```{r}
-#| echo: true
-B=10000
-theta<- rep(NA,B)
-for( b in 1:B ){
-bootind = sample(1:n,size=n,replace=T)
-dfboot = df[bootind,]
-theta[b] = (1/4)*(mean(dfboot$y[dfboot$x==5]) - mean(dfboot$y[dfboot$x==1]))
-}
-```
+Here's what the data looks like.
 
 ```{r}
 #| out-height: 3.5in
@@ -67,30 +51,46 @@ theta[b] = (1/4)*(mean(dfboot$y[dfboot$x==5]) - mean(dfboot$y[dfboot$x==1]))
 #| fig-subcap:
 #|  -  Histogram of the vector Y's elements
 #|  -  Jittered Scatterplot of X and Y
-ggplot() + geom_histogram(aes(x=Y,     y=after_stat(density)), alpha=.3) + 
+ggplot() + geom_histogram(aes(x=Y,     y=after_stat(density)), alpha=.2, bins=50) + 
            geom_vline(aes(xintercept=mean(Y)), alpha=.5) + 
            geom_vline(aes(xintercept=mean(Y)+c(-1,1)*sd(Y)), linetype='dashed', alpha=.5) + 
            geom_pointrange(aes(x=mean(Y), xmin=mean(Y)-1.96*sd(Y), xmax=mean(Y)+1.96*sd(Y), y=.025)) + theme_bw() + xlab('') + ylab('')
 
-ggplot(df, aes(x=x, y=y)) +geom_jitter(shape=1,alpha=.3) + geom_point(x=1,y=mean(df$y[df$x==1]),size=3) + geom_point(x=2,y=mean(df$y[df$x==2]),size=3) + geom_point(x=3,y=mean(df$y[df$x==3]),size=3)+ geom_point(x=4,y=mean(df$y[df$x==4]),size=3) + geom_point(x=5,y=mean(df$y[df$x==5]),size=3) + geom_segment(aes(x=1,y=mean(y[x==1])-sd(y[x==1]), xend=1, yend=mean(y[x==1])+sd(y[x==1]))) + geom_segment(aes(x=2,y=mean(y[x==2])-sd(y[x==2]), xend=2, yend=mean(y[x==2])+sd(y[x==2]))) + geom_segment(aes(x=3,y=mean(y[x==3])-sd(y[x==3]), xend=3, yend=mean(y[x==3])+sd(y[x==3]))) + geom_segment(aes(x=4,y=mean(y[x==4])-sd(y[x==4]), xend=4, yend=mean(y[x==4])+sd(y[x==4]))) + geom_segment(aes(x=5,y=mean(y[x==5])-sd(y[x==5]), xend=5, yend=mean(y[x==5])+sd(y[x==5]))) 
-  
+ggplot() + geom_point(aes(x=X, y=Y), alpha=.1, position=position_jitter(w=.2, h=0)) + xlab('') + ylab('') +
+           stat_summary(aes(x=X, y=Y), geom='pointrange', 
+              fun=mean, 
+              fun.min=function(x) mean(x)-sd(x),
+              fun.max=function(x) mean(x)+sd(x))  
+```
 
+
+We run this code.
+
+```{r}
+#| echo: true
+B=1000
+
+thetastar =  rep(NA,B)
+for( b in 1:B ){
+  Jstar = sample(1:n,size=n,replace=TRUE)
+  Xstar = X[Jstar]
+  Ystar = Y[Jstar]
+  thetastar[b] = (1/4)*(mean(Ystar[Xstar==5]) - mean(Ystar[Xstar==1]))
+}
 ```
 
 ```{r}
 #| out-height: 3.5in
-#| fig-ncol: 2
-#| fig-subcap:
-#|  -  Histogram of the theta's elements
-ggplot() + geom_histogram(aes(x=theta, y=after_stat(density)), alpha=.3) + 
-           geom_vline(aes(xintercept=mean(theta)), alpha=.5) + 
-           geom_vline(aes(xintercept=mean(theta)+c(-1,1)*sd(theta)), linetype='dashed', alpha=.5) + 
-           geom_pointrange(aes(x=mean(theta), xmin=mean(theta)-1.96*sd(theta), xmax=mean(theta)+1.96*sd(theta), y=1)) + theme_bw() + xlab('') + ylab('')
+#| fig-cap: Histogram of the thetastar's elements
+ggplot() + geom_histogram(aes(x=thetastar, y=after_stat(density)), alpha=.2) + 
+           geom_vline(aes(xintercept=mean(thetastar)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(thetastar)+c(-1,1)*sd(thetastar)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(thetastar), xmin=mean(thetastar)-1.96*sd(thetastar), xmax=mean(thetastar)+1.96*sd(thetastar), y=1)) + xlab('') + ylab('')
 
 ```
 
 
-\subsection*{Part a}
+## Part A
 What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket
 if necessary for clarity, on the appropriate plot above.
 ```{r}
@@ -99,11 +99,8 @@ if necessary for clarity, on the appropriate plot above.
 mean(Y)
 ```
 
-\begin{answer}
-The sample mean (unconditioned). It's indicated by the solid vertical line on the sample histogram.
-\end{answer}
 
-\subsection*{Part b}
+## Part B
 What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 ```{r}
 #| echo: true
@@ -111,12 +108,7 @@ What does this code calculate? State it in words and mark it with a 'b', and an 
 sd(Y)
 ```
 
-\begin{answer}
-The sample standard deviation. It's the distance between the solid vertical and either dashed vertical line on the sample histogram.
-\end{answer}
-
-
-\subsection*{Part c}
+## Part C
 What does this code calculate? State it in words and mark it with a 'c', and an arrow or bracket
 if necessary for clarity, on the appropriate plot above.
 ```{r}
@@ -125,24 +117,15 @@ if necessary for clarity, on the appropriate plot above.
 mean(Y[X==1])
 ```
 
-\begin{answer}
-The conditional sample mean of Y among X=1. It's indicated by the black dot on the scatterplot where X=1.
-\end{answer}
-
-\subsection*{Part d}
+## Part D   
 What does this code calculate? State it in words and mark it with a 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 ```{r}
 #| echo: true
 #| eval: false
-sd(theta)
+sd(thetastar)
 ```
 
-\begin{answer}
-The bootstrap sampling distribution's standard deviation for the average increment estimator. 
-It's the distance between the solid vertical and either dashed vertical line on the sampling distribution histogram.
-\end{answer}
-
-\subsection*{Part e}
+## Part E
 What does this code calculate? State it in words and mark it with a 'e', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 ```{r}
 #| echo: true
@@ -154,333 +137,208 @@ What does this code calculate? State it in words and mark it with a 'e', and an 
 + 1.96* sqrt((1/4)^2*var(Y[X=5])/length(Y[X=5]) + (-1/4)^2*var(Y[X=1])/length(Y[X=1]))
 ```
 
-\begin{answer}
-A 95\% confidence interval --- based on normal approximation --- for the average incremental difference in Y from X=1 to X=5 in the population from which our data was drawn. This is indicated by the horizontal segment (with a dot in the middle) on the sampling distribution histogram (theta).
-\end{answer}
-
-\subsection*{Part f}
-How could you calculate roughly the same thing as in part e using 'sd(theta)' replacing \begin{verbatim} sqrt((1/4)^2*var(Y[X=5])/length(Y[X=5]) + (-1/4)^2*var(Y[X=1])/length(Y[X=1])) \end{verbatim}
-
-\begin{answer}
-
-We can use the standard deviation of the bootstrap sampling distribution as our estimate of standard error.
-
-\begin{verbatim}
-(1/4)(mean(Y[X=5]) - mean(Y[X=1]))  - 1.96 * sd(theta)
-(1/4)(mean(Y[X=5]) - mean(Y[X=1]))  + 1.96 * sd(theta)
-\end{verbatim}
-
-\end{answer}
+## Part F
+How could you calculate roughly the same thing as in Part E if we knew `sd(thetastar)` 
+but not `Var(Y[X=5])` and `Var(Y[X=1])`?
 
 
-\subsection*{Problem 2}
+# Problem 2
 
-In the following parts, choose the figure with the appropriate regression line(s).
+Let's reconsider what we were doing in Problem 1. In that problem, we were using a difference in means to estimate some population summary $\theta$ (theta). 
+Suppose that, instead of that difference in means, we used the slope of a line fit by least squares to the data. That is, we use this point estimate.
 
+$$ 
+\frac{\hat \mu(5) - \hat \mu(1)}{4} = \frac{\qty{ \alpha + 5 \hat \beta} - \qty{\alpha + 1\hat\beta}}{4} = \hat\beta \qqtext { where } \hat\mu(x) = \hat \alpha + \hat \beta x 
+$$
 
-```{r, fig.width=10,fig.height=4}
-#| echo: false
-#| warning: false
-n <- 500
-zz <- c(rep(0,n/2),rep(1,n/2))
-set.seed(220220)
-xx <-  1 + 2*zz + rnorm(n,mean=0,sd = 1)
-yy <- 2*zz*xx - xx + rnorm(n)
-
-
-modAct1 <- lm(yy ~ xx)
-modAct2 <- lm(yy ~ xx + zz)
-
-
-df <- data.frame(xx,yy,zz)
-
-p <- ggplot(data = df, aes(x = xx, y = yy)) +
-  geom_point(aes(shape = factor(zz)),size = 1,alpha=.5) +
-  scale_shape_manual(values = c(1,19), label = c("z=0","z=1")) +
-  xlab("x") +
-  ylab("y") +
-  theme_bw() +
-  theme(panel.grid = element_blank(),
-        legend.box.just = "left",
-        legend.justification = c("left","top"),
-        legend.position = c(0,1),
-        legend.margin = margin(6,6,6,6),
-        legend.title = element_blank(),
-        legend.box.background = element_rect(color="black",size=1))
-
-coef1 <- modAct1$coefficients
-coef2 <- modAct2$coefficients
-mod3 <- lm(yy ~ xx+zz+xx*zz, data = df)
-coef3 <- coef(mod3)
-# simple regression line y ~ x --------
-
-
-```
-
+is the least squares fit of the least squares fit of the 'lines' model. This line.
 
 ```{r}
-#| echo: false
-#ggplot(data = df, aes(x = xx, y = yy)) +
-#  geom_point(size = 1,alpha=.5) +
-#  xlab("x") +
-#  ylab("y") +
-#  theme_bw() + geom_abline(intercept = coef1[1], slope = coef1[2]) + ggtitle("A3")
+lines.fit = lm(Y~X, data=df)
+muhat = function(x) { predict(lines.fit, newdata=data.frame(X=x)) }
+x = seq(.5,5.5,by=.01)
+ggplot() + geom_point(aes(x=X, y=Y), alpha=.15, position=position_jitter(w=.2, h=0)) + xlab('') + ylab('') +
+           stat_summary(aes(x=X, y=Y), geom='pointrange', 
+              fun=mean, 
+              fun.min=function(x) mean(x)-sd(x),
+              fun.max=function(x) mean(x)+sd(x))  +
+           geom_line(aes(x=x, y=muhat(x))) 
 ```
 
-\subsubsection*{Part A}
+This gives us a *biased* estimator of the same population summary. In **one of the two plots below**, I've shown the sampling distribution of that estimator, with its mean indicated by the thin solid line; dashed lines indicating the mean plus or minus two standard errors; and the population summary we're estimating indicated by a thicker black line. 
 
-Choose the figure with the two dashed lines associated with the additive multiple regression ($y\sim x+z$).
+## Part A
 
-```{r,fig.width=10,fig.height=4}
-#| echo: false
-# multiple additive regression y ~ x + z
-addA <- p + geom_abline(intercept = coef2[1], slope = coef2[2], linetype = 'dashed') +
-  geom_abline(intercept = coef2[1] + coef2[3], slope = coef2[2], linetype = 'dashed') +
-  ggtitle("A3")
-
-addB <- p + geom_abline(intercept = 0.5, slope = coef3[2]*1.5,
-                linetype = 'dashed')+ geom_abline(intercept = 0.5, slope = -1,
-                linetype = 'dashed') + ggtitle("A1")
-
-addC <- p + geom_curve(aes(x = -2,xend=6,y=-6,yend=-1),
-               curvature = -0.8,
-               angle = 70,
-               linetype = 'dashed') +
-  geom_curve(aes(x=-2,y=0,xend=4,yend=-7),
-             curvature = -0.5,
-             linetype = 'dashed') +
-  ggtitle("A2")
-
-#pdf(file="Q1partBplot.pdf",width=10,height=4)
- addB + addC + addA
-#dev.off()
-```
-
-\color{red} A3 \color{black}
-
-\subsubsection*{Part B}
-
-Choose the figure with the two dotted lines associated with the interactive multiple regression ($y\sim x*z$).
-
-```{r,fig.width=10,fig.height=4}
-#| echo: false
-# interactive model
-
-intC2 <- p + geom_abline(intercept = coef3[1], slope = coef3[2],
-                linetype = 'dotted') +
-  geom_abline(intercept = coef3[1] + coef3[3],
-              slope = coef3[2] + coef3[4],
-              linetype = 'dotted') +
-  ggtitle("B2")
-
-
-intC1 <- p + geom_abline(intercept = coef3[1], slope = coef3[2]*1.5,
-                linetype = 'dotted') +
-  geom_abline(intercept = 5,
-              slope = coef3[2]*1.5,
-              linetype = 'dotted') +
-  ggtitle("B1")
-
-intC3 <- p + geom_curve(aes(x = -2,y = -2.5,xend=3,yend=5),
-               curvature = 0.3,
-               #angle = 30,
-               linetype = 'dotted') +
-  geom_curve(aes(x=0,y=5,xend=6,yend=-5),
-             curvature = 0.3,
-             angle=95,
-             linetype = 'dotted') +
-  ggtitle("B3")
-
-#pdf(file="Q1partCplot.pdf",width=10,height=4)
-intC1 + intC2 + intC3
-#dev.off()
-```
-
-\color{red} B2 \color{black}
-
-\subsection*{Problem 3}
-
-\subsubsection*{Part A} 
-
-```{r}
-#| echo: false
-
-p3n <- 200
-z <- c(rep(0,p3n/2),rep(1,p3n/2))
-set.seed(220220)
-x <-   z + rnorm(p3n,mean=1,sd=1) + z*rnorm(p3n,mean=3,sd = 1)
-y <- (-0.5)*x + (4)*z + rnorm(p3n)
-
-
-dfp3 <- data.frame(y,x,z)
-
-q1 <- ggplot(data = dfp3, aes(x = x, y = y)) +
-  geom_point(aes(shape = factor(z)),size = 1,alpha=.5) +
-  scale_shape_manual(values = c(1,19), label = c("z=0","z=1")) +
-  xlab("x") +
-  ylab("y") +
-  theme_bw() +
-  theme(panel.grid = element_blank(),
-        legend.box.just = "left",
-        legend.justification = c("left","top"),
-        legend.position = c(0,1),
-        legend.margin = margin(6,6,6,6),
-        legend.title = element_blank(),
-        legend.box.background = element_rect(color="black",size=1))
-
-q2<- ggplot(data = dfp3, aes(x = x, y = z)) +
-  geom_jitter(height=.25) +  xlab("x") +
-  ylab("z") +
-  theme_bw()
-
-
-
-modone<- lm(y~x+z,data=dfp3)
-modtwo<- lm(z ~ x, data=dfp3)
-
-```
-
-We have collected $y$, $x$, and a binary variable $z$. The scatter plots below show our data. 
+Which plot is it? Mark it with an 'A'. 
 
 ```{r}
 #| out-height: 3.5in
 #| fig-ncol: 2
-#| fig-subcap:
-#|  -  Scatterplot 1
-#|  -  Scatterplot 2 (jittered)
-q1
-q2
 
+point.estimate = (muhat(5) - muhat(1))/4
+se = sd(thetastar)
+bias = point.estimate - (mean(Y[X==5]) - mean(Y[X==1]))/4
+
+dist.plot = function(bias) { 
+  theta = bias
+  breaks = theta + seq(-5,5, by=1)
+  x = theta  + seq(-5,5, by=.01)
+    labels.abstract = case_when(
+      breaks == theta  ~ 'theta',
+      breaks == theta+1  ~ 'theta + se',
+      breaks == theta-1 ~ 'theta - se',
+      breaks > theta+1  ~ sprintf('theta + %s se', abs(breaks-theta)),
+      breaks < theta-1  ~ sprintf('theta - %s se', abs(breaks-theta)))
+ggplot() + 
+    geom_area(aes(x=x, y=dnorm(x, mean=theta+bias, sd=1)), alpha=.1) +
+    geom_vline(aes(xintercept=theta+bias)) +
+    geom_vline(aes(xintercept=theta+bias+c(-2,2)), linetype='dotted') + 
+    geom_vline(aes(xintercept=theta+bias+c(-1,1)), linetype='dashed') + 
+    geom_vline(aes(xintercept=theta), color='black', size=1.5) +
+    scale_x_continuous(breaks=breaks, limits=range(breaks), labels=labels.abstract) +
+    theme(axis.text.x=element_text(angle=60)) +
+    xlab('') + ylab('')
+}
+dist.plot(bias/se)
+dist.plot(-bias/se)
 ```
 
+## Part B 
 
-\subsubsection*{Part A}
+Letting $\hat\theta$ be our point estimator, i.e. a draw from the correct sampling distribution above, explain how to calculate the coverage of the confidence interval $\hat\theta \pm 2\  \text{se}$ in terms of the sampling distribution's density $f(x)$.  Is the coverage closer to 0\%, 50\%, or 95\%?  You do not need to calculate the coverage any more precisely than that. Just explain how to do it.
 
-Do you expect the coefficient on $x$ from the simple regression of $y$ on $x$ ($lm(y\sim x)$) to be: (choose one, no explanation needed)
+::: {.callout-tip}
+If you're uncertain of your answer to Part A, don't worry. Because of the symmetry of the normal distribution, coverage is the same in both possibilities plotted above.
+:::
 
-\begin{itemize}
-\item Positive
-\item Negative
-\item Zero 
-\end{itemize}
+## Part C
+Suppose the data we have is from a pilot study. We're considering re-running the study with 4 times more data. 
+If we use intervals $\hat\theta \pm 2\  \text{se}$ based on the same point estimator, will our coverage be closer to 0\%, 50\%, or 95\%?  What if we used 16 times more data? You may assume the point estimator's bias is the same at all sample sizes and its standard error $\text{se}$ is directly proportional to $1/\sqrt{n}$, i.e., that $\text{se}$ is $1/2$ as big as it is above when we have 4 times more data and $1/4$ as big as it is above when we have 16 times more data. 
 
+::: {.callout-tip} 
+Consider drawing diagrams like the one above at these two sample sizes. 
+:::
 
-\subsubsection*{Part B}
+# Problem 3
 
-We then run the regression $lm(y \sim x+ z)$ which gives us the following output: 
+Below, I've shown data from a randomized experiment on the effect of aspirin on headaches. Here $X$ is the self-reported severity of the headache
+at the time of the initial complain on a scale of 1-5, $Y$ an analogous severity score an hour an hour after treatment with aspirin or a placebo, and $W$ a binary indicator of whether the patient was assigned to treatment. We've let them be a bit more precise after treatment, so $Y$ will not necessarily be an integer as $X$ was.
+
+In this experiment, patients in our population were assigned to aspirin ($w=1$, triangles) or placebo ($w=0$, circles) with probability depending only on whether their pre-treatment headache severity ($x$) **was 3 or higher**. Then, to get the patients who actually participated in our experiment, we sampled with replacement from this population.
+
+Here's a plot of the data. As usual, the bars show the proportion of patients with a given level of treatment with the corresponding value of $x$, i.e.
+$$ 
+\text{bar height} = N_{w,x} / N_w \qfor N_{w,x} = \sum_{i:W_i=w \text{ and } X_i=x} 1 \qand  N_w = \sum_{i: W_i=w} 1.
+$$
 
 ```{r}
-summary(modone)
+#| out-width: 100% 
+ 
+set.seed(1) 
+m = 1e6 
+pi = function(x) { ifelse(x >= 3, .8, .2) }
+mu = function(w, x) { 1 + (x-1)^1.7/2.7 - 3.5*w*(x-1)/10 }  
 
+X = sample(1:5, size=m, replace=TRUE)
+W = 0 + (runif(m) <= pi(X))
+epsilon0 = rnorm(m)
+epsilon1 = rnorm(m)
+Y0 = mu(0,X) + .15*epsilon0
+Y1 = mu(1,X) + .15*epsilon1
+
+pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
+
+n = 1000
+data = pop[sample(nrow(pop), n, replace=TRUE),]
+
+plotX = function(W,X) { X + .1*(2*W-1) }
+aspirin.plot = scatter = ggplot(data) + 
+  geom_point(aes(x=plotX(W,X), y=Y, shape=factor(W)), alpha=.05, size=1, position=position_jitter(w=.075, h=0)) + 
+  stat_summary(aes(x=plotX(W,X), y=Y, shape=factor(W)), geom="pointrange", alpha=.3, size=1,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - sd(x), 
+                 fun.max = function(x) mean(x) + sd(x)) +
+  geom_bar(aes(x=plotX(W,X), y=4*after_stat(prop)), 
+          alpha=.5, linewidth=.2) + 
+          xlab('') + ylab('') + 
+          guides(shape='none', color='none', fill='none', linetype='none') +
+          scale_x_continuous(breaks=seq(50,80,by=5)) + scale_y_continuous(breaks=seq(1,5,by=1))
+aspirin.plot
+
+estimate.ATT = function(formula, data) {
+  model.fit = lm(formula, data=data)
+  muhat = function(w,x) { predict(model.fit, newdata=data.frame(W=w, X=x)) }
+  mean(muhat(1, data$X[data$W==1])) - mean(muhat(0, data$X[data$W==1]))
+}
+
+model.formulas = list(
+horizontal = Y ~ W,
+parallel = Y ~ W + X,
+all = Y ~ W * factor(X),
+piecewise = Y ~ W * I(X >= 3))
+
+muhat.parallel = function(w,x) { predict(lm(Y~W+X, data=data), newdata=data.frame(W=w, X=x)) }
+point.estimates = model.formulas |> map(\(formula) estimate.ATT(formula, data)) |> bind_rows(.id='model')
 ```
-And we run the regression $lm(z \sim x)$ which gives us the following output: 
+
 ```{r}
-summary(modtwo)
+width = function(samples, center=mean(samples), alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( center - w/2 <= samples & samples <= center + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-center))))$root
+}
+bootstrap.widths = model.formulas |> map(\(formula) { 
+  bootstrap.samples = replicate(100, { estimate.ATT(formula, data[sample(nrow(data), n, replace=TRUE), ]) })
+  width(bootstrap.samples)
+}) |> bind_rows(.id='model')
 ```
 
-\bigskip 
+## Part A
 
+Your cousin, who likes to be very formal and statistical, calculates a 95% confidence interval for the difference in mean outcomes for the subpopulations assigned to aspirin and placebo. For
+$$
+\hat \Delta = \frac{1}{N_1}\sum_{i:W_i=1} Y_i - \frac{1}{N_0}\sum_{i:W_i=0} Y_i,
+$$
+they report this interval estimate:
+$$
+\hat \Delta \pm 1.96 \ \text{se} = `{r} point.estimates$horizontal` \pm `{r} bootstrap.widths$horizontal/2`.
+$$
 
-How would you use these outputs to calculate the coefficient on $x$ from the simple regression $lm(y\sim x)$? Explain your steps and define any notation you use. Plug in the estimates from your output (you can leave it as an equation). 
+On the basis of this interval estimate, they throw out their bottle of aspirin and go to the pharmacy to buy empty capsules to make placebos. Explain, in terms they can understand, why this is a mistake.
 
+## Part B
 
-\bigskip 
+Your uncle, who owns a very fancy adjustable-width ruler, decides to estimate the average treatment effect on the treated subpopulation (ATT) using the **parallel-lines regression model**. Here's their least squares prediction function, which they plot as a solid line for the placebo treatment ($w=0$)
+and a dashed line for the aspirin treatment ($w=1$).
 
-\color{red} 
-Let the simple regression of $y$ on $x$ be $y = \beta_0^S + \beta_1^S x$ 
+$$
+\begin{aligned}
+\hat\mu(w,x) &= \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2 \qfor \\
+\model &= \qty{ m(w,x) = a(w) + bx \text{ for functions } \ a(w) \ \text{ and numbers } \ b } 
+\end{aligned}
+$$
 
-Let the multiple regression of $y$ on $x$ and $z$ be $y= \beta_0 + \beta_1 x + \beta_2 z$ 
+```{r}
+#| out-width: 100%
+grid = expand_grid(W=c(0,1), X=seq(min(data$X), max(data$X), by=.01))
 
-Let the regression of $z$ on $x$ be $z = \gamma_0 + \gamma_1 x$ where $\gamma_1 = \frac{\sum_{i=1}^n (x_i-\bar{x})z_i}{\sum_{i=1}^n (x_i - \bar{x})^2}$
-
-From our OVB formula, we know $\beta_1^S = \beta_1 + \beta_2 * \gamma_1$ 
-
-The regression outputs indicate that $\beta_1 = -0.5517$, $\beta_2 = 4.21$, and $\gamma_1 = 0.1845$
-
-$\beta_1^S = -0.5517 + (4.21)*(0.1845) = 0.225$ 
-
-\color{black}
-
-
-
-\subsubsection*{Part C}
-
-Suppose we want $\beta_1$ from $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i +  \beta_3 w_i + e_i$ but we run the regression $lm (y\sim x)$ without $z$ or $w$. We have de-meaned our variables $x_i$, $z_i$, and $w_i$ such that $\bar{x}=\sum_{i=1}^n x_i =0$, $\bar{z}=\sum_{i=1}^n z_i =0$, and $\bar{w}= \sum_{i=1}^n w_i =0$. Under what condition(s) will the coefficient on $x$ from $lm (y\sim x)$, which is $\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$, be equal to $\beta_1$? Derive what your coefficient on $x$ will be in terms of $\beta$s and justify your steps.
-
-\bigskip
-
-\color{red}
-
-The coefficient on $x$ from $lm (y\sim x)$ is $$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$$
-
-Plug in $y_i$ defined by the multivariate regression: $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i +  \beta_3 w_i + e_i$
-
-$$\frac{\sum_{i=1}^n x_i (\beta_0 + \beta_1 x_i + \beta_2 z_i +  \beta_3 w_i + e_i)}{\sum_{i=1}^n x_i^2 }$$
-
-Distribute
-
-$$\frac{\sum_{i=1}^n x_i \beta_0 }{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_1 x_i}{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_2 z_i }{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_3 w_i }{\sum_{i=1}^n x_i^2 }+  \frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 }$$ Let's work through each term.
-
-$$\frac{\sum_{i=1}^n x_i \beta_0 }{\sum_{i=1}^n x_i^2 } = \frac{ \beta_0 \sum_{i=1}^n x_i }{\sum_{i=1}^n x_i^2 } = \frac{ \beta_0 *0 }{\sum_{i=1}^n x_i^2 } = 0$$ 
-
-as $x$ is demeaned, $\sum x_i =0$ 
-
-
-\bigskip
-
-$$\frac{\sum_{i=1}^n x_i \beta_1 x_i}{\sum_{i=1}^n x_i^2 } = \frac{  \beta_1 \sum_{i=1}^n x_i x_i}{\sum_{i=1}^n x_i^2 } = \beta_1$$
-
-\bigskip
-
-$$\frac{\sum_{i=1}^n x_i \beta_2 z_i }{\sum_{i=1}^n x_i^2 } = \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 }$$
-
-\bigskip
-
-$$\frac{\sum_{i=1}^n x_i \beta_3 w_i }{\sum_{i=1}^n x_i^2 } = \frac{\beta_3 \sum_{i=1}^n x_i w_i }{\sum_{i=1}^n x_i^2 }$$
-
-\bigskip
-
-$$\frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 } = \frac{0}{\sum_{i=1}^n x_i^2 } =0$$ we know that $\sum_{i=1}^n x_i e_i =0$ from the first order conditions on our least squares estimator (we chose the intercept and coefficient(s) that minimize the sum of squared residuals)
-
-\bigskip
-
-Thus we have
-
-$$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 } = \beta_1 + \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 } + \frac{\beta_3 \sum_{i=1}^n x_i w_i }{\sum_{i=1}^n x_i^2 }$$ The coefficient on $x$ from the simple regression of $y$ on $x$ will be equal to $\beta_1$ if: (1) $\beta_2$ or the coefficient on $x$ from the simple regression from $z$ on $x$ is 0 and (2) $\beta_3$ or the coefficient on $x$ from the simple regression of $w$ on $x$ if 0. If either of these terms is non-zero, our simple regression will not give us the same result as our regression that includes both $x$, $z$, and $w$. If $x$ is randomized (like a random treatment assignment), it should not be correlated with $z$ or $w$, so our short regression coefficient should give us $\beta_1$. 
-\color{black}
-
-\bigskip 
-
-\subsection*{Problem 4}
-
-Consider the following \texttt{R} code:
-
-```{=tex}
-\begin{verbatim}
-1. lm(y ~ residuals(lm(z~x)))
-2. lm(y ~ residuals(lm(x~z)))
-3. lm(residuals(lm(y~z)) ~ x)
-4. lm(residuals(lm(y~x)) ~ z)
-5. lm(residuals(lm(y~x)) ~ residuals(lm(z~x)))
-6. lm(residuals(lm(y~x)) ~ residuals(lm(x~z)))
-7. lm(residuals(lm(y~z)) ~ residuals(lm(x~z)))
-8. lm(residuals(lm(y~z)) ~ residuals(lm(z~x)))
- \end{verbatim}
+aspirin.plot + 
+  geom_line(aes(x=X, y=muhat.parallel(W,X), linetype=factor(W)), data=grid)
 ```
-```{=tex}
-\begin{itemize}
-\item[a)]  Choose one of the above that will produce the coefficient on $x$ from the multiple regression of $y \sim x + z$\\
-\color{red} 2 or 7 \color{black}
 
-\bigskip
+They report a point estimate of `{r} point.estimates$parallel`, which they calculated like this.
 
-\item[b)] BONUS:  Choose one of the above that will produce the coefficient on $z$ from the multiple regression of $y \sim x + z$\\
-\color{red} 5 or 1 \color{black}
+$$
+\widehat{ATT} = \frac{1}{N_1}\sum_{i:W_i=1} \qty{ \hat\mu(1,X_i) - \hat\mu(0,X_i) } \qfor  N_w = \sum_{i: W_i=w} 1. 
+$$
 
-\bigskip 
+They bootstrap it to calculate a 95% confidence interval of $`{r} point.estimates$parallel` \pm `{r} bootstrap.widths$parallel/2`$.
 
-\item[c)] Choose one of the above that will produce the same residuals as the residuals from the multiple regression of $y \sim x + z$\\
- \color{red}  7 or 5 \color{black}
-\end{itemize}
+They fish your cousin's aspirin bottle out of the trash and say that, while they shouldn't necessarily expect a `full point' of improvement on the 1-5 scale, they still think the aspirin is worth taking. Explain, in terms they can understand, why they're underestimating the effect.
 
+## Part C (Extra Credit)
 
+This was a bad question. Everyone gets free points.
