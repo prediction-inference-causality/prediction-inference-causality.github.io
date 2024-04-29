@@ -11,6 +11,7 @@ subtitle: "Inverse Probability Weighting"
 {{< include shared-code.qmd >}}
 
 ```{r}
+library(tidyverse)
 set.seed(1) 
 m = 1e6 
 pi = function(x) { ifelse(x <= 65, .2, .8) }
@@ -293,7 +294,7 @@ $$
 #| out-height: 500px
 mht.plot.ipw = ggplot(data) + 
   geom_point(aes(x=plotX(W,X), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.05) + 
-  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W), size=W + (1-W)*pi(X)/(1-pi(X))), geom="pointrange", alpha=.3, 
+  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W), size=W + (1-W)*pi(X)/(1-pi(X))), geom="pointrange", alpha=.15, 
                  fun=mean, 
                  fun.min = function(x) mean(x) - sd(x), 
                  fun.max = function(x) mean(x) + sd(x)) +
@@ -301,7 +302,7 @@ mht.plot.ipw = ggplot(data) +
           alpha=.5, linewidth=.2) + 
           xlab('') + ylab('') + 
           guides(color='none', fill='none', size='none') +
-          scale_x_continuous(breaks=seq(50,80,by=5)) + scale_size_area(max_size=2)
+          scale_x_continuous(breaks=seq(50,80,by=5)) + scale_size_area(max_size=1)
 
 mht.plot.ipw
 ```
@@ -310,7 +311,7 @@ mht.plot.ipw
 $$
 \begin{aligned}
 \text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x) \hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \quad \gamma(w,x) = w + (1-w)\frac{p(1,x)}{p(w,x)}
+= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x) \hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \frac{\ingreen{p(1,x)}}{p(w,x)}
 \end{aligned}
 $$
 
@@ -324,7 +325,7 @@ $$
 
 ```{r} 
 #| out-height: 500px
-data$weights = pi(data$X)/(1-pi(data$X))
+data$weights = ifelse(data$W, 1, pi(data$X)/(1-pi(data$X)))
 
 ipwfits = list(
 B =  lm(Y ~ X, data=data, weights=weights),
@@ -379,7 +380,7 @@ mht.plot.ipw +
 $$
 \begin{aligned}
 \text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \quad \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
+= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
 \end{aligned}
 $$
 
@@ -421,7 +422,7 @@ prediction.function = function(model) {
 
 mht.plot.ipw = ggplot(data) + 
   geom_point(aes(x=plotX(W,X), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.05) + 
-  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W), size=W + (1-W)*pi(X)/(1-pi(X))), geom="pointrange", alpha=.3, 
+  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W), size=W + (1-W)*pi(X)/(1-pi(X))), geom="pointrange", alpha=.15, 
                  fun=mean, 
                  fun.min = function(x) mean(x) - sd(x), 
                  fun.max = function(x) mean(x) + sd(x)) +
@@ -429,13 +430,9 @@ mht.plot.ipw = ggplot(data) +
           alpha=.5, linewidth=.2) + 
           xlab('') + ylab('') + 
           guides(color='none', fill='none', size='none') +
-          scale_x_continuous(breaks=seq(50,80,by=5)) + scale_size_area(max_size=2)
+          scale_x_continuous(breaks=seq(50,80,by=5)) + scale_size_area(max_size=1)
 
-mht.plot.ipw
-
-
-data$weights = pi(data$X)/(1-pi(data$X))
-
+data$weights = ifelse(data$W, 1, pi(data$X)/(1-pi(data$X)))
 ipwfits = list(
 B =  lm(Y ~ X, data=data, weights=weights),
 D =  lm(Y ~ W, data=data, weights=weights),
@@ -487,7 +484,7 @@ mht.plot.ipw +
 $$
 \begin{aligned}
 \text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \quad \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
+= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
 \end{aligned}
 $$
 
@@ -530,7 +527,7 @@ prediction.function = function(model) {
 
 mht.plot.ipw = ggplot(data) + 
   geom_point(aes(x=plotX(W,X), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.05) + 
-  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W), size=W + (1-W)*pi(X)/(1-pi(X))), geom="pointrange", alpha=.3, 
+  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W), size=W + (1-W)*pi(X)/(1-pi(X))), geom="pointrange", alpha=.15, 
                  fun=mean, 
                  fun.min = function(x) mean(x) - sd(x), 
                  fun.max = function(x) mean(x) + sd(x)) +
@@ -538,12 +535,9 @@ mht.plot.ipw = ggplot(data) +
           alpha=.5, linewidth=.2) + 
           xlab('') + ylab('') + 
           guides(color='none', fill='none', size='none') +
-          scale_x_continuous(breaks=seq(50,80,by=5)) + scale_size_area(max_size=2)
+          scale_x_continuous(breaks=seq(50,80,by=5)) + scale_size_area(max_size=1)
 
-mht.plot.ipw
-
-
-data$weights = pi(data$X)/(1-pi(data$X))
+data$weights = ifelse(data$W, 1, pi(data$X)/(1-pi(data$X)))
 
 ipwfits = list(
 B =  lm(Y ~ X, data=data, weights=weights),
@@ -596,7 +590,7 @@ mht.plot.ipw +
 $$
 \begin{aligned}
 \text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \quad \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
+= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
 \end{aligned}
 $$
 
