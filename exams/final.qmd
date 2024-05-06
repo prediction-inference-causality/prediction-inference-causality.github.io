@@ -1,97 +1,96 @@
 ---
-title: "QTM 220 Final"
-format: 
-  pdf:
-    include-in-header:
-      text: |
-        \usepackage{physics}
-        \usepackage{mathtools}
-        \DeclareMathOperator{\argmin}{argmin}
-        \DeclareMathOperator{\E}{E}
-        \newcommand{\model}{\mathcal{M}}
-        \newcommand{\R}{\mathbb{R}}
-        \newenvironment{answer}{\ \\ \color{white}}{\color{black}}
-        % replace 'red' with 'white' above  to hide solutions (in printout)
-execute:
-  echo: false
-  warning: false
-editor: visual
+title: "Final Exam"
+subtitle: "QTM 220"
 ---
 
+
+::: hidden
+
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\CATE}{CATE}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+\DeclareMathOperator*{\argmin}{argmin}
+\newcommand{\model}{\mathcal{M}}
+$$
+
+:::
+
 ```{r}
-library(purrr)
-library(tibble)
-library(dplyr)
-library(magrittr)
-library(ggplot2)
-theme_set(theme_bw())
+library(tidyverse)
+theme_set(theme_minimal())
 ```
 
-
-\section*{Problem 1}
-Suppose we have a sample of $(X_1,Y_1) \ldots (X_n,Y_n)$ drawn with replacement from a population. $X$ is binary. It's stored in an \textbf{R} dataframe `df' with $n$ rows. We run this code.
+# Problem 1
 
 ```{r}
 #| echo: false
 library(ggplot2)
 n <- 500
-x <- c(rep(0,n/2),rep(1,n/2))
+X <- c(rep(0,n/2),rep(1,n/2))
 set.seed(220220)
-y <- 2.6*x +  rnorm(n) + runif(n,-1,1)
-
-
-df <- data.frame(y,x)
-
-q2<- ggplot(data = df) +
-  geom_jitter(aes(x=x,y=y), width=.25, alpha=.2) +
-  geom_pointrange(aes(x=x, y=mean(y), ymin=mean(y)-2*sd(y), ymax=mean(y)+2*sd(y)), data=df[df$x==0,]) + 
-  geom_pointrange(aes(x=x, y=mean(y), ymin=mean(y)-2*sd(y), ymax=mean(y)+2*sd(y)), data=df[df$x==1,]) + 
-  xlab("x") +
-  ylab("y") +
-  theme_bw() 
+Y <- 2.6*X +  rnorm(n) + runif(n,-1,1)
+N1 = sum(X==1)
+N0 = sum(X==0)
 ```
+
+Suppose we have a sample of $(X_1,Y_1) \ldots (X_n,Y_n)$ drawn with replacement from a population
+$(x_1, y_1) \ldots (x_m, y_m)$. The variable $X$ is binary. We have our sample stored in two **R** vectors $X$ and $Y$ of length $n$. We run this code.
 
 ```{r}
 #| echo: true
 B=10000
-theta = rep(NA,B)
+theta.star = rep(NA,B)
 for( b in 1:B ){
-  bootind = sample(1:n,size=n,replace=TRUE)
-  dfboot = df[bootind,]
-  theta[b] = mean(dfboot$y[dfboot$x==1]) - mean(dfboot$y[dfboot$x==0])
+  J.star = sample(1:n,size=n,replace=TRUE)
+  X.star = X[J.star]
+  Y.star = Y[J.star]
+  theta.star[b] = mean(Y.star[X.star==1]) - mean(Y.star[X.star==0])
 }
 ```
 
 ```{r}
 #| out-height: 3.5in
 #| fig-ncol: 2
-#| fig-subcap:
+#| fig-cap:
 #|  -  Histogram of the vector Y's elements
 #|  -  Jittered Scatterplot of X and Y
-ggplot() + geom_histogram(aes(x=y,     y=after_stat(density)), alpha=.3) + 
-           geom_vline(aes(xintercept=mean(y)), alpha=.5) + 
-           geom_vline(aes(xintercept=mean(y)+c(-1,1)*sd(y)), linetype='dashed', alpha=.5) + 
-           geom_pointrange(aes(x=mean(y), xmin=mean(y)-1.96*sd(y), xmax=mean(y)+1.96*sd(y), y=.025)) + theme_bw() + xlab('') + ylab('')
+ggplot(data.frame(X=X,Y=Y)) + 
+    geom_histogram(aes(x=Y, y=after_stat(density)), alpha=.3, bins=30) + 
+    geom_vline(aes(xintercept=mean(Y)), alpha=.5) + 
+    geom_vline(aes(xintercept=mean(Y)-sd(Y)), linetype='dashed', alpha=.5) + 
+    geom_vline(aes(xintercept=mean(Y)+sd(Y)), linetype='dashed', alpha=.5) + 
+    geom_pointrange(aes(x=mean(Y), xmin=mean(Y)-1.96*sd(Y), xmax=mean(Y)+1.96*sd(Y), y=.025)) + 
+    xlab('') + ylab('')
 
-q2 
+mean_sd = function(y){ data.frame(y=mean(y), ymin=mean(y)-sd(y), ymax = mean(y) + sd(y)) }
+ggplot(data.frame(X=X,Y=Y)) + 
+    geom_point(aes(x=X, y=Y), position = position_jitter(w=.2), alpha=.2) + 
+    stat_summary(aes(x=X, y=Y), fun.data=mean_sd, geom='pointrange') + 
+    scale_x_continuous(breaks=c(0,1)) 
 ```
 
 ```{r}
 #| out-height: 3.5in
 #| fig-ncol: 2
-#| fig-subcap:
-#|  -  Histogram of the theta's elements
+#| fig-cap:
+#|  -  Histogram of theta.star's elements
 
-ggplot() + geom_histogram(aes(x=theta, y=after_stat(density)), alpha=.3) + 
-           geom_vline(aes(xintercept=mean(theta)), alpha=.5) + 
-           geom_vline(aes(xintercept=mean(theta)+c(-1,1)*sd(theta)), linetype='dashed', alpha=.5) + 
-           geom_pointrange(aes(x=mean(theta), xmin=mean(theta)-1.96*sd(theta), xmax=mean(theta)+1.96*sd(theta), y=.25)) + theme_bw() + xlab('') + ylab('')
+ggplot() + geom_histogram(aes(x=theta.star, y=after_stat(density)), alpha=.3, bins=50) + 
+           geom_vline(aes(xintercept=mean(theta.star)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(theta.star)+c(-1,1)*sd(theta.star)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(theta.star), 
+                               xmin=mean(theta.star)-1.96*sd(theta.star), 
+                               xmax=mean(theta.star)+1.96*sd(theta.star), y=.25)) 
 
 ```
 
-\subsection*{Part a}
-
-What does this code calculate? State it in words and mark it with a 'a', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+::: {.callout-exercise}
+## Part A
+What does this code calculate?  State your answer in words in terms of the sample and/or population, not the variables in the code.
+And mark it with a 'a', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 
 ```{r}
 #| echo: true
@@ -99,62 +98,83 @@ What does this code calculate? State it in words and mark it with a 'a', and an 
 sd(theta)
 ```
 
-\begin{answer}
+:::
+::: {.callout-solution}
 
 The bootstrap sampling distribution's standard deviation for the difference in the mean of y between x=1 and x=0. Estimated standard error. It's the distance between the solid vertical and either dashed vertical line on the theta sampling distribution histogram. 
-\end{answer}
+:::
 
-\subsection*{Part b}
 
-What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+::: {style="height:2in"}
+:::
+
+::: {.callout-exercise}
+### Part B
+
+What does this code calculate? State your answer in words in terms of the sample and/or population, not the variables in the code. And mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: true
+(mean(Y[X==1])-mean(Y[X==0])) + 1.96 * (sd(Y[X==1])/sqrt(N1) + sd(Y[X==0])/sqrt(N0))
+(mean(Y[X==1])-mean(Y[X==0])) - 1.96 * (sd(Y[X==1])/sqrt(N1) + sd(Y[X==0])/sqrt(N0))
+```
+
+:::
+
+::: {style="height:2in"}
+:::
+
+::: {.callout-solution}
+A 95\% confidence interval --- based on normal approximation --- for the difference in means for the population from which this sample was drawn. This is indicated by the horizontal segment (with a dot in the middle) on the sampling distribution histogram (theta). 
+:::
+
+::: {.callout-exercise}
+### Part C
+Which of the following would calculate roughly the same thing as in Part B? Explain why.
 
 ```{r}
 #| echo: true
 #| eval: false
-(mean(y[x==1])-mean(y[x==0])) + 1.96*(sd(y[x==1])/sqrt(n1) + sd(y[x==0])/sqrt(n0))
-(mean(y[x==1])-mean(y[x==0])) - 1.96*(sd(y[x==1])/sqrt(n1) + sd(y[x==0])/sqrt(n0))
-
+mean(Y[X==1])-mean(Y[X==0]) + 1.96 * sd(theta.star)/sqrt(B)
+mean(Y[X==1])-mean(Y[X==0]) - 1.96 * sd(theta.star)/sqrt(B)
 ```
 
-\begin{answer}
-A 95\% confidence interval --- based on normal approximation --- for the difference in means for the population from which this sample was drawn. This is indicated by the horizontal segment (with a dot in the middle) on the sampling distribution histogram (theta). 
-\end{answer}
+```{r}
+#| echo: true
+#| eval: false
+mean(Y[X==1])-mean(Y[X==0]) + 1.96 * sd(theta.star)/sqrt(n)
+mean(Y[X==1])-mean(Y[X==0]) - 1.96 * sd(theta.star)/sqrt(n)
+```
 
-\subsection*{Part c}
+```{r}
+#| echo: true
+#| eval: false
+mean(Y[X==1])-mean(Y[X==0]) + 1.96 * sd(theta.star)
+mean(Y[X==1])-mean(Y[X==0]) - 1.96 * sd(theta.star)
+```
 
-How could you calculate roughly the same thing as in part b using 'sd(theta)'
+:::
 
-\begin{answer}
-We can use the standard deviation of the bootstrap sampling distribution as our estimate of standard error.
+::: {style="height:2in"}
+:::
 
-\begin{verbatim}
-(mean(y[x==1])-mean(y[x==0]))  + 1.96 * sd(theta)
-(mean(y[x==1])-mean(y[x==0]))  - 1.96 * sd(theta)
-\end{verbatim}
+::: {.callout-solution}
+The third one. The bootstrap sampling distribution is an approximation of the sampling distribution of our
+point estimate `mean(Y[X==1])-mean(Y[X==0])`, so we can use the bootstrap standard deviation (i.e. the spread of the bootstrap sampling distribution)
+as an estimator the standard error of our point estimate (i.e. the spread of our point estimate's actual sampling distribution).
+:::
 
-\end{answer}
+# Problem 2
 
-\subsection*{Part d}
-
-Why does part c not include $n_1$ or $n_0$?
-
-\begin{answer}
-We are using the bootstrap estimated sampling distribution to directly estimate standard error. The estimated sampling distribution already takes the sample size (and the subsample of treated and untreated) into account.
-
-\end{answer}
-
-\newpage
-
-
-\section*{Problem 2}
-
-Below, I've plotted two samples. Each is drawn with replacement from some population.
+Below, I've plotted samples drawn, with replacement, from two populations.
 On top of them, I've drawn lines fit to them via least squares as follows.
-$$ \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{m(X_i) - Y_i}^2 \qfor \model = \qty{m(x) = b_0 + b_1 x \ : \ x \in \R^2} 
+$$ 
+\hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{Y_i - m(X_i)}^2 \qfor \model = \qty{m(x) = a + b x  \ \text{ for numbers $a$, $b$} }
 $$
 
-Below these, in some order, I've plotted the sampling distributions of the predictions $\hat\mu(0)$ based on those two models. As usual, I've indicated the mean of each sampling distribution with a solid blue line, one standard error in either direction with a dashed blue line, and two  standard errors in either direction with a dotted blue line. The value of $\mu(0)$, the mean of $y$ among individuals in the population with $x=0$, is indicated by a black line. 
-
+Below these, in some order, I've plotted the sampling distributions of the predictions $\hat\mu(0)$ I get when I fit this model to each sample.
+As usual, I've indicated the mean of each sampling distribution with a solid blue line, one standard error in either direction with a dashed blue line, and two  standard errors in either direction with a dotted blue line. The value of $\mu(0)$, the mean of $y$ among individuals in the population with $x=0$, is indicated by a green line. 
 
 
 ```{r}
@@ -162,13 +182,13 @@ Below these, in some order, I've plotted the sampling distributions of the predi
 #| layout-nrow: 2
 
 set.seed(1)
-mu = function(x){.2 + x + .5*sinpi(x)}
+mu = function(x){.2 + .7*x + .8*sinpi(x)}
 m = 1000000
 X = round(3*runif(m))/3
 Y = mu(X) + .5*rnorm(m)
 pop = data.frame(X=X, Y=Y)
 
-n=50
+n=30
 
 samp = pop[sample(1:nrow(pop), n, replace=TRUE), ]
 model1 = lm(Y~X, data=samp)
@@ -176,23 +196,25 @@ model2 = lm(Y~X, data=samp[samp$X %in% c(0,1), ])
 grid = expand.grid(X=seq(0,1,by=.01))
 ggplot(samp) + geom_point(aes(x=X, y=Y), color='red', alpha=.3) + 
   geom_line(aes(x=X, y=predict(model1, newdata=data.frame(X=X))), data=grid, color='blue') +
-  coord_cartesian(ylim=c(-3,3), xlim=c(0,1))
+  scale_x_continuous(breaks=round(seq(0,1,by=1/3),2)) +
+  coord_cartesian(ylim=c(-3,3), xlim=c(-.1,1.1))
 
 ggplot(samp[samp$X %in% c(0,1), ]) +
  geom_point(aes(x=X, y=Y), color='red', alpha=.3) + 
   geom_line(aes(x=X, y=predict(model2, newdata=data.frame(X=X))), data=grid, color='blue') +
-  coord_cartesian(ylim=c(-3,3), xlim=c(0,1)) 
+  scale_x_continuous(breaks=round(seq(0,1))) +
+  coord_cartesian(ylim=c(-3,3), xlim=c(-.1,1.1)) 
 
 sampdist = purrr::map(1:1000, function(rep) {
   samp = pop[sample(1:nrow(pop), n, replace=TRUE), ]
   model1 = lm(Y~X, data=samp)
   model2 = lm(Y~X, data=samp[samp$X %in% c(0,1), ])
   data.frame(val=c(coef(model1)[1], coef(model2)[1]), model=c('model1', 'model2'))
-}) %>% bind_rows()
+}) |> bind_rows()
 
 ggplot(sampdist[sampdist$model=='model2', ])  +
   geom_histogram(aes(x=val, y=after_stat(density)), bins=50, alpha=.2) +
-  geom_vline(aes(xintercept=mu(0)), color='black') +
+  geom_vline(aes(xintercept=mu(0)), color='green', linewidth=1.5) +
   geom_vline(aes(xintercept=mean(val)), color='blue') +
   geom_vline(aes(xintercept=mean(val)-sd(val)), color='blue', linetype='dashed') + 
   geom_vline(aes(xintercept=mean(val)+sd(val)), color='blue', linetype='dashed') + 
@@ -201,7 +223,7 @@ ggplot(sampdist[sampdist$model=='model2', ])  +
 
 ggplot(sampdist[sampdist$model=='model1', ])  +
   geom_histogram(aes(x=val, y=after_stat(density)), bins=50, alpha=.2) +
-  geom_vline(aes(xintercept=mu(0)), color='black') +
+  geom_vline(aes(xintercept=mu(0)), color='green', linewidth=1.5) +
   geom_vline(aes(xintercept=mean(val)), color='blue') +
   geom_vline(aes(xintercept=mean(val)-sd(val)), color='blue', linetype='dashed') + 
   geom_vline(aes(xintercept=mean(val)+sd(val)), color='blue', linetype='dashed') + 
@@ -209,28 +231,57 @@ ggplot(sampdist[sampdist$model=='model1', ])  +
   geom_vline(aes(xintercept=mean(val)+2*sd(val)), color='blue', linetype='dotted') 
 ```
 
-\subsection*{Part A}
+::: {.callout-exercise}
 True or False. These plots are in correspondence, i.e., the sampling distribution on the left corresponds to the line fit to the sample on the left.
+:::
 
-\subsection*{Part B}
-Suppose I use the bootstrap to get a good estimate $\hat\text{se}$ of the standard error of each estimator $\hat\mu(0)$.
-For each of these estimators, approximate the coverage of the 95\% confidence interval $\hat\mu(0) \pm 2 \hat\text{se}$.
+::: {.callout-exercise}
+Suppose I use the bootstrap to get a good estimate $\widehat{\text{se}}$ of the standard error of each estimator $\hat{\mu}(0)$.
+For each of these estimators, approximate the coverage of the 95\% confidence interval $\hat\mu(0) \pm 2 \widehat{\text{se}}$.
 Is it closer to 95\%, 50\%, or 0\%?  So that the correctness of this one isn't tied to the previous one, please report this for...
-\begin{itemize}
-\item the estimator whose sampling distribution is on the left.
-\item the estimator whose sampling distribution is on the right.
-\end{itemize}
+
+- the estimator whose sampling distribution is on the left.
+- the estimator whose sampling distribution is on the right.
+
+:::
+
+::: {style="height:2in"}
+:::
 
 
-\newpage
+# Problem 3
 
-\subsection*{Problem 3}
+In this problem, we'll work with a sample $(W_1, X_1, Y_1) \ldots (W_n,X_n,Y_n)$ from some population $(w_1, x_1, y_1) \ldots (w_m, x_m, y_m)$. 
+We'll plot $X_i$ on the horizontal axis, $Y_i$ is on the vertical axis, and $W_i$ variable, which is binary, is indicated by color---green for $W_i=1$, red for $W_i=0$. 
+The sample is from a conditionally randomized study: for all members of the population with the same value of $x_j$, $w_j$ is chosen by flipping the same weighted coin,
+so there is some function $\pi(x)$ for which it comes up heads for people with $x_j=x$ with probability $\pi(x)=P(W_i=1 \mid X_i=x)$.
 
-In this problem, we'll work with a sample $(D_1, X_1, Y_1) \ldots (D_n,X_n,Y_n)$ from some population. I've plotted it below. The $X$ variable is on the horizontal axis, the $Y$ variable is on the vertical axis, and the $D$ variable, which is binary, is indicated by color---green for $D=1$, red for $D=0$. The sample is from a conditionally randomized study, in which $D$ is randomized conditional on $X$ with probability $\pi(x)=P(D=1 \mid X=x)$. 
-I've fit an interacted bivariate model to the data using unweighted least squares. 
-The solid lines show the fitted model $\hat\mu$ with $\hat\mu(1,x)$
-and $\hat\mu(0,x)$ in green and red respectively.
+We'll be estimating the the Average Treatment Effect on the Treated (ATT).
+$$
+\begin{aligned}
+\text{ATT} &= \frac{1}{m_1} \sum_{j:w_j=1} \qty{\mu(1,x_j) - \mu(0,x_j)} \qfor m_w = \sum_{j:w_j=w} 1 \qand \mu(w,x) = \frac{\sum_{j:w_j=w \ \text{ and } x_j = x} y_j}{\sum_{j:w_j=w \ \text{ and } x_j = x} 1}
+\end{aligned}
+$$
 
+As usual, we'll do this by using least squares regression to get an estimate $\hat\mu$ of $\mu$, then plugging it into a version of the formula above
+where we replace population averages with sample averages. That is, we'll use this formula in terms of $\hat\mu$.
+$$
+\begin{aligned}
+\widehat{ATT} &= \frac{1}{N_1} \sum_{i:W_i=1} \qty{\hat\mu(1,X_i) - \hat\mu(0,X_i)} \qfor N_w = \sum_{i:W_i=w} 1.  
+\end{aligned}
+$$
+
+
+## A Small Study
+We start by working with the small sample plotted below. I've fit the *two lines* model to the data using unweighted least squares, i.e., $\hat \mu$ is chosen as follows.
+$$
+\begin{aligned}
+\hat \mu &= \argmin_{m \in \model} \sum_{i=1}^n \qty{Y_i - m(W_i,X_i)}^2  \\
+& \qfor \model = \qty{m(w,x) = a(w) + b(w)x  \ \text{ for any functions $a$, $b$ } }
+\end{aligned}
+$$
+
+In the plot, the solid lines show $\hat\mu$ with $\hat\mu(1,x)$ and $\hat\mu(0,x)$ in green and red respectively as usual.
 
 ```{r}
 X <- c(0,2,4,0,0,2,4,4)
@@ -246,107 +297,101 @@ plot<- ggplot(data = data, aes(x = X, y = Y)) +
   scale_y_continuous(breaks = seq(0, 13, by = 1)) + 
   geom_line(aes(x=X, y=muhat, color=factor(D)), data=grid) 
     
-plot + theme(legend.position="none")
+plot + guides(color='none')
 ```
 
 
+::: {.callout-exercise}
+### Part A
+What is the ATT estimate $\widehat{ATT}$ based on this model and data? Show your calculations.
+:::
 
+::: {style="height:5in"}
+:::
 
-You'll be estimating the Average Treatment Effect (ATE)  and the Average Treatment Effect on the Treated (ATT).
-$$
-\begin{aligned}
-\text{ATE} &= \E[ \mu(1,X) - \mu(0,X) ] \\
-\text{ATT} &= \E[ \mu(1,X) - \mu(0,X) \mid D=1] 
-\end{aligned}
-$$
-
-As your estimates, you'll use the following.
-$$
-\begin{aligned}
-\widehat{ATE} &= \frac{1}{n} \sum_{i=1}^n \qty{\hat\mu(1,X_i) - \hat\mu(0,X_i)} \\
-\widehat{ATT} &= \frac{1}{N_1} \sum_{i:D_i=1} \qty{\hat\mu(1,X_i) - \hat\mu(0,X_i)} \qfor N_1 = \sum_{i=1}^n D_i 
-\end{aligned}
-$$
-
-
-
-\subsection*{Part a}
-
-What is your ATE estimate $\widehat{ATE}$ based on this model and data? Show your calculations.
-
-\begin{answer}
-
-$\frac{1}{8}[(2-10)+(2-10)+(2-10)+(4-6)+(4-6)+(6-2)+(6-2)+(6-2)] = -2$
-
-\end{answer}
-
-\subsection*{Part b}
-
-What is the $\widehat{ATT}$ based on this model and data? Show your calculations.
-
-\begin{answer}
-
+::: {.callout-solution}
 $\frac{1}{3}[(2-10)+(4-6)+(6-2)] = -2$ 
+:::
 
-\end{answer}
+::: {.callout-exercise}
+### Part B
+Calculate the *difference in means* of the treated and control groups, i.e.,
+$$
+\hat\Delta = \frac{1}{N_1} \sum_{i:W_i=1} Y_i - \frac{1}{N_0} \sum_{i:W_i=0} Y_i \quad \text{ for } \quad N_w = \sum_{i:W_i=w} 1.
+$$
 
-\newpage
+Compare this to the ATT. Is it bigger or smaller? Explain why.
+:::
 
-\subsection*{Problem 4}
-In this question, we'll repeat our exercise from Problem 3 using a larger sample, then go a bit further.
-The set-up is exactly the same as before. We have a sample of $(D_1, X_1, Y_1) \ldots (D_n,X_n,Y_n)$ from some population. I've plotted it below. The $X$ variable is on the horizontal axis, the $Y$ variable is on the vertical axis, and the $D$ variable, which is binary, is indicated by color---green for $D=1$, red for $D=0$. I've used some jitter when plotting to make things easier to see---$X$ really takes on the four values $0$,$1/3$,$2/3$,and $1$.
+::: {.callout-tip}
+Does it matter that we're averaging $Y_i$ instead of $\hat\mu(W_i,X_i)$ when we calculate $\hat\Delta$?
+No need to write an answer to this question. It's just a prompt to help you think about Part B.
+:::
+
+:::{style="height:5in"}
+:::
 
 
-The sample is from a conditionally randomized study, in which $D$ is randomized conditional on $X$ with probability $\pi(x)=P(D=1 \mid X=x)$. I've fit an interacted bivariate model to the data using unweighted least squares. The solid lines show the fitted model $\hat\mu$ with $\hat\mu(1,x)$ and $\hat\mu(0,x)$ in green and red respectively.
-I've also plotted $\bar Y_{x,d}$, the average of $Y$ among individuals with $X=x$ and $D=d$, as well as arms spannding $\pm 2$ standard errors, for all $x$ and $d$.
+## A Bigger Version
+In this question, we'll repeat Exercise A using a larger sample then do a bit more.
+The set-up is exactly the same as before. We have a sample of $(W_1, X_1, Y_1) \ldots (W_n,X_n,Y_n)$ drawn with replacement from some population $(w_1, x_1, y_1) \ldots (w_m, x_m, y_m)$. 
+I've plotted it below. The $X$ variable is on the horizontal axis, the $Y$ variable is on the vertical axis, and the $W$ variable, which is binary, is indicated by color---green for $W=1$, red for $W=0$. I've used some jitter when plotting to make things easier to see---$X$ really takes on the four values $0$,$1/3$,$2/3$,and $1$.
+
+The sample is from a conditionally randomized study; for all members of the population with the same value of $x_j$, $w_j$ is chosen by flipping the same weighted coin,
+so there is some function $\pi(x)$ for which it comes up heads for people with $x_j=x$ with probability $\pi(x)=P(W_i=1 \mid X_i=x)$. The population we're using here is
+not necessarily the same as the one from which we drew the small sample in the previous question, so don't expect to see exactly the same relationships in the data.
+
+As before, I've fit the *two lines*  model to the data using least squares. The solid lines show the fitted model $\hat\mu$ with $\hat\mu(1,x)$ and $\hat\mu(0,x)$ in green and red respectively.
+I've also plotted $\bar Y_{w,x}$, the average of $Y$ among individuals with $W=w$ and $X=x$, as well as arms spanning $\pm 2$ standard errors, for all pairs of $w$ and $x$.
 
 ```{r scatter}
-mu = function(d, x){.5 + (1-d)*sinpi(x/2) + d*x}
-pi = function(x){ .1 + .6*abs(cospi(x)) }
+mu = function(w, x){.5 + (1-w)*sinpi(x/2) + w*x}
+pi = function(x){ .5 + .4*cospi(2*x) }
 
 set.seed(1)
-n = 100
+n = 400
 X = sample(seq(0,1,by=.333), n, replace=T)
-D = rbinom(n, 1, pi(X))
-Y = mu(D,X) + .1*rnorm(n)
-data = data.frame(X=X, D=D, Y=Y)
-summaries = data %>% group_by(D,X) %>% summarize(mu=mean(Y), n = n(), se=sd(Y)/sqrt(n)) %>%
-                     group_by(D) %>% mutate(f=n/sum(n))
+W = rbinom(n, 1, pi(X))
+Y = mu(W,X) + .1*rnorm(n)
+data = data.frame(X=X, W=W, Y=Y)
+summaries = data %>% group_by(W,X) %>% summarize(mu=mean(Y), n = n(), se=sd(Y)/sqrt(n)) %>%
+                     group_by(W) %>% mutate(f=n/sum(n))
 
-model = lm(Y~D*X, data=data)
+model = lm(Y~W*X, data=data)
 summaries$muhat = predict(model, newdata=summaries)
 
-summaries0 = summaries %>% filter(D==0)
-summaries1 = summaries %>% filter(D==1)
-summaries0 = summaries0[order(summaries0$X),]
-summaries1 = summaries1[order(summaries1$X),]
-f = mean(D) * summaries0$f + (1-mean(D)) * summaries1$f
+summaries0 = summaries %>% filter(W==0)
+summaries1 = summaries %>% filter(W==1)
+summaries0 = summaries0[order(summaries0$W),]
+summaries1 = summaries1[order(summaries1$W),]
+f = mean(W) * summaries0$f + (1-mean(W)) * summaries1$f
 
 scatter = ggplot(data) + 
-  geom_point(aes(x=X+.025*(2*D-1), y=Y, color=factor(D)), 
-             position=position_jitter(w=.025,h=0), alpha=.2, size=.5) + 
-  geom_line(aes(x=X, y=muhat, color=factor(D)), data=summaries, size=.5) +
+  geom_point(aes(x=X+.025*(2*W-1), y=Y, color=factor(W)), 
+             position=position_jitter(w=.025,h=0), alpha=.2, size=1) + 
+  geom_line(aes(x=X, y=muhat, color=factor(W)), data=summaries, size=.5) +
   scale_x_continuous(breaks=round(seq(0,1,by=1/3),2)) + xlab('') + ylab('') + 
-  geom_col(aes(x=X+.025*(2*D-1), y=f, fill=factor(D), color=factor(D)), data=summaries, position='identity', alpha=.2, width=.1) +
+  geom_col(aes(x=X+.025*(2*W-1), y=f, fill=factor(W), color=factor(W)), data=summaries, position='identity', alpha=.2, width=.1) +
   geom_col(aes(x=X, y=f), fill='purple', color='purple', 
     data=data.frame(f=f, X=summaries0$X), position='identity', alpha=.2, width=.05) +
-  geom_pointrange(aes(x=X+.025*(2*D-1), y=mu, ymin=mu-2*se, ymax=mu+2*se, color=factor(D)), 
+  geom_pointrange(aes(x=X+.025*(2*W-1), y=mu, ymin=mu-2*se, ymax=mu+2*se, color=factor(W)), 
                   data=summaries, alpha=.8, size=.2) +
   guides(color='none', fill='none') + theme_bw()
 scatter 
 ```
 
 This time, you probably won't want to count dots. Instead, you'll work with summaries of the data's distribution.
-The proportion of times that $X$ takes on each value $x$ when $D=0$ and when $D=1$, $\hat f_{0}(x)$ and $\hat f_1(x)$ respectively, are plotted as histograms in matching colors. In purple, I've plotted $\hat f$, the proportion of times $X$ takes on each value $x$ among all observations---I've made that one a bit thinner so it's easier to see the other two.
+The proportion of times that $X$ takes on each value $x$ when $W=0$ and when $W=1$, $\hat p(0,x)$ and $\hat p(1,x)$ respectively, are plotted as histograms in matching colors. In purple, I've plotted $\hat p(x)$, the proportion of times $X$ takes on each value $x$ among all observations---I've made that one a bit thinner so it's easier to see the other two.
 
 ```{r}
 options(digits=2)
 ```
+
 $$
 \begin{aligned}
-\hat f_0(x) &= \frac{1}{N_0}\sum_{i:D_i=0} 1(X_i=x)  \qfor N_0 = \sum_{i=1}^n (1-D_i) \\
-\hat f_1(x) &= \frac{1}{N_1}\sum_{i:D_i=1} 1(X_i=x)  \qfor N_1 = \sum_{i=1}^n D_i \\
-\hat f(x)   &= \frac{1}{n}\sum_{i=1}^n 1(X_i=x)
+\hat p(0,x)  &= \frac{1}{N_0}\sum_{i:W_i=0 \text{ and } X_i=x} 1  \quad \text{for} \quad N_0 = \sum_{i:W_i=0} 1 \\
+\hat p(1, x) &= \frac{1}{N_1}\sum_{i:W_i=1 \text{ and } X_i=x} 1  \quad \text{for} \quad N_1 = \sum_{i:W_i=1} 1 \\
+\hat p(x) &= \frac{1}{n}\sum_{i:X_i=x} 1 \\
 \end{aligned}
 $$
 
@@ -354,7 +399,7 @@ Here's a table of the summaries you see in the plot.
 
 $$
 \begin{array}{llllllll}
-x & \hat f_0(x) & \hat f_1(x) & \hat f(x) & \hat\mu(0,x) & \hat \mu(1,x) & \bar Y_{0,x} & \bar Y_{1,x} \\
+x & \hat p(0,x) & \hat p(1,x) & \hat p(x) & \hat\mu(0,x) & \hat \mu(1,x) & \bar Y_{0,x} & \bar Y_{1,x} \\
 \hline
 0 & `r summaries0$f[1]` & `r summaries1$f[1]` & `r f[1]` & `r summaries0$muhat[1]` & `r summaries1$muhat[1]` & `r summaries0$mu[1]` & `r summaries1$mu[1]` \\
 \frac13 & `r summaries0$f[2]` & `r summaries1$f[2]` & `r f[2]` & `r summaries0$muhat[2]` & `r summaries1$muhat[2]` & `r summaries0$mu[2]` & `r summaries1$mu[2]` \\
@@ -364,252 +409,37 @@ x & \hat f_0(x) & \hat f_1(x) & \hat f(x) & \hat\mu(0,x) & \hat \mu(1,x) & \bar 
 $$
 
 
-\subsection*{Part a}
-
-What is your ATE estimate $\widehat{ATE}$ based on this model and data? Show your calculations.
-
-\begin{answer}
-
-\vspace{1in}
-
-\end{answer}
-
-\subsection*{Part b}
-
+::: {.callout-exercise}
+### Part C
 What is your ATT estimate $\widehat{ATT}$ based on this model and data? Show your calculations.
+:::
+::: {style="height:5in"}
+:::
 
-\begin{answer}
+::: {.callout-exercise}
+### Part D
+Is this estimate's bias positive, negative, or roughly zero? With reference to the plot above explain your answer and explain why this is happening. 
+:::
+::: {style="height:5in"}
+:::
 
-\vspace{2in}
+::: {.callout-exercise}
+### Part E
+In terms of quantities available in the plot and table, write an *unbiased* estimate of the ATT. 
+Write this first as a formula involving quantities like $\hat p(0,x)$, $\hat p(1,x)$, etc. 
+Then calculate its value using the numbers in the table. 
+:::
+::: {style="height:5in"}
+:::
 
-\end{answer}
+## Extra Credit
 
-\subsection*{Part c}
+::: {.callout-exercise}
+### Extra Credit
 
-For each of your two estimates: is its bias positive, negative, or roughly zero? With reference to the plot above explain your answer and explain why this is happening. If it's hard to see what's going on in that plot, it may help to take a look at the plot below, in which I've done exactly the same thing with a larger sample.
-
-\paragraph{Bonus.} Explain why the bias we get at this larger sample size tells us something about the bias we get at the smaller sample size we worked with above.
-
-```{r scatter-big}
-mu = function(d, x){.5 + (1-d)*sinpi(x/2) + d*x}
-pi = function(x){ .1 + .6*abs(cospi(x)) }
-
-set.seed(1)
-n = 1000
-X = sample(seq(0,1,by=.333), n, replace=T)
-D = rbinom(n, 1, pi(X))
-Y = mu(D,X) + .1*rnorm(n)
-data = data.frame(X=X, D=D, Y=Y)
-summaries = data %>% group_by(D,X) %>% summarize(mu=mean(Y), n = n(), se=sd(Y)/sqrt(n)) %>%
-                     group_by(D) %>% mutate(f=n/sum(n))
-
-model = lm(Y~D*X, data=data)
-summaries$muhat = predict(model, newdata=summaries)
-
-summaries0 = summaries %>% filter(D==0)
-summaries1 = summaries %>% filter(D==1)
-summaries0 = summaries0[order(summaries0$X),]
-summaries1 = summaries1[order(summaries1$X),]
-f = mean(D) * summaries0$f + (1-mean(D)) * summaries1$f
-
-scatter = ggplot(data) + 
-  geom_point(aes(x=X+.025*(2*D-1), y=Y, color=factor(D)), 
-             position=position_jitter(w=.025,h=0), alpha=.2, size=.5) + 
-  geom_line(aes(x=X, y=muhat, color=factor(D)), data=summaries, size=.5) +
-  scale_x_continuous(breaks=round(seq(0,1,by=1/3),2)) + xlab('') + ylab('') + 
-  geom_col(aes(x=X+.025*(2*D-1), y=f, fill=factor(D), color=factor(D)), data=summaries, position='identity', alpha=.2, width=.1) +
-  geom_col(aes(x=X, y=f), fill='purple', color='purple', 
-    data=data.frame(f=f, X=summaries0$X), position='identity', alpha=.2, width=.05) +
-  geom_pointrange(aes(x=X+.025*(2*D-1), y=mu, ymin=mu-2*se, ymax=mu+2*se, color=factor(D)), 
-                  data=summaries, alpha=.8, size=.2) +
-  guides(color='none', fill='none') + theme_bw()
-scatter 
-```
-
-
-
-
-\begin{answer}
-
-\vspace{2in}
-\end{answer}
-
-\subsection*{Part d}
-
-In terms of quantities available in the plot and table, write \emph{unbiased} estimates of the ATE and ATT. Write these first as a formula involving quantities like $\hat f_0(x)$, $\hat f_1(x)$, etc. then calculate their value using the numbers in the table. 
-
-\begin{answer}
-
-\vspace{2in}
-\end{answer}
-
-\newpage
-
-\section*{Problem 5}
-```{r}
-#| layout-ncol: 2
-set.seed(5)
-
-mu = function(d, x){.2 + x + (1-d) }
-pi = function(x){ 1 - .01 -.98*abs(cospi(x/2)) }
-
-m = 10000
-X = sample(seq(0,1,by=.3333), m, replace=T)
-D = rbinom(m, 1, pi(X))
-Y = mu(D,X) + .02*rnorm(m)
-pop = data.frame(X=X, D=D, Y=Y)
-
-pop.scatter = ggplot(pop) + 
-  geom_point(aes(x=X+.01*(2*D-1), y=Y, color=factor(D)), 
-             position=position_jitter(w=.1,h=0), alpha=.3, size=1) + 
-  scale_x_continuous(breaks=seq(0,1,by=.1)) + xlab('') + ylab('') + 
-  geom_histogram(aes(x=X, y=.4*after_stat(density), fill=factor(D), color=factor(D)), 
-    position='identity', bins=10, alpha=.2) +
-  guides(color='none', fill='none') + theme_bw()
-
-n = 1000
-set.seed(7)
-data = pop[sample(1:nrow(pop), n, replace=TRUE), ]
-summaries = data %>% group_by(D,X) %>% summarize(mu=mean(Y), n = n()) %>%
-                     group_by(D) %>% mutate(f=n/sum(n))
-
-grid = expand.grid(X=seq(0,1,by=.3333), D=0:1)
-sample.scatter = ggplot(data) + 
-  geom_point(aes(x=X+.01*(2*D-1), y=Y, color=factor(D)), 
-             position=position_jitter(w=.1,h=0), alpha=.2, size=2) + 
-  geom_line(aes(x=X, y=mu, color=factor(D)), data=summaries) +
-  scale_x_continuous(breaks=seq(0,1,by=.1)) + xlab('') + ylab('') + 
-  geom_col(aes(x=X, y=f, fill=factor(D), color=factor(D)), data=summaries, position='identity', alpha=.2, width=.25) +
-  geom_line(aes(x=X, y=pi(X)), data=grid, size=1, color='purple') +
-  geom_point(aes(x=X, y=pi(X)), data=grid, color='purple') +
-  guides(color='none', fill='none') + theme_bw()
-
-#pop.scatter 
-sample.scatter
-
-estimate.ATT = function(model, data) {
-  X = data$X
-  D = data$D
-  muhat = function(d,x) { predict(model, newdata=data.frame(X=x,D=d)) }
-  mean(muhat(1,X[D==1]) - muhat(0, X[D==1]))
-}
-B = 5000
-estimates = data.frame(additive=rep(NA,B), additive.ipw=rep(NA,B)) 
-set.seed(7)
-for( b in 1:B ){
-  data = pop[sample(1:nrow(pop), n, replace=TRUE), ]
-  data$ATTweights = data$D + (1-data$D)*pi(data$X)/(1-pi(data$X)) 
-  additive.model.ipw = lm(Y~D*X, data=data, weights=ATTweights)
-  additive.model     = lm(Y~D*X, data=data)
-  estimates$additive[b]     = estimate.ATT(additive.model, data)
-  estimates$additive.ipw[b] = estimate.ATT(additive.model.ipw, data)
-}
-ggplot(estimates) + 
-  geom_histogram(aes(x=additive, y=after_stat(density)), alpha=.3, fill='orange', bins=50) +
-  geom_histogram(aes(x=additive.ipw, y=after_stat(density)), alpha=.3, fill='blue', bins=50)
-```
-
-Some people don't like inverse probability weighting. What they say is that often, some observations get way more weight --- and therefore influence on the least squares fit --- than others. Suppose we're estimating the ATT. Above, I've plotted a sample in which this will happen. The probability of treatment, $\pi(x)=\E[D_i \mid X_i=x]$, is drawn in purple. And the subpopulations means, $\mu(d,x)$, are drawn in as solid lines in red and green as usual. 
-You know these because this is a sample drawn from a population your coworker made up.
-Your coworker, who wrote the code that generated the fake data above, fits the additive bivariate model via unweighted least squares. They then use that model to estimate the ATT. Here's their estimate, which we'll call `the orange estimate'.
-
+Repeat Exercises A-E for the Average Treatment Effect on the whole population (ATE) instead of the ATT.
 $$
-\begin{aligned}
-\textcolor{orange}{\widehat{ATT}} &= \frac{1}{N_1} \sum_{i:D_i=1} \qty{\hat\mu(1,X_i) - \hat\mu(0,X_i)} \qfor N_1 = \sum_{i=1}^n D_i \qqtext{where} \\
-\hat\mu &= \argmin_{m \in \model} \sum_{i=1}^n \qty{m(D_i, X_i) - Y_i}^2 \qfor \\
-\model &= \qty{m(d, x) = b_0 + b_1 x + b_2 d + b_3 dx \ : \ x \in \R^4}
-\end{aligned}
+ATE = \frac{1}{m} \sum_{j=1}^m \qty{ \mu(1,x_j) - \mu(0,x_j) }.
 $$
 
-You suggest a small tweak: that they use inverse probability weighted least squares when they estimate $\mu(x)$. Here's your estimate, which we'll call `the blue estimate'.
-
-$$
-\begin{aligned}
-\textcolor{blue}{\widehat{ATT}} &= \frac{1}{N_1} \sum_{i:D_i=1} \qty{\hat\mu(1,X_i) - \hat\mu(0,X_i)} \qfor N_1 = \sum_{i=1}^n D_i \qqtext{where} \\
-\hat\mu &= \argmin_{m \in \model} \sum_{i=1}^n \qty{D_i+\frac{(1-D_i)\pi(X_i)}{1-\pi(X_i)}} \qty{m(D_i, X_i) - Y_i}^2 \qfor \\
-\model &= \qty{m(d, x) = b_0 + b_1 x + b_2 d + b_3 dx \ : \ x \in \R^4}
-\end{aligned}
-$$
-
-They argue that their estimator is better by producing a plot of the sampling distributions of the two estimators. In it, we see the sampling distribution of ATT estimators based on the interacted bivariate model, fit with (in blue) and without (in orange) inverse probability weights. And, as you can see, the two estimators have the same mean, but the inverse-probability-weighted version has a larger variance. To produce it, they've drawn `r B` samples of size n=`r n` with replacement from their population and calculated the two estimators. You know that their estimator only works because the regression model they're using is not misspecified --- $\mu(0,x)$ and $\mu(1,x)$ really are lines. To demonstrate their error, you want to make a plot like theirs, using the same estimators, but a slightly different population. 
-
-\subsection*{Part A}
-You try two things.
-\begin{enumerate}
-\item Changing their population so that $\mu(1,x)=x^2$, leaving $\mu(0,x)$ as a line. 
-\item Changing their population so that $\mu(0,x)=1+x^2$, leaving $\mu(1,x)$ as a line.
-\end{enumerate}
-Here, in some order, are the plots you get. Only one of these is useful in arguing their point. 
-Which one is it? Which of the two changes did you make to the population to get it? Explain how you know.
-
-```{r}
-#| layout-ncol: 2
-set.seed(5)
-
-mu = function(d, x){.2 + d*x^2 + (1-d)*(1+x) }
-pi = function(x){ 1 - .01 -.98*abs(cospi(x/2)) }
-
-m = 10000
-X = sample(seq(0,1,by=.3333), m, replace=T)
-D = rbinom(m, 1, pi(X))
-Y = mu(D,X) + .02*rnorm(m)
-pop = data.frame(X=X, D=D, Y=Y)
-
-estimate.ATT = function(model, data) {
-  X = data$X
-  D = data$D
-  muhat = function(d,x) { predict(model, newdata=data.frame(X=x,D=d)) }
-  mean(muhat(1,X[D==1]) - muhat(0, X[D==1]))
-}
-
-B = 5000
-estimates = data.frame(additive=rep(NA,B), additive.ipw=rep(NA,B)) 
-set.seed(7)
-for( b in 1:B ){
-  data = pop[sample(1:nrow(pop), n, replace=TRUE), ]
-  data$ATTweights = data$D + (1-data$D)*pi(data$X)/(1-pi(data$X)) 
-  additive.model.ipw = lm(Y~D*X, data=data, weights=ATTweights)
-  additive.model     = lm(Y~D*X, data=data)
-  estimates$additive[b]     = estimate.ATT(additive.model, data)
-  estimates$additive.ipw[b] = estimate.ATT(additive.model.ipw, data)
-}
-ggplot(estimates) + 
-  geom_histogram(aes(x=additive, y=after_stat(density)), alpha=.3, fill='orange', bins=50) +
-  geom_histogram(aes(x=additive.ipw, y=after_stat(density)), alpha=.3, fill='blue', bins=50)
-
-set.seed(5)
-
-mu = function(d, x){.2 + d*x + (1-d)*(1+x^2) }
-pi = function(x){ 1 - .01 -.98*abs(cospi(x/2)) }
-
-m = 10000
-X = sample(seq(0,1,by=.3333), m, replace=T)
-D = rbinom(m, 1, pi(X))
-Y = mu(D,X) + .02*rnorm(m)
-pop = data.frame(X=X, D=D, Y=Y)
-data = pop[sample(1:nrow(pop), n, replace=TRUE), ]
-summaries = data %>% group_by(D,X) %>% summarize(mu=mean(Y), n = n()) %>%
-                     group_by(D) %>% mutate(f=n/sum(n))
-
-B = 5000
-estimates = data.frame(additive=rep(NA,B), additive.ipw=rep(NA,B)) 
-set.seed(7)
-for( b in 1:B ){
-  data = pop[sample(1:nrow(pop), n, replace=TRUE), ]
-  data$ATTweights = data$D + (1-data$D)*pi(data$X)/(1-pi(data$X)) 
-  additive.model.ipw = lm(Y~D*X, data=data, weights=ATTweights)
-  additive.model     = lm(Y~D*X, data=data)
-  estimates$additive[b]     = estimate.ATT(additive.model, data)
-  estimates$additive.ipw[b] = estimate.ATT(additive.model.ipw, data)
-}
-ggplot(estimates) + 
-  geom_histogram(aes(x=additive, y=after_stat(density)), alpha=.3, fill='orange', bins=50) +
-  geom_histogram(aes(x=additive.ipw, y=after_stat(density)), alpha=.3, fill='blue', bins=50)
-```
-
-\newpage
-
-\subsection*{Part B}
-
-Suppose you'd been estimating the ATE instead of the ATT and you'd used appropriate weights ---
-$D_i/\pi(X_i) + (1-D_i)/(1-\pi(X_i))$ --- so that your estimator was unbiased. Would you see a problem with the unweighted approach using your coworker's population? What about with the two populations you tried in part A? Explain your answer. 
+:::
