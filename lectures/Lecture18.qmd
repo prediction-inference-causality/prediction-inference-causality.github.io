@@ -1,0 +1,603 @@
+---
+title: "Lecture 18"
+subtitle: "Inverse Probability Weighting"
+---
+
+
+# Misspecification and Summaries
+
+# Six Regression Models 
+
+{{< include shared-code.qmd >}}
+
+```{r}
+library(tidyverse)
+set.seed(1) 
+m = 1e6 
+pi = function(x) { ifelse(x <= 65, .2, .8) }
+mu = function(w, x) { 2 - (x-50)/30 + w*((x-50)/30)^2/2 }  
+
+X = 50+round(30*runif(m))
+W = 0 + (runif(m) <= pi(X))
+epsilon0 = rnorm(m)
+epsilon1 = rnorm(m)
+Y0 = mu(0,X) + .15*epsilon0
+Y1 = mu(1,X) + .15*epsilon1
+
+pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
+
+n = 10000
+data = pop[sample(nrow(pop), n, replace=TRUE),]
+
+prediction.function = function(model) { 
+  function(w, x) { 
+    predict(model, newdata=data.frame(W=w, X=x))
+  }
+}
+
+fits = list(
+B =  lm(Y ~ X, data=data),
+D =  lm(Y ~ W, data=data), 
+E =  lm(Y ~ W + I(X <= 65), data=data),
+A =  lm(Y ~ W + X, data=data),
+C =  lm(Y ~ W * I(X <= 65), data=data),
+F =  lm(Y ~ W * X, data=data))
+muhats = fits |> map(prediction.function)
+
+grid = expand_grid(W=c(0,1), X=seq(50,80,by=.01))
+predictions = muhats |> map(\(muhat) { 
+  grid$muhat = muhat(grid$W, grid$X)
+  grid
+}) |> bind_rows(.id='model') 
+
+
+plotX = \(w,x) x + .15*(2*w-1)
+```
+
+```{r} 
+#| out-height: 700
+
+mht.plot = scatter = ggplot(data) + 
+  geom_point(aes(x=plotX(W,X), y=Y, color=factor(W)), alpha=.025, size=.05, position=position_jitter(w=.15, h=0)) + 
+  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W)), geom="pointrange", alpha=.3, size=.5,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - sd(x), 
+                 fun.max = function(x) mean(x) + sd(x)) +
+  geom_bar(aes(x=plotX(W,X), y=15*after_stat(prop), fill=factor(W), color=factor(W)), 
+          alpha=.5, linewidth=.2) + 
+          xlab('') + ylab('') + 
+          guides(color='none', fill='none') +
+          scale_x_continuous(breaks=seq(50,80,by=5))
+
+mht.plot + 
+  geom_line(data=predictions, aes(x=X, y=muhat, color=factor(W)), linewidth=.5) + 
+  facet_wrap(~model, ncol=3)
+```
+
+$$
+\begin{aligned}
+\model_1 &= \qty{ m(w,x) = a    + bx \ : \ \text{ any numbers }\  a,b }   && \text{ one line } \\
+\model_2 &= \qty{ m(w,x) = a(w)        : \ \text{ any function }\  a(w) }   && \text{ horizontal lines } \\
+\model_3 &= \qty{ m(w,x) = a(w) + bx \ : \ \text{ any function }\ a(w) \ \text{ and number }\ b } && \text{ parallel lines } \\
+\model_4 &= \qty{ m(w,x) = a(w) + b(w)x \ : \ \text{ any functions }\ a(w),\ b(w) } && \text{ lines } \\
+\model_5 &= \qty{ m(w,x) = a(w) + b \operatorname*{1_{\le 65}}(x)  \ : \ \text{ any function } a(w) \ \text{ and number }\ b } && \text{ additive piecewise-constant } \\
+\model_6 &= \qty{ m(w,x) = a(w) + b(w) \operatorname*{1_{\le 65}}(x)  \ : \ \text{ any functions } a(w),\ b(w) } && \text{ piecewise-constant } 
+\end{aligned}
+$$
+
+None of these models fits the data particularly well. But one does give us an unbiased estimate of the ATT.
+  
+## See?
+
+```{r}
+#| cache: true
+set.seed(1) 
+
+estimates = function(rep) { 
+m = 1e6 
+pi = function(x) { ifelse(x <= 65, .2, .8) }
+mu = function(w, x) { 2 - (x-50)/30 + w*((x-50)/30)^2/2 }  
+
+X = 50+round(30*runif(m))
+W = 0 + (runif(m) <= pi(X))
+epsilon0 = rnorm(m)
+epsilon1 = rnorm(m)
+Y0 = mu(0,X) + .15*epsilon0
+Y1 = mu(1,X) + .15*epsilon1
+
+n = 10000
+pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
+data = pop[sample(nrow(pop), n, replace=TRUE),]
+
+fits = list(
+B =  lm(Y ~ X, data=pop),
+D =  lm(Y ~ W, data=pop), 
+E =  lm(Y ~ W + I(X <= 65), data=pop),
+A =  lm(Y ~ W + X, data=pop),
+C =  lm(Y ~ W * I(X <= 65), data=pop),
+F =  lm(Y ~ W * X, data=pop))
+muhats = fits |> map(prediction.function)
+
+ATT.estimates = muhats |> map(\(muhat) { 
+  data.frame(estimate=mean(muhat(1, pop$X[pop$W==1]) - muhat(0, pop$X[pop$W==1])))
+}) |> bind_rows(.id='model')
+ATT.estimates$true = mean(mu(1,pop$X[pop$W==1]) - mu(0,pop$X[pop$W==1]))
+ATT.estimates
+}
+
+ests = 1:100 |> map(estimates) |> bind_rows(.id='rep')
+```
+
+```{r}
+#| out-height: 700px
+theATT = mean(ests$true)
+ggplot(ests) +
+        geom_histogram(aes(x=estimate, y=after_stat(density)), bins=30, alpha=.3) + 
+        geom_vline(xintercept=theATT, color='green') + 
+        facet_wrap(~model, ncol=3, scales='free')
+```
+
+## Why?
+
+```{r} 
+#| out-height: 500px
+mht.plot 
+```
+
+- Let's think about what we're estimating: the ATT.
+- This is a weighted avearage of column means.
+
+$$
+\begin{aligned}
+\text{ATT} 
+&= \frac{1}{m_1}\sum_{j:w_j=1} \qty{ \mu(1,x_j) - \mu(0,x_j)} \qfor \mu(w,x) = \frac{\sum_{j: w_j,x_j=w,x } y_j}{\sum_{j: w_j,x_j=w} 1} \qand m_w = \sum_{j: w_j=w} 1 \\
+&= \sum_{x} \ingreen{p(1,x)} \qty{ \ingreen{\mu(1,x)} - \inred{\mu(0,x)}} \qfor p(w,x) = \frac{\sum_{j: w_j=w, x_j=x} 1}{\sum_{j: w_j=w} 1 } \\
+&= \sum_{w,x} \alpha(w,x) \mu(w,x) \qfor \alpha(w,x) = \begin{cases}+p(1,x) & \text{ if } w=1 \\ -p(1,x) & \text{ if } w=0 \end{cases}
+\end{aligned}
+$$
+
+- What you may notice is that, because these proportions $p(w,x)$ are piecewise-constant, they're in the model.
+
+## Claim
+
+- You'll get an unbiased estimate of the summary $\sum_{w,x}\alpha(w,x) \mu(w,x)$
+- if the regression model $\model$ contains at least one of ...
+    - the subpopulation mean function $\mu(w,x)$ 
+    - the weights $\alpha(w,x)$
+
+**Prove it**. 
+$$
+\textbf{Hint.} \qquad \frac{1}{n}\sum_{i=1}^n \qty{Y_i - \hat\mu(W_i,X_i)} m(W_i,X_i)  = 0 \qqtext{ for every } m \in \model 
+$$
+
+::: fragment
+
+:::
+
+
+## Weighted Least Squares
+
+
+
+- This sort of feels like an 'a stopped clock is right twice a day' thing.
+- We chose a 'bad model' for $\mu$ but it worked because it was a good model for $\alpha$.
+- But we can make this more systematic by using **weighted least squares**.
+
+$$
+\hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \quad \text{ satisfies } \quad \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - \hat\mu(W_i,X_i)} m(W_i,X_i)  = 0 \qqtext{ for every } m \in \model
+$$
+
+- Our weights should reflect our summary.
+- e.g. if we take $\gamma(w,x) = \abs{\alpha(w,x)}$, we're good if our model contains $m(w,x) = \text{sign}(\alpha(w,x))$.
+- For treatment effects, that means --- if we choose the right weights --- we just need to have indicators for treatment.
+
+## Inverse Probability Weighting
+
+```{r} 
+#| out-height: 500px
+mht.plot 
+```
+
+- This just sort of worked out for us 'by chance' with our block-randomized experiment.
+- But let's think about how to get the right weights in general. What are we doing?
+- We're averaging the the red and green curves over the distribution of the green points.
+
+$$
+\begin{aligned}
+\text{ATT} 
+= \sum_{x} \ingreen{p(1,x) \hat\mu(w,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(w,x)} \\
+\end{aligned}
+$$
+
+
+## Does the First Term Cause Any Trouble?
+
+$$
+\begin{aligned}
+\text{ATT} 
+= \sum_{x} \ingreen{p(1,x) \hat\mu(w,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(w,x)} \\
+\end{aligned}
+$$
+
+- If our model has treatment-group indicators, no.
+
+$$
+\begin{aligned}
+0 &= \E\qty[ \frac{1}{n}\sum_{i=1}^n \qty{Y_i - \hat\mu(W_i,X_i)} 1(W_i=1) ] \\
+&=\E\qty[ \qty{\mu(W_i,X_i) - \hat\mu(W_i,X_i)} 1(W_i=1) ] \\
+&=\E\qty[ \qty{\mu(1,X_i) - \hat\mu(1,X_i)} 1(W_i=1) ] \\
+&=\E\qty[ \qty{\mu(1,X_i) - \hat\mu(1,X_i)} \mid W_i=1 ] P(W_i=1) \\
+&= p_1 \sum_{x} \ingreen{p(1,x)} \qty{\mu(1,x) - \hat\mu(1,x)}
+\end{aligned}
+$$
+
+- Intuitively, this is because we're 'fitting the data in the right place'
+- We're averaging over the same distribution of points we've fit our curve to.
+- So, even if our model is 'bad' most places, its average is still right.
+
+
+## What About the Second?
+
+$$
+\begin{aligned}
+\text{ATT} 
+= \sum_{x} \ingreen{p(1,x) \hat\mu(w,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(w,x)} \\
+\end{aligned}
+$$
+
+- Even when our model has treatment-group indicators, it's still trouble. Let's try what we just did.
+
+$$
+\begin{aligned}
+0 &= \E\qty[ \frac{1}{n}\sum_{i=1}^n \qty{Y_i - \hat\mu(W_i,X_i)} 1(W_i=0) ] \\
+&=\E\qty[ \qty{\mu(W_i,X_i) - \hat\mu(W_i,X_i)} 1(W_i=0) ] \\
+&=\E\qty[ \qty{\mu(0,X_i) - \hat\mu(0,X_i)} 1(W_i=1) ] \\
+&=\E\qty[ \qty{\mu(,X_i) - \hat\mu(0,X_i)} \mid W_i=0 ] P(W_i=0) \\
+&= p_0 \sum_{x} \inred{p(0,x)} \qty{\mu(0,x) - \hat\mu(0,x)}
+\end{aligned}
+$$
+
+- This is not the right average. It's the one that occurs in the 'unadjusted gap', not the ATT.
+- We need to adjust for the fact that we're averaging over a different distribution of points.
+
+
+## The Second: A Weighted Version
+$$
+\begin{aligned}
+\text{ATT} 
+= \sum_{x} \ingreen{p(1,x) \hat\mu(w,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(w,x)} \\
+\end{aligned}
+$$
+
+- Recall what we know about weighted least squares.
+$$
+\hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \quad \text{ satisfies } \quad \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - \hat\mu(W_i,X_i)} m(W_i,X_i)  = 0 \qqtext{ for every } m \in \model
+$$
+
+- Let's try 'upweighting' the red points on the right side by the ratio of the number of green points to red ones.
+
+$$
+\begin{aligned}
+0 &= \E\qty[ \frac{1}{n}\sum_{i=1}^n \gamma(X_i) \qty{Y_i - \hat\mu(W_i,X_i)} 1(W_i=0) ] \qfor \gamma(x)= \frac{\ingreen{p(1,x)}}{\inred{p(0,x)}} \\
+&=\E\qty[ \gamma(X_i)\qty{\mu(W_i,X_i) - \hat\mu(W_i,X_i)} 1(W_i=0) ] \\
+&=\E\qty[ \gamma(X_i)\qty{\mu(0,X_i) - \hat\mu(0,X_i)} 1(W_i=1) ] \\
+&=\E\qty[ \gamma(X_i)\qty{\mu(,X_i) - \hat\mu(0,X_i)} \mid W_i=0 ] P(W_i=0) \\
+&= p_0 \sum_{x} \qty{\gamma(x) \inred{p(0,x)}} \qty{\mu(0,x) - \hat\mu(0,x)} \\
+&= p_0 \sum_{x} \qty{\frac{\ingreen{p(1,x)}}{\inred{p(0,x)}} \inred{p(0,x)}} \qty{\mu(0,x) - \hat\mu(0,x)} \\
+&= p_0 \sum_{x} \ingreen{p(1,x)} \qty{\mu(0,x) - \hat\mu(0,x)}
+\end{aligned}
+$$
+
+## Summary
+
+```{r} 
+#| out-height: 500px
+mht.plot.ipw = ggplot(data) + 
+  geom_point(aes(x=plotX(W,X), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.05) + 
+  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W), size=W + (1-W)*pi(X)/(1-pi(X))), geom="pointrange", alpha=.15, 
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - sd(x), 
+                 fun.max = function(x) mean(x) + sd(x)) +
+  geom_bar(aes(x=plotX(W,X), y=15*after_stat(prop), fill=factor(W), color=factor(W)), 
+          alpha=.5, linewidth=.2) + 
+          xlab('') + ylab('') + 
+          guides(color='none', fill='none', size='none') +
+          scale_x_continuous(breaks=seq(50,80,by=5)) + scale_size_area(max_size=1)
+
+mht.plot.ipw
+```
+
+
+$$
+\begin{aligned}
+\text{ATT} 
+= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x) \hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \frac{\ingreen{p(1,x)}}{p(w,x)}
+\end{aligned}
+$$
+
+- This is the 'inverse probability weighted least squares' estimate of the ATT.
+- We give equal weight to the green points because that's the distribution we're averaging over.
+- But we weight the red points by the ratio of the number of green points to red ones so they look like they have that distribution too.
+  
+
+
+## Summary
+
+```{r} 
+#| out-height: 500px
+data$weights = ifelse(data$W, 1, pi(data$X)/(1-pi(data$X)))
+
+ipwfits = list(
+B =  lm(Y ~ X, data=data, weights=weights),
+D =  lm(Y ~ W, data=data, weights=weights),
+E =  lm(Y ~ W + I(X <= 65), data=data, weights=weights),
+A =  lm(Y ~ W + X, data=data, weights=weights),
+C =  lm(Y ~ W * I(X <= 65), data=data, weights=weights),
+F =  lm(Y ~ W * X, data=data, weights=weights))
+
+muhats.ipw = ipwfits |> map(prediction.function)
+
+ATT.estimates.ipw = muhats.ipw |> map(\(muhat) { 
+  data.frame(estimate=mean(muhat(1, pop$X[pop$W==1]) - muhat(0, pop$X[pop$W==1])))
+}) |> bind_rows(.id='model')
+
+
+fits = list(
+B =  lm(Y ~ X, data=pop),
+D =  lm(Y ~ W, data=pop), 
+E =  lm(Y ~ W + I(X <= 65), data=pop),
+A =  lm(Y ~ W + X, data=pop),
+C =  lm(Y ~ W * I(X <= 65), data=pop),
+F =  lm(Y ~ W * X, data=pop))
+muhats = fits |> map(prediction.function)
+
+ATT.estimates = muhats |> map(\(muhat) { 
+  data.frame(estimate=mean(muhat(1, pop$X[pop$W==1]) - muhat(0, pop$X[pop$W==1])))
+}) |> bind_rows(.id='model')
+ATT.estimates$true = mean(mu(1,pop$X[pop$W==1]) - mu(0,pop$X[pop$W==1]))
+
+att.comparison = left_join(ATT.estimates, ATT.estimates.ipw, by='model') |> 
+    rename(unweighted=estimate.x, weighted=estimate.y)
+
+grid = expand_grid(W=c(0,1), X=seq(50,80,by=.01))
+predictions.ipw = muhats.ipw |> map(\(muhat) { 
+  grid$muhat = muhat(grid$W, grid$X)
+  grid
+}) |> bind_rows(.id='model') 
+predictions = muhats |> map(\(muhat) { 
+  grid$muhat = muhat(grid$W, grid$X)
+  grid
+}) |> bind_rows(.id='model') 
+
+
+mht.plot.ipw + 
+  geom_line(data=predictions.ipw, aes(x=X, y=muhat, color=factor(W)), linewidth=.5) + 
+  geom_line(data=predictions, aes(x=X, y=muhat, color=factor(W)), linewidth=.5, linetype='dashed') + 
+  facet_wrap(~model, ncol=3)
+```
+
+
+$$
+\begin{aligned}
+\text{ATT} 
+= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
+\end{aligned}
+$$
+
+- This is the 'inverse probability weighted least squares' estimate of the ATT.
+- We give equal weight to the green points because that's the distribution we're averaging over.
+- But we weight the red points by the ratio of the number of green points to red ones so they look like they have that distribution too.
+
+```{r}
+round(att.comparison[ , c('true', 'unweighted', 'weighted')], 3)
+```
+
+## This Works For Any Distribution of Assignments
+
+```{r}
+
+set.seed(1) 
+m = 1e6 
+pi = function(x) { .1 + .8*(x-50)/30 } 
+mu = function(w, x) { 2 - (x-50)/30 + w*((x-50)/30)^2/2 }  
+
+X = 50+round(30*runif(m))
+W = 0 + (runif(m) <= pi(X))
+epsilon0 = rnorm(m)
+epsilon1 = rnorm(m)
+Y0 = mu(0,X) + .15*epsilon0
+Y1 = mu(1,X) + .15*epsilon1
+
+pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
+
+n = 10000
+data = pop[sample(nrow(pop), n, replace=TRUE),]
+
+prediction.function = function(model) { 
+  function(w, x) { 
+    predict(model, newdata=data.frame(W=w, X=x))
+  }
+}
+
+
+mht.plot.ipw = ggplot(data) + 
+  geom_point(aes(x=plotX(W,X), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.05) + 
+  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W), size=W + (1-W)*pi(X)/(1-pi(X))), geom="pointrange", alpha=.15, 
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - sd(x), 
+                 fun.max = function(x) mean(x) + sd(x)) +
+  geom_bar(aes(x=plotX(W,X), y=15*after_stat(prop), fill=factor(W), color=factor(W)), 
+          alpha=.5, linewidth=.2) + 
+          xlab('') + ylab('') + 
+          guides(color='none', fill='none', size='none') +
+          scale_x_continuous(breaks=seq(50,80,by=5)) + scale_size_area(max_size=1)
+
+data$weights = ifelse(data$W, 1, pi(data$X)/(1-pi(data$X)))
+ipwfits = list(
+B =  lm(Y ~ X, data=data, weights=weights),
+D =  lm(Y ~ W, data=data, weights=weights),
+E =  lm(Y ~ W + I(X <= 65), data=data, weights=weights),
+A =  lm(Y ~ W + X, data=data, weights=weights),
+C =  lm(Y ~ W * I(X <= 65), data=data, weights=weights),
+F =  lm(Y ~ W * X, data=data, weights=weights))
+
+ATT.estimates.ipw = muhats.ipw |> map(\(muhat) { 
+  data.frame(estimate=mean(muhat(1, pop$X[pop$W==1]) - muhat(0, pop$X[pop$W==1])))
+}) |> bind_rows(.id='model')
+
+
+fits = list(
+B =  lm(Y ~ X, data=pop),
+D =  lm(Y ~ W, data=pop), 
+E =  lm(Y ~ W + I(X <= 65), data=pop),
+A =  lm(Y ~ W + X, data=pop),
+C =  lm(Y ~ W * I(X <= 65), data=pop),
+F =  lm(Y ~ W * X, data=pop))
+muhats = fits |> map(prediction.function)
+
+ATT.estimates = muhats |> map(\(muhat) { 
+  data.frame(estimate=mean(muhat(1, pop$X[pop$W==1]) - muhat(0, pop$X[pop$W==1])))
+}) |> bind_rows(.id='model')
+ATT.estimates$true = mean(mu(1,pop$X[pop$W==1]) - mu(0,pop$X[pop$W==1]))
+
+att.comparison = left_join(ATT.estimates, ATT.estimates.ipw, by='model') |> 
+    rename(unweighted=estimate.x, weighted=estimate.y)
+
+grid = expand_grid(W=c(0,1), X=seq(50,80,by=.01))
+predictions.ipw = muhats.ipw |> map(\(muhat) { 
+  grid$muhat = muhat(grid$W, grid$X)
+  grid
+}) |> bind_rows(.id='model') 
+predictions = muhats |> map(\(muhat) { 
+  grid$muhat = muhat(grid$W, grid$X)
+  grid
+}) |> bind_rows(.id='model') 
+
+
+mht.plot.ipw + 
+  geom_line(data=predictions.ipw, aes(x=X, y=muhat, color=factor(W)), linewidth=.5) + 
+  geom_line(data=predictions, aes(x=X, y=muhat, color=factor(W)), linewidth=.5, linetype='dashed') + 
+  facet_wrap(~model, ncol=3)
+```
+
+
+$$
+\begin{aligned}
+\text{ATT} 
+= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
+\end{aligned}
+$$
+
+- This is the 'inverse probability weighted least squares' estimate of the ATT.
+- We give equal weight to the green points because that's the distribution we're averaging over.
+- But we weight the red points by the ratio of the number of green points to red ones so they look like they have that distribution too.
+
+```{r}
+round(att.comparison[ , c('true', 'unweighted', 'weighted')], 3)
+```
+
+
+## Even Weird Ones
+
+```{r}
+
+set.seed(1) 
+m = 1e6 
+pi = function(x) { .5 + .3*sin(3*((x-50)/5)^2) } 
+mu = function(w, x) { 2 - (x-50)/30 + w*((x-50)/30)^2/2 }  
+
+X = 50+round(30*runif(m))
+W = 0 + (runif(m) <= pi(X))
+epsilon0 = rnorm(m)
+epsilon1 = rnorm(m)
+Y0 = mu(0,X) + .15*epsilon0
+Y1 = mu(1,X) + .15*epsilon1
+
+pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
+
+n = 10000
+data = pop[sample(nrow(pop), n, replace=TRUE),]
+
+prediction.function = function(model) { 
+  function(w, x) { 
+    predict(model, newdata=data.frame(W=w, X=x))
+  }
+}
+
+
+mht.plot.ipw = ggplot(data) + 
+  geom_point(aes(x=plotX(W,X), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.05) + 
+  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W), size=W + (1-W)*pi(X)/(1-pi(X))), geom="pointrange", alpha=.15, 
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - sd(x), 
+                 fun.max = function(x) mean(x) + sd(x)) +
+  geom_bar(aes(x=plotX(W,X), y=15*after_stat(prop), fill=factor(W), color=factor(W)), 
+          alpha=.5, linewidth=.2) + 
+          xlab('') + ylab('') + 
+          guides(color='none', fill='none', size='none') +
+          scale_x_continuous(breaks=seq(50,80,by=5)) + scale_size_area(max_size=1)
+
+data$weights = ifelse(data$W, 1, pi(data$X)/(1-pi(data$X)))
+
+ipwfits = list(
+B =  lm(Y ~ X, data=data, weights=weights),
+D =  lm(Y ~ W, data=data, weights=weights),
+E =  lm(Y ~ W + I(X <= 65), data=data, weights=weights),
+A =  lm(Y ~ W + X, data=data, weights=weights),
+C =  lm(Y ~ W * I(X <= 65), data=data, weights=weights),
+F =  lm(Y ~ W * X, data=data, weights=weights))
+
+ATT.estimates.ipw = muhats.ipw |> map(\(muhat) { 
+  data.frame(estimate=mean(muhat(1, pop$X[pop$W==1]) - muhat(0, pop$X[pop$W==1])))
+}) |> bind_rows(.id='model')
+
+
+fits = list(
+B =  lm(Y ~ X, data=pop),
+D =  lm(Y ~ W, data=pop), 
+E =  lm(Y ~ W + I(X <= 65), data=pop),
+A =  lm(Y ~ W + X, data=pop),
+C =  lm(Y ~ W * I(X <= 65), data=pop),
+F =  lm(Y ~ W * X, data=pop))
+muhats = fits |> map(prediction.function)
+
+ATT.estimates = muhats |> map(\(muhat) { 
+  data.frame(estimate=mean(muhat(1, pop$X[pop$W==1]) - muhat(0, pop$X[pop$W==1])))
+}) |> bind_rows(.id='model')
+ATT.estimates$true = mean(mu(1,pop$X[pop$W==1]) - mu(0,pop$X[pop$W==1]))
+
+att.comparison = left_join(ATT.estimates, ATT.estimates.ipw, by='model') |> 
+    rename(unweighted=estimate.x, weighted=estimate.y)
+
+grid = expand_grid(W=c(0,1), X=seq(50,80,by=.01))
+predictions.ipw = muhats.ipw |> map(\(muhat) { 
+  grid$muhat = muhat(grid$W, grid$X)
+  grid
+}) |> bind_rows(.id='model') 
+predictions = muhats |> map(\(muhat) { 
+  grid$muhat = muhat(grid$W, grid$X)
+  grid
+}) |> bind_rows(.id='model') 
+
+
+mht.plot.ipw + 
+  geom_line(data=predictions.ipw, aes(x=X, y=muhat, color=factor(W)), linewidth=.5) + 
+  geom_line(data=predictions, aes(x=X, y=muhat, color=factor(W)), linewidth=.5, linetype='dashed') + 
+  facet_wrap(~model, ncol=3)
+```
+
+
+$$
+\begin{aligned}
+\text{ATT} 
+= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
+\end{aligned}
+$$
+
+- This is the 'inverse probability weighted least squares' estimate of the ATT.
+- We give equal weight to the green points because that's the distribution we're averaging over.
+- But we weight the red points by the ratio of the number of green points to red ones so they look like they have that distribution too.
+
+```{r}
+round(att.comparison[ , c('true', 'unweighted', 'weighted')], 3)
+```
