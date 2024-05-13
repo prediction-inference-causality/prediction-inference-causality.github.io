@@ -1,0 +1,57 @@
+
+```{r}
+#| label: ga-population
+set.seed(4)
+m = 7233584
+n = 625
+
+b0 = floor(.7*m)
+b1 = ceiling(.3*m)
+y0 = rbinom(n=b0,size=1,prob=.68)
+y1 = rbinom(n=b1,size=1,prob=.74)
+dfpop = data.frame(y=c(y0,y1), x=c(rep(0,b0),rep(1,b1)))
+dfpop = dfpop[sample(1:m),] # shuffle the rows
+x = dfpop$x
+y = dfpop$y
+```
+
+```{r}
+#| label: ga-sample
+# Generate Sample Data for us (J1) and three friends (J2,J3,JM)
+set.seed(0)
+J1 = sample(1:m,size=n,replace=T)
+J2 = sample(1:m,size=n,replace=T)
+J3 = sample(1:m,size=n,replace=T)
+JM = sample(1:m,size=n,replace=T)
+
+J = J1
+dfsam = dfpop[J,]
+X = dfsam$x
+Y = dfsam$y
+```
+
+```{r}
+#| label: ga-maps
+#| cache: true
+library(usmap)
+ga.shape = us_map(include = c("GA"))
+
+# Create fake locations for the people in our population
+# by taking random convex combinations of state vertices
+# To reduce computation, we'll have 10K locations + jitter
+L = 10000 
+V = nrow(ga.shape)
+weights = abs(rt(L*V,1))
+dim(weights) = c(L,V)
+weights = (1/rowSums(weights)) * weights 
+base.x = weights %*% ga.shape$x
+base.y = weights %*% ga.shape$y
+base.ind = 1 + ( (0:(m-1)) %% L )
+locations = data.frame(x=base.x[base.ind] + rnorm(m, sd=.01),
+                       y=base.y[base.ind] + rnorm(m, sd=.01))
+
+ga = ggplot() + 
+    geom_polygon(data=ga.shape, aes(x = x, y = y), 
+                 fill="white", color="black") + 
+    coord_fixed() + blank.theme
+```

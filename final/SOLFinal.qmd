@@ -1,0 +1,642 @@
+---
+title: "QTM 220 Final Exam (12/7)"
+format: pdf
+execute:
+  echo: false
+  warning: false
+editor: visual
+---
+
+\subsection*{Problem 1}
+
+Suppose you have a sample $Y_1,Y_2...,Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma$.
+
+Consider the following estimator for $\mu$: $\tilde{Y} = \frac{1}{2n}\sum_{i=1}^n Y_i$
+
+\subsubsection*{Part A}
+
+What is $E[\tilde{Y}]$?
+
+\bigskip
+
+\color{red}
+
+$$E[\tilde{Y}] = E[\frac{1}{2n}\sum_{i=1}^n Y_i]$$ $$= \frac{1}{2n} E[\sum_{i=1}^n Y_i]$$
+
+$$= \frac{1}{2n} \sum_{i=1}^n E[Y_i]$$ by linearity of expectations
+
+$$= \frac{1}{2n} \sum_{i=1}^n E[Y]$$ by IID
+
+$$= \frac{1}{2n} \sum_{i=1}^n \mu$$ by definition
+
+$$= \frac{1}{2n} n \mu$$
+
+$$= \frac{n}{2n} \mu$$
+
+$$= \frac{1}{2} \mu$$
+
+\color{black}
+
+\subsubsection*{Part B}
+
+What is the bias of $E[\tilde{Y}]$ for $\mu$?
+
+\bigskip
+
+\color{red}
+
+$E[\tilde{Y} - \mu]$
+
+$=\frac{1}{2}\mu - \mu$
+
+$=\frac{-\mu}{2}$ \color{black}
+
+\subsubsection*{Part C}
+
+Showing your work, calculate $Var[\tilde{Y}]$.
+
+\bigskip
+
+\color{red}
+
+$$Var[\tilde{Y}] = V[\frac{1}{2n}\sum_{i=1}^n Y_i]$$
+
+$$ = (\frac{1}{2n})^2 V[\sum_{i=1}^n Y_i]$$
+
+$$ = (\frac{1}{2n})^2 \sum_{i=1}^n V[Y]$$ because IID, covariances are 0
+
+$$ = (\frac{1}{2n})^2 \sum_{i=1}^n \sigma^2$$ by definition
+
+$$ = (\frac{1}{2n})^2 n \sigma^2$$
+
+$$ = \frac{n}{(2n)^2} \sigma^2$$
+
+$$ = \frac{1}{4n} \sigma^2$$
+
+```{=tex}
+\color{black}
+\subsubsection*{Part D}
+```
+How does $Var[\tilde{Y}]$ compare to $Var[\bar{Y}]$ (where $\bar{Y} = \frac{1}{n}\sum_{i=1}^n Y_i$)?
+
+\bigskip
+
+\color{red}
+
+Similar steps show that $V[\bar{Y}] = \frac{\sigma^2}{n}$
+
+$\frac{1}{n} > \frac{1}{4n}$ so our $\tilde{Y}$ estimator has a lower variance than the sample mean. But the estimator is biased, so we probably wouldn't want to use it over the mean.
+
+\color{black}
+
+\subsection*{Problem 2}
+
+Suppose we have a sample of $Y_1 \ldots Y_n$ and binary $X_1 \ldots X_n$ stored in an \textbf{R} dataframe \`df' with $n$ rows. We run this code.
+
+```{r}
+#| echo: false
+library(ggplot2)
+n <- 500
+x <- c(rep(0,n/2),rep(1,n/2))
+set.seed(220220)
+y <- 2.6*x +  rnorm(n) + runif(n,-1,1)
+
+
+df <- data.frame(y,x)
+
+
+
+q2<- ggplot(data = df, aes(x = x, y = y)) +
+  geom_jitter(width=.25) +
+  geom_hline(yintercept=mean(df$y[df$x==0]), linetype="dashed")+ 
+   geom_hline(yintercept=mean(df$y[df$x==1]), linetype="dashed")+ 
+  xlab("x") +
+  ylab("y") +
+  theme_bw() 
+
+```
+
+```{r}
+#| echo: true
+B=10000
+theta<- rep(NA,B)
+for( b in 1:B ){
+bootind = sample(1:n,size=n,replace=T)
+dfboot = df[bootind,]
+theta[b]<- (mean(dfboot$y[dfboot$x==1])-mean(dfboot$y[dfboot$x==0]))
+}
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the vector Y's elements
+#|  -  Jittered Scatterplot of X and Y
+ggplot() + geom_histogram(aes(x=y,     y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(y)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(y)+c(-1,1)*sd(y)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(y), xmin=mean(y)-1.96*sd(y), xmax=mean(y)+1.96*sd(y), y=.025)) + theme_bw() + xlab('') + ylab('')
+
+q2 
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the theta's elements
+
+ggplot() + geom_histogram(aes(x=theta, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(theta)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(theta)+c(-1,1)*sd(theta)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(theta), xmin=mean(theta)-1.96*sd(theta), xmax=mean(theta)+1.96*sd(theta), y=.25)) + theme_bw() + xlab('') + ylab('')
+
+```
+
+\subsection*{Part a}
+
+What does this code calculate? State it in words and mark it with a 'a', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+sd(theta)
+```
+
+\color{red}
+
+The bootstrap sampling distribution's standard deviation for the difference in the mean of y between x=1 and x=0. Estimated standard error. It's the distance between the solid vertical and either dashed vertical line on the theta sampling distribution histogram. \color{black}
+
+\subsection*{Part b}
+
+What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+(mean(y[x==1])-mean(y[x==0])) + 1.96*(sd(y[x==1])/sqrt(n1) + sd(y[x==0])/sqrt(n0))
+(mean(y[x==1])-mean(y[x==0])) - 1.96*(sd(y[x==1])/sqrt(n1) + sd(y[x==0])/sqrt(n0))
+
+```
+
+\color{red}
+
+A 95% confidence interval --- based on normal approximation --- for the difference in means for the population from which this sample was drawn. This is indicated by the horizontal segment (with a dot in the middle) on the sampling distribution histogram (theta). \color{black}
+
+\subsection*{Part c}
+
+How could you calculate roughly the same thing as in part b using 'sd(theta)'
+
+\color{red}
+
+We can use the standard deviation of the bootstrap sampling distribution as our estimate of standard error.
+
+```{=tex}
+\begin{verbatim}
+(mean(y[x==1])-mean(y[x==0]))  + 1.96 * sd(theta)
+(mean(y[x==1])-mean(y[x==0]))  - 1.96 * sd(theta)
+\end{verbatim}
+```
+\color{black}
+
+\subsection*{Part d}
+
+Why does part c not include $n_1$ or $n_0$?
+
+\color{red}
+
+We are using the bootstrap estimated sampling distribution to directly estimate standard error. The estimated sampling distribution already takes the sample size (and the subsample of treated and untreated) into account.
+
+\color{black}
+
+\subsection*{Problem 3}
+
+Consider the following data set with treatment $d$, covariate $x$, and outcome $y$, which has been fit with a linear interactive model. Note that the treated units with $d=1$ are denoted as triangles, while the control units with $d=0$ are denoted with circles. The regression line for the treated units is solid, while the regression line for the control units is dashed.
+
+```{r}
+x <- c(0,2,4,0,0,2,4,4)
+y <- c(2,4,6,12.25,8,5.25,3.25,1)
+d <- c(1,1,1,0,0,0,0,0)
+#plot(x,y,pch=c(19,19,19,1,1,1,1,1))
+#abline(lm(y[d==0] ~x[d==0]),lty=2)
+#abline(lm(y[d==1] ~x[d==1]))
+
+df<- data.frame(x=x,y=y,d=d)
+m1<- lm(y[d==0] ~x[d==0],data=df)
+m2<- lm(y[d==1] ~x[d==1], data=df)
+plot<- ggplot(data = df, aes(x = x, y = y)) + geom_point(aes(shape=as.factor(d)),size=2) + scale_y_continuous(breaks = seq(0, 13, by = 1)) + geom_abline(slope=m1$coef[2], intercept=m1$coef[1], linetype="dashed")+geom_abline(slope=m2$coef[2], intercept=m2$coef[1])
+
+plot + theme(legend.position="none")
+```
+
+\subsubsection{Part a}
+
+What is the $\widehat{ATE}$ based on this model and data? Show your calculations.
+
+\color{red}
+
+$\frac{1}{8}[(2-10)+(2-10)+(2-10)+(4-6)+(4-6)+(6-2)+(6-2)+(6-2)] = -2$
+
+\color{black}
+
+\subsubsection{Part b}
+
+What is the $\widehat{ATT}$ based on this model and data? Show your calculations.
+
+\color{red}
+
+$\frac{1}{3}[(2-10)+(4-6)+(6-2)] = -2$ \color{black}
+
+\subsubsection{Part c}
+
+What is the $\widehat{ATC}$ based on this model and data? Show your calculations.
+
+\color{red}
+
+$\frac{1}{5}[(2-10)+(2-10)+(4-6)+(6-2)+(6-2)] = -2$ \color{black}
+
+\subsection*{Problem 4}
+
+We run an experiment in which a treatment, $D$, is randomly assigned to participants conditional on sex. The table below shows our data, including our outcome of interest, $Y$.
+
+```{=tex}
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+Sex & Treatment (D) & Outcome (Y) & Y(1) & Y(0) \\
+\hline
+Male & 1 & 20 & & \\
+\hline
+Male & 0 & 5 & & \\
+\hline
+Male & 0 & 10 & & \\
+\hline
+Male & 0 & 5 & & \\
+\hline
+Female & 1 & 10 & & \\
+\hline
+Female & 1 & 5 & & \\
+\hline
+Female & 0 & 5 & & \\
+\hline
+Female & 0 & 0 & & \\
+\hline
+Female & 0 & 5 & & \\
+\hline 
+Female & 1 & 10 & & \\
+\hline
+Female & 0 & 5 & & \\
+\hline 
+Female & 1 & 5 & & \\
+\hline
+\end{tabular}
+```
+\subsubsection*{Part a}
+
+Fill in the table with potential outcomes based on the observed data. Put a question mark (?) in the cells for which you do not have data.
+
+\subsubsection*{Part b}
+
+What is the probability of receiving treatment for males? What is the probability of receiving treatment for females?
+
+\color{red}
+
+$P(D=1|Male) = \frac{1}{4}$
+
+$P(D=1|Female) = \frac{1}{2}$ \color{black}
+
+\subsubsection*{Part c}
+
+What is the treatment effect among males? What is the treatment effect among females?
+
+\color{red}
+
+Males: $20 - \frac{5+10+5}{3} = 20 - \frac{20}{3} = 13.333$
+
+Females: $\frac{10+5+10+5}{4} - \frac{5+0+5+5}{4} = \frac{30}{4} - \frac{15}{4} = 7.5 - 3.75 = 3.75$ \color{black}
+
+\subsubsection*{Part d}
+
+If you ignored the conditional randomization and calculated the average treatment effect without accounting for sex, what would your estimate be?
+
+\color{red}
+
+$\frac{20+10+5+10+5}{5} - \frac{5+10+5+5+0+5+5}{7} = \frac{50}{5} - \frac{35}{7} = 10 - 5 = 5$ \color{black}
+
+\subsubsection*{Part e}
+
+To analyze our data, we are interested in fitting the following model: $$Y_i = \beta_0 + \beta_1 D_i + \beta_2 Sex_i + \beta_3 D_i:Sex_i$$ where $Sex_i =1$ for males and $=0$ for females. Fill in the table below using $\beta$s
+
+```{=tex}
+\begin{tabular}{|c|c|}
+\hline
+& $\beta$s \\
+\hline 
+Avg Y [Treated, Male] & \color{red} $\beta_0 + \beta_1 + \beta_2 + \beta_3$ \color{black} \\
+\hline 
+Avg Y [Control, Male] & \color{red} $\beta_0 + \beta_2$ \color{black} \\
+\hline 
+Avg Y [Treated, Female] & \color{red} $\beta_0 + \beta_1$ \color{black}\\
+\hline 
+Avg Y [Control, Female] & \color{red}$\beta_0$ \color{black}\\
+\hline 
+$\hat{ATE}_{Male}$ & \color{red} $\beta_1 + \beta_3$ \color{black} \\
+\hline 
+$\hat{ATE}_{Female}$ & \color{red} $\beta_1$ \color{black} \\
+\hline
+\end{tabular}
+```
+\subsubsection*{BONUS: Part f}
+
+When we run this as an interactive regression in R, why might we be concerned about using the standard errors lm() gives us?
+
+\color{red}
+
+The standard errors from lm() assume homoskedasticity-- that errors are constant-- which they might not be. We should consider using the sandwich standard errors that are heteroskedasticity consistent
+
+\color{black}
+
+\subsection*{Problem 5}
+
+Consider the following data with four observations.
+
+```{r}
+x <- c(1,2,3,4)
+y <- c(2,4,1,3)
+plot(x,y,pch=19,xlim=c(0,5),ylim=c(-2,6))
+```
+
+Our goal is to use leave one out cross-validation to choose between a linear regression model and a quadratic regression model for this data. Below we have plotted these data four times. In the top left panel, the left-most observation has been left out (denoted by an open circle). In the top right, the second observation has been left out. In the bottom left, the third observation has been left out. In the bottom right, the right-most observation has been left out.
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+
+x <- c(1,2,3,4)
+y <- c(2,4,1,3)
+#par(mfrow=c(2,2))
+plot(x,y,pch=c(1,19,19,19),xlim=c(0,5),ylim=c(-2,6))
+plot(x,y,pch=c(19,1,19,19),xlim=c(0,5),ylim=c(-2,6))
+plot(x,y,pch=c(19,19,1,19),xlim=c(0,5),ylim=c(-2,6))
+plot(x,y,pch=c(19,19,19,1),xlim=c(0,5),ylim=c(-2,6))
+```
+
+\subsubsection{Part A}
+
+On the figure above, draw a linear model for each of the plots based on the non-left-out data.
+
+\subsubsection{Part B}
+
+On the figure above, draw the residuals from the linear models to the left-out observation for each of the plots.
+
+\subsubsection{Part C}
+
+On the figure above, draw a quadratic regression line (i.e., line that can be parabolic) for each of the plots based on the non-left-out data.
+
+\subsubsection{Part D}
+
+On the figure above, draw the residuals from the quadratic models to the left-out observation for each of the three plots.
+
+\subsubsection{Part E}
+
+Based on the residuals in parts B and D, which model is preferred?
+
+\color{red}
+
+the linear model is preferred; the quadratic yields much larger residuals for the left out data (it is overfit) \color{black}
+
+\subsection*{Problem 6}
+
+\subsubsection*{Part A}
+
+We have collected a sample of $y$, $x$, and $z$.
+
+```{r}
+#| echo: false
+
+set.seed(220)
+n=100
+z<- runif(n,-5,10)
+x<- rnorm(n,20,2) + (-2)*z
+y<- 2*x + (.85)*z + rnorm(n,0,2)
+
+df<- data.frame(z=z,x=x,y=y)
+
+modsimp<- lm(y~x,data=df)
+
+modmulti<- lm(y~x+z,data=df)
+
+modyz<- lm(y~z,data=df)
+residyz<- residuals(modyz)
+modxz<- lm(x~z,data=df)
+residxz<- residuals(modxz)
+rdf<- data.frame(ryz=residyz,rxz=residxz)
+```
+
+We run a simple regression $lm(y \sim x)$ and get the following output:
+
+```{r}
+#| echo: false
+#summary(modsimp)
+modsimp
+```
+
+We run a multiple regression $lm(y \sim x+z)$ and get the following output:
+
+```{r}
+#| echo: false
+#summary(modmulti)
+modmulti
+```
+
+The following plots show our data:
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Scatterplot of x and y
+#|  -  Scatterplot of residuals from lm(x~ z) and lm(y~ z)
+a1<- ggplot(data = df, aes(x = x, y = y)) +
+  geom_point() + xlim(-6,15)+ylim(-30,45) + xlab("x") +
+  ylab("y") + geom_abline(slope=modsimp$coef[2], intercept=modsimp$coef[1], linetype="dashed") +
+  theme_bw()
+
+a2<- ggplot(data = rdf, aes(x = rxz, y = ryz)) +
+  geom_point() + xlim(-6,15)+ylim(-30,45) +  xlab("r_(x~z)") +
+  ylab("r_(y~z)") + geom_abline(slope=modmulti$coef[2], intercept=modmulti$coef[1], linetype="dashed") +
+  theme_bw()
+
+
+a1
+a2
+```
+
+What is the slope of the line in Figure 5? (write a number)
+
+\bigskip
+
+\color{red}
+2.0064
+\color{black}
+
+\bigskip
+
+\subsubsection*{Part B}
+
+Which plot (figure 4 or figure 5) provides the residuals from the multiple regression $y \sim x + z$?
+
+\bigskip 
+ 
+\color{red}
+Figure 5
+\color{black}
+
+\subsection*{Problem 7}
+
+\subsubsection*{Part A}
+
+Suppose we want $\beta_1$ from $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i + \beta_3 x_i*z_i + e_i$ but we run the regression $lm (y\sim x)$ without $z$ or the interaction term. We have de-meaned our variables $x_i$ and $z_i$ such that $\bar{x}=\sum_{i=1}^n x_i =0$ and $\bar{z}=\sum_{i=1}^n z_i =0$. Derive what your coefficient on $x$ from $lm (y\sim x)$, which is $\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$, will be in terms of $\beta$s and \textbf{justify your steps}. Hint: you can relabel $x_i*z_i$ as a different variable, $w_i$.
+
+\bigskip
+
+\color{red}
+
+The coefficient on $x$ from $lm (y\sim x)$ is $$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$$
+
+Plug in $y_i$ defined by the multivariate regression: $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i + \beta_3 x_i* z_i+ e_i$
+
+Let's redefine $x_i*z_i = w_i$
+
+$y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i + \beta_3 w_i + e_i$
+
+$$\frac{\sum_{i=1}^n x_i (\beta_0 + \beta_1 x_i + \beta_2 z_i +  \beta_3 w_i + e_i)}{\sum_{i=1}^n x_i^2 }$$
+
+Distribute
+
+$$\frac{\sum_{i=1}^n x_i \beta_0 }{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_1 x_i}{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_2 z_i }{\sum_{i=1}^n x_i^2 } + \frac{\sum_{i=1}^n x_i \beta_3 w_i }{\sum_{i=1}^n x_i^2 }+  \frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 }$$ Let's work through each term.
+
+$$\frac{\sum_{i=1}^n x_i \beta_0 }{\sum_{i=1}^n x_i^2 } = \frac{ \beta_0 \sum_{i=1}^n x_i }{\sum_{i=1}^n x_i^2 } = \frac{ \beta_0 *0 }{\sum_{i=1}^n x_i^2 } = 0$$
+
+as $x$ is demeaned, $\sum x_i =0$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i \beta_1 x_i}{\sum_{i=1}^n x_i^2 } = \frac{  \beta_1 \sum_{i=1}^n x_i x_i}{\sum_{i=1}^n x_i^2 } = \beta_1$$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i \beta_2 z_i }{\sum_{i=1}^n x_i^2 } = \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 }$$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i \beta_3 w_i }{\sum_{i=1}^n x_i^2 } = \frac{\beta_3 \sum_{i=1}^n x_i w_i }{\sum_{i=1}^n x_i^2 }$$
+
+\bigskip
+
+$$\frac{\sum_{i=1}^n x_i  e_i}{\sum_{i=1}^n x_i^2 } = \frac{0}{\sum_{i=1}^n x_i^2 } =0$$ we know that $\sum_{i=1}^n x_i e_i =0$ from the first order conditions on our least squares estimator (we chose the intercept and coefficient(s) that minimize the sum of squared residuals)
+
+\bigskip
+
+Thus we have
+
+$$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 } = \beta_1 + \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 } + \frac{\beta_3 \sum_{i=1}^n x_i w_i }{\sum_{i=1}^n x_i^2 }$$ Plugging back in for $w_i$, $$\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 } = \beta_1 + \frac{\beta_2 \sum_{i=1}^n x_i z_i }{\sum_{i=1}^n x_i^2 } + \frac{\beta_3 \sum_{i=1}^n x_i z_i x_i }{\sum_{i=1}^n x_i^2 }$$
+
+\color{black}
+
+\subsubsection*{Part B}
+
+```{r}
+#| echo: false
+
+p3n <- 200
+z <- c(rep(0,p3n/2),rep(1,p3n/2))
+set.seed(220220)
+x <-   rnorm(p3n,mean=1,sd=1) + z*rnorm(p3n,mean=3,sd = 1)
+y <- 12 + (-3)*x + (4)*z + 8*x*z + rnorm(p3n) + runif(p3n,-4,6)
+
+
+dfp3 <- data.frame(y,x,z)
+
+q1 <- ggplot(data = dfp3, aes(x = x, y = y)) +
+  geom_point(aes(shape = factor(z)),size = 1,alpha=.5) +
+  scale_shape_manual(values = c(1,19), label = c("z=0","z=1")) +
+  xlab("x") +
+  ylab("y") +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        legend.box.just = "left",
+        legend.justification = c("left","top"),
+        legend.position = c(0,1),
+        legend.margin = margin(6,6,6,6),
+        legend.title = element_blank(),
+        legend.box.background = element_rect(color="black",size=1))
+
+q2<- ggplot(data = dfp3, aes(x = x, y = z)) +
+  geom_jitter(height=.25) +  xlab("x") +
+  ylab("z") +
+  theme_bw()
+
+
+
+modone<- lm(y~x+z+x:z,data=dfp3)
+modtwo<- lm(z ~ x, data=dfp3)
+modthree<- lm(x*z ~ x,data=dfp3)
+modfour<- lm(y~x,data=dfp3)
+```
+
+We have collected $y$, $x$, and a binary variable $z$. The scatter plots below show our data.
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Scatterplot 1
+#|  -  Scatterplot 2 (jittered)
+q1
+q2
+
+```
+
+Do you expect the coefficient on $x$ from the simple regression of $y$ on $x$ ($lm(y\sim x)$) to be: (choose one, no explanation needed)
+
+```{=tex}
+\begin{itemize}
+\item \color{red} Positive \color{black}
+\item Negative
+\item Zero 
+\end{itemize}
+```
+\subsubsection*{BONUS: Part C}
+
+We then run the regression $lm(y \sim x+ z+x*z)$ which gives us the following output:
+
+```{r}
+#summary(modone)
+modone
+```
+
+And we run the regression $lm(z \sim x)$ which gives us the following output:
+
+```{r}
+#summary(modtwo)
+modtwo
+```
+
+And we run the regression $lm(x*z \sim x)$ which gives us the following output:
+
+```{r}
+#summary(modthree)
+modthree
+```
+
+\bigskip
+
+Use these outputs to calculate the coefficient on $x$ from the simple regression $lm(y\sim x)$. Explain your steps and define any notation you use. Plug in the estimates from your output (you can leave it as an equation).
+
+\color{red}
+$$-2.968 + (3.819) * 0.19954 + (8.010) * 1.014 = 5.916$$
+\color{black}
+```{r}
+modfour
+```

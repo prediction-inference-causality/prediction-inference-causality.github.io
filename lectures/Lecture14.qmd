@@ -1,0 +1,677 @@
+---
+title: "QTM 220 Lecture 14"
+subtitle: "Least Squares Regression in Linear Models"
+---
+
+
+
+# A Problem With Subsample Averages
+
+
+## Sometimes There Isn't Much to Average
+
+{{< include shared-code.qmd >}}
+{{< include ca-income.qmd >}}
+
+```{r}
+#| out-height: 400px
+
+ggplot(earnings) + 
+  geom_point(aes(x=education, y=income), color='#F7766D',size=dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.3)) +
+  scale_x() + scale_y() + guides(color='none')
+```
+
+- Very few people in our California CPS sample have less than 11 years of education.
+  - There's a good reason for this: CA law requires residents stay in school until they're 18.
+  - And usually, if you're 18 year or older, you've gotten to 11th grade.
+- But that means our 8th-10th grade income averages are based on very few people.
+- And that makes them very sensitive to who, exactly, is in the sample.
+
+## Sensitivity
+
+```{r}
+#| cache: true
+
+loo.means = \(rows) map(1:nrow(rows), \(i) mean(rows[-i,]$income)) |> unlist() 
+loo = earnings |> group_by(education) |> 
+                  group_modify(\(rows, group) 
+                    data.frame(income = loo.means(rows)))
+
+boot = map(1:100, \(bb) {
+  boot.sam = earnings[sample(nrow(earnings), replace=TRUE),]
+  boot.sam |> group_by(education) |> summarize(income=mean(income))
+}) |> bind_rows()
+```
+
+```{r}
+#| out-height: 500px
+#| layout-ncol: 2
+#| fig-asp: .6
+
+earnings$type = 'individual incomes'
+loo$type = 'leave-one-out means'
+boot$type = 'bootstrap means'
+combined = rbind(earnings[, c('education','type','income')], loo, boot)
+combined$type = factor(combined$type, levels=c('individual incomes', 'leave-one-out means', 'bootstrap means'))
+education.levels = c(8,12,16,20)
+
+ggplot(combined[combined$education %in% education.levels & 
+                combined$type %in% c('individual incomes', 'leave-one-out means'), ]) + 
+  geom_point(aes(x=factor(type), color=factor(type), y=income), size=2*dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.2)) + 
+  facet_grid(cols=vars(education)) + guides(color='none') + scale_y(c(0,200000))
+
+ggplot(combined[combined$education %in% education.levels & 
+                combined$type %in% c('individual incomes', 'bootstrap means'), ]) + 
+  geom_point(aes(x=factor(type), color=factor(type), y=income), size=2*dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.2)) + 
+  facet_grid(cols=vars(education)) + guides(color='none') + scale_y(c(0,200000))
+```  
+
+- If we leave even one person out of our 8th grade average, it changes a fair amount.
+  - Each person's income is 1/`{r} sum(earnings$education==8)`th of that average.
+  - We can see those changes in the 'leave-one-out means' plot on the left.
+- That's not a problem with the 12th grade average.
+  - Each person's income is 1/`{r} sum(earnings$education==12)`th of that average.
+  - And the leave-one-out means barely change.
+- We see a more 'statistical' version of this by looking at the bootstrap means plot on the right.
+  - The spread of these bootstrap means is a good approximation to the spread \
+    we get in the actual sample means when we sample from the population.
+  - And it's *huge* for folks with 8th grade educations.
+
+
+## Sometimes There's Nothing to Average
+  
+```{r}
+#| out-height: 500px
+#| fig-asp: .4
+race.categories = c('White only', 'Black only', 'Asian only', 'Hawaiian/Pacific Islander only (HP)')
+mean_sd = function(x) { list(y=mean(x), ymin=mean(x)-sd(x), ymax=mean(x)+sd(x)) }
+ggplot(earnings[earnings$race %in% race.categories & earnings$education %in% education.levels, ]) + 
+  geom_point(aes(x=race, y=income, color=race), size=dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.3)) +
+  stat_summary(aes(x=race, y=income), geom="pointrange", fun.data=mean_sd, size=.5, alpha=.7) +
+
+  facet_grid(cols=vars(education)) + guides(color='none', x=guide_axis(angle=45)) + scale_y(c(0,200000)) 
+```
+
+- When we break things out in additional dimensions, e.g. by race, we see a bigger problem.
+- We can't even take an average of Black survey respondents with 8th grade educations.
+- There's nobody in that column to average.
+
+## Often.
+```{r}
+#| out-height: 500px
+#| fig-asp: .4
+counties = c('alameda', 'san francisco', 'los angeles', 'orange')
+cearnings = earnings[earnings$county %in% counties, ]
+cearnings$county = factor(cearnings$county, levels=counties) 
+ggplot(cearnings[cearnings$education %in% education.levels & cearnings$county %in% counties, ]) +
+  geom_point(aes(x=county, y=income, color=county), size=dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.05)) +
+  stat_summary(aes(x=county, y=income), geom="pointrange", fun.data=mean_sd, size=.5, alpha=.7) +
+  facet_grid(cols=vars(education)) +
+  guides(color='none', x=guide_axis(angle=45)) + scale_y(c(0,200000)) 
+```
+
+- When we break things out by county, we have empty columns too.
+- We've sampled nobody in San Francisco with an 8th grade education.
+- This isn't an edge case. This is common.
+
+
+## Extremely Common.
+```{r}
+#| out-height: 500px
+ggplot(cearnings[cearnings$education %in% education.levels & 
+                 cearnings$county %in% counties &
+                 cearnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=race, y=income, color=race), size=2*dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.05)) +
+  stat_summary(aes(x=race, y=income), geom="pointrange", fun.data=mean_sd, size=.5, alpha=.7) +
+  facet_grid(cols=vars(county), rows=vars(education)) +
+  guides(color='none', x=guide_axis(angle=45)) + scale_y(c(0,200000)) 
+```
+
+ - When we break things down in multiple dimensions, we have a lot of empty categories.
+ - Even using 3 dimensions---race, county, and education---we have a lot.
+     - Otherwise, there are population summaries we just can't estimate. 
+     - i.e. anything involving the mean of a group we haven't sampled
+ - So we need some way to make predictions for groups with no data.
+
+## A Partial Solution
+
+```{r}
+#| out-height: 500px
+cearnings$degree = ifelse(cearnings$education < 16, 'no 4-year degree', '4-year degree')
+cearnings$degree = factor(cearnings$degree, levels=c('no 4-year degree', '4-year degree'))
+cearnings$area = ifelse(cearnings$county %in% c('alameda', 'san francisco'), 'sf bay area', 'la area')
+cearnings$area = factor(cearnings$area, levels=c('sf bay area', 'la area'))
+ggplot(cearnings[cearnings$education %in% education.levels & 
+                cearnings$county %in% counties &
+                cearnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=race, y=income, color=race), size=2*dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.05)) +
+  stat_summary(aes(x=race, y=income), geom="pointrange", fun.data=mean_sd, size=.5, alpha=.7) +
+  facet_grid(cols=vars(area), rows=vars(degree)) +
+  guides(color='none', x=guide_axis(angle=45)) + scale_y(c(0,200000)) 
+```
+
+- We've already seen a partial solution to this problem: coarsening.
+- Here we've coarsened in two dimensions.
+  - We've coarsened education into two categories: 4-year degree  (>= 16 years) vs. no 4-year degree (<16 years).
+  - We've coarsened county into two areas: SF Bay Area (SF, Alameda) and LA Area (LA, Orange).
+- And it helps, but we have two problems.
+  1. We've renamed everything, so we'd have to redefine all our summaries. This is fixable.
+  2. We *still* have empty groups, although we have fewer. This is not.
+
+
+## We Need A General Solution
+```{r}
+#| out-height: 500px
+ggplot(earnings[earnings$education %in% education.levels & earnings$county != 'unknown', ]) + 
+  geom_point(aes(x=race, y=income, color=race), size=2*dot.size, 
+             alpha=.2, position=position_jitter(seed=0,w=.05)) +
+  stat_summary(aes(x=race, y=income), geom="pointrange", fun.data=mean_sd, size=.5, alpha=.7) +
+  facet_grid(cols=vars(county), rows=vars(education)) +
+  guides(color='none', x=guide_axis(angle=45)) + scale_y(c(0,200000)) 
+```
+
+- This empty groups problem is a much bigger deal than I've made it seem.
+- We've been looking at some of the most populous counties and common racial identities.
+- When we use all the counties in CA and all the identities the CPS includes, most groups are empty.
+- And the range of coarsening options is overwhelming.
+
+# What We've Been Doing: A Least Squares Interpretation 
+
+## Reinterpreting the Sample Mean
+
+```{r}
+#| out-height: 400px
+Y = earnings$income[earnings$education==8]
+X = 1:length(Y) 
+
+ggplot() + 
+  geom_point(aes(x=X, y=Y), alpha=.5, size=3) +
+  geom_hline(yintercept=mean(Y), color='red') +
+  geom_segment(aes(x=X, xend=X, y=mean(Y), yend=Y), alpha=.2, color='red') +
+  geom_hline(yintercept=median(Y), color='orange')  +
+  geom_segment(aes(x=X+.1, xend=X+.1, y=median(Y), yend=Y), alpha=.2, color='orange') +
+  geom_hline(yintercept=0, color='blue')  + 
+  geom_segment(aes(x=X-.1, xend=X-.1, y=0, yend=Y), alpha=.2, color='blue') + 
+  scale_y(c(0,60000)) 
+```
+
+- Let's stop thinking about the sample mean *procedurally*, i.e., sum the dots and divide by their number.
+- Let's think of it as a *choice*, i.e., the best number for summarizing the data accordinating to some criterion.
+- What we're looking at here are the outcomes $Y_i$ for sampled Californians with 8 years of education.
+- And three summaries of the location of those outcomes.
+  1. The sample mode ([blue line]{.fg style="color:blue"})
+  2. The sample median ([orange line]{.fg style="color:orange"})
+  3. The sample mean ([red line]{.fg style="color:red"})
+- All of these are reasonable summaries. And the best choice according to some reasonable criterion. 
+- Criteria which, sensibly, look what's left over when we compare our observations to our location summary.
+
+$$
+\hat\varepsilon_i = Y_i - \hat\mu \qquad \text{ are the \textbf{residuals}}
+$$
+
+
+## Residuals
+
+```{r}
+#| layout-ncol: 3
+#| out-height: 400px
+#| fig-asp: 1
+
+signsq = function(x) { sign(x)*x^2 / 40000 }
+ggplot() + 
+  geom_point(aes(x=X,y=Y-0), size=3, color='blue') +
+  geom_hline(yintercept=0, alpha=.1, linewidth=2) + scale_y(c(-40000, 60000)) +
+  geom_segment(aes(x=X, xend=X, y=0, yend=signsq(Y-0)), alpha=.2)
+
+
+ggplot() + 
+  geom_point(aes(x=X,y=Y-median(Y)), size=3, color='orange') +
+  geom_hline(yintercept=0, alpha=.1, linewidth=2) + scale_y(c(-40000, 60000)) + 
+  geom_segment(aes(x=X, xend=X, y=0, yend=signsq(Y-median(Y))), alpha=.2)
+
+ggplot() + 
+  geom_point(aes(x=X,y=Y-mean(Y)), size=3, color='red') +  
+  geom_hline(yintercept=0, alpha=.1, linewidth=2) + scale_y(c(-40000, 60000)) +
+  geom_segment(aes(x=X, xend=X, y=0, yend=signsq(Y-mean(Y))), alpha=.2)
+```
+
+- Here we're looking at the residuals for each of our location summaries $\hat\mu$.
+  1. $\hat\varepsilon_i = Y_i - \hat\mu$ when $\hat\mu$ is the mode ([blue points]{.fg style="color:blue"}). It has the largest number of *zero residuals*.
+  2. $\hat\varepsilon_i = Y_i - \hat\mu$ when $\hat\mu$ is the sample median ([orange points]{.fg style="color:orange"}). It has the *smallest sum of absolute residuals*.
+  3. $\hat\varepsilon_i = Y_i - \hat\mu$ when $\hat\mu$ is the sample mean ([red points]{.fg style="color:red"}). It has the *smallest sum of squared residuals*. 
+- For better or for worse, the sum of squared residuals is the criterion we tend to use.
+
+$$ 
+\textcolor{red}{\hat \mu} = \argmin_{\text{numbers}\ m} \sum_{i=1}^n \qty{ Y_i - m }^2 \quad \text{ is the \textbf{least squares estimate}}
+$$
+
+## The Least Squares Location Summary
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2
+ggplot() + 
+  geom_point(aes(x=X,y=Y-mean(Y)), size=3, color='red') +  
+  geom_hline(yintercept=0, alpha=.1, linewidth=2) + scale_y(c(-40000, 60000)) +
+  geom_segment(aes(x=X, xend=X, y=0, yend=signsq(Y-mean(Y))), alpha=.2)
+
+ssr = Vectorize(\(m) sum((Y-m))^2)
+x = seq(-40000, 80000, length.out=1000)
+ggplot() + geom_line(aes(x=x, y=ssr(x)))  +
+  geom_point(aes(x=mean(Y), y=ssr(mean(Y))), color='red', size=4) + 
+  geom_point(aes(x=median(Y), y=ssr(median(Y))), color='orange', size=4) +
+  geom_point(aes(x=0, y=ssr(0)), color='blue', size=4)  
+```
+$$ 
+\hat \mu = \argmin_{\text{numbers}\ m} \sum_{i=1}^n \qty{ Y_i - m }^2 \quad \text{ satisfies the \textbf{zero-derivative condition} }
+$$
+$$ 
+\begin{aligned}
+0 
+= \frac{d}{dm} \sum_{i=1}^n \qty{ Y_i - m }^2  \ \ \mid_{m=\hat\mu} \quad 
+= \sum_{i=1}^n \frac{d}{dm} \qty{ Y_i - m }^2  \ \ \mid_{m=\hat\mu} \quad 
+= \sum_{i=1}^n 2 \qty{ Y_i - m } \ \ \mid_{m=\hat\mu} \quad 
+= \sum_{i=1}^n 2 \qty{ Y_i - \hat\mu } 
+\end{aligned}
+$$
+
+- This says the least squares residuals [$\hat\varepsilon = Y_i - \hat \mu$]{.fg style="color:red"} *sum to zero*. 
+- With a bit of algebra, this tells us that the least squares estimator $\hat\mu$ is the sample mean.
+
+$$
+0 = \sum_{i=1}^n 2\qty{ Y_i - \hat\mu } \quad \iff \quad 2\sum_{i=1}^n Y_i = 2\sum_{i=1}^n \hat\mu \quad \iff \quad \sum_{i=1}^n Y_i = \hat\mu\sum_{i=1}^n 1 \quad \iff \quad \hat\mu = \frac{1}{n} \sum_{i=1}^n Y_i
+$$
+
+- It's not just the best choice of the 3 locations summaries we've looked at. 
+- It's the best choice --- in terms of the sum of squared errors criterion --- of all numbers outright.
+
+## Two Locations
+
+```{r}
+#| out-height: 400px
+estimate_mode = function(x, na.rm = FALSE) {
+  if(na.rm){
+    x = x[!is.na(x)]
+  }
+  ux <- unique(x)
+  return(ux[which.max(tabulate(match(x, ux)))])
+}
+Y = earnings$income[earnings$education %in% c(8,12)]
+X = earnings$education[earnings$education %in% c(8,12)]
+
+ggplot(data.frame(X=X,Y=Y)) + 
+  geom_point(aes(x=X,y=Y), alpha=.2, size=1, position=position_jitter(w=.5)) + 
+  stat_summary(aes(x=X, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  scale_y(c(0,60000)) 
+```
+
+- If we have two groups, we can find the best location for each by this criterion.
+- We can think of the *subsample means* as the best **function of x** for predicting **y**.
+- Again, letting *best*  mean the one that minimizes the sum of squared residuals. 
+
+$$ 
+\hat \mu = \argmin_{\text{functions}\ m(x)} \sum_{i=1}^n \qty{ Y_i - m(X_i) }^2 
+$$
+
+
+## Two Locations
+```{r}
+#| out-height: 200px
+#| fig-asp: .2
+ggplot(data.frame(X=X,Y=Y)) + 
+  geom_point(aes(x=X,y=Y), alpha=.2, size=1, position=position_jitter(w=.5)) + 
+  stat_summary(aes(x=X, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  scale_y(c(0,60000)) 
+```
+
+- A function of $X$ is just a number for each value of $X$.
+- So to see that the subsample means are the solution, we can break our sum into pieces where $X$ is the same.
+
+$$
+\hat \mu = \argmin_{\text{functions}\ m(x)} \sum_{i:X_i=8} \qty{ Y_i - m(8) }^2  + \sum_{i:X_i=12} \qty{ Y_i - m(12) }^2
+$$
+
+- And observe that the first sum depends only on $m(8)$ and the second only on $m(12)$.
+  - So we get $\hat\mu(8)$ by minimizing squared error on the $x=8$ subsample over all possible locations.
+  - And we get $\hat\mu(12)$ by minimizing squared error on the $x=12$ subsample over all possible locations.
+- The minimizers --- which we can solve for exactly as before --- are the means of each subsample.
+
+$$
+\begin{aligned}
+\hat \mu(8)   &= \argmin_{\text{numbers}\ m} \sum_{i:X_i=8} \qty{ Y_i - m }^2  = \frac{\sum_{i:X_i=8} Y_i}{\sum_{i:X_i=8} 1 } \\
+\hat \mu(12)  &= \argmin_{\text{numbers}\ m} \sum_{i:X_i=12} \qty{ Y_i - m }^2 = \frac{\sum_{i:X_i=12} Y_i}{\sum_{i:X_i=12} 1 }
+\end{aligned}
+$$
+
+## Many Locations
+
+```{r}
+#| out-height: 400px
+X = earnings$education
+Y = earnings$income
+ggplot(data.frame(X=X,Y=Y)) + 
+  geom_point(aes(x=X,y=Y), alpha=.2, size=1, position=position_jitter(w=.3)) + 
+  stat_summary(aes(x=X, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  scale_y(c(0,150000)) + scale_x() 
+```
+
+- There's nothing special about two locations. We can do this for as many locations as we like.
+- We break our sum into pieces where $X$ is the same.
+$$
+\hat \mu = \argmin_{\text{functions}\ m(x)} \sum_x \sum_{i:X_i=x} \qty{ Y_i - m(x) }^2 
+$$
+
+- And we get the best location at each $x$, in terms of squared error, by minimizing each piece.
+- The solution is, as before, the mean of each subsample.
+
+$$
+\hat \mu(x) = \argmin_{\text{numbers}\ m} \sum_{i:X_i=x} \qty{ Y_i - m }^2  = \frac{\sum_{i:X_i=x} Y_i}{\sum_{i:X_i=x} 1 }
+$$
+
+## Coarsening
+
+```{r}
+#| out-height: 200px
+#| fig-asp: .2
+X = earnings$education
+Y = earnings$income
+Xcoarse = ifelse(X < 16, mean(X[X<16]), mean(X[X>=16]))
+df.small = data.frame(x=unique(X[X<16]), y=mean(Y[X<16]))
+df.big = data.frame(x=unique(X[X>=16]), y=mean(Y[X>=16]))
+ggplot(data.frame(X=X,Y=Y,Xcoarse=Xcoarse)) + 
+  geom_point(aes(x=X,y=Y, color=factor(Xcoarse)), alpha=.2, size=1, position=position_jitter(w=.3)) + 
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  geom_point(aes(x=x, y=y), data=df.small, color='red') +
+  geom_line(aes(x=x, y=y), data=df.small, color='red') +
+  geom_point(aes(x=x, y=y), data=df.big, color='red') +
+  geom_line(aes(x=x, y=y), data=df.big, color='red') + 
+  coord_cartesian(ylim=c(0,150000)) + guides(color='none') 
+```
+
+- When we coarsen, we're in effect restricting the set of functions we're considering.
+- We're restricting them to be functions of the coarsened groups $c(x)$, i.e. the color in the plot.
+- Now we break our sum into pieces where the coarsened group $c(x)$ is the same.
+
+$$
+\begin{aligned}
+\hat \mu(c(x)) 
+&= \argmin_{\text{functions}\ m(c(x)) } \sum_{c(x)} \sum_{i:c(X_i)=c(x)} \qty{ Y_i - m(c(x)) }^2 \\
+&= \argmin_{\text{functions}\ m(c(x)) } \inred{\sum_{i:c(X_i)=\text{red}} \qty{ Y_i - m(\text{red}) }^2} + \ingreen{\sum_{i:c(X_i)=\text{green}} \qty{ Y_i - m(\text{green}) }^2}
+\end{aligned}
+$$
+
+- And we get the best location at each coarsened $x$, in terms of squared error, by minimizing each piece.
+- And the solution is the mean of each coarsened group.
+
+$$
+\hat \mu(x) = \argmin_{\text{numbers}\ m} \sum_{i:c(X_i)=c(x)} \qty{ Y_i - m }^2  = \frac{\sum_{i:c(X_i)=c(x)} Y_i}{\sum_{i:c(X_i)=c(x)} 1 }
+$$
+
+- This says the prediction we make at each $x$ is the mean of the $y$ values in the coarsened group it belongs to.
+  
+## Least Squares Regression
+
+```{r}
+#| out-height: 300px
+#| layout-ncol: 2
+X = earnings$education
+Y = earnings$income
+dfXY = data.frame(X=X,Y=Y)
+ggplot(dfXY) + 
+  geom_point(aes(x=X,y=Y), alpha=.2, size=1, position=position_jitter(w=.3)) + 
+  stat_summary(aes(x=X, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  scale_y(c(0,150000)) + scale_x()
+
+X = earnings$education
+Y = earnings$income
+Xcoarse = ifelse(X < 16, mean(X[X<16]), mean(X[X>=16]))
+df.small = data.frame(x=unique(X[X<16]), y=mean(Y[X<16]))
+df.big = data.frame(x=unique(X[X>=16]), y=mean(Y[X>=16]))
+ggplot(data.frame(X=X,Y=Y,Xcoarse=Xcoarse)) + 
+  geom_point(aes(x=X,y=Y, color=factor(Xcoarse)), alpha=.2, size=1, position=position_jitter(w=.3)) + 
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=mean, size=5, alpha=.7, color='red') +
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=median, size=5, alpha=.7, color='orange') +
+  stat_summary(aes(x=Xcoarse, y=Y), geom="point", fun=estimate_mode, size=5, alpha=.7, color='blue') +
+  geom_point(aes(x=x, y=y), data=df.small, color='red') +
+  geom_line(aes(x=x, y=y), data=df.small, color='red') +
+  geom_point(aes(x=x, y=y), data=df.big, color='red') +
+  geom_line(aes(x=x, y=y), data=df.big, color='red') + 
+  coord_cartesian(ylim=c(0,150000)) + guides(color='none') 
+```
+
+- We can think of both *uncoarsened* and *coarsened* subsample means as least squares estimators.
+- Each is the best choice, within some set of functions, for predicting $Y$ from $X$.
+- But the set of functions we're choosing from is different in each case.
+  - In the uncoarsened case, we're choosing from all functions of $X$.
+  - In the coarsened case, we're choosing from functions of the coarsened $X$.
+- We call the set of functions we're choosing from a **regression model**.
+- And we call the minimizer of squared error, $\hat\mu$, is the least squares estimator in that model.
+
+$$
+\hat\mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(X_i) }^2 \qquad \text{ where } \quad \mathcal{M} \ \ \text{ is our model.}
+$$
+
+
+# Least Squares Regression in Linear Models 
+
+## Least Squares Regression
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+muhat.monotone = as.stepfun(isoreg(X,Y))
+muhat.lin = lm(Y ~ X)
+lsq.plot = ggplot(data.frame(x=X, y=Y)) + geom_point(aes(x=X,y=Y), alpha=.1, size=1, position=position_jitter(w=.3)) + 
+  stat_summary(aes(x=X+.1, y=Y), fun=mean, geom='point', color='red', alpha=.5) + 
+  stat_summary(aes(x=X+.1, y=Y), fun=mean, geom='line', color='red', alpha=.3) + 
+  geom_point(aes(X-.1, predict(muhat.lin)),  color='blue', alpha=.3) +
+  geom_line(aes(X-.1, predict(muhat.lin)),  color='blue', alpha=.3) +
+  geom_point(aes(x=X, y=muhat.monotone(X)), color='magenta', alpha=.3) + 
+  geom_line(aes(x=X, y=muhat.monotone(X)), color='magenta', alpha=.3) + 
+  scale_y(c(0,150000)) + scale_x()
+lsq.plot
+```
+
+- Regression, generally, is choosing a function of covariates $X_i$ to predict outcomes $Y_i$. 
+- We choose from a set of functions $\model$ that we call a **regression model**.
+
+$$
+Y_i \approx \hat\mu(X_i) \qfor \hat\mu \in \model 
+$$
+
+- Least Squares Regression is a special case in which we choose by minimizing the sum of squared residuals.
+
+$$
+\hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(X_i) }^2
+$$
+
+- Given a model, we can find the least squares estimator by doing this minimization.
+- And we can do this for any model we like, so long as we can solve the minimization problem. 
+$$
+\begin{aligned}
+\textcolor{red}{\model} &= \qty{ \text{all functions} \  m(x) }                               \\
+\textcolor{blue}{\model} &= \qty{ \text{all lines} \ m(x)=ax + b }  \\
+\textcolor{magenta}{\model} &= \qty{ \text{all increasing functions} \  m(x) }   \\
+\end{aligned}
+$$
+
+## Linear Models
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+lsq.plot
+```
+
+- In this class, we're going to focus on **linear models**.
+  - These are sets of functions that are 'closed' under addition, subtraction, and scaling by constants.
+  - This means when we add, subtract, and scale functions in the model, we get another function in the model.
+$$
+a(x), b(x) \in \model \implies a(x) + b(x), a(x) - b(x), c a(x) \in \model \quad \text{ for any constant $c$ }
+$$
+
+- **Q.** Which of these models are linear? 
+
+$$
+\begin{aligned}
+\textcolor{red}{\model} &= \qty{ \text{all functions} \  m(x) }                               \\
+\textcolor{blue}{\model} &= \qty{ \text{all lines} \ m(x)=ax + b }  \\
+\textcolor{magenta}{\model} &= \qty{ \text{all increasing functions} \  m(x) }   \\
+\end{aligned}
+$$
+
+# Multivariate Regression Models
+
+## Additive Models 
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+ 
+grid = expand.grid(education=unique(earnings$education), race=race.categories) 
+muhat = function(model) { function(ed,race) { predict(model, newdata=data.frame(education=ed, race=race)) } }
+
+additive.fit   = lm(income ~ race+factor(education), data=earnings[earnings$race %in% race.categories,])
+ggplot(earnings[earnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=education, y=income), size=1, 
+             alpha=.1, position=position_jitter(seed=0,w=.3)) +
+  geom_point(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid, alpha=.5) +
+  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
+```
+
+- Here we let our predictions be arbitrary functions of education ($x$) as before.
+- But we're requiring that race ($w$) only shift that function up and down---it can't change the function's shape.
+- The result, in visual terms, are predictions for different values of $w$ are 'parallel curves'.
+
+$$\small{
+\begin{aligned}
+\textcolor{blue}{\model} &= \qty{ m(w,x) = m_0(w) + m_1(x) \ \ \text{for univariate functions} \ \ m_0, m_1 }  &&\text{additive bivariate model} \\
+\end{aligned}
+}
+$$
+
+
+## The Parallel Lines Model 
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+ 
+additive.line.fit   = lm(income ~ race+education, data=earnings[earnings$race %in% race.categories,])
+ggplot(earnings[earnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=education, y=income), size=1, 
+             alpha=.1, position=position_jitter(seed=0,w=.3)) +
+  geom_point(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid, alpha=.5) +
+  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
+```
+
+- Here we impose the additional restriction that the function of education ($x$) is a line.
+- This means that the predictions for different values of $w$ are parallel lines.
+
+$$\small{
+\begin{aligned}
+\textcolor{red}{\model} &= \qty{ m(w,x) = a(w) + b x   }                 &&\text{parallel lines} \\
+\end{aligned}
+}
+$$
+
+## The Not-Necessarily-Parallel Lines Model 
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+ 
+additive.line.fit   = lm(income ~ race+education, data=earnings[earnings$race %in% race.categories,])
+interacted.line.fit = lm(income ~ race*education, data=earnings[earnings$race %in% race.categories,])
+ggplot(earnings[earnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=education, y=income), size=1, 
+             alpha=.1, position=position_jitter(seed=0,w=.3)) +
+  geom_point(aes(x=education, y=muhat(interacted.line.fit)(education,race)),  color='magenta', data=grid) +
+  geom_line(aes(x=education, y=muhat(interacted.line.fit)(education,race)),   color='magenta', data=grid, alpha=.5) +
+  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
+```
+
+- Here we stick with the lines thing, but drop the additivity restriction.
+- For each value of $w$, we can get a totally different line.
+
+$$\small{
+\begin{aligned}
+\textcolor{magenta}{\model} &= \qty{ m(w,x) = a(w) + b(w) x  }                 &&\text{lines} \\
+\end{aligned}
+}
+$$
+
+
+## Where This Leaves Us
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+ 
+ggplot(earnings[earnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=education, y=income), size=1, 
+             alpha=.1, position=position_jitter(seed=0,w=.3)) +
+  geom_point(aes(x=education, y=muhat(interacted.line.fit)(education,race)),  color='magenta', data=grid) +
+  geom_line(aes(x=education, y=muhat(interacted.line.fit)(education,race)),   color='magenta', data=grid, alpha=.5) +
+  geom_point(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid, alpha=.5) +
+  geom_point(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid, alpha=.5) +
+  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
+```
+
+- Each of these approaches allows us to make predictions everywhere---even in columns we haven't sampled.
+- Fundamentally, it's because they're using information from one column to make predictions in another.
+- This solves the empty-groups problem, but it introduces a new one. What is it?
+
+## Where We're Going
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4
+ 
+ggplot(earnings[earnings$race %in% race.categories, ]) + 
+  geom_point(aes(x=education, y=income), size=1, 
+             alpha=.1, position=position_jitter(seed=0,w=.3)) +
+  geom_point(aes(x=education, y=muhat(interacted.line.fit)(education,race)),  color='magenta', data=grid) +
+  geom_line(aes(x=education, y=muhat(interacted.line.fit)(education,race)),   color='magenta', data=grid, alpha=.5) +
+  geom_point(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid, alpha=.5) +
+  geom_point(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid) +
+  geom_line(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid, alpha=.5) +
+  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
+```
+
+- There's no *right model* to use. Each has its own strengths and weaknesses.
+- In the next couple days, we'll look into the issues surrounding model choice.
+  - Implications of bad model choice.
+  - A good model to use 'by default'.
+  - How to automate model choice.
+
+
+
+
+
+
+
+
+
+

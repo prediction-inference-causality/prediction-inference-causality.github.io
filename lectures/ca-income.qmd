@@ -1,0 +1,110 @@
+```{r}
+#| label: ca-income-setup
+#| include: false 
+library(ggplot2)
+source('income.R')
+```
+
+```{r}
+#| label: load-ca-data
+#| cache: true
+california.state.code = 6
+ca_income = income(california.state.code)
+```
+
+```{r}
+#| label: make-ca-maps
+# Make maps of California with and without population density shown
+
+ca.plot = ggplot(data=ca_income$info, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(fill='gray', color = "white", alpha=.4) +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+
+ca.pop.plot = ggplot(data=ca_income$info, mapping=aes(x=long, y=lat, group=group)) + 
+  coord_quickmap() +
+  geom_polygon(aes(fill = pop/area), color = "white") +
+      scale_fill_gradient(trans="log10") + 
+      theme_void()
+```
+
+
+```{r}
+#| label: fake-ca-population
+#| cache: true
+
+# For illustration purposes, we're going to make up a fake population that we can think of our sample as being drawn from. 
+# We'll make up a population as follows
+# 1. choose the number of people to be the number of people in our sample scaled up to account for the cps sampling ratio. 
+#    Or, really, a smaller ratio that's more usable visually.
+# 2. draw units with replacement from the sample to get a set of rows to *add to the sample* to get the population
+# 3. tweak these new rows to make them a bit different 
+#  - perturb the income in these new rows by income by multiplying by 1*.1U for U uniform on [-1, 1]. 
+#  - perturb their location by resampling their location from their subregion
+# 4. combine the sample and the added rows to get the population, shuffling so the sample isn't at the top
+#    we'll save the indices of the sample rows in the population as 'J' so we can refer to them later.
+
+earnings = ca_income$sample
+earnings$degree = factor(earnings$education >= 16, # we use this dichotomization a lot early on
+                         levels=c(FALSE, TRUE),
+                         labels=c('no 4-year degree','4-year degree')) 
+earnings$group = 1                     # we need this for mapping
+cps.sampling.ratio = 1/2500            # the actual one
+plotting.cps.sampling.ratio=1/12.5     # works visually
+npop = nrow(earnings) / plotting.cps.sampling.ratio
+pop.seed = 1
+
+newtopop = earnings[(\()sample(1:nrow(earnings), npop-nrow(earnings), replace=TRUE)) |> with_seed(pop.seed), ]
+newtopop$income = newtopop$income*(1 + .1 * runif(nrow(newtopop), -1, 1))
+newlocations = ca_income$sample_location(newtopop$county, seed=2)
+newtopop$lat  = newlocations$lat
+newtopop$long = newlocations$long
+pop.earnings = rbind(earnings, newtopop)
+
+order = (\() sample(1:nrow(pop.earnings))) |> with_seed(pop.seed)
+J=order[1:nrow(earnings)]
+pop.earnings[order, ] = pop.earnings
+```
+
+
+```{r}
+#| label:  define-old-names-for-ca-stuff
+
+# Now we'll define a bunch of stuff that's used in older lectures
+# where the fake population and sample had a more awkward relationship
+
+display.population = pop.earnings
+pop.tab = pop.earnings
+
+our.sample = earnings 
+sample.tab = earnings
+sample.tab$J = J
+```
+
+```{r}
+#| label: plot-ca-sample-and-population
+
+# Now we'll plot the sample and the population on the map.
+# Probably in the future this should be done in the lecture file,
+# as we may want them colored differently lecture by lecture.
+sample.plot = ca.plot + geom_point(aes(x=long, y=lat), data=earnings, size=.2, alpha=.5)
+sample.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=earnings, size=.2, alpha=.5)
+pop.plot = ca.plot + geom_point(aes(x=long, y=lat), data=pop.earnings, size=.02, alpha=.1) 
+pop.plot.inf = ca.pop.plot + geom_point(aes(x=long, y=lat), data=pop.earnings, size=.01, alpha=.1)  
+```
+
+```{r}
+#| label: visualization-defaults
+
+## default settings for our scatter plot
+scale_y = function(limits=c(0, 2e5)) { 
+  list(scale_y_continuous(breaks=seq(0, max(limits), by=25e3), labels=label_dollar()),
+       coord_cartesian(ylim=limits))
+}
+years = 8:20
+scale_x = function(limits=c(min(years)-.5, max(years)+.5)) { 
+  scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=limits)
+}
+dot.size = 2
+```

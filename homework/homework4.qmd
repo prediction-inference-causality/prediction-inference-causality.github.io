@@ -1,0 +1,593 @@
+---
+title: "Problem Set 4"
+subtitle: "QTM 220"
+---
+
+
+::: hidden
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\CATE}{CATE}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+\DeclareMathOperator*{\argmin}{argmin}
+\newcommand{\model}{\mathcal{M}}
+$$
+:::
+
+## Summary
+In this problem set, we're going to get practice using some new regression models to do the kinds of analysis we've been doing all semester. While we do this, we'll pay a bit of attention to bias---a new phenomenon, because it's not something that happens when we use the 'all curves' model we've been using.
+
+Here are the libraries we'll need.
+```{r}
+#| echo: true
+#| output: false 
+library(ggplot2)
+library(tidyverse)
+library(rpart)
+```
+
+And some settings to configure how our plots and code output looks.
+```{r}
+#| echo: true 
+theme_set(theme_minimal())
+options(scipen = 1, digits = 3)
+```
+
+
+## Bone Density 
+
+Researchers hypothesize that higher calcium intake causes greater bone density (stronger bones).  To test this, a clinic 
+runs an experiment where patients are treated with a calcium supplement or a placebo for 1 year, after which their bone density is measured. 
+Bone Density T-Scores indicate how good someone’s bone density is---0 is typical, positive numbers are better, negative numbers are worse (a threshold score of -2.5 is used to diagnose osteoporosis). The (fake) data from this imaginary study is shown below. 
+
+To get a random sample from its patient population in which treatment is randomized, the following procedure is used.
+
+1. Patients in our population are classified as old (age 65+) or young (age 64-). We'll call this $X$: $X=0$ if young, $X=1$ if old.
+2. For each patient in our population, we flip a coin to assign them to treatment or placebo. An age-group-specific weighted coin, so that patients are assigned treatment or placebo 
+with probability depending on their age group. We'll call this $W$: $W=1$ if treatment, $W=0$ if placebo.
+3. We then sample with replacement from the population.^[Note that we don't really need to treat patients *who aren't in the sample* according to the coin flip. Flipping a coin for each patient in the population just helps us think about what our sample looks like.]
+
+Here's a table of the data.
+```{r}
+#| echo: true
+bone.data = data.frame(age        = c(1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0),
+                       supplement = c(1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1),
+                       bone_density = c(-2, -3, -2, 0, -1, 0, -2, 0, 1, 1, -1, 1.5))
+bone.data
+```
+
+And here's a plot. We'll show the individual points, the mean and standard deviation of bone density for each age/treatment group (as points with arms), and the proportion of patients in each group that received treatment (as bar heights). Because we're used to seeing data in which $y$ is non-negative, we'll plot bone density plus 3, so that our plot looks a bit more familiar.
+
+```{r}
+#| echo: true
+#| out-width: 100%
+plotX = function(w,x) { x + 0.15*(w-0.5) } 
+
+bone.plot = 
+  ggplot(bone.data) + 
+    geom_point(aes(x=plotX(supplement, age), y=bone_density+3, color=factor(supplement)),
+               alpha=1, size=2, position=position_jitter(width=0.05, height=0, seed=2)) + 
+    stat_summary(aes(x=plotX(supplement, age), y=bone_density+3, color=factor(supplement)),
+                 geom='pointrange', fun=mean, 
+                                    fun.min=\(x)mean(x)-sd(x), 
+                                    fun.max=\(x)mean(x)+sd(x), alpha=.5) +    
+    geom_bar(aes(x=plotX(supplement, age), y=4*after_stat(prop), fill=factor(supplement), color=factor(supplement)), 
+             position='identity', alpha=.1, linewidth=.2) + 
+    scale_x_continuous(breaks=c(0,1), labels=c('Young', 'Old')) + xlab('') 
+     
+bone.plot
+```
+
+
+Let's start with some exercises where we estimate population summaries by taking appropriate averages of subsample means. 
+These should be familiar from the last problem set, although there's more of a causal flavor to their interpretation.
+
+::: {#exr-conditional-treatment-effects .callout-exercise}
+Using a simple difference of column means, estimate the **Conditional Average Treatment Effect**, $\CATE(x) = \mu(1,x)-\mu(0,x)$,
+for the young patients (i.e. for $x=0$) and the old patients ($x=0)$. 
+Here $\mu(w,x)$ is the average bone density of patients in our population assigned to treatment $w$ and age group $x$.
+:::
+
+::: {#exr-average-treatment-effects .callout-exercise}
+Estimate two summaries of the Conditional Average Treatment Effect.
+$$
+\begin{aligned}
+\text{ATT} &= \frac{\sum_{j:w_j=1} \CATE(x_j)}{\sum_{j:w_j=1} 1} && \text{Average Treatment Effect on the Treated Subpopulation} \\
+\text{ATE} &= \frac{\sum_{j=1}^m \CATE(x_j)}{\sum_{j=1}^m 1}     && \text{Average Treatment Effect on the Whole Population}
+\end{aligned}
+$$
+
+To do this, average your estimate of the CATE from the previous exercise over *the treated subsample* and over *the whole sample* respectively. 
+:::
+
+
+::: {#exr-diff-in-means .callout-exercise}
+
+Suppose that instead of these average treatment effect estimates, you simply took the difference in means of bone density between the treated and control groups. What is this difference in means? 
+
+:::
+
+::: {.callout-solution}
+Here's a solution for the first three exercises.
+```{r}
+#| echo: true
+W = bone.data$supplement
+X = bone.data$age
+Y = bone.data$bone_density
+
+muhat.all = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
+CATEhat = function(x) { muhat.all(1,x) - muhat.all(0,x) }
+
+ATThat = mean(CATEhat(X[W==1]))
+ATEhat = mean(CATEhat(X))
+Deltahat = mean(Y[W==1]) - mean(Y[W==0])
+
+data.frame(CATE0=CATEhat(0), CATE1=CATEhat(1), ATThat=ATThat, ATEhat=ATEhat, Delta=Deltahat)
+```
+
+:::
+
+::: {#exr-diff-in-means-interpretation .callout-exercise}
+What does this difference in means really estimate, i.e., what is the expected value of this difference in means? Express your answer in terms of $\mu(w,x)$ and the proportion $p_{w,x}=m_{w,x}/m_w$ of patients --- among those assigned to treatment $w$ --- that are in age group $x$. Is this the ATT, ATE, or something else? Is it necessarily
+the average of the conditional average treatment effect $\CATE(x)$ over any group of patients? Explain why or why not.
+
+**Hint**. See [this slide from Lecture 11](https://davidahirshberg.bitbucket.io/static/Lecture11.html#/the-average-over-people) and [this slide from Lecture 12](https://davidahirshberg.bitbucket.io/static/Lecture12.html#/revisiting-a-computational-trick). 
+
+:::
+
+::: {.callout-solution}
+I'm going to give a really detailed explanation of this one. I thought it might be helpful. This is way more than I'd expect you to submit. Anything that touches on the main ideas is fine.
+
+
+It's an unbiased estimate of the analogous summary of the population, i.e., the difference in means of bone density between the people in the population randomized to treatment and control. This. I'll prove it in a minute.
+$$
+\begin{aligned}
+\Delta &= \frac{1}{m_1}\sum_{j:w_j=1} y_j - \frac{1}{m_0}\sum_{j:w_j=0} y_j  && \qfor m_w = \sum_{j:w_j=w} 1 \\
+       &= \frac{1}{m_1}\sum_{j:w_j=1}\mu(1,x) - \frac{1}{m_0}\sum_{j:w_j=0} \mu(0,x) && \qqtext{where}
+          \mu(w,x) = \frac{1}{m_{w,x}}\sum_{j:w_j=w \ \text{ and } \ x_j=x} y_j  \\
+       &= \sum_x p(1,x)\mu(1,x)  - \sum_x p(0,x)\mu(0,x) && \qqtext{where}  
+           p(w,x)  = \frac{m_{w,x}}{m_w} \qfor m_{w,x} = \sum_{j:w_j=w \ \text{ and } x_j=x} 1.
+\end{aligned}
+$$
+
+It's good practice to try to describe everything here in terms of the plot above. Or---because the plot above is of a sample, not a population---in terms of an imaginary population version of the plot like the ones we've been using for illustration in lecture.
+
+ This isn't necessarily a summary of the effect of treatment. In fact, even if the CATE is zero for all $x$---even if the treatment has no effect on bone density for anyone---this difference in means can be non-zero. That's because of *covariate shift*, i.e., differences in the distribution of $x$ between the treated and control groups. Let's compare this to the ATT, much like we compared the sample analog of this quantity to an analogous 'adjusted difference' in [this slide from Lecture 12](https://davidahirshberg.bitbucket.io/static/Lecture12.html#/revisiting-a-computational-trick). 
+
+$$
+\begin{aligned}
+\Delta - \text{ATT} 
+&= \qty{\frac{1}{m_1}\sum_{j:w_j=1} \mu(1,x_j) - \frac{1}{m_0}\sum_{j:w_j=0} \mu(0,x_j)} 
+-  \frac{1}{m_1}\sum_{j:w_j=1} \qty{ \mu(1,x_j) - \mu(0,x_j) } \\
+&= \frac{1}{m_1}\sum_{j:w_j=1} \mu(0,x_j) -  \frac{1}{m_0}\sum_{j:w_j=0} \mu(0,x_j) 
+\end{aligned}
+$$
+
+What this tells us is that if *typical outcomes without treatment* are better for the
+*people who tend to be treated* than they are for the *people who tend not to be treated*, then the difference in means $\Delta$ will be bigger than the ATT. This is true even if the treatment has no effect on bone density for anyone---then the ATT will be zero and the difference in means will be positive. If opposite is true, i.e. if typical outcomes without treatment are worse for the people who tend to be treated, then the difference in means will be smaller than the ATT.
+
+
+When we look at our estimates of $\Delta$ and the ATT, we see the sample version of that covariate shift phenomenon happening. Young people tend to have better bone density than old people, and the proportion of young patients among the treated ($2/7$ green dots) is smaller than among the controls ($2/5$ red dots),  so our estimate of $\Delta$ is smaller than our estimate of the ATT. So if we ignore covariate shift in our analysis, using $\Delta$ instead of the ATT, 
+we'll underestimate the treatment effect because *the people getting treated are the ones who need an effective treatment*. 
+
+Here's a more extreme example of that phenomenon. If you ask people who have and haven't taken aspirin if they have a headache, you'll see headaches are more frequent among the people who have taken aspirin. It's not because aspirin doesn't work. It's because people take aspirin when they have a headache.
+
+
+Now let me explain why we get an unbiased estimate of $\Delta$. We can, if we like, write our difference of the mean outcomes in the treated and control subsamples as a proportion-weighted average of the column means $\hat\mu(w,x)$.  The column means are unbiased estimate of the corresponding means $\mu(w,x)$ in the population and the sample proportions an unbiased estimate of the population proportion. Thus, as discussed in Lecture 11,
+
+$$
+\begin{aligned}
+\hat \Delta 
+&= \frac{1}{N_1}\sum_{i:W_i=1} Y_i - \frac{1}{N_0}\sum_{i:W_i=0} Y_i && \text{ for } N_w = \sum_{i:W_i=w} 1 \\
+&= \frac{1}{N_1}\sum_x \qty{\sum_{i:W_i=1 \text{ and } X_i=x} Y_i} - \frac{1}{N_0}\sum_x \qty{\sum_{i:W_i=0 \text{ and } X_i=x} Y_i} && \text{summing within then over columns } \\ 
+&= \frac{1}{N_1} \sum_x \qty{N_{1,x} \hat\mu(1,x)} - \frac{1}{N_0} \sum_x \qty{N_{0,x} \hat\mu(0,x)} && \text{ for } N_{w,x} = \sum_{i:W_i=w \ \text{ and } \ X_i=x} 1 \\
+&= \sum_x \hat p(1,x)\hat\mu(1,x) - \sum_x \hat p(0,x) \hat\mu(0,x) && \qfor \hat p(w,x) = \frac{N_{w,x}}{N_w} 
+\end{aligned}
+$$
+
+We can show that this is an unbiased estimate of the corresponding summary of the population, $\Delta$,
+because the sample means are conditionally unbiased estimates of the corresponding subpopulation means and the sample proportions are unbiased estimates of the corresponding population proportions. That is, as discussed in Lecture 11,
+
+$$
+\begin{aligned}
+\E\qty[ \hat p(w,x) \hat\mu(w,x) ] 
+&= \E \qty[ \hat p(w,x) \E\qty{ \hat \mu(w,x) \mid W_1 \ldots W_n, X_1 \ldots X_n} ] && \text{ via the law of iterated expectations and linearity } \\
+&= \E \qty[ \hat p(w,x) \mu(w,x) ] && \text{ because subsample means are conditionally unbiased} \\
+&= \mu(w,x)\E\qty[ \hat p(w,x) ] = \mu(w,x) p(w,x) && \text{ because the sample proportions are unbiased}.
+\end{aligned}
+$$
+  
+That tell us that $\E[\hat\Delta]$ is equal to our last expression for $\Delta$ above. 
+To show the other expressions are equivalent, we reverse the argument we used to rewrite $\hat\Delta$ in terms of the column means and proportions.
+
+:::
+
+
+Now let's recall an interpretation of what we've been doing Lecture 14. Using the subsample mean $\hat\mu(w,x)$ to estimate the corresponding subpopulation mean $\mu(w,x)$
+is, equivalently, estimating **the function** $\mu$ by the the function $\hat\mu$ that minimizes the sum of squared residuals among all functions outright, i.e.,
+$$ 
+\hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2 \qfor \model = \qty{ \text{ all functions } \ \ m(w,x) }
+$$
+
+And we can, if we prefer, use the least squares estimator within a smaller set of functions, e.g.,
+$$
+\begin{aligned}
+\model &= \qty{ \text{ all functions of \emph{coarsened covariates} } \ \ m(w,x)=f(c(w,x)) } && \text{ is a piecewise-constant model } \\
+\model &= \qty{ m(w,x) = m_0(w) + m_1(x) \ \ : \ \ m_0, m_1 \text{ are functions of one variable } } && \text{ is the additive model } \\
+\model &= \qty{ m(w,x) = a(w) + b x \ \ : \ \ a \text{ is a function of one variable and } \ \  b  \\ \text{ is a number } } && \text{ is the parallel lines model }\\
+\model &= \qty{ m(w,x) = a(w) \ \ : \ \ a \text{ is a function of one variable } \ } && \text{ is the horizontal lines model }\\
+\end{aligned}
+$$
+
+Here's code to find and plot you the least squares estimator $\hat\mu$ within each model. 
+To choose the coarsening $c(w,x)$ in the piecewise-constant model, we'll use a tree as implemented in the `rpart` package.
+
+Here's some generic code for making predictions and plotting given what **R** calls a 'model fit object'.
+```{r}
+#| echo: true
+prediction.function = function(model.fit) { function(w,x) { predict(model.fit, newdata=data.frame(supplement=w, age=x)) } }
+plot.predictions = function(muhat) { 
+  grid = expand.grid(supplement=c(0,1), age=c(0,1))
+  bone.plot +
+    geom_point(aes(x=age, y=muhat(supplement, age)+3, color=factor(supplement)), data=grid) + 
+    geom_line(aes(x=age,  y=muhat(supplement, age)+3, color=factor(supplement)), data=grid) +
+    guides(color='none', fill='none')
+}
+```
+
+And here's some code to actually fit the models and plot the fits. The `rpart` stuff is its own thing, but for the rest of them, we're using the **R** built-in function `lm` with an 
+appropriate **regression formula** describing our model. The formula language takes a bit of getting used to and we're not going to go get into that here. But if you're curious,
+feel free to come to hours and ask about it.
+
+```{r}
+#| echo: true
+#| out-width: 100% 
+#| layout-nrow: 2
+#| layout-ncol: 2
+#| fig-cap:
+#| - "Piecewise-constant model"
+#| - "Additive model"
+#| - "Parallel lines model"
+#| - "Horizontal lines model" 
+
+
+## The piecewise-constant model
+# Tell rpart to not to worry about having more than 1 observation per level of the coarsened covariate 
+# (or, in more evocative terms, per 'bucket')
+rpart.settings = rpart.control(minbucket=1)  
+# Then fit and plot
+piecewise.constant.model.fit = rpart(bone_density ~ supplement + age, data=bone.data, control=rpart.settings)
+muhat.piecewise.constant = prediction.function(piecewise.constant.model.fit)
+plot.predictions(muhat.piecewise.constant) + guides(color='none')
+
+## The additive model
+additive.model.fit = lm(bone_density ~ factor(supplement) + factor(age), data=bone.data)
+muhat.additive = prediction.function(additive.model.fit)
+plot.predictions(muhat.additive)
+
+## The parallel lines model
+parallel.lines.model.fit = lm(bone_density ~ factor(supplement) + age, data=bone.data)
+muhat.parallel = prediction.function(parallel.lines.model.fit)
+plot.predictions(muhat.parallel)
+
+## The horizontal lines model
+horizontal.lines.model.fit = lm(bone_density ~ factor(supplement), data=bone.data)
+muhat.horizontal = prediction.function(horizontal.lines.model.fit)
+plot.predictions(muhat.horizontal)
+```
+
+::: {#additive-model-equivalence .callout-note}
+If you look at these plots closely, you can see that the least squares estimators in the additive model and the parallel lines model are the same.
+In fact, when $w$ and $x$ are binary, these two models are the same---i.e., they're two ways of describing the same set of functions. If you like,
+try to prove it.
+:::
+
+
+Now let's use a few of these models and take a moment to think about what happens. 
+
+::: {#exr-repeat-using-models .callout-exercise}
+Repeat @exr-conditional-treatment-effects - @exr-diff-in-means using the predictions of the **additive model** and the **horizontal lines model**
+instead of those of the **all functions model**. When you do this, you'll get identical estimates of different summaries of the population. Explain why this happens and why it didn't happen when we used the all functions model.
+:::
+
+::: {.callout-solution}
+```{r}
+#| echo: true
+prediction.functions = list(all=muhat.all, additive=muhat.additive, horizontal=muhat.horizontal)
+map(prediction.functions, function(muhat) { 
+  CATEhat = function(x) { muhat(1,x) - muhat(0,x) } 
+  data.frame(CATE0 = CATEhat(0), 
+             CATE1 = CATEhat(1),
+             ATT =  mean(CATEhat(X[W==1])), 
+             ATE =  mean(CATEhat(X)),
+             Delta = mean(muhat(1,X[W==1])) - mean(muhat(0,X[W==0])))
+}) |> bind_rows(.id='model')
+```
+
+When we use the additive model and horizontal lines model, we get identical estimates of the CATE, ATT, and ATE. This is because, for all functions $m(w,x)$ in both models, the difference
+$m(1,x)-m(0,x)$ does not depend on $x$. In a sense, that's what additive means. 
+
+For the horizontal lines model, these are also the same as the difference in means $\Delta$. That's because for curves $m$ in this model, $m(w,x)$ doesn't depend on $x$---that's what a horizontal line is. That means it doesn't matter that $\hat\Delta$ is a comparison of averages of $\hat\mu(1,x)$ and $\hat\mu(0,x)$ over two different distributions of $x$ instead of one (e.g. the distribution of green dots we use to estimate the ATT). The average of a constant, over any distribution, is that constant.
+:::
+
+Unless you actually believe these different summaries of the population are the same, this seems like a problem. And 
+although our sample size is small, it's not a small-sample-size problem. Using these models, we'll get identical estimates
+of these different summaries no matter what sample size we have. This means at least one of the matching summary estimates has to be biased.
+This might be a sign that we're using the wrong model and, in a sense, motivates our decision to use the 'all functions' model that we
+started with.
+
+But before we move on, I want to call your attention to something. Unless you have a bug in your code (this is a good time to check),
+the raw difference in means you calculated in @exr-diff-in-means and the corresponding part of @exr-repeat-using-models
+should be the same for every model. Let's think about why that's happening.
+
+To make sense of this phenomenon, we're going to think about the residuals we get when we predict $Y_i$ using two functions in our model: the least squares estimator $\hat \mu$ and a 'perturbed version' $\hat\mu + t m$ for any other function $m$ in our model. Or, to be precise, we're going to think about the residuals we get when we predict $Y_i$ using functions like this for a range of values of $t$, i.e., for functions
+
+$$ 
+m_t(w,x) = \hat \mu(w,x) + t m(w,x) \quad \text{ for numbers } \ \ t \ \ \text{ near zero } 
+$$
+
+We know that the least squares estimator $\hat \mu$ is the curve that minimizes the sum of squared residuals among all functions in our model, so we know that---if we think of the sum of squared residuals as a function of $t$ for curves like this---the minimum occurs at $t=0$ where $m_t=\hat\mu$. Let's see what the 'zero-derivative' condition characterizing this minimum tells us.
+
+$$
+\begin{aligned}
+0 
+&= \frac{d}{dt} \sum_{i=1}^n \qty{ Y_i - m_t(W_i,X_i) }^2 \Big|_{t=0}  
+&& \text{ is the zero-derivative condition} \\
+&= \sum_{i=1}^n 2\qty{ Y_i - m_\delta(W_i,X_i) } \times  -\frac{d}{dt} m_{t}(W_i,X_i) \Big|_{t=0} 
+&& \text{ using the chain rule } \\
+&= -2 \sum_{i=1}^n  \qty{ Y_i - \hat\mu(W_i,X_i) } m(W_i,X_i) 
+&& \text{ differentiating } \ m_{t} \ \text{ and evaluating at } \ t=0 \\
+\end{aligned}
+$$
+
+This tells us that, for any function $m$ in our model, if we multiply the least squares residuals $\hat\varepsilon_i=Y_i-\hat\mu(W_i,X_i)$ by the corresponding values $m(W_i,X_i)$ of that function and sum them up, we get zero. This is a generalization of the equation we used to show that the sample mean was the least squares estimator [here in Lecture 14](https://davidahirshberg.bitbucket.io/static/Lecture14.html#/the-least-squares-location-summary), where there was no multiplication by $m(W_i,X_i)$---where we just summed up the residuals. 
+
+::: {.callout-note}
+In linear algebra terms, this says that the vector $\hat\varepsilon$ of least squares residuals is *orthogonal* to every vector of predictions $[m(W_1,X_1) \ldots m(W_n,X_n)]$ we can get using curves in our model. If you think of *not orthogonal* as meaning 'looks a bit like', this makes intuitive sense. If the residuals looked a bit like the predictions of some function $m$ in our model, we'd be able to improve on the fit of $\hat\mu$ by adding a bit of that function to it: $\hat\mu + t m$ would, for small enough $t$, fit the data better than $\hat\mu$ would.
+:::
+
+Now let's think about what this tells us when we take $m$ to be the constant function $m(w,x)=1$ --- assuming we're in a model which, like every one we've discussed so far, includes that function. It tells us that the least squares estimator gets the overall mean right.
+$$
+0 = \sum_{i=1}^n \qty{ Y_i - \hat\mu(W_i,X_i) } \times 1 \quad \text{ so } \quad \frac{1}{n}\sum_{i=1}^n \hat\mu(W_i,X_i) = \frac{1}{n}\sum_{i=1}^n Y_i 
+$$
+
+That is, it tells us that the average of our predictions $\hat\mu(W_i,X_i)$ over the people in our sample is the same as the average of their outcomes $Y_i$. This is true *for any model* that includes the constant function $m(w,x)=1$: the all-functions model, the additive model, the parallel lines model, the horizontal lines model, and most other models you can think of. It's not true for the 'lines through the origin' model $\{ m(w,x) = b(w)x \}$, which is why people really dislike that model.
+
+We can say something similar about the average of our predictions $\hat\mu(W_i,X_i)$ for people with a specific treatment status $W_i=w$. If we use any model that includes an *indicator for that treatment status*, including any of the aforementioned four, then the average of our predictions $\hat\mu(W_i,X_i)$ over the people in our sample with treatment status $W_i=w$ is the same as the average of their outcomes $Y_i$. 
+$$
+\begin{aligned}
+0 &= \sum_{i=1}^n \qty{ Y_i - \hat\mu(W_i,X_i) } \times m(W_i,X_i) \qfor m(W_i,X_i) = \begin{cases} 1 & \text{ if } W_i=w \\ 0 & \text{ if } W_i \neq w \end{cases} \\
+  &= \sum_{i:W_i=w} \qty{ Y_i - \hat\mu(w,X_i) } \quad  \text{ so } \frac{1}{N_w}\sum_{i:W_i=w} \hat\mu(w,X_i) = \frac{1}{N_w}\sum_{i:W_i=w} Y_i \qfor N_w=\sum_{i:W_i=w} 1
+\end{aligned}
+$$
+  
+
+::: {#exr-delta-model-invariant .callout-exercise}
+Use this fact to explain why the difference in means you calculated in @exr-diff-in-means and the corresponding part of @exr-repeat-using-models is the same for every model. 
+:::
+
+::: {.callout-tip}
+Recall that the difference in means we're talking about looks like this.
+
+$$
+\frac{1}{N_w}\sum_{i:W_i=w} \hat\mu(w,X_i) - \frac{1}{N_{w'}}\sum_{i:W_i=w'} \hat\mu(w',X_i) \quad \text{for} \quad  w=1 \ \text{ and } \ w'=0
+$$
+
+What do we know about each of the terms in this difference?
+:::
+
+::: {.callout-solution}
+Look at the tip. No matter what model we use, each mean $\frac{1}{N_w}\sum_{i:W_i=w} \hat\mu(w,X_i)$ in this difference is, as discussed immediately above the exercise, equal to the mean outcome $\frac{1}{N_w}\sum_{i:W_i=w} Y_i$ of the people in our sample with treatment status $W_i=w$. 
+:::
+
+
+## Gerber, Green, and Larimer Michigan Voter Experiment
+
+Now let's move on to a different dataset. This one is from a field experiment conducted by Gerber, Green, and Larimer in Michigan---the same one we discussed in Lecture 6. 
+
+Let's start by loading the data. $Y$ will be an indicator for whether the voter turned out in the 2006 election, $X$ be the voter's age at the time of the election, and $W$ be an indicator for whether the voter received the treatment. $W=1$ indicates that they received the treatment---a letter encouraging them to turn out---and $W=0$ indicates that they did not. To make the data a bit easier to work with, I'm going to drop voters who are 96+ years old. What's nice about this is that it ensures we've got voters in both treatment groups at every remaining age.
+
+
+```{r}
+#| echo: true
+social.pressure = read.csv('social-pressure-data.csv')
+keep = social.pressure$treatment %in% c(' Control', ' Neighbors') & (2006 - social.pressure$yob)< 96
+turnout.data = data.frame(W=as.numeric(social.pressure[keep,'treatment'] == ' Neighbors'),
+                          X=2006-social.pressure[keep, 'yob'],
+                          Y = as.numeric(social.pressure[keep,'voted'] == 'Yes'))
+```
+
+Here's a plot a lot like the one we made for the bone density data. We'll show the individual points, the mean and standard deviation of turnout for each age/treatment group (as points with arms), and the proportion of patients in each group that received treatment (as bar heights). Here the raw data is a bit harder to look at for a few reasons.
+
+1. There are way more points.
+2. There are way more columns.
+3. The outcome is binary, so all the points in each column stack on top of each other.
+
+To make the plot more readable, we'll make the points transparent and jitter them a bit---both horizontally and vertically --- so they're not quite on top of each other. It helps, but it's still a bit hard to look at the raw data. The means and proportions are still easy enough to see, though.
+
+```{r}
+#| echo: true
+#| out-width: 100%
+
+plotX = function(w,x) { x + 0.75*(w-0.5) } 
+
+turnout.summary.plot = 
+  ggplot(turnout.data) + 
+    stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W)),
+                 geom='pointrange', fun=mean, 
+                                    fun.min=\(x)mean(x)-sd(x), 
+                                    fun.max=\(x)mean(x)+sd(x), alpha=.2, size=.5, linewidth=.5) +    
+    geom_bar(aes(x=plotX(W, X), y=10*after_stat(prop), fill=factor(W), color=factor(W)), 
+             position='identity', alpha=.1, linewidth=.1) + xlab('') 
+
+turnout.plot = turnout.summary.plot + 
+  geom_point(aes(x=plotX(W, X), y=Y,  color=factor(W)),
+            alpha=.01, size=.01, position=position_jitter(width=0.25, height=.1, seed=2))  
+
+turnout.plot
+```
+
+Now let's fit a few models and plot those in. We'll actually leave the individual points out because there are so many that the plots get a bit busy, so what we'll be plotting over are the means and proportions. We'll use the all-functions model, additive model, the parallel lines model, and the horizontal lines model. We already know the least squares fit of the all-functions model is going to go through the column means we've already plotted, so we don't really need to plot that. But to set up later code, we'll plot it anyway. 
+
+```{r}
+#| echo: true
+#| out-width: 100%
+#| layout-ncol: 2
+#| layout-nrow: 2
+#| fig-cap:
+#| - "All functions model"
+#| - "Additive model"
+#| - "Parallel lines model"
+#| - "Horizontal lines model" 
+
+prediction.function = function(model.fit) { function(w,x) { predict(model.fit, newdata=data.frame(W=w, X=x)) } }
+plot.predictions = function(muhat) { 
+  grid = expand.grid(W=c(0,1), X=min(turnout.data$X):max(turnout.data$X))
+  turnout.summary.plot +
+    geom_line(aes(x=X,  y=muhat(W, X), color=factor(W)), data=grid) + guides(color='none', fill='none')
+}
+
+all.functions.model.fit = lm(Y ~ factor(W)*factor(X), data=turnout.data)
+muhat.all = prediction.function(all.functions.model.fit)
+plot.predictions(muhat.all)
+
+additive.model.fit = lm(Y ~ factor(W) + factor(X), data=turnout.data)
+muhat.additive = prediction.function(additive.model.fit)
+plot.predictions(muhat.additive)
+
+parallel.lines.model.fit = lm(Y ~ factor(W) + X, data=turnout.data)
+muhat.parallel = prediction.function(parallel.lines.model.fit)
+plot.predictions(muhat.parallel)
+
+horizontal.lines.model.fit = lm(Y ~ factor(W),     data=turnout.data)
+muhat.horizontal = prediction.function(horizontal.lines.model.fit)
+plot.predictions(muhat.horizontal)
+```
+
+You can see that these models give us pretty different predictions at each age $x$ and treatment status $w$. Let's go ahead and plot an estimate of the **Conditional Average Treatment Effect** $\CATE(x) = \mu(1,x)-\mu(0,x)$ for each model, too.
+
+```{r}
+#| echo: true
+#| out-width: 100%
+x = min(turnout.data$X):max(turnout.data$X)
+CATE.data = data.frame(x=x, 
+                       all.functions    = muhat.all(1,x) - muhat.all(0,x),
+                       additive         = muhat.additive(1,x) - muhat.additive(0,x),
+                       parallel.lines   = muhat.parallel(1,x) - muhat.parallel(0,x),
+                       horizontal.lines = muhat.horizontal(1,x) - muhat.horizontal(0,x)) |>
+              pivot_longer(-x, names_to='model', values_to='CATE')
+CATE.data$model = factor(CATE.data$model, levels=c('all.functions', 'additive', 'parallel.lines', 'horizontal.lines'))
+ggplot(CATE.data) + geom_line(aes(x=x, y=CATE, color=model) ) + 
+                    facet_wrap(~model, ncol=4) + 
+                    ylab('Estimate of CATE(x)') + 
+                    guides(color=FALSE) 
+```
+
+Now let's do a few exercises mirroring the major ones we did for the bone density data.
+
+
+::: {#exr-average-treatment-effects .callout-exercise}
+Using the four estimates of $\CATE(x)$ plotted above, calculate corresponding estimates of the **Average Treatment Effect on the Treated Subpopulation** and the **Average Treatment Effect on the Whole Population**.
+$$
+\begin{aligned}
+\text{ATT} &= \frac{\sum_{j:w_j=1} \CATE(x_j)}{\sum_{j:w_j=1} 1} && \text{Average Treatment Effect on the Treated Subpopulation} \\
+\text{ATE} &= \frac{\sum_{j=1}^m \CATE(x_j)}{\sum_{j=1}^m 1}     && \text{Average Treatment Effect on the Whole Population}
+\end{aligned}
+$$
+
+To do this, average your estimate of the CATE over *the treated subsample* and over *the whole sample* respectively. You should get 8 estimates in total---an estimate of the ATT and ATE for each of the four models. 
+:::
+
+::: {.callout-tip}
+If you run the code above, then say `muhat.all(1,x)-muhat.all(0,x)`, you'll get an estimate of $\CATE(x)$ based on the all-functions model.
+And similarly for the other models.
+:::
+
+::: {.callout-solution}
+```{r}
+X = turnout.data$X
+W = turnout.data$W
+prediction.functions = list(all=muhat.all, additive=muhat.additive, parallel = muhat.parallel, horizontal=muhat.horizontal)
+map(prediction.functions, function(muhat) { 
+  CATEhat = function(x) { muhat(1,x) - muhat(0,x) } 
+  data.frame(ATT =  mean(CATEhat(X[W==1])), 
+             ATE =  mean(CATEhat(X)),
+             Delta = mean(muhat(1,X[W==1])) - mean(muhat(0,X[W==0])))
+}) |> bind_rows(.id='model')
+```
+:::
+
+When you see this, you'll notice that *every estimate is the roughly the same*, no matter which model you use and which summary you're estimating.
+When we saw matching estimates like this before, we took it as a sign that we were using the wrong model and therefore were getting bias. But we 
+know that can't be what's going on here.
+
+::: {#exr-no-bias .callout-exercise}
+Explain how you know that the estimates we get using one of these models can't be biased.
+:::
+
+
+::: {.callout-tip}
+Were we worried about bias earlier in the semester? What bearing does that have on this question?
+:::
+
+::: {.callout-solution}
+We know that when we're using the all-functions model, i.e. within-column means like we've used earlier in the semester, 
+we get unbiased estimates of population summaries like this.
+:::
+
+::: {#exr-diff-in-means-2 .callout-exercise}
+Suppose that instead of these average treatment effect estimates, you simply took the difference in turnout predictions for the treated and control groups. 
+That is, you calculate --- letting $\hat\mu$ be the least squares estimator of $\mu$ based on each of your four models --- this raw difference in mean predictions.
+$$
+\hat\Delta = \frac{1}{N_1}\sum_{i:W_i=1} \hat\mu(1,X_i) - \frac{1}{N_0}\sum_{i:W_i=0} \hat\mu(0,X_i).
+$$
+
+Report these estimates and compare them to the estimates of the ATT and ATE you calculated in the previous exercise.
+Did you really have to calculate them to know how they'd compare? Explain why or why not.
+You may want to refer to [this slide from Lecture 12](https://davidahirshberg.bitbucket.io/static/Lecture12.html#/revisiting-a-computational-trick)
+and the proportions $P_{w,x}$ drawn into our plots as bar heights.
+:::
+
+::: {.callout-solution}
+We reported our estimates $\hat\Delta$ above when we looked at the ATT and ATE. And we didn't really have to calculate them. 
+We knew they'd be the same as the ATE and ATT because there's no covariate shift. The distribution of age ($x$) that we average $\hat\mu(1,x)$ over when we calculate $\hat\Delta$ (that of the green dots) is exactly the same as the one we average it over when we calculate the ATT (green dots again) and approximately the same as the one we average it over when we calculate that ATE (the red and green dots combined). Similarly, the distribution of age we average $\hat\mu(0,x)$ over when we calculate $\hat\Delta$ (that of the red dots) is essentially the same as the distribution we average it over when we calculate the ATT $\hat\mu(0,x)$ over (green dots) and approximately the same as the one we average it over when we calculate the ATE (the red and green dots combined). We can see this from the heights of the red and green bars in the plot (the proportions $P_{0,x}$ and $P_{1,x}$ of red and green dots at each age $x$), which are always roughly equal to each other. And we didn't even have to look at the bars---we knew they'd be of roughly equal height ahead of time because treatment was randomized with probabilities that didn't depend on age. 
+
+Here's a summary. Randomization implies all numbers in each row of the table (i.e. using the same model) 
+from @exr-average-treatment-effects should be roughly the same.
+:::
+
+
+Now I'm going to ask a few questions that are a bit more open-ended. They're meant to get you thinking about the implications of these pieces. This first one is pretty straightforward.
+
+::: {#exr-open-ended-1 .callout-exercise}
+In this study, treatment was randomized with probabilities that did not depend on age, 
+so we knew even before looking at the data that these proportions $P_{0,x}$ and $P_{1,x}$, 
+the heights of the red and green bars respectively, would be roughly the same in each column.
+This is enough to tell you that it wasn't going to matter which model you used to estimate the ATT and ATE.
+Using your work on @exr-diff-in-means-2 and @exr-delta-model-invariant, explain why.
+:::
+
+::: {.callout-solution}
+
+@exr-diff-in-means-2 tells us that the difference in means $\hat\Delta$ will be the same for any of our four models.
+That is, it tells us that that every number in the last column of our table from @exr-average-treatment-effects will be exactly the same. And @exr-delta-model-invariant tells us that every number in each row of the table will be roughly the same. If we put those together, that tells us that every number in each row will be roughly the same as every number in the last column. That is, all the numbers in the table will be the roughly the same, including the column of ATT estimates and the column of ATE estimates we get using the four models.
+:::
+
+This second one is more challenging. I'll make it extra credit, but I encourage you to give it a shot.
+You'll probably learn something from it. And, after we review the solutions, both will be in-bounds as exam material. 
+You'll get a sense of what that means on the practice exam.
+
+::: {#exr-open-ended-2 .callout-exercise}
+**Extra Credit**.
+Suppose that treatment was randomized with probabilities that depends on a coarsened version of age---the probability
+differs for those with $age \le 50$ and $age > 50$ but not within those groups. Suppose I claim that you'll get roughly the
+same estimates of the ATT and ATE using the **all-functions model** and the **not-necessarily-parallel lines model** $\model=\qty{m(w,x)=a(w)+b(w)x}$.
+Do you agree? If so, explain why using the same reasoning you used in @exr-open-ended-1. If not, provide a counterexample by
+simulating an experiment with these properties and showing that the estimates differ.
+:::
+
+::: {.callout-solution}
+I'm going to hold off on posting a solution to this one so I can give you the opportunity to work on it over the weekend. I'll post an announcement about this soon.
+:::

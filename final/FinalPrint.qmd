@@ -1,0 +1,510 @@
+---
+title: "QTM 220 Final Exam (12/7)"
+format: pdf
+execute:
+  echo: false
+  warning: false
+editor: visual
+---
+
+\subsection*{Problem 1}
+
+Suppose you have a sample $Y_1,Y_2...,Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma$.
+
+Consider the following estimator for $\mu$: $\tilde{Y} = \frac{1}{2n}\sum_{i=1}^n Y_i$
+
+\subsubsection*{Part A}
+
+What is $E[\tilde{Y}]$?
+
+\vspace{3in}
+
+
+
+
+
+\subsubsection*{Part B}
+
+What is the bias of $E[\tilde{Y}]$ for $\mu$? 
+
+\vspace{2in}
+
+
+
+\subsubsection*{Part C}
+
+Showing your work, calculate $Var[\tilde{Y}]$.
+
+
+\vspace{5in}
+
+
+```{=tex}
+\subsubsection*{Part D}
+```
+How does $Var[\tilde{Y}]$ compare to $Var[\bar{Y}]$ (where $\bar{Y} = \frac{1}{n}\sum_{i=1}^n Y_i$)?
+
+\vspace{2in}
+
+\subsection*{Problem 2}
+
+Suppose we have a sample of $Y_1 \ldots Y_n$ and binary $X_1 \ldots X_n$ stored in an \textbf{R} dataframe \`df' with $n$ rows. We run this code.
+
+```{r}
+#| echo: false
+library(ggplot2)
+n <- 500
+x <- c(rep(0,n/2),rep(1,n/2))
+set.seed(220220)
+y <- 2.6*x +  rnorm(n) + runif(n,-1,1)
+
+
+df <- data.frame(y,x)
+
+
+
+q2<- ggplot(data = df, aes(x = x, y = y)) +
+  geom_jitter(width=.25) +
+  geom_hline(yintercept=mean(df$y[df$x==0]), linetype="dashed")+ 
+   geom_hline(yintercept=mean(df$y[df$x==1]), linetype="dashed")+ 
+  xlab("x") +
+  ylab("y") +
+  theme_bw() 
+
+```
+
+```{r}
+#| echo: true
+B=10000
+theta<- rep(NA,B)
+for( b in 1:B ){
+bootind = sample(1:n,size=n,replace=T)
+dfboot = df[bootind,]
+theta[b]<- (mean(dfboot$y[dfboot$x==1])-mean(dfboot$y[dfboot$x==0]))
+}
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the vector Y's elements
+#|  -  Jittered Scatterplot of X and Y
+ggplot() + geom_histogram(aes(x=y,     y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(y)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(y)+c(-1,1)*sd(y)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(y), xmin=mean(y)-1.96*sd(y), xmax=mean(y)+1.96*sd(y), y=.025)) + theme_bw() + xlab('') + ylab('')
+
+q2 
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the theta's elements
+
+ggplot() + geom_histogram(aes(x=theta, y=after_stat(density)), alpha=.3) + 
+           geom_vline(aes(xintercept=mean(theta)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(theta)+c(-1,1)*sd(theta)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(theta), xmin=mean(theta)-1.96*sd(theta), xmax=mean(theta)+1.96*sd(theta), y=.25)) + theme_bw() + xlab('') + ylab('')
+
+```
+
+
+\subsection*{Part a}
+
+What does this code calculate? State it in words and mark it with a 'a', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+sd(theta)
+```
+
+\vspace{1.5in}
+
+\subsection*{Part b}
+
+What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+
+```{r}
+#| echo: true
+#| eval: false
+(mean(y[x==1])-mean(y[x==0])) + 1.96*(sd(y[x==1])/sqrt(n1) + sd(y[x==0])/sqrt(n0))
+(mean(y[x==1])-mean(y[x==0])) - 1.96*(sd(y[x==1])/sqrt(n1) + sd(y[x==0])/sqrt(n0))
+
+```
+
+\vspace{1.5in}
+
+\subsection*{Part c}
+
+How could you calculate roughly the same thing as in part b using 'sd(theta)'?
+
+\vspace{1.5in}
+
+\subsection*{Part d}
+
+Why does part c not include $n_1$ or $n_0$? 
+
+\vspace{1.5in}
+
+\subsection*{Problem 3}
+
+Consider the following data set with treatment $d$, covariate $x$, and outcome $y$, which has been fit with a linear interactive model. Note that the treated units with $d=1$ are denoted as triangles, while the control units with $d=0$ are denoted with circles. The regression line for the treated units is solid, while the regression line for the control units is dashed.
+
+```{r}
+x <- c(0,2,4,0,0,2,4,4)
+y <- c(2,4,6,12.25,8,5.25,3.25,1)
+d <- c(1,1,1,0,0,0,0,0)
+#plot(x,y,pch=c(19,19,19,1,1,1,1,1))
+#abline(lm(y[d==0] ~x[d==0]),lty=2)
+#abline(lm(y[d==1] ~x[d==1]))
+
+df<- data.frame(x=x,y=y,d=d)
+m1<- lm(y[d==0] ~x[d==0],data=df)
+m2<- lm(y[d==1] ~x[d==1], data=df)
+plot<- ggplot(data = df, aes(x = x, y = y)) + geom_point(aes(shape=as.factor(d)),size=2) + scale_y_continuous(breaks = seq(0, 13, by = 1)) + geom_abline(slope=m1$coef[2], intercept=m1$coef[1], linetype="dashed")+geom_abline(slope=m2$coef[2], intercept=m2$coef[1])
+
+plot + theme(legend.position="none")
+```
+
+\subsubsection{Part a}
+
+What is the $\widehat{ATE}$ based on this model and data? Show your calculations.
+
+\vspace{1.5in}
+
+\subsubsection{Part b}
+
+What is the $\widehat{ATT}$ based on this model and data? Show your calculations.
+
+\vspace{1.5in}
+
+\subsubsection{Part c}
+
+What is the $\widehat{ATC}$ based on this model and data? Show your calculations.
+
+\vspace{1.5in}
+ 
+
+\subsection*{Problem 4}
+
+We run an experiment in which a treatment, $D$, is randomly assigned to participants conditional on sex. The table below shows our data, including our outcome of interest, $Y$.
+
+```{=tex}
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+Sex & Treatment (D) & Outcome (Y) & Y(1) & Y(0) \\
+\hline
+Male & 1 & 20 & & \\
+\hline
+Male & 0 & 5 & & \\
+\hline
+Male & 0 & 10 & & \\
+\hline
+Male & 0 & 5 & & \\
+\hline
+Female & 1 & 10 & & \\
+\hline
+Female & 1 & 5 & & \\
+\hline
+Female & 0 & 5 & & \\
+\hline
+Female & 0 & 0 & & \\
+\hline
+Female & 0 & 5 & & \\
+\hline 
+Female & 1 & 10 & & \\
+\hline
+Female & 0 & 5 & & \\
+\hline 
+Female & 1 & 5 & & \\
+\hline
+\end{tabular}
+```
+\subsubsection*{Part a}
+
+Fill in the table with potential outcomes based on the observed data. Put a question mark (?) in the cells for which you do not have data.
+
+\subsubsection*{Part b}
+
+What is the probability of receiving treatment for males? What is the probability of receiving treatment for females?
+
+\vspace{1.5in}
+
+\subsubsection*{Part c}
+
+What is the treatment effect among males? What is the treatment effect among females?
+
+\vspace{1.5in}
+
+\subsubsection*{Part d}
+
+If you ignored the conditional randomization and calculated the average treatment effect without accounting for sex, what would your estimate be?
+
+\vspace{1.5in}
+
+\subsubsection*{Part e}
+
+To analyze our data, we are interested in fitting the following model: $$Y_i = \beta_0 + \beta_1 D_i + \beta_2 Sex_i + \beta_3 D_i:Sex_i$$ where $Sex_i =1$ for males and $=0$ for females. Fill in the table below using $\beta$s
+
+```{=tex}
+\begin{tabular}{|p{5cm}|p{7cm}|}
+\hline
+& $\beta$s \\
+\hline 
+Avg Y [Treated, Male] & \\
+\hline 
+Avg Y [Control, Male] &  \\
+\hline 
+Avg Y [Treated, Female] & \\
+\hline 
+Avg Y [Control, Female] & \\
+\hline 
+$\hat{ATE}_{Male}$ & \\
+\hline 
+$\hat{ATE}_{Female}$ &  \\
+\hline
+\end{tabular}
+```
+
+\subsubsection*{BONUS: Part f}
+When we run this as an interactive regression in R, why might we be concerned about using the standard errors lm() gives us?
+
+\vspace{1.5in}
+
+\subsection*{Problem 5}
+
+Consider the following data with four observations.
+
+```{r}
+x <- c(1,2,3,4)
+y <- c(2,4,1,3)
+plot(x,y,pch=19,xlim=c(0,5),ylim=c(-2,6))
+```
+
+Our goal is to use leave one out cross-validation to choose between a linear regression model and a quadratic regression model for this data. Below we have plotted these data four times. In the top left panel, the left-most observation has been left out (denoted by an open circle). In the top right, the second observation has been left out. In the bottom left, the third observation has been left out. In the bottom right, the right-most observation has been left out.
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+
+x <- c(1,2,3,4)
+y <- c(2,4,1,3)
+#par(mfrow=c(2,2))
+plot(x,y,pch=c(1,19,19,19),xlim=c(0,5),ylim=c(-2,6))
+plot(x,y,pch=c(19,1,19,19),xlim=c(0,5),ylim=c(-2,6))
+plot(x,y,pch=c(19,19,1,19),xlim=c(0,5),ylim=c(-2,6))
+plot(x,y,pch=c(19,19,19,1),xlim=c(0,5),ylim=c(-2,6))
+```
+
+\subsubsection{Part A}
+
+On the figure above, draw a linear model for each of the plots based on the non-left-out data.
+
+\subsubsection{Part B}
+
+On the figure above, draw the residuals from the linear models to the left-out observation for each of the plots.
+
+\subsubsection{Part C}
+
+On the figure above, draw a quadratic regression line (i.e., line that can be parabolic) for each of the plots based on the non-left-out data.
+
+\subsubsection{Part D}
+
+On the figure above, draw the residuals from the quadratic models to the left-out observation for each of the three plots.
+
+\subsubsection{Part E}
+
+Based on the residuals in parts B and D, which model is preferred?
+
+\vspace{1.5in}
+
+\subsection*{Problem 6}
+
+\subsubsection*{Part A}
+
+We have collected a sample of $y$, $x$, and $z$. 
+
+```{r}
+#| echo: false
+
+set.seed(220)
+n=100
+z<- runif(n,-5,10)
+x<- rnorm(n,20,2) + (-2)*z
+y<- 2*x + (.85)*z + rnorm(n,0,2)
+
+df<- data.frame(z=z,x=x,y=y)
+
+modsimp<- lm(y~x,data=df)
+
+modmulti<- lm(y~x+z,data=df)
+
+modyz<- lm(y~z,data=df)
+residyz<- residuals(modyz)
+modxz<- lm(x~z,data=df)
+residxz<- residuals(modxz)
+rdf<- data.frame(ryz=residyz,rxz=residxz)
+```
+
+We run a simple regression $lm(y \sim x)$ and get the following output: 
+
+```{r}
+#| echo: false
+#summary(modsimp)
+modsimp
+```
+
+We run a multiple regression $lm(y \sim x+z)$ and get the following output: 
+
+```{r}
+#| echo: false
+#summary(modmulti)
+modmulti
+```
+
+The following plots show our data: 
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Scatterplot of x and y
+#|  -  Scatterplot of residuals from lm(x~ z) and lm(y~ z)
+a1<- ggplot(data = df, aes(x = x, y = y)) +
+  geom_point() + xlim(-6,15)+ylim(-30,45) + xlab("x") +
+  ylab("y") + geom_abline(slope=modsimp$coef[2], intercept=modsimp$coef[1], linetype="dashed") +
+  theme_bw()
+
+a2<- ggplot(data = rdf, aes(x = rxz, y = ryz)) +
+  geom_point() + xlim(-6,15)+ylim(-30,45) +  xlab("r_(x~z)") +
+  ylab("r_(y~z)") + geom_abline(slope=modmulti$coef[2], intercept=modmulti$coef[1], linetype="dashed") +
+  theme_bw()
+
+
+a1
+a2
+```
+
+\vspace{1.5in}
+
+What is the slope of the line in Figure 5? (write a number)
+
+\vspace{1in}
+
+\subsubsection*{Part B}
+
+Which plot (Figure 4 or Figure 5) provides the residuals from the multiple regression $y \sim x + z$? 
+
+\vspace{1.5in}
+
+\subsection*{Problem 7}
+
+\subsubsection*{Part A}
+
+Suppose we want $\beta_1$ from $y_i = \beta_0 + \beta_1 x_i + \beta_2 z_i + \beta_3 x_i*z_i + e_i$ but we run the regression $lm (y\sim x)$ without $z$ or the interaction term. We have de-meaned our variables $x_i$ and $z_i$ such that $\bar{x}=\sum_{i=1}^n x_i =0$ and $\bar{z}=\sum_{i=1}^n z_i =0$. Derive what your coefficient on $x$ from $lm (y\sim x)$, which is $\frac{\sum_{i=1}^n x_i y_i}{\sum_{i=1}^n x_i^2 }$, will be in terms of $\beta$s and \textbf{justify your steps}. Hint: you can relabel $x_i*z_i$ as a different variable, $w_i$.
+
+
+
+\vspace{8in}
+
+
+\subsubsection*{Part B}
+
+```{r}
+#| echo: false
+
+p3n <- 200
+z <- c(rep(0,p3n/2),rep(1,p3n/2))
+set.seed(220220)
+x <-   rnorm(p3n,mean=1,sd=1) + z*rnorm(p3n,mean=3,sd = 1)
+y <- 12 + (-3)*x + (4)*z + 8*x*z + rnorm(p3n) + runif(p3n,-4,6)
+
+
+dfp3 <- data.frame(y,x,z)
+
+q1 <- ggplot(data = dfp3, aes(x = x, y = y)) +
+  geom_point(aes(shape = factor(z)),size = 1,alpha=.5) +
+  scale_shape_manual(values = c(1,19), label = c("z=0","z=1")) +
+  xlab("x") +
+  ylab("y") +
+  theme_bw() +
+  theme(panel.grid = element_blank(),
+        legend.box.just = "left",
+        legend.justification = c("left","top"),
+        legend.position = c(0,1),
+        legend.margin = margin(6,6,6,6),
+        legend.title = element_blank(),
+        legend.box.background = element_rect(color="black",size=1))
+
+q2<- ggplot(data = dfp3, aes(x = x, y = z)) +
+  geom_jitter(height=.25) +  xlab("x") +
+  ylab("z") +
+  theme_bw()
+
+
+
+modone<- lm(y~x+z+x:z,data=dfp3)
+modtwo<- lm(z ~ x, data=dfp3)
+modthree<- lm(x*z ~ x,data=dfp3)
+modfour<- lm(y~x,data=dfp3)
+```
+
+
+We have collected $y$, $x$, and a binary variable $z$. The scatter plots below show our data. 
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Scatterplot 1
+#|  -  Scatterplot 2 (jittered)
+q1
+q2
+
+```
+
+Do you expect the coefficient on $x$ from the simple regression of $y$ on $x$ ($lm(y\sim x)$) to be: (choose one, no explanation needed)
+
+\begin{itemize}
+\item Positive
+\item Negative
+\item Zero 
+\end{itemize}
+
+
+\subsubsection*{BONUS: Part C}
+
+We then run the regression $lm(y \sim x+ z+x*z)$ which gives us the following output: 
+
+```{r}
+#summary(modone)
+modone
+```
+And we run the regression $lm(z \sim x)$ which gives us the following output: 
+```{r}
+#summary(modtwo)
+modtwo
+```
+
+And we run the regression $lm(x*z \sim x)$ which gives us the following output: 
+```{r}
+#summary(modthree)
+modthree
+```
+
+
+
+\bigskip 
+
+
+Use these outputs to calculate the coefficient on $x$ from the simple regression $lm(y\sim x)$. Explain your steps and define any notation you use. Plug in the estimates from your output (you can leave it as an equation). 
+
+
+
+
+
+
+

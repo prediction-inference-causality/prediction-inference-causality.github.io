@@ -1,0 +1,562 @@
+---
+title: "Practice Final"
+subtitle: "QTM 220"
+---
+
+::: hidden
+
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\CATE}{CATE}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+\DeclareMathOperator*{\argmin}{argmin}
+\newcommand{\model}{\mathcal{M}}
+$$
+
+:::
+
+```{r}
+library(tidyverse)
+theme_set(theme_minimal())
+options(scipen = 1, digits = 2)
+```
+
+### Summary
+Whether you're in academia or industry, you'll run into people who are analyzing data badly. 
+Often, what they're doing is both the established common practice and obviously wrong. In this practice exam,
+I'm going to run you through some examples in which this is happening. I'm going to ask you how to do better;
+explain what's going wrong; and, in some cases, deal with what happens when you've convinced someone to do better
+but they haven't entirely understood you. Obviously, in real life not everything that happens can be explained
+using the concepts we've learned in this class, and often the problems are a bit better-hidden than they are here.
+But it's surprising---at least to me---how often these things come up in a relatively obvious way. 
+
+Aside from giving you some practice recognizing and dealing with this stuff, what I hope to do here is give you some examples to help you explain what's going on. Often, if someone's making a mistake in a subtler form or a more complex problem, you may be able to point out that the situation in analogous to one here where the problem is very obvious. 
+
+Enough about my intentions. I hope you find this useful.  For the exam, expect questions fairly similar to these --- probably a bit easier --- with less text around them. And perhaps some like questions you've seen on previous exams that don't appear here.
+
+
+## Problem 1
+
+```{r}
+set.seed(1)
+mu = function(x){.2 + x + .37*sinpi(x)}
+n = c(10, 20, 40, 1000)
+X = round(runif(max(n)), 1)
+Y = mu(X) + .4*rnorm(max(n))
+data = data.frame(X=X, Y=Y)
+
+ggplot(data) + geom_point(aes(x=X, y=Y), position=position_jitter(w=.025,h=0), alpha=.3)  
+```
+
+Suppose we observe a sample of $(X_1, Y_1), \ldots, (X_n, Y_n)$ drawn with replacement from the population $(x_1,y_1) \ldots (x_m,y_m)$ plotted above and we're interested in estimating the subpopulation mean $\mu(0) = \sum_{j:x_j=0} y_j / \sum_{j:x_j=0} 1$.
+
+To do this, we use least squares regression to fit a line to the data and then let its value $\hat\mu(0)$ at $x=0$ be our estimate. Below is a plot of its sampling distribution at sample size $n=13$. As usual, I've plotted its mean, mean plus or minus one standard deviation, and mean plus or minus two standard errors as solid, dashed, and dotted blue lines respectively. I've also plotted the subpopulation mean $\mu(0)$ itself as a green line. 
+
+You may assume that the standard error of the estimator at sample size $n$ is $\sigma/\sqrt{n}$ for some number $\sigma$ *that does not vary with sample size*, just like it would be if $\hat\mu(0)$ were the mean of a sample of size $n$.
+
+
+
+```{r} 
+sampdist = replicate(1000, {
+  samp = data[sample(1:nrow(data), 13, replace=TRUE), ]
+  model = lm(Y~X, data=samp)
+  c(coef(model)[1])
+})
+ggplot() + geom_histogram(aes(x=X, y=after_stat(density)), 
+  data=data.frame(X=sampdist), bins=50, alpha=.3) +
+  geom_vline(aes(xintercept=mu(0)), color='green', linewidth=1.5) +
+  geom_vline(aes(xintercept=mean(sampdist)), color='blue') +
+  geom_vline(aes(xintercept=mean(sampdist)+c(-1,1)*sd(sampdist)), color='blue', linetype='dashed') + 
+  geom_vline(aes(xintercept=mean(sampdist)+c(-2,2)*sd(sampdist)), color='blue', linetype='dotted') 
+```
+
+::: {.callout-exercise} 
+### Part A
+At which of these three samples sizes --- 25, 50, or 100 --- would you expect that interval $\hat\mu(0) \pm 1.96\ \text{se}$ to have a width of roughly $1/2$? 
+:::
+
+::: {.callout-solution}
+50. 
+
+Here's why. If standard error is $\sigma/\sqrt{n}$, increasing sample size by a factor of $s$ will decrease it by a factor of
+$(\sigma/\sqrt{sn}) / (\sigma/\sqrt{n}) = \sqrt{n/(sn)} = 1/\sqrt{s}$. So, if we quadruple the sample size, the standard error will be halved. 
+In this instance, we can see from the plot that the standard error at sample size $13$ is roughly $1$, so quadrupling that to roughly $50$ will give us a standard error of roughly $1/2$.
+:::
+
+::: {.callout-exercise}
+### Part B
+At which of these three samples sizes --- 25, 50, or 100 --- would you expect the coverage of the usual 95\% confidence interval $\hat\mu(0) \pm 1.96\ \text{se}$ to be closest to 50\%?
+:::
+::: {.callout-solution}
+50. 
+
+Here's why. The bias of a least squares estimator is the error it makes when fit to the population and therefore does not depend on sample size. 
+Our bias is roughly 1 standard error at sample size $n=13$ and therefore will be roughly 2 standard errors at sample size $n=50$. And we get roughly 50% coverage when the bias is roughly 2 standard errors.
+
+You can see this by drawing the integral you'd use to do the coverage calculation. You do not, of course, actually have the sampling distribution for $n=50$ so you can't draw that exactly. But you know it should be centered in the same place as the one you do have, but about half as wide. I've drawn that below in red. For what it's worth, I've also drawn the actual sampling distribution for $n=50$ in blue. You'd integrate this sampling distribution from two standard errors left of the estimation target to two standard deviations right of it---i.e., over the region I've shaded yellow. And because that yellow region extends right to the center of the (roughly symmetric) sampling distribution and left far enough to include essentially all of its probability mass, this integral is roughly $.5$---half of the sampling distribution's total mass. 
+```{r} 
+sampdist.50 = replicate(1000, {
+  samp = data[sample(1:nrow(data), 50, replace=TRUE), ]
+  model = lm(Y~X, data=samp)
+  c(coef(model)[1])
+})
+ggplot() + 
+  geom_histogram(aes(x=X, y=after_stat(density)), 
+    data=data.frame(X=sampdist.50), bins=50, alpha=.3, fill='red') +
+  geom_histogram(aes(x=X, y=after_stat(density)), 
+    data=data.frame(X=(1/2)*sampdist + (1/2)*mean(sampdist)), bins=50, alpha=.3, fill='blue') +
+  geom_vline(aes(xintercept=mu(0)), color='black') +
+  geom_vline(aes(xintercept=mean(sampdist.50)), color='blue') +
+  geom_vline(aes(xintercept=mean(sampdist.50)+c(-1,1)*sd(sampdist.50)), color='blue', linetype='dashed') + 
+  geom_vline(aes(xintercept=mean(sampdist.50)+c(-2,2)*sd(sampdist.50)), color='blue', linetype='dotted') +
+  geom_area(aes(y=5, x=mu(0)+c(-2,2)*sd(sampdist.50)), fill='yellow', color='yellow', alpha=.3)
+```
+
+:::
+
+
+## Problem 2
+
+You have a sample $Y_1,Y_2...,Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma$.
+The usual estimate for $\mu$ is the sample mean $\bar{Y} = \frac{1}{n}\sum_{i=1}^n Y_i$. But one of your coworkers has a clever idea to reduce variance---instead of dividing by $n$, they divide by $n+10$. This is their estimator: $\tilde{Y}_{10} = \frac{1}{n+10}\sum_{i=1}^n Y_i$. You try to convince them it's a bad idea by being a bit hyperbolic---you argue that if that's a good idea, then why not divide by $n+100$? They, unfortunately, *love* this idea.  You now have to explain why this is a bad idea.
+
+::: {.callout-exercise}
+### Part A
+Calculate the bias and standard error of the three estimators $\bar{Y}$, $\tilde Y_{10}$, and $\tilde Y_{100} = \frac{1}{n+100}\sum_{i=1}^n Y_i$.  
+:::
+::: {.callout-solution}
+We've seen versions of this one a million times. These are $\tilde Y_0$, $\tilde Y_{10}$, and $\tilde Y_{100}$ for 
+$\tilde Y_k = \frac{1}{n+k}\sum_{i=1}^n Y_i$, so we'll do the general case. We'll base our arguments on our knowledge that $\tilde Y_k$ is a constant $n/(n+k)$ times $\bar Y$, which we know to be unbiased and to have standard error $\sigma/\sqrt{n}$. Here's the bias.
+
+ \begin{align*}
+ E[\tilde{Y}_k] - \mu 
+ &= \E[\frac{n}{n+k}\bar Y] - \mu \\
+ &= \frac{n}{n+k}\E[\bar Y] - \mu \\
+ &=\frac{n}{n+k}\mu - \mu \\
+ &= \qty(\frac{n}{n+k} - 1)\mu \\
+ &= \qty(\frac{n}{n+k} - \frac{n+k}{n+k})\mu \\
+ &= -\frac{k}{n+k}\mu
+  \\\end{align*}
+
+And the estimator's variance.
+
+ \begin{align*}
+ V[\tilde{Y}_k] 
+ &= V[\frac{n}{n+k} \bar {Y}] \\
+ &= \qty(\frac{n}{n+k})^2 V[\bar{Y}] \\
+ &= \frac{n^2}{(n+k)^2} \frac{\sigma^2}{n} \\
+ &= \frac{ n\sigma^2}{(n+k)^2}=\frac{\sigma^2}{n} \times \frac{n^2}{(n+k)^2}
+ \end{align*}
+ so the estimator's standard error is $\sigma/\sqrt{n} \times n/(n+k)$.
+ And it follows that the bias over the standard error is 
+
+ $$
+ \frac{\text{bias}}{\text{se}} = -\frac{k}{n+k} \mu \times \frac{n+k}{\sigma \sqrt{n}} = -\frac{\mu k}{\sigma \sqrt{n}} 
+ $$
+
+
+To help you draw in Part B, you may want to make a table of information like this. For $\sigma=1$:
+
+```{r}
+se = function(n,k){1/sqrt(n) * n/(n+k)}
+```
+
+$$
+\begin{array}{lllll}
+\text{estimator} &  \text{bias/se} (n=100) & \text{bias/se} (n=10,000) 
+& \text{se}(n=100) & \text{se}(n=10,000) \\
+\hline \\
+\bar Y  
+& 0\mu 
+& 0\mu 
+& \frac{1}{10} 
+& \frac{1}{100}  \\
+\tilde Y_{10}   
+& -\frac{10}{\sqrt{100}}\mu=-1\mu   
+& -\frac{10}{\sqrt{10,000}}\mu=-\frac{10}{100}=-.1\mu  
+&  \frac{1}{\sqrt{100}} \times \frac{100}{110} \approx `{r} se(100, 10)`
+&  \frac{1}{\sqrt{10,000}} \times \frac{10,000}{10,010} \approx `{r} se(10000, 10)` \\
+\tilde Y_{100}  
+&  -\frac{100}{\sqrt{100}}\mu=-10\mu  
+& \frac{-100}{\sqrt{10,000}}\mu=-\frac{100}{100}=-1\mu 
+& \frac{1}{\sqrt{100}} \times \frac{100}{200} \approx `{r} se(100,100)` & \frac{1}{\sqrt{10,100}}\approx `{r} se(10000,100)`  
+\end{array}
+$$
+
+:::
+
+::: {.callout-exercise}
+### Part B 
+For $\mu=0$ and $\sigma=1$, draw a picture of the sampling distribution of $\bar{Y}$, $\tilde Y_{2}$, and $\tilde Y_{100}$ at sample sizes $n=100$ and $n=10,000$. Clearly label (i) $\mu$, (ii) the center of your sampling distribution,
+and (iii) the standard error of your sampling distribution. 
+Repeat for $\mu=1$ and $\sigma=1$.
+:::
+::: {.callout-solution}
+I'll plot normal approximations to $\bar Y$ and $\tilde Y_{10}$, $\tilde Y_{100}$ in green, blue, and red respectively
+with their mean +- 2 standard errors indicated by dotted lines. The mean $\mu$ will be in black. To reduce clutter---this is a lot of plots---I won't plot the sampling distribution means.
+
+```{r manynormals}
+#| layout-ncol: 2
+#| layout-nrow: 2 
+#| fig-cap:
+#|  - mu=0 n=100
+#|  - mu=0 n=10,000
+#|  - mu=1 n=100
+#|  - mu=1 n=10,000 
+x = seq(-2,2,by=.001)
+
+plot.normals = function(mu, n) {
+  the.se   = function(k) se(n,k)
+  the.bias = function(k) -(mu*k/sqrt(n+k)) * the.se(k)
+  ggplot() + 
+    geom_area(aes(x=x, y=dnorm(x, mean=mu+the.bias(0), sd=the.se(0))), alpha=.05, color='green', fill='green') +
+    geom_vline(aes(xintercept=mu+the.bias(0) + c(-2,2)*the.se(0)), color='green', linetype='dotted') +
+    geom_area(aes(x=x, y=dnorm(x, mean=mu+the.bias(10), sd=the.se(10))), alpha=.05, color='blue', fill='blue') +
+    geom_vline(aes(xintercept=mu+the.bias(10) + c(-2,2)*the.se(10)), color='blue', linetype='dotted') +
+    geom_area(aes(x=x, y=dnorm(x, mean=mu+the.bias(100), sd=the.se(100))), alpha=.05, color='red', fill='red') +
+    geom_vline(aes(xintercept=mu+the.bias(100) + c(-2,2)*the.se(100)), color='red', linetype='dotted') +
+    geom_vline(aes(xintercept=mu), color='black') + xlab('') + ylab('') 
+}
+
+plot.normals(0,100) + scale_x_continuous(breaks=seq(-4/10, 4/10, by=1/10), limits=c(-5/10,4/10)) 
+plot.normals(0,10000) + scale_x_continuous(breaks=seq(-14/100, 4/100, by=1/100), limits=c(-15/100,4/100)) 
+plot.normals(1,100)   + scale_x_continuous(breaks=1+seq(-4/10, 4/10, by=1/10), limits=1+c(-5/10,4/10))
+plot.normals(1,10000) + scale_x_continuous(breaks=1+seq(-14/100, 4/100, by=1/100), limits=1+c(-14/100,4/100)) 
+```
+
+:::
+
+::: {.callout-exercise}
+### Part C
+Using your drawings from part B, explain why both your coworker's proposal and your hyperbolic proposal to use $\tilde Y_{100}$ to estimate $\mu$ is a bad idea. 
+:::
+::: {.callout-solution}
+The idea of using the $\tilde{Y}_k$ estimators is to reduce standard error---to get a narrower confidence interval and therefore a more precise claim about the value of $\mu$. But, in essence, either we don't get a meaningful reduction in standard error or we get a level of bias that makes the narrower confidence interval have bad coverage. We see the no-meaningful-reduction thing happen for $n=10,000$, where either value of $k$ is a drop in the bucket. And we see the bad-coverage thing happen for $n=100$, where the bias in the $k=100$ case is so large that confidence intervals around it will have essentially zero coverage. None of this happens if $\mu$ happens to be zero or very small, but if we knew that, we wouldn't need to estimate it.
+:::
+
+::: {.callout-exercise}
+### Part D
+This coworker isn't going anywhere. Next time, it might be better to bite your tongue and  save time. If your sample size was $n=10,000$, maybe your coworker's idea to use $\tilde Y_{10}$ really wasn't creating much of a problem. What would you need to know about $\mu$ and $\sigma$ to justify this? The pictures you drew in part B might not really illustrate the potential problem. You may want to draw a new one for different values of $\mu$ and $\sigma$.
+:::
+
+::: {.callout-solution}
+What you really need to know is that $\text{bias}/\text{se}=\mu k/ \sigma \sqrt{n}$ is small. For $k=10$ and $n=10,000$,
+that's $\mu/ 10\sigma$. We don't see a problem with $Y_{10}$ in our drawings because this is either $0$ (in the plots on the left) or $1/10$ (in the plots on the right). But if $\mu$ were very large or $\sigma$ very small this could be a problem. But, if you like, you can estimate both, see whether it's a problem, and humor your coworker if it's not.
+:::
+
+
+### Problem 3
+
+```{r scatter}
+mu = function(w, x){.2 + (1-w)*sinpi(x/2) + w*x}
+pi = function(x){ 1 - (.1 + .8*abs(cospi(x))) }
+
+set.seed(1)
+n = 1000
+X = sample(seq(0,1,by=.25), n, replace=T)
+W = rbinom(n, 1, pi(X))
+Y = mu(W,X) + .02*rnorm(n)
+data = data.frame(X=X, W=W, Y=Y)
+summaries = data %>% group_by(W,X) %>% summarize(mu=mean(Y), n = n()) %>%
+                     group_by(W) %>% mutate(f=n/sum(n))
+
+scatter = ggplot(data) + 
+  geom_point(aes(x=X+.01*(2*W-1), y=Y, color=factor(W)), 
+             position=position_jitter(w=.1,h=0), alpha=.2) + 
+  scale_x_continuous(breaks=seq(0,1,by=.25)) + 
+  scale_y_continuous(breaks=seq(0,1.3,by=.1)) +
+  xlab('') + ylab('') + 
+  geom_col(aes(x=X, y=f/2, fill=factor(W), color=factor(W)), data=summaries, position='identity', alpha=.2, width=.25) +
+  guides(color='none', fill='none') + theme_bw()
+scatter 
+```
+
+We have a sample of $(W_1, X_1, Y_1) \ldots (W_n,X_n,Y_n)$ drawn with replacement from some population and we've stored it in an **R** dataframe `data` with $n$ rows. I've plotted it above. The $X$ variable is on the horizontal axis, the $Y$ variable is on the vertical axis, and the $W$ variable, which is binary, is indicated by color---green for $W=1$, red for $W=0$. The sample is from a conditionally randomized study, in which $W$ is randomized conditional on $X$ with probability $\pi(x)=P(W=1 \mid X=x)$. The proportion of times that $X$ takes on each value $x$ when $W=0$ and when $W=1$, $\hat p(0,x)$ and $\hat p(1, x)$ respectively, are plotted as histograms in matching colors. Keep in mind that the grayish part of the histogram is where the red and green one overlap. $\hat p(0,x)$ and $\hat p(1,x)$ are also given, as numbers, in the table below.
+
+```{r summaries}
+f0 = summaries %>% filter(W==0)
+f0 = f0[order(f0$X),]
+f1 = summaries %>% filter(W==1)
+f1 = f1[order(f1$X),]
+options(digits=2)
+```
+
+$$
+\begin{array}{lll}
+x & \hat p(0,x) & \hat p(1, x) \\
+\hline
+0 & `r f0$f[1]` & `r f1$f[1]` \\
+\frac14 & `r f0$f[2]` & `r f1$f[2]` \\
+\frac24 & `r f0$f[3]` & `r f1$f[3]` \\
+\frac34 & `r f0$f[4]` & `r f1$f[4]` \\
+1 & `r f0$f[5]` & `r f1$f[5]` \\
+\end{array}
+$$
+
+
+## Part A
+
+Suppose your coworker fits  the *parallel lines model* by least squares. 
+That is, they make prediction $\hat\mu(w,x)$ using the following function.
+
+$$
+\begin{aligned}
+\hat \mu &= \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2 \qquad \\
+&\qqtext{ where } \model = \qty{m(w,x) = a(w) + bx  \ \text{ for all functions $a$ and numbers $b$ }}
+\end{aligned}
+$$
+
+```{r}
+#| echo: false
+additive.model = lm(Y~W+X, data=data) 
+```
+
+They claim that the difference in the green and red lines' $y$-intercepts, $\hat\mu(1,0)-\hat\mu(0,0) = `{r} coef(additive.model)[2]`$, is a pretty good estimate of the Average Treatment Effect on the Treated (ATT). 
+You're not sure, so you plot their fitted model. Here's what you see. As usual, $\hat\mu(1,x)$ is the green line and $\hat\mu(0,x)$ is the red one.
+
+
+```{r}
+muhat.additive = function(w,x) { predict(additive.model, newdata=data.frame(W=w, X=x)) }
+grid = expand.grid(X=seq(0,1,by=.01), W=0:1)
+scatter + geom_line(aes(x=X, y=muhat.additive(W,X), color=factor(W)), data=grid)
+```
+
+::: {.callout-exercise}
+### Part A
+Do you think their estimate is biased up (too large) or down (too small)? Referring to the plot, explain why. 
+:::
+
+::: {.callout-solution}
+It's biased up. Looking at the distribution of the treated people --- count the green dots or look at the green histogram, where it's been done for you --- we see that the ATT is essentially an average of the difference between the green and red lines in the middle of the plot. And when you look there the green line fits the data but the red line is an underestimate: 
+$\text{good} - \text{too small} = \text{too big}$.
+:::
+
+
+```{r}
+#| echo: false
+quadratic.formula  = Y ~ W*(1+X+I(X^2))
+quadratic.model = lm(quadratic.formula, data=data) 
+```
+
+## Part B
+
+Hearing your concerns, your coworker decides to try a different model: a (non-additive) quadratic model. 
+That is, they're making predictions using a function 
+
+$$
+\hat \mu(w,x) = \hat a(w) + \hat b(w)x + \hat c(w)x^2 \qqtext{ for $\hat a$, $\hat b$, $\hat c$ as in this table:} 
+\begin{array}{l|ll}
+w & 0 & 1 \\
+\hline
+\hat a(w) & `{r} coef(quadratic.model)[1]` & `{r} coef(quadratic.model)[1] + coef(quadratic.model)[2]` \\
+\hat b(w) & `{r} coef(quadratic.model)[3]` & `{r} coef(quadratic.model)[3] + coef(quadratic.model)[5]` \\
+\hat c(w) & `{r} coef(quadratic.model)[4]` & `{r} coef(quadratic.model)[4] + coef(quadratic.model)[6]` \\
+\end{array}
+$$
+
+that they've chosen by solving this least squares problem:
+
+$$
+\begin{aligned}
+\hat \mu &= \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i)}^2 \\
+&\qqtext{ where } \model = \qty{m(w,x) = a(w) + b(w)x + c(w)x^2  \text{ for all functions $a$, $b$, $c$ } }. 
+\end{aligned}
+$$
+
+
+And they show it does a pretty good job of fitting the data.
+```{r}
+muhat.quadratic = function(w,x) { predict(quadratic.model, newdata=data.frame(W=w, X=x)) }
+grid = expand.grid(X=seq(0,1,by=.01), W=0:1)
+scatter + geom_line(aes(x=X, y=muhat.quadratic(W,X), color=factor(W)), data=grid)
+```
+
+They're confused. It looks to them like the function $\hat\mu$ is fitting the data. But when they compare the green and red curves' $y$-intercepts, $\hat\mu(1,0)-\hat\mu(0,0)=0$, they get a number that doesn't seem like a good estimate of the ATT. 
+
+::: {.callout-exercise}
+### Part B
+How would you propose to use their model to estimate the ATT? Give a formula for you estimator in terms of quantities you see in the plot and then, using the information above, calculate an actual numerical value. I haven't tried to make the numbers nice, so you may want a calculator for this one.
+
+```{r}
+beta3 = coef(quadratic.model)[2]
+beta4 = coef(quadratic.model)[5]
+beta5 = coef(quadratic.model)[6]
+```
+
+:::
+::: {.callout-solution}
+
+To estimate the ATT, we want to average the difference $\hat\mu(1,x)-\hat\mu(0,x)$ between the green and red curves over the distribution of the green points, i.e., using the weights $\hat p(1, x)$ shown in the green histogram. Abstractly, here's our estimate.
+$$ 
+\widehat{ATT} = \sum_x \hat p(1,x) \qty{ \hat\mu(1,x) - \hat\mu(0,x) }
+$$
+
+We've got a table of $\hat p(1, x)$ above, so what we need to actually calculate this is add a row of the difference 
+$\hat\mu(1,x) - \hat\mu(0,x)$. And for this model, 
+
+
+```{r}
+da = .2 - .2
+db = .97 - 1.82
+dc = .04 - -.81
+```
+
+$$
+\begin{aligned}
+\hat\mu(1,x) - \hat\mu(0,x) 
+&= \qty{ \hat a(1) + \hat b(1)x + \hat c(1)x^2 } - \qty{ \hat a(0) + \hat b(0)x + \hat c(0)x^2 } \\
+&= \qty{ \hat a(1) - \hat a(0) } + \qty{ \hat b(1) - \hat b(0) }x + \qty{ \hat c(1) - \hat c(0) }x^2 \\
+&= `{r} da` - `{r} abs(db)`x  + `{r} dc`x^2 
+\end{aligned}
+$$
+
+Now we make our table. 
+
+
+$$
+\begin{array}{llll}
+x & \hat p(0, x) & \hat p(1,x) & \hat\mu(1,x)-\hat\mu(0,x) \\
+\hline
+0 & `r f0$f[1]` & `r f1$f[1]` & `r da`  \\
+\frac14 & `r f0$f[2]` & `r f1$f[2]` & `r da` + `r db`/4 + `r dc`/16 = `r da + db/4 + dc/16` \\
+\frac24 & `r f0$f[3]` & `r f1$f[3]` & `r da` + `r db` \times 2/4 + `r dc` \times (2/4)^2 = `r da + db*2/4 + dc*(2/4)^2` \\
+\frac34 & `r f0$f[4]` & `r f1$f[4]` & `r da` + `r db` \times 3/4 + `r dc` \times (3/4)^2 = `r da + db*3/4 + dc*(3/4)^2` \\
+1 & `r f0$f[5]` & `r f1$f[5]` & `r da` + `r db` + `r dc` = `r da + db + dc` \\
+\end{array}
+$$
+
+Multiplying the right two columns and summing, we get an estimate of the ATT of 
+`{r} f1$f[1]*da + f1$f[2]*(da + db*1/4 + dc*(1/4))^2 + f1$f[3]*(da + db*(2/4) + dc*(2/4)^2) + f1$f[4]*(da + db*(3/4) + dc*(3/4)^2) + f1$f[5]*(da + db + dc)`.
+
+:::
+
+## Part C
+
+```{r}
+estimate.ATT = function(muhat, data) {
+  X = data$X
+  W = data$W
+  mean(muhat(1,X[W==1]) - muhat(0, X[W==1]))
+}
+fit.quadratic.model = function(data) {
+  model = lm(Y~W*(1+X+I(X^2)), data=data)
+  \(w,x) { predict(model, newdata=data.frame(W=w, X=x)) }
+}
+fit.all.functions.model = function(data) {
+  model = lm(Y~W*factor(X), data=data)
+  \(w,x) { predict(model, newdata=data.frame(W=w, X=x)) }
+}
+```
+
+You've managed to convince your coworker that looking at the difference in $y$-intercepts is not the right way to estimate the ATT. You've got them estimating it correctly. For the sake of not spoiling Part B, let's say we've got a function `estimate.ATT(muhat,data)` that does that. Your coworker wants use the bootstrap to estimate their estimator's standard error. They run the following code.
+
+```{r}
+set.seed(1)
+```
+
+```{r}
+#| echo: true  
+#| cache: true 
+B=4000
+ATT.star = rep(NA,B)
+for( b in 1:B ){
+  J.star = sample(1:nrow(data),size=nrow(data),replace=TRUE)
+  data.star = data[J.star,]
+  muhat.star = fit.quadratic.model(data.star) 
+  ATT.star[b] = estimate.ATT(muhat.star, data.star)
+}
+```
+
+This is their estimate of the standard error.
+```{r}
+#| echo: true
+sd(ATT.star)/sqrt(n)
+```
+
+::: {.callout-exercise}
+### Part C
+Is this a good estimate of the standard error of their ATT estimate? Explain why or why not. 
+To justify your answer, you may want to refer to the following plot of the bootstrap distribution they calculated.
+
+:::
+
+```{r}
+ggplot() + geom_histogram(aes(x=ATT.star, y=after_stat(density)), alpha=.3, fill='red', bins=50) + xlab('') + ylab('')   
+```
+
+::: {.callout-solution}
+No. They shouldn't divide by $\sqrt{n}$. The bootstrap sampling distribution is an estimate of the estimator's sampling distribution; its standard deviation is and estimate of the standard error of the estimator. No need to divide by anything.
+Looking at the bootstrap sampling distribution plotted above, we can see that the claimed standard error `{r} sd(ATT.star)/sqrt(n)` is way smaller than the spread of the distribution.
+:::
+
+## Part D
+
+You've proposed using the *all functions model* to estimate the ATT instead of either of your co-worker's approaches. That is, you've proposed making predictions using the following function.
+$$
+\hat\mu(w,x) = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i)}^2 \qquad \model = \qty{\text{ all functions } m(w,x) \ }.
+$$
+
+You've fit that, plugged it into your function `estimate.ATT`, and then calculated its bootstrap sampling distribution, just like your coworker did for their estimate in Part C. Here's a plot comparing the bootstrap sampling distribution of your estimate (in blue) to theirs (in red).^[As you know, blue and red make purple. What you're seeing in purple is where the blue and red histograms overlap.]
+
+```{r}
+#| cache: true 
+set.seed(1)
+B=4000
+ATT.star.all = rep(NA,B)
+for( b in 1:B ){
+  J.star = sample(1:nrow(data),size=nrow(data),replace=TRUE)
+  data.star = data[J.star,]
+  muhat.star = fit.all.functions.model(data.star) 
+  ATT.star.all[b] = estimate.ATT(muhat.star, data.star)
+}
+```
+
+```{r}
+ggplot() + geom_histogram(aes(x=ATT.star, y=after_stat(density)), alpha=.3, fill='red', bins=50) +
+           geom_histogram(aes(x=ATT.star.all, y=after_stat(density)), alpha=.3, fill='blue', bins=50) +
+            xlab('') + ylab('')
+```
+
+::: {.callout-exercise}
+### Part D
+Your coworker argues that their estimate is better because it's more precise --- it has a smaller standard error. Many of your colleagues are convinced by their argument. Are you? Explain why or why not. 
+:::
+
+::: {.callout-tip}
+Think about your answer to Problem 2.
+:::
+
+::: {.callout-solution}
+I'm not convinced. Our estimator is unbiased but our coworker's may not be. If our coworker's estimator happens not to be biased---which is something we cannot know---then we gain a bit of precision like we did in Problem 2 when $\mu=0$. But if it is, like in Problem 2 when $\mu=1$, this gain in precision is really an illusion: we get a narrower interval but it doesn't have the coverage we want.
+:::
+
+## Part E
+
+```{r}
+#| cache: true 
+B=4000
+ATT.star.horizontal = rep(NA,B)
+fit.horizontal.model = function(data) {
+  model = lm(Y~W, data=data)
+  \(w,x) { predict(model, newdata=data.frame(W=w)) }
+}
+for( b in 1:B ){
+  J.star = sample(1:nrow(data),size=nrow(data),replace=TRUE)
+  data.star = data[J.star,]
+  muhat.star = fit.horizontal.model(data.star) 
+  ATT.star.horizontal[b] = estimate.ATT(muhat.star, data.star)
+}
+```
+
+When you bring a summary of your findings to your boss, they're annoyed. 'Why are you doing all this complicated nonsense?', they say. They pull up the data, subtract the mean of the green points from the mean of the red points, and get `{r} mean(data$Y[data$W==1]) - mean(data$Y[data$W==0])`. They bootstrap it, too, to get a standard error estimate of `{r} sd(ATT.star.horizontal)`. 'Much better!', they say. 'Simple. And much more precise.' 
+
+::: {.callout-exercise}
+### Part E
+Do your best to talk them out of it. Use whatever mix of communication techniques feels right---drawing, plain english, math, whatever.
+:::
+
+::: {.callout-solution}
+Look at the scatter plot of the data. You can see that most of the green points are in the middle of the plot, whereas most of the red points are at the edges. So the groups of people you're comparing when you calculate this difference in means are not the same. So even if treatment had no effect at all, your difference in means could still be meaningfully different from zero just because of covariate shift, i.e., differences in the composition of the two groups.
+:::

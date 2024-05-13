@@ -1,0 +1,360 @@
+---
+title: "QTM 220 Lecture 12"
+subtitle: "Adjusting for Covariate Shift"
+---
+
+## The Black/White Income Gap in California
+
+{{< include shared-code.qmd >}}
+{{< include ca-income.qmd >}}
+
+```{r}
+filtered = \(rows) rows[rows$income < 5e5 & rows$race %in% c('White only', 'Black only'),]
+  
+pop = pop.earnings |> filtered()
+sam = earnings |> filtered()
+```
+
+```{r}
+xco = function(w,x) {
+  w=as.numeric(w)
+  x + .15*(2*w-1)
+}
+
+sam.dot = list(size=1,    alpha=.2)
+pop.dot = list(size=.25,    alpha=.05)
+
+scatter.by.race = function(rows, 
+                           dot=sam.dot,
+                           width=sd) { 
+  ggplot(rows[rows$race %in% c('Black only', 'White only'), ]) + 
+    geom_point(aes(x=xco(race=='White only',education), y=income, color=race), 
+               size=dot$size, position=position_jitter(seed=0,w=.15), alpha=dot$alpha) + 
+    stat_summary(aes(x=xco(race=='White only',education), y=income, color=race), geom="pointrange", alpha=.7,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - width(x), 
+                 fun.max = function(x) mean(x) + width(x))  +
+    scale_x() + scale_y() + guides(color='none')
+}
+```
+
+```{r}
+#| out-height: 350px
+#| fig-asp: .4
+
+W = as.numeric(sam$race == 'White only')
+X = sam$education
+Y = sam$income 
+muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
+
+a = \(x) approx(x, .01)
+scatter.by.race(sam)
+```
+
+- Let's take a look at at income ($y$) broken down in terms of two variables.
+  1. Education ($x$), in years of schooling, is indicated by column in the plot.
+  2. Race ($w$) is indicated by color in the plot.  [$w=0$ for Black people]{.twocolor-red}  and [$w=1$ for white people]{.twocolor-green} in our sample.
+- To keep things simple, we'll look at the subset of CPS recipients who identify as either [Black only]{.twocolor-red} or [white only]{.twocolor-green}.
+- At most education levels, the [white people]{.twocolor-green} in our sample make more money than the [Black people]{.twocolor-red}.
+- We know that's a thing. If we want, we can report a summary or two.
+
+
+$$
+\begin{array}{lll}
+\text{raw income gap} \quad & \quad \text{adjusted income gap} & \\
+\displaystyle \hat \Delta = \ingreen{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} 
+\quad& \displaystyle \hat \tau = \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \inred{Y_i}
+\quad& \text{symbolically} \\
+        `{r} approx(mean(Y[W==1]) - mean(Y[W==0]), .01)`  
+        = \ingreen{`{r} a(mean(Y[W==1]))`} - \inred{`{r} a(mean(Y[W==0]))`}   
+\quad&  `{r} a(mean(muhat(1, X[W==0]) - muhat(0, X[W==0])))` 
+       = \ingreen{`{r} a(mean(muhat(1, X[W==0])))`} - \inred{`{r} a(mean(muhat(0, X[W==0])))`}   
+\quad& \text{numerically}
+\end{array} 
+$$
+
+
+## Statistical Inference
+
+```{r}
+W = as.numeric(sam$race == 'White only')
+X = sam$education
+Y = sam$income 
+muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
+the.adjusted.gap = mean(muhat(1, X[W==0]) - mean(muhat(0, X[W==0])))
+the.raw.gap = mean(Y[W==1]) - mean(Y[W==0])
+
+adjusted.gap = \(people) people |> group_by(education, race) |> 
+                    summarize(muhat=mean(income), N=n(), .groups='drop') |> 
+                  group_by(race) |>
+                    mutate(P = N/sum(N)) |>
+                   group_by(education) |>
+                    group_map(\(s,e) s$P[s$race=='Black only'] * 
+                    (s$muhat[s$race=='White only'] - s$muhat[s$race=='Black only'])) |>
+                  unlist() |> sum()
+raw.gap = \(people) mean(people$income[people$race=='White only']) - 
+                    mean(people$income[people$race=='Black only'])
+                    
+stopifnot(abs(the.adjusted.gap - adjusted.gap(sam)) < 1e-6)
+stopifnot(abs(the.raw.gap - raw.gap(sam)) < 1e-6)
+
+set.seed(0)
+B = 200
+bootstrap.gaps = \(sam) 1:B |> map(\(B) {
+  bootsam = sam[sample(1:nrow(sam), replace=TRUE), ]
+  list(raw=raw.gap(bootsam), adjusted=adjusted.gap(bootsam))
+}) |> bind_rows()
+```
+
+```{r}
+#| cache: true
+ca.bootstrap.gaps = bootstrap.gaps(sam)
+```
+
+```{r}
+#| out-height: 350px
+#| fig-asp: .5
+#| layout-ncol: 2 
+#| fig-cap: 
+#|  - "Sample"
+#|  - "Imagined Population" 
+scatter.by.race(sam)
+scatter.by.race(pop, dot=pop.dot)
+```
+
+- As usual, we can interpret these sample summaries as estimates of corresponding population summaries. 
+- And we can construct 95% confidence intervals as usual---by bootstrapping. Nothing new here.
+- What I want to talk about today is what these summaries mean and how they differ.
+  - Incidentally, in California the raw and adjusted gaps are very similar.
+  - But they are conceptually different and can be very different elsewhere. Let's look at Georgia.
+
+$$
+\begin{array}{lll}
+\text{raw income gap} \quad & \quad \text{adjusted income gap} & \\
+\displaystyle \hat \Delta = \ingreen{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} 
+\quad& \displaystyle \hat \tau = \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \inred{Y_i}
+\quad& \text{in sample} \\
+\displaystyle \Delta = \ingreen{\frac{1}{m_1}\sum_{j:w_j=1} y_j} - \inred{\frac{1}{m_0}\sum_{j:w_j=0} y_j} 
+\quad&\displaystyle \tau = \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \ingreen{\mu(1, x_j)} - \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \inred{y_j}
+\quad& \text{in population} \\
+        `{r} a(mean(Y[W==1]) - mean(Y[W==0]))` \pm `r a(2*sd(ca.bootstrap.gaps$raw))`
+\quad&  `{r} a(mean(muhat(1, X[W==0]) - muhat(0, X[W==0])))` \pm `r a(2*sd(ca.bootstrap.gaps$adjusted))` 
+\quad& \text{in 95\% of surveys}
+\end{array} 
+$$
+
+
+## What Happens in Georgia 
+```{r}
+#| cache: true
+georgia.state.code = 13
+ga.sam = income(georgia.state.code)$sample
+ga.bootstrap.gaps = bootstrap.gaps(ga.sam)
+```
+
+```{r}
+#| out-height: 350px
+#| fig-asp: .4
+scatter.by.race(ga.sam)
+```
+
+- In Georgia, they're different. What are these two summaries?
+  1. **Raw**. How much more the average white person makes than the average Black person.
+  2. **Adjusted**. How much more, *for the average Black person*, a similarly-educated white person tends to make.
+- The adjusted gap explains *part of* the raw gap. But not all of it.
+- What's left over is, conceptually, about differences in the distribution of education.
+
+$$
+\begin{array}{lll}
+\text{raw income gap} \quad & \quad \text{adjusted income gap} & \\
+\displaystyle \hat \Delta = \ingreen{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} 
+\quad& \displaystyle \hat \tau = \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \inred{Y_i}
+\quad& \text{in sample} \\
+\displaystyle \Delta = \ingreen{\frac{1}{m_1}\sum_{j:w_j=1} y_j} - \inred{\frac{1}{m_0}\sum_{j:w_j=0} y_j} 
+\quad&\displaystyle \tau = \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \ingreen{\mu(1, x_j)} - \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \inred{y_j}
+\quad& \text{in population} \\
+        `{r} a(raw.gap(ga.sam))` \pm `r a(2*sd(ga.bootstrap.gaps$raw))`
+\quad&  `{r} a(adjusted.gap(ga.sam))` \pm `r a(2*sd(ga.bootstrap.gaps$adjusted))` 
+\quad& \text{in 95\% of surveys}
+\end{array} 
+$$
+
+
+## Revisiting A Computational Trick
+
+```{r}
+#| out-height: 350px
+#| fig-asp: .4
+#| layout-ncol: 2 
+#| fig-cap:
+#|  - "Georgia"
+#|  - "California"
+
+scatter.with.hist = scatter.by.race(ga.sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
+scatter.with.hist
+scatter.by.race(sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
+```
+
+- To make sense of our two summaries, it's helpful to revisit a counting trick we used before.
+  - When we want to average over the people in a sample, we can use a histogram to help us count.
+  - This reduces a sum over hundreds or thousands of people to a sum over a few bins.
+
+$$
+\begin{aligned}
+\hat \Delta &= \sum_{x} \qty{ \ingreen{P_{1,x} \hat\mu(1,x)} \quad - \quad \inred{P_{0,x} \ \hat\mu(0,x)} }            && \qqtext{where} \ P_{w,x} = \frac{N_{w,x}}{N_w} \\
+\hat \tau   &= \sum_{x} \qty{ \inred{P_{0,x}} \ \ingreen{\hat\mu(1,x)} \quad - \quad \inred{P_{0,x} \ \hat\mu(0,x)} }    && \qqtext{for} \ \ \ N_w = \sum_{i:W_i=w} 1 \\ 
+\hat \Delta - \hat \tau &= \sum_{x} \qty{\ingreen{P_{1,x}} - \inred{P_{0,x}}} \ingreen{\hat\mu(1,x)}                         && \qqtext{and} \ \ \ N_{w,x} = \sum_{i:W_i=w, X_i=x} 1
+\end{aligned}
+$$
+
+- Looking at what happens in each bin can help us understand what's going on.
+- Why were our raw and adjusted gaps similar in California but different in Georgia?
+  
+
+## Derivation: The Raw Gap
+```{r}
+#| out-height: 350px
+#| fig-asp: .4
+scatter.with.hist
+```
+
+$$
+\begin{aligned}
+\hat \Delta &= \frac{1}{N_1}\sum_{i:W_i=1} Y_i \quad -  \quad \frac{1}{N_0}\sum_{i:W_i=0} Y_i  && \qfor  N_{w} = \sum_{i:W_i=w} 1\\
+            &= \sum_{x} \frac{1}{N_1}\sum_{i:W_i=1, X_i=x} Y_i   \quad - \quad \sum_{x}\frac{1}{N_0}\sum_{i:W_i=0, X_i=x} Y_i && \qqtext{summing within then over bins} \\
+            &= \sum_{x} \frac{1}{N_1} \ N_{1,x} \ \hat\mu(1,x)  \quad - \quad \sum_{x} \frac{1}{N_0} \ N_{0,x} \ \hat\mu(0,x)     && \qfor N_{w,x} = \sum_{i:W_i=w, X_i=x} 1  \\
+            &= \sum_{x} \ingreen{P_{1,x} \ \hat\mu(1,x)} \quad - \quad \sum_x \inred{P_{0,x} \ \hat\mu(0,x)}  && \qfor P_{w,x} = \frac{N_{w,x}}{N_w} \\
+\end{aligned}
+$$
+
+## Derivation: The Adjusted Gap
+
+```{r}
+#| out-height: 350px
+#| fig-asp: .4
+scatter.with.hist
+```
+
+
+## Derivation: The Adjusted Gap
+```{r}
+#| out-height: 350px
+#| fig-asp: .4
+scatter.with.hist
+```
+
+$$
+\begin{aligned}
+\hat \tau &= \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} \\
+          &= \sum_{x} \frac{1}{N_0}\sum_{i:W_i=1, X_i=x} \hat\mu(1,x)   - \sum_{x}\frac{1}{N_0}\sum_{i:W_i=0, X_i=x} Y_i && \qqtext{summing within then over bins} \\
+          &= \sum_{x} \frac{1}{N_0} \ N_{0,x} \ \hat\mu(1,x)  - \sum_{x} \frac{1}{N_0} \ N_{0,x} \ \hat\mu(0,x)             && \qfor N_{w,x} = \sum_{i:W_i=w, X_i=x} 1  \\
+          &= \sum_{x} \ingreen{P_{1,x} \ \hat\mu(1,x)} \quad - \quad \sum_x \inred{P_{0,x} \ \hat\mu(0,x)}  && \qfor P_{w,x} = \frac{N_{w,x}}{N_w} \\ \\
+\end{aligned}
+$$
+
+## What To Adjust For?
+
+```{r}
+#| out-height: 350px
+#| fig-asp: .4
+#| layout-ncol: 2 
+#| fig-cap:
+#|  - "Georgia"
+#|  - "California"
+
+scatter.with.hist = scatter.by.race(ga.sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
+scatter.with.hist
+scatter.by.race(sam) +
+  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
+```
+
+- If we're trying to think about discrimination, it's not entirely clear what we should adjust for.
+  - By looking at the adjusted gap, we're trying to make the people we compare 'similarly qualified'
+  - But discrimination also *causes* differences in education.
+  - So we're *adjusting away* some of the effect we might want to measure.
+- We can try to formalize our comparisons in terms of potential outcomes. 
+- We'll imagine that for each person in our population ... 
+  -  there's one income they'd have if they were 'treated' by being raced white.
+  -  and another income they'd have if they were 'treated' by being raced Black.
+
+$$
+\begin{aligned}
+y_j(1) & \text{ income person $j$ would have if they were 'treated' by being raced white} \\
+y_j(0) & \text{ income person $j$ would have if they were 'treated' by being raced Black}
+\end{aligned}
+$$
+
+
+## What Do We Do With These Potential Outcomes?
+
+$$
+\begin{aligned}
+y_j(1) & \text{ income person $j$ would have if they were 'treated' by being raced white} \\
+y_j(0) & \text{ income person $j$ would have if they were 'treated' by being raced Black}
+\end{aligned}
+$$
+
+- The individual effect of this treatment is the difference between these two.
+- We can summarize this by the average of these differences for the Black people in our population.
+
+$$
+\begin{aligned}
+\text{individual effect}_j 
+&= y_j(1) - y_j(0) \\
+\text{average effect} 
+&= \frac{1}{m_0}\sum_{j:w_j=0} \qty{ y_j(1) - y_j(0) }  = \frac{1}{m_0}\sum_{j:w_j=0} y_j(1) - \frac{1}{m_0}\sum_{j:w_j=0} y_j(0) 
+\end{aligned}
+$$
+
+- And $y_j(1)$ being unobservable for the people in this average, we try to find some proxy for it.
+  - The adjusted-gap approach is to use the average income of white people with the same education level.
+  - But what's the justification for this? Or something like this? There really isn't one. 
+  - We've just disguised a fundamental problem in mathematical notation that works in other contexts. 
+- You could argue that the problem is this 'treatment' isn't something you can assign, e.g., by randomization.
+- But that's not really the problem. The problem is that the potential outcomes don't make sense.
+- What does it mean to be person $j$,  except raced differently? It's meaningless.
+
+## A Non-Solution --- Audit Studies
+
+- People try to work around this by reframing the question in terms of *perception* of race. 
+  - Because that's manipulable. You can, for example, choose the name on a job application.
+  - You can randomize job applications to be 'Black' or 'white' by flipping a coin...
+  - and then, on the basis of that, selecting the name of a Black or white census respondent at random.
+- You can then mail these out and see who gets called back for an interview.
+
+$$
+\begin{aligned}
+y_j(1) & \text{ whether application $j$ would get an interview when using a `random white name'} \\
+y_j(0) & \text{ whether application $j$ would get an interview when using a `random Black name'}
+\end{aligned}
+$$
+
+- Fundamentally, this is a version of our adjusted gap, but with more levels of $X$---one per application.
+- The difference in interview rates is the called the 'effect of race' on *the decision-maker's actions*.
+- But really, it's just the effect of a specific race signifier on the decision-maker's actions. 
+  - If the idea of person $j$ except raced differently means nothing in the actual world...
+  - ... then why do we imagine that it means something in the decision-maker's head?
+- That doesn't mean that studies like this are useless. 
+  - But we shouldn't act as if they get around the fundamental problem.
+  - i.e., as if it works to think about discrimination using statistical tools alone.
+
+## A Reference
+
+::: {style="z-index:1000"}
+{{< video  https://www.youtube.com/watch?v=l_LeJfn_qW0 width="854px" height="480px">}}
+:::
+
+- This critique of potential outcomes for thinking about discrimination is paraphrased
+ from \
+ a paper by [Issa Kohler-Hausmann](https://law.yale.edu/issa-kohler-hausmann). Roughly paraphased. I encourage you to read it yourself.
+- The title refers to a 1984 SNL sketch in which Eddie Murphy conducts a revealing audit study. 
+
+[Eddie Murphy and the Dangers of Counterfactual Causal Thinking About Detecting Racial Discrimination](https://openyls.law.yale.edu/bitstream/handle/20.500.13051/18009/Kohler-Hausmann,%20Eddie%20Murphy%20and%20the%20Dangers%20of%20Counterfactual%20Causal%20Thinking%20about%20Detecting%20Racial%20Discrimination.pdf?sequence=1) \
+[Kohler-Hausmann](https://law.yale.edu/issa-kohler-hausmann), 2018

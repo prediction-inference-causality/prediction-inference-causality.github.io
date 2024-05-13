@@ -1,0 +1,512 @@
+---
+title: "Lecture 1"
+subtitle: "Descriptive Regression with a Binary Covariate"
+---
+
+```{r libraries}
+library(ggplot2)
+library(dplyr)
+library(magrittr)
+library(knitr)
+library(scales)
+options(knitr.kable.NA = '')
+
+library(cpsR)
+library(usmap)
+library(sf)
+
+library(ggplot2)
+
+library(scales)
+library(knitr)
+
+percent = label_percent(accuracy=1)
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+census.api.key = '8084f81e4f71e4d32638dac15f188b424f72d063'
+# for cps variable interpretation see https://www2.census.gov/programs-surveys/cps/datasets/2022/march/asec2022_ddl_pub_full.pdf
+```
+
+```{r ggplot-themes}
+class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
+		    panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+		    axis.ticks.x = element_blank(),
+		    axis.ticks.y = element_blank(),
+		    axis.text.x  = element_text(colour = "#aaaaaa"),
+		    axis.text.y  = element_text(colour = "#aaaaaa"),
+		    axis.title.x  = element_text(colour = "#aaaaaa"),
+		    axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
+)
+
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
+
+theme_update(axis.text.x   = element_blank(), 
+   	         axis.text.y   = element_blank())
+blank.theme = theme_get()
+
+theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
+	         panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
+grid.theme = theme_get()
+
+theme_set(simplified.theme)
+```
+
+
+```{r table-styling}
+ellipsis <- function(df, nhead=5L, ntail=2) {
+    rownames(df) = as.character(1:nrow(df))
+    stopifnot("data.frame" %in% class(df))
+    els <- rep(NA, ncol(df)) %>% 
+        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
+        data.frame(stringsAsFactors=FALSE) %>% 
+        tibble::as_tibble()
+    rownames(els) = "⋮"
+    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
+}
+```
+
+
+```{r get-california-data}
+#| cache: true
+
+california.state.code = 6
+cps.data = cpsR::get_asec(year=2022, vars=c('pearnval', 'gestfips', 'h_numper', 'htotval', 'a_age', 'a_hga','gereg', 'a_maritl', 'a_sex','peafever','a_wkstat'), key=census.api.key)
+```
+
+```{r process-california-data}
+all.earnings = data.frame(age=cps.data$a_age,
+                          state.code = cps.data$gestfips,
+                          income=cps.data$pearnval, 
+                          education=case_match(cps.data$a_hga,
+                                          0  ~ 0,   # child
+                                          31 ~ 0,   # < grade 1
+                                          32 ~ 4,   #  grade 1-4
+                                          33 ~ 6,   #  grade 5-6
+                                          34 ~ 8,   #  grade 7-8 
+                                          35 ~ 9,   #  grade 9
+                                          36 ~ 10,  #  grade 10
+                                          37 ~ 11,  #  grade 11
+                                          38 ~ 11,  #  grade 12 no diploma
+                                          39 ~ 12,  #  high school grad
+                                          40 ~ 13,  #  some college
+                                          41 ~ 14,  #  associate degree(vocational)
+                                          42 ~ 14,  #  associate degree (academic)
+                                          43 ~ 16,  #  bachelors degree
+                                          44 ~ 18,  #  masters degree
+                                          45 ~ 20,  #  professional school degree
+                                          46 ~ 20)) #  doctorate
+
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
+all.earnings$employed<- ifelse(cps.data$a_wkstat >5, 0,ifelse(cps.data$a_wkstat<2,NA,1))
+all.earnings$fouryrdegree = all.earnings$education >=16
+all.earnings$degree = factor(all.earnings$fouryrdegree,
+                    levels=c(FALSE, TRUE), 
+                    labels=c('no 4-year degree','4-year degree')) 
+
+earnings = all.earnings[all.earnings$age %>% in.interval(c(25,35)) & 
+                        all.earnings$state.code == california.state.code &
+                        all.earnings$education > 8, ]
+
+rownames(earnings)=NULL
+earnings$person = 1:nrow(earnings)
+```
+
+```{r visualization-defaults}
+scale_y = function(limits=c(-.3e5, 3e5)) { 
+  scale_y_continuous(labels=label_dollar(), limits=limits)
+}
+
+years = 8:20
+scale_x = function(limits=c(min(years)-.5, max(years)+.5)) { 
+  scale_x_continuous(breaks=years, labels=sprintf('%dy', years), limits=limits)
+}
+
+dot.size = 2
+```
+
+
+```{r define-colors}
+twocolor.red   = 'rgb(248,118,109)'
+twocolor.green = 'rgb(0,191,196)'
+```
+
+# What Regression Analysis Is 
+
+## 
+
+```{r}
+#| out-height: 600px
+
+theme_set(blank.theme)
+set.seed(0)
+n = 100
+X = round(runif(n), 1)
+Y = sin(pi*X/1.7) + rnorm(n, sd=.1)
+fake.data = data.frame(X=X, Y=Y)
+
+ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
+                    geom_smooth(aes(x=X, y=Y), method='lm', se=FALSE, size=1, alpha=.3) + 
+                    coord_cartesian(ylim=c(-.5,1.5)) 
+```                
+
+- You may have the impression that regression is about fitting lines to data.
+- That's what some regression analysis books focus on. And we'll talk about it.
+- But it's not what regression analysis is really about. And it's not what this class will focus on.
+
+## 
+
+```{r}
+#| out-height: 600px
+#| layout-ncol: 2
+summaries = fake.data %>% group_by(X) %>% summarize(mu=mean(Y))
+ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
+                    geom_smooth(aes(x=X, y=Y), method='lm', se=FALSE, size=1, alpha=.3) +
+                    coord_cartesian(ylim=c(-.5,1.5)) 
+ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
+                    geom_point(aes(x=X, y=mu), data=summaries, size=4, alpha=.2, color='blue') +
+                    coord_cartesian(ylim=c(-.5,1.5))
+```  
+
+- Regression analysis is about breaking one thing, $y$, into two parts.
+  - One part we can predict using another thing, $x$, and one part we can't.
+  - e.g. breaking income into a part we can predict using education and a part we can't. 
+- We can try to make those predictions by drawing a line, but it's usually not a good idea.
+  - There's a difference between what we can predict and what we can predict by drawing a line.
+  - And it's easy to do better. We can make predictions by averaging---averaging the $y$s at each $x$.
+
+## 
+
+```{r}
+#| out-height: 600px
+ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
+                    geom_point(aes(x=X, y=mu), data=summaries, size=4, alpha=.2, color='blue') + 
+                    coord_cartesian(ylim=c(-.5,1.5))
+```  
+
+- So, to be reductive, this is a class about looking at and comparing averages.
+- That works very well if you have a bunch of observations at each $x$.
+  - e.g., if you're using years of schooling to predict income.
+  - We'll focus on cases like this for the first half of the class.
+- It works less well if you don't.
+  - That's when things get a bit more complicated. 
+  - We'll get there later on in the class and talk about how to deal with it.
+  - Lines are an option, but there are usually better ones. 
+  
+##
+```{r}
+#| out-height: 600px
+ggplot(fake.data) + geom_point(aes(x=X, y=Y, alpha=X==.5), size=2) + 
+                    geom_point(aes(x=X, y=mu, alpha=X==.5), data=summaries, size=4, color='blue') + 
+                    coord_cartesian(ylim=c(-.5,1.5)) +
+                    scale_alpha_discrete(range=c(.03,.4)) + guides(alpha=FALSE)
+```  
+
+- For a few weeks, as a sort of warm-up, we'll focus on explaining what we see at a single $x$.
+- We can think of this as zooming in on part of the problem.
+- Or as the sort of regression analysis we do when we have no explanatory variable---no $x$. 
+
+## Today
+
+- Let's put aside all that prefatory stuff about what regression analysis is.
+- We'll look at how to describe and summarize two datasets we'll work with a lot in this class.
+  - Data on wages from the 2022 Current Population Survey (CPS)
+  - Data from turnout polls in advance of the 2020 Presidential Election
+- We'll look at a few summaries of each. 
+  - location
+  - spread 
+  - distribution 
+- We'll close with a few dice-rolling activities.
+  - These'll help us think about what summaries tell us about data we don't have.
+  - That's about how the observations we have are *sampled* from a larger population of possible observations.
+  - This is called *statistical inference*. It's the main topic of this class. 
+  - We'll really get into it next week.
+
+# Example 1: 2022 CPS Wage Data
+
+## The Data 
+- The Current Population Survey is a survey run by Census Bureau and Bureau of Labor Statistics
+    - Each year, about 1/2500 US residents is surveyed.
+    - It's approximately correct to think of these residents as being chosen randomly 
+    from the set of all residents with equal probability.
+    - This approximation gets better if you focus on a single state.
+- We'll look at surveyed California residents 
+    - between the ages of 25 and 35
+    - with at least an 8th-grade education
+- This sample includes `r nrow(earnings)` people. Here's a partial view of their responses.
+
+ \ \
+
+```{r}
+cols = c('income', 'age', 'education')
+earnings[,cols] %>% ellipsis(nhead=4, ntail=2) %>% kable() 
+```
+
+## Here is a Complete View of Their Incomes
+
+```{r}
+#| out-height: 400px
+lims = c(-.5e5, 5e5)
+scatter = ggplot(earnings) + 
+            geom_point(aes(x=person, y=income), alpha=.05) +
+            scale_y_continuous(limits=lims, labels=label_dollar())
+scatter
+```
+
+- Each person gets a dot.
+- The y-coordinate of the dot shows their income.
+- The x-coordinate of the dot is arbitrary.
+    - It's their row in the table.
+- The plot, in effect, shows our people 
+    - lined up in some arbitrary order
+    - standing as tall as their income.
+- The problem with this is that it's hard to make sense of by looking at it.
+- It often helps to look at *data summaries*, a.k.a. *descriptive statistics*.
+
+## Location
+
+```{r}
+#| out-height: 400px
+x.med  = 1300
+x.mean = 1400
+size.mean = 3
+size.med = 3
+
+summaries = earnings %>% 
+    summarize(mean=mean(income), 
+              median=median(income), 
+              sd=sd(income), 
+              mad=mad(income, constant=1))
+scatter + geom_point(aes(x=x.mean, y=mean), size=size.mean, color='red', data=summaries) + 
+          geom_hline(aes(yintercept=mean), color='red', data=summaries) +
+          geom_point(aes(x=x.med, y=median), size=size.med, color='orange', data=summaries) +
+          geom_hline(aes(yintercept=median), color='orange', data=summaries)
+```
+
+- The **location** of the data is where it is.
+- It's about approximating the data by a *constant*.
+$$ Y_i \approx \mu \qfor i=1,\dots,n $$
+
+- People use a few different summaries of location.
+    - e.g. the [Median]{.fg style="--col: orange"}
+    - e.g. the [Mean]{.fg style="--col: red"}
+
+## Spread
+
+```{r}
+#| out-height: 400px
+scatter + geom_pointrange(aes(x=x.mean, y=mean, ymin=mean-sd, ymax=mean+sd), color='red', data=summaries)  +
+          geom_hline(aes(yintercept=mean), color='red', data=summaries) +
+          geom_pointrange(aes(x=x.med, y=median, ymin=median-mad, ymax=median+mad), color='orange', data=summaries) +
+          geom_hline(aes(yintercept=median), color='orange', data=summaries)
+```
+
+- The **spread** of the data is how far it tends to be from its location.
+- Different measures of spread tend to be used with different measures of location.
+    - the [Median Absolute Deviation]{.fg style="--col: orange"} is used with the Median.
+    - the [Standard Deviation]{.fg style="--col: red"} is used with the Mean.
+
+## Spread and Residuals
+
+```{r}
+#| out-width: 400px
+#| fig-asp: .6 
+#| layout-ncol: 2
+#| layout-nrow: 2
+
+scatter + geom_hline(aes(yintercept=median(income)), color='orange') +
+          geom_segment(aes(x=person, xend=person, y=income, yend=median(income)), color='gray', alpha=.1)
+scatter + geom_hline(aes(yintercept=mean(income)), color='red') + 
+          geom_segment(aes(x=person, xend=person, y=income, yend=mean(income)), color='gray', alpha=.1)
+
+res.lims = c(-2.5e5, 2.5e5)
+ggplot(earnings) + geom_point(aes(x=person, y=income-median(income)), color='orange', alpha=.3) +
+    scale_y_continuous(labels=label_dollar(), limits=res.lims) 
+ggplot(earnings) + geom_point(aes(x=person, y=income-mean(income), size=abs(income-mean(income))), color='red', alpha=.3) +
+    scale_y_continuous(labels=label_dollar(), limits=res.lims) + scale_size_area() + guides(size=FALSE) 
+```
+
+- Spread summarizes the size of the *residuals* $\hat\varepsilon_i = Y_i - \hat\mu$ left over after constant approximation.
+- The median absolute deviation is the median size of the residuals.
+- The standard deviation is the square root of the mean squared size of the residuals.
+  - This is a sort of average in which big residuals count more than small ones.
+  - To give you a sense of what this means visually, I've scaled the red dots.
+  - I've made them bigger when they're further away from zero.
+
+## Distribution
+
+```{r}
+#| layout-ncol: 2
+h=ggplot(earnings) + geom_histogram(aes(x=income, y=after_stat(density)), 
+                                  colour="black", fill="blue") + coord_flip() + xlim(0,5e5)
+h 
+scatter + ylim(0,5e5)
+```
+
+- This is called a histogram. It's a way of summarizing the distribution of the data.
+- It tells us more than location and spread, but less than the dot plot.
+- It tells you how many people have roughly a given income, without telling you who those people are.
+- You see the same thing by looking at the darkness of the scatter plot at each height, but it's easier to use the histogram.
+- It's easier to use the histogram when calculating location and spread, too. We'll see that in lab this Friday.
+
+# Example 2: 2020 Election Turnout Polls
+
+```{r population}
+our.seed = 0
+set.seed(our.seed)
+N=7233584
+p=4999960/N
+y= c(rep(1,p*N), rep(0, (1-p)*N))
+y=sample(y) # shuffle the order 
+population.proportion = p
+```
+
+```{r sample}
+set.seed(our.seed)
+
+n = 625
+J = sample(N, n, replace=TRUE)
+Y = y[J]
+sample.proportion = mean(Y)
+poll = data.frame(J=J, Y=Y)
+```
+
+## The Data
+
+- Suppose you want to predict how many Georgia residents will turn out to vote in the 2020 presidential election.
+- To do that, you'll do some polling.
+  - You use a list of the $N \approx `r approx(N)`$ people registered to vote in Georgia.
+  - And you make $n=`r n`$ phone calls.
+  - And then you ask the potential voter whether they plan to vote.
+- What you're hoping is that the proportion of people you call who say they plan to vote is a useful prediction of the proportion of registered voters who do actually vote.
+- Here's a partial view of the data you collect.
+
+```{r}
+poll %>% ellipsis(nhead=4, ntail=2) %>% kable() 
+```
+
+## Dot Plot
+
+```{r}
+#| out-height: 400px
+poll$call = 1:nrow(poll) 
+scatter = ggplot(poll) + geom_point(aes(x=call, y=Y), alpha=.1)
+scatter
+```
+
+- This is the same sort of plot we saw before, but it's harder to look at.
+- Because there are only two possible values of $Y$, everyone is on two lines.
+- It's not as easy to eyeball location or spread, but we can still calculate them and draw them in.
+
+## Location
+
+```{r}
+#| out-height: 400px
+x.med  = 300
+x.mean = 400
+size.mean = 3
+size.med = 3
+
+summaries = poll %>% 
+    summarize(mean=mean(Y), 
+              median=median(Y),  
+              sd=sd(Y), 
+              mad=mad(Y, constant=1))
+scatter + geom_point(aes(x=x.mean, y=mean), size=size.mean, color='red', data=summaries) + 
+          geom_hline(aes(yintercept=mean), color='red', data=summaries) +
+          geom_point(aes(x=x.med, y=median), size=size.med, color='orange', data=summaries) +
+          geom_hline(aes(yintercept=median), color='orange', data=summaries)
+```
+
+- The **location** of the data is still --- sort of --- where it is.
+- It's about approximating the data by a *constant*.
+$$ Y_i \approx \mu \qfor i=1,\dots,n $$
+- But when the data is binary, it has no 'middle', so that approximation looks odd.
+- However, the usual summaries of location have different---and natural---interpretations.
+    - e.g. the [Median]{.fg style="--col: orange"}. In binary data, it's whichever outcome is most common.
+    - e.g. the [Mean]{.fg style="--col: red"}. In binary data, it's the proportion of ones: $`r sum(poll$Y)`/`r n` \approx `r round(sample.proportion, 2)`$.
+
+## Distribution
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2
+h=ggplot(poll) + geom_histogram(aes(x=Y, y=after_stat(density)), 
+                                  colour="black", fill="blue", bins=2) + coord_flip() 
+h 
+scatter + ylim(0,1)
+```
+
+- Distribution offers no more information than the mean $\hat\mu$ itself.
+- To report the distribution, we report the proportion of ones ($\hat\mu$) and zeros ($1-\hat\mu$).
+
+## Spread
+
+```{r}
+#| out-height: 400px
+scatter + geom_pointrange(aes(x=x.mean, y=mean, ymin=mean-sd, ymax=mean+sd), color='red', data=summaries)  +
+          geom_hline(aes(yintercept=mean), color='red', data=summaries) +
+          geom_pointrange(aes(x=x.med, y=median, ymin=median-mad, ymax=median+mad), color='orange', data=summaries) +
+          geom_hline(aes(yintercept=median), color='orange', data=summaries)
+```
+
+- The **spread** of the data is still how far it tends to be from its location. Sort of.
+- Let's look at our usual measures of spread.
+    - the [Median Absolute Deviation]{.fg style="--col: orange"}, the median distance from the median, is zero. Why?
+    - the [Standard Deviation]{.fg style="--col: red"} is the square root of the mean squared distance from the mean. It's a function of the mean: $\sqrt{\hat\mu(1-\hat\mu)}$.
+
+
+## From Location to Spread
+
+When $\hat\mu$ is the mean, the standard deviation is $\sqrt{\hat\mu(1-\hat\mu)}$. Let's prove it.
+
+$$
+\begin{aligned}
+\text{standard deviation}^2 
+&= \frac{1}{n}\sum_{i=1}^n (Y_i - \hat\mu)^2 \\
+&= \frac{1}{n}\sum_{y \in \{0,1\}} \sum_{i : Y_i=y} (Y_i - \hat\mu)^2 \\ 
+&= \frac{1}{n}\qty{ N_1 (1 - \hat\mu)^2  + (n-N_1) (0 - \hat\mu)^2 } \\
+&= \frac{1}{n}\qty{ N_1 (1 - 2\hat\mu + \hat\mu^2)  + (n-N_1) (0 - \hat\mu)^2 } \\
+&= \frac{1}{n}\qty{ N_1 - 2N_1 \hat\mu + n \hat\mu^2} \\
+&= \frac{1}{n}\qty{ n\hat\mu - 2n\hat\mu\times \hat \mu + n \hat \mu^2} \\
+&= \frac{1}{n}\qty{ n\hat\mu - n\hat\mu^2 } = \hat\mu - \hat\mu^2 = \hat\mu(1-\hat\mu)
+\end{aligned}
+$$
+
+## Summary
+
+- We've seen two ways to look at data.
+  - Tables.
+  - Dot plots.
+- And three ways to summarize it.
+    - location
+    - spread
+    - distribution
+- When outcomes are binary, things are a bit harder visually.
+- But summaries are simpler---they all boil down to the same thing.
+- For that reason, we'll focus on binary data for a couple weeks.
+
+# Summaries of Random Data
+
+## The Idea
+
+- When our data is random, so is a summary of that data.
+- That's because our summary is a function of our data. A function of something random is itself random.
+- To understand what our summary are telling us about the random mechanism our data comes from ...
+  - We'll often talk about *our summary's distribution*
+  - In particular, the distribution of summaries we'd get if we got data from our random mechanism many times.
+  - We call this the *sampling distribution* of our summary.
+- This is more useful than it sounds. 
+- We can use it, for example, to learn about large groups of people using small surveys.
+- To get a sense of how all this works, let's do a few simple examples.
+- As our source of randomness, we'll roll dice.
+
+## Sum of Two Dice
+
+## Proportion of Odds in 5 Rolls
+
+## Candy Preferences

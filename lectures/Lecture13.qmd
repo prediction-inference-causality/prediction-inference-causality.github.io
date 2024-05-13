@@ -1,0 +1,691 @@
+---
+title: "QTM 220 Lecture 13"
+subtitle: "Causal Inference in Conditionally Randomized Experiments"
+---
+
+
+## An Example
+
+{{< include shared-code.qmd >}}
+{{< include ca-income.qmd >}}
+
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .4 
+ 
+set.seed(1) 
+m = 1e4 
+pi = function(x) { 1/(1+exp(-(x-60)/8 )) }
+mu = function(w, x) { 1 - (x-50)/30 + w*((x-50)/30)^2/2 }  
+
+X = 50+round(30*runif(m))
+W = 0 + (runif(m) <= pi(X))
+epsilon0 = rnorm(m)
+epsilon1 = rnorm(m)
+Y0 = mu(0,X) + .25*epsilon0
+Y1 = mu(1,X) + .25*epsilon1
+
+pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
+counterfactual.pop = data.frame(X=X, W=W, Y=Y0*W + Y1*(1-W))  
+
+n = 5000
+data = pop[sample(nrow(pop), n, replace=TRUE),]
+
+plotX = function(X,W) { X + .15*(2*W-1) }
+pop.scatter = ggplot(pop) + 
+  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.2) + 
+  guides(color=FALSE)
+counterfactual.pop.scatter = ggplot(counterfactual.pop) +
+  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.2) + 
+  guides(color=FALSE)
+scatter = ggplot(data) + 
+  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.1, position=position_jitter(w=.15, h=0)) + 
+  guides(color=FALSE)
+
+big.coords = coord_cartesian(xlim=c(50,80), ylim=c(-1.5,2.5))
+narrow.coords = coord_cartesian(xlim=c(60,70), ylim=c(-1.5,2.5))
+tight.coords = coord_cartesian(xlim=c(50,80), ylim=c(0,1.5))
+
+annotated.pop.scatter = pop.scatter +  
+  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), geom="pointrange", alpha=.8,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - sd(x), 
+                 fun.max = function(x) mean(x) + sd(x))
+
+annotated.counterfactual.pop.scatter = counterfactual.pop.scatter +  
+  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), geom="pointrange", alpha=.8,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - sd(x), 
+                 fun.max = function(x) mean(x) + sd(x))
+annotated.pop.scatter + big.coords
+```
+
+
+- Researchers hypothesize that MHT increases bone density. 
+- We'll think about how to look into this.
+- Above, we've got a population of `r approx(m,1)` people eligible for some form of MHT.
+  - Their age at the time the study begins is on the $x$-axis.
+  - Bone density, measured 2 years later, is on the $y$-axis.
+  - Color indicates whether they [did]{.twocolor-green} or [didn't]{.twocolor-red} do MHT.
+- What we want to know is how well MHT works, on average, for the people who take it.
+- That means comparing green folks---people who take MHT---to versions of themselves who didn't.
+
+::: aside
+To make things easier to look at, I'm drawing people who did and didn't receive treatment side-by-side. 
+This shift isn't meaningful. Age is a round number: 60, 61, ...
+:::
+
+
+## Counterfactuals
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+annotated.pop.scatter + big.coords
+annotated.counterfactual.pop.scatter + big.coords
+```
+
+- We can't observe these *counterfactual* versions of people.
+- But we can think about what the data would look like if we did.
+  - On the left, we've got our real population.
+  - On the right, we've got a hypothetical one where everyone who did MHT didn't and vice versa.
+  - Note we're keeping the colors the same---counterfactual green people are still green.
+- We can think of the average difference as the *average effect of MHT for those who took it*.
+
+$$
+\begin{aligned}
+\frac{\sum_{j:w_j=1} y_j(1) - y_j(0)}{\sum_{j:w_j=1} 1} = 
+\frac{\sum_{j:w_j=1} y_j}{\sum_{j:w_j=1} 1} - \textcolor{blue}{\frac{\sum_{j:w_j=1} y_j(0)}{\sum_{j:w_j=1} 1}}
+\end{aligned}
+$$
+
+- We call this the *average treatment effect on the treated* (ATT). It's a difference of two means. 
+- One is observable (if we have the population). [The other isn't]{.fg style="color:blue"}.
+
+
+## Counterfactuals
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+
+annotated.pop.scatter + big.coords
+annotated.counterfactual.pop.scatter + big.coords
+```
+
+- We can't observe these *counterfactual* versions of people.
+- But we can think about what the data would look like if we did.
+  - On the left, we've got our real population.
+  - On the right, we've got a hypothetical one where everyone who did MHT didn't and vice versa.
+  - Note we're keeping the colors the same---counterfactual green people are still green.
+- We can think of the average difference as the *average effect of MHT for those who took it*.
+
+$$
+\begin{aligned}
+\frac{\sum_{j:w_j=1} y_j(1) - y_j(0)}{\sum_{j:w_j=1} 1} = 
+\frac{\sum_{j:w_j=1} y_j}{\sum_{j:w_j=1} 1} - \textcolor{blue}{\frac{\sum_{j:w_j=1} y_j(0)}{\sum_{j:w_j=1} 1}}
+\end{aligned}
+$$
+
+- We call this the *average treatment effect on the treated* (ATT). It's a difference of two means. 
+- One is observable (if we have the population). [The other isn't]{.fg style="color:blue"}.
+
+## Summarizing these Populations
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+#| 
+mean.shape=21
+
+summarized.pop = pop.scatter + 
+  stat_summary(aes(x=plotX(X,W), y=Y), geom="point", color='black', shape=mean.shape, fun=mean) + 
+  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), fun=mean, geom="line") +
+  geom_bar(aes(x=X, y=10*after_stat(prop), fill=factor(W), color=factor(W)), 
+    position='identity', alpha=.1, linewidth=.2, data=pop) +
+    guides(fill='none', color='none') 
+
+summarized.counterfactual.pop = counterfactual.pop.scatter + 
+  stat_summary(aes(x=plotX(X,W), y=Y), geom="point", color='black', shape=mean.shape, fun=mean) + 
+  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), fun=mean, geom="line") +
+  geom_bar(aes(x=X, y=10*after_stat(prop), fill=factor(W), color=factor(W)), 
+    position='identity', alpha=.1, linewidth=.2, data=pop) + 
+    guides(fill='none', color='none') 
+
+summarized.pop + tight.coords
+summarized.counterfactual.pop + tight.coords
+```
+
+- The scatter plot is hard to read. To help, I've overlaid some summaries.
+  - Mean bone density for each age and treatment group.
+  - Histograms of age for each treatment group.
+- We can think of what we're doing in terms of these summaries. Here's the observable mean.
+
+$$
+\begin{aligned}
+\text{observable mean} 
+= \frac{\sum_{j:w_j=1} y_j}{\sum_{j:w_j=1} 1} 
+= \sum_x \frac{\sum_{j:w_j=1, x_j=x} 1}{\sum_{j:w_j=1} 1} \frac{\sum_{j:w_j=1, x_j=x} y_j}{\sum_{j:w_j=1, x_j=x} 1} 
+= \sum_x \ingreen{p(1,x)}\ingreen{\mu(1,x)}
+\end{aligned}
+$$
+
+- It's the average of the green curve over the distribution of the green points---i.e., the green histogram.
+- The counterfactual mean is the same thing, but in the counterfactual plot.
+
+
+## Working With Summaries
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+#| fig-subcap:
+#|   - "Real Population: Green People Did MHT, Red People Didn't"
+#|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
+summarized.pop + 
+  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), summary=mean, geom="line", linetype='dashed', data=counterfactual.pop) +
+  tight.coords
+summarized.counterfactual.pop + tight.coords
+```
+
+
+- This seems like it'd be a problem, since we don't actually see the counterfactual plot. 
+- But, comparing our plots, we see something helpful. 
+  - The green curve on the right looks like the red curve on the left.
+  - To make this easier to see, I've drawn it in as a dashed line.
+- We can use *what actually happened to the red people* to estimate *what would have happened to the green people*.
+
+$$
+\begin{aligned}
+\text{observable mean} &= \sum_x \ingreen{p(1,x)}\ingreen{\mu(1,x)} \\
+\text{counterfactual mean} &= \sum_x \ingreen{p(1,x)}\inred{\mu(0,x)}
+\end{aligned}
+$$
+
+- In real data, there's no counterfactual plot, so we can't do this comparison visually.
+- But *we can prove* that these curves look the same *in conditionally randomized experiments*.
+
+## Sampling
+
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+summarized.scatter = scatter + 
+  stat_summary(aes(x=plotX(X,W), y=Y), geom="point", color='black', shape=mean.shape, fun=mean) + 
+  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), geom="line") +
+  geom_bar(aes(x=X, y=10*after_stat(prop), fill=factor(W), color=factor(W)), 
+    position='identity', alpha=.1, linewidth=.2)  +
+    guides(fill='none', color='none')
+  
+summarized.scatter + tight.coords
+summarized.pop + tight.coords
+```
+
+- The other part of our problem is the **statistical element**.
+  - In reality, we don't have the whole population. 
+  - We just have a sample of, say, `r approx(n,1)` people. 
+- So we have to ask whether what we see in the sample is true of the population.
+
+## Plan
+  
+- We're going to talk about how to answer these questions.
+- You've seen the main ideas before in simpler contexts.
+- All we've got to do is generalize them and put them together.
+
+# Conditionally Randomized Experiments
+
+## The Idea
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .4
+#| 
+ages = c(60,70)
+twolevel.pop = pop[pop$X %in% ages, ]
+twolevel.pop = twolevel.pop[1:200, ]
+
+jitter.width = 1.5
+plotX2 = function(W,X) { X + 1.5*(2*W-1) }
+twolevel.pop$jX = twolevel.pop$X + jitter.width*runif(nrow(twolevel.pop), -1,1)
+twolevel.pop$fW = factor(twolevel.pop$W)
+w0 = twolevel.pop$fW[twolevel.pop$W==0][1]
+w1 = twolevel.pop$fW[twolevel.pop$W==1][1]
+
+twolevel.coord = coord_cartesian(ylim=c(-.5,1.5))
+twolevel.pop.scatter = ggplot(twolevel.pop) + 
+  geom_point(aes(x=plotX2(W,jX), y=Y, color=factor(W)), alpha=.5, size=3) + 
+  guides(color='none') + scale_x_continuous(breaks=ages) 
+twolevel.pop.scatter + twolevel.coord
+```
+
+- To make things simple, let's start by looking at a subset of our population.
+  - We'll look at participants who were either `{r} min(ages)` or `{r} max(ages)` when the study began.
+  - We'll ignore the others. This gives us two age groups---a binary covariate.
+- Suppose that each person flips a coin to determine whether they do MHT.
+  - The coins are weighted differently are different age groups.
+  - That's why different proportions of people do MHT in the two groups.
+- We call this a **conditionally randomized experiment**.
+  - a.k.a. a **blocked** or **stratified** randomized experiment.
+
+## Randomization and Sampling
+
+:::: r-stack
+
+::: {.fragment .fade-out fragment-index="0"}
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+potential.outcome.plot = ggplot(twolevel.pop) + 
+  geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3) + 
+  geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3) + 
+  geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
+  guides(color='none') + scale_x_continuous(breaks=ages) + twolevel.coord
+
+population.plot = function(seed=1) {
+  twolevel.pop$W =(\() rbinom(nrow(twolevel.pop), 1, pi(twolevel.pop$X))) |> with_seed(seed)
+  twolevel.pop$fW = factor(twolevel.pop$W)
+  twolevel.pop$Y = twolevel.pop$Y0*(1-twolevel.pop$W) + twolevel.pop$Y1*twolevel.pop$W
+  ggplot(twolevel.pop) + 
+    geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3, shape=1) + 
+    geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3, shape=1) + 
+    geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
+    geom_point(aes(x=plotX2(W,jX), y=Y, color=fW), alpha=.5, size=3) +  
+    guides(color='none') + scale_x_continuous(breaks=ages) + twolevel.coord
+}
+
+sample.plot = function(randomization.seed=1, sample.seed=1) {  
+  twolevel.pop$W =(\() rbinom(nrow(twolevel.pop), 1, pi(twolevel.pop$X))) |> with_seed(randomization.seed)
+  twolevel.pop$fW = factor(twolevel.pop$W)
+  twolevel.pop$Y = twolevel.pop$Y0*(1-twolevel.pop$W) + twolevel.pop$Y1*twolevel.pop$W
+
+  sample.ind = (\() sample(nrow(twolevel.pop), 50, replace=TRUE)) |> with_seed(sample.seed)
+  twolevel.pop$sampled = sapply(1:nrow(twolevel.pop), function(i) sum(sample.ind==i))
+
+  ggplot(twolevel.pop) + 
+    geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3, shape=1, data=twolevel.pop[twolevel.pop$sampled==0,]) + 
+    geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3, shape=1, data=twolevel.pop[twolevel.pop$sampled==0,]) + 
+    geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
+    geom_point(aes(x=plotX2(W,jX), y=Y, color=fW), alpha=.5, size=3, shape=13, data=twolevel.pop[twolevel.pop$sampled==0,]) +  
+    geom_point(aes(x=plotX2(W,jX), y=Y, color=fW, size=sampled), alpha=.8) +  
+    guides(color='none', size='none') + scale_x_continuous(breaks=ages) + scale_size_area() + twolevel.coord
+  
+}
+
+potential.outcome.plot
+```
+
+:::
+::: {.fragment .current-visible fragment-index="0"}
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+population.plot(1)
+```
+
+:::
+::: {.fragment .current-visible fragment-index="1"}
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+population.plot(2)
+```
+
+:::
+::: {.fragment .current-visible fragment-index="2"}
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+population.plot(3)
+```
+
+:::
+::: {.fragment .current-visible fragment-index="3"}
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+sample.plot(3, 1)
+```
+
+:::
+::: {.fragment .current-visible fragment-index="4"}
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+sample.plot(3, 2)
+```
+
+:::
+::: {.fragment .current-visible fragment-index="5"}
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+sample.plot(3, 3)
+```
+
+:::
+::::
+
+::: {.fragment .semi-fade-out fragment-index="0"}
+1. We start with two potential outcomes for each person in our population.
+   - Those are the connected dots we see in the plot.
+:::
+::: {.fragment .fade-in fragment-index="0"}
+::: {.fragment .semi-fade-out fragment-index="3"}
+2. Each one flips a coin --- one with weight depending on their age --- to determine whether they're treated.
+   - The winning outcomes --- the ones that actually happen --- are the ones that don't fade out.
+   - This is, of course, random. So different this happen each time we do it.
+:::
+:::
+::: {.fragment .fade-in fragment-index="3"}
+3. Then we sample --- with replacement --- from our population. 
+    - &olcross; marks a person who isn't sampled.
+    - small dots mark people sampled once.
+    - bigger dots mark people sampled 2,3,... times.
+    - This is random, too.
+:::
+
+## Implications (TODO: IMPROVE/MAKE VISUAL)
+
+$$
+\begin{array}{cccc|ccc}
+i & X_i & W_i & Y_i & Y_i(1) & Y_i(0) & Y_i(1)-Y_i(0) \\
+\hline
+1 & \textcolor{blue}{60} &1 & 70 & \textcolor{blue}{70} & \alert{70} & \alert{0} \\
+2 & \textcolor{magenta}{70} &1 & 80 & \textcolor{magenta}{80} & \alert{70} & \alert{10} \\
+3 & \textcolor{blue}{60} & 0 & 60 & \alert{60} & \textcolor{blue}{60} & \alert{0}\\
+4 & \textcolor{magenta}{70} &0& 70 & \alert{80} & \textcolor{magenta}{70} & \alert{10} \\
+5 & \textcolor{blue}{60} & 0&70 & \alert{70} & \textcolor{blue}{70} & \alert{0} \\
+6 & \textcolor{blue}{60}& 0 & 80 & \alert{80} & \textcolor{blue}{80} & \alert{0} \\
+\end{array}
+$$
+
+- For each age group, we have a randomized experiment. 
+- Among those with $\textcolor{blue}{X=60}$ and $\textcolor{magenta}{X=70}$ ...
+  - Everything we've said before about randomized experiments is true.
+  - We can think of the people who do and don't do MHT as being drawn from the same population.
+  - That means that --- if we ignore $W_i$ and $Y_i$ --- they have the same distribution.
+  - We have to ignore this stuff to get idenitical distribution because it's *downstream of randomization*.
+- This allows us to get at the *distribution of our missing data*. 
+- [Remember red numbers are not observed]{.fg style="color:red"}.
+
+## Filling in Missing Data
+
+$$
+\begin{array}{cccc|ccc}
+i & X_i & W_i & Y_i & Y_i(1) & Y_i(0) & Y_i(1)-Y_i(0) \\
+\hline
+1 & \textcolor{blue}{60} &1 & 70 & \textcolor{blue}{70} & \alert{70} & \alert{0} \\
+2 & \textcolor{magenta}{70} &1 & 80 & \textcolor{magenta}{80} & \alert{70} & \alert{10} \\
+3 & \textcolor{blue}{60} & 0 & 60 & \alert{60} & \textcolor{blue}{60} & \alert{0}\\
+4 & \textcolor{magenta}{70} &0& 70 & \alert{80} & \textcolor{magenta}{70} & \alert{10} \\
+5 & \textcolor{blue}{60} & 0&70 & \alert{70} & \textcolor{blue}{70} & \alert{0} \\
+6 & \textcolor{blue}{60}& 0 & 80 & \alert{80} & \textcolor{blue}{80} & \alert{0} \\
+\end{array}
+$$
+
+What is the average $Y_i(1)$ among the participants with $X=60$?
+
+::: fragment
+
+$$
+\frac{\textcolor{blue}{70} +\alert{60} +\alert{70} + \alert{80}}{\textcolor{blue}{1} + \alert{3}}  = 70
+$$
+
+:::
+
+
+What is the average $Y_i(1)$ among the *treated* ($D=1$) participants with $X=60$?
+
+::: fragment
+$$
+\frac{\textcolor{blue}{70} }{\textcolor{blue}{1}}  = 70
+$$
+:::
+
+What is the average $Y_i(0)$ among the participants with $X=60$?
+
+::: fragment
+$$
+\frac{\textcolor{red}{70} +\textcolor{blue}{60} +\textcolor{blue}{70}+\textcolor{blue}{80}}{4}  = 70
+$$
+:::
+
+
+What is the average $Y_i(0)$ among the *untreated* ($D=0$) participants with $X=60$?
+
+::: fragment
+$$
+\frac{\textcolor{blue}{60} +\textcolor{blue}{70}+\textcolor{blue}{80}}{3}  = 70
+$$
+
+:::
+
+::: aside
+This is a stylized example. Randomization implies equivalance *in distribution*, but not in any given sample.
+:::
+
+
+## Conditional ATE for $\textcolor{blue}{X=60}$
+
+$$
+\begin{array}{cccc|ccc}
+i & X_i & W_i & Y_i & Y_i(1) & Y_i(0) & Y_i(1)-Y_i(0) \\
+\hline
+1 & \textcolor{blue}{60} &1 & 70 & \textcolor{blue}{70} & \alert{70} & \alert{0} \\
+2 & \textcolor{magenta}{70} &1 & 80 & \textcolor{magenta}{80} & \alert{70} & \alert{10} \\
+3 & \textcolor{blue}{60} & 0 & 60 & \alert{60} & \textcolor{blue}{60} & \alert{0}\\
+4 & \textcolor{magenta}{70} &0& 70 & \alert{80} & \textcolor{magenta}{70} & \alert{10} \\
+5 & \textcolor{blue}{60} & 0&70 & \alert{70} & \textcolor{blue}{70} & \alert{0} \\
+6 & \textcolor{blue}{60}& 0 & 80 & \alert{80} & \textcolor{blue}{80} & \alert{0} \\
+\end{array}
+$$
+
+- Because we have a randomized experiment within the  $\textcolor{blue}{X=60}$ group ...
+- The difference in *subpopulation means* is equal to the average effect of treatment within that group.
+- We call this the **conditional average treatment effect** ($CATE(60)$).
+$$
+CATE(60) = \E[Y_i(1) - Y_i(0) \mid X_i=0] = \E[Y_i \mid W_i=1, X_i=60] - \E[Y_i \mid W_i=0, X_i=60]
+$$
+- The difference in subsample means $\textcolor{blue}{X=60}$ is an unbiased estimator of 
+this quantity.
+
+$$
+\begin{aligned}
+\widehat{CATE}(60) &=\frac{\textcolor{blue}{70} }{1}  - \frac{\textcolor{blue}{60} +\textcolor{blue}{70}+\textcolor{blue}{80}}{3} \\
+&= \frac{\textcolor{blue}{70} +\alert{60} +\alert{70} + \alert{80}}{4} - \frac{\textcolor{red}{70} +\textcolor{blue}{60} +\textcolor{blue}{70}+\textcolor{blue}{80}}{4} \\
+&= \frac{\alert{0} +\alert{0} +\alert{0} + \alert{0}}{4}
+\end{aligned}
+$$
+
+
+
+## Conditional ATE for $\textcolor{magenta}{X=70}$
+
+$$
+\begin{array}{cccc|ccc}
+i & X_i & W_i & Y_i & Y_i(1) & Y_i(0) & Y_i(1)-Y_i(0) \\
+\hline
+1 & \textcolor{blue}{60} &1 & 70 & \textcolor{blue}{70} & \alert{70} & \alert{0} \\
+2 & \textcolor{magenta}{70} &1 & 80 & \textcolor{magenta}{80} & \alert{70} & \alert{10} \\
+3 & \textcolor{blue}{60} & 0 & 60 & \alert{60} & \textcolor{blue}{60} & \alert{0}\\
+4 & \textcolor{magenta}{70} &0& 70 & \alert{80} & \textcolor{magenta}{70} & \alert{10} \\
+5 & \textcolor{blue}{60} & 0&70 & \alert{70} & \textcolor{blue}{70} & \alert{0} \\
+6 & \textcolor{blue}{60}& 0 & 80 & \alert{80} & \textcolor{blue}{80} & \alert{0} \\
+\end{array}
+$$
+
+- Because we have a randomized experiment within the  $\textcolor{magenta}{X=70}$ group ...
+- The difference in *subpopulation means* is equal to the average effect of treatment within that group.
+- We call this the **conditional average treatment effect** ($CATE(70)$).
+$$
+CATE(70) = \E[Y_i(1) - Y_i(0) \mid X_i=0] = \E[Y_i \mid W_i=1, X_i=70] - \E[Y_i \mid W_i=0, X_i=70]
+$$
+- The difference in subsample means $\textcolor{magenta}{X=70}$ is an unbiased estimator of 
+this quantity.
+
+$$
+\begin{aligned}
+\widehat{CATE}(70) &= \frac{\textcolor{magenta}{80} }{1}  - \frac{\textcolor{magenta}{70} }{1} \\
+&=\frac{\textcolor{magenta}{80} +\alert{80} }{2} - \frac{\alert{70}  + \textcolor{magenta}{70}}{2} \\
+&= \frac{\alert{10} +\alert{10}}{2}
+\end{aligned}
+$$
+
+## The ATE
+
+$$
+\begin{array}{cccc|ccc}
+i & X_i & W_i & Y_i & Y_i(1) & Y_i(0) & Y_i(1)-Y_i(0) \\
+\hline
+1 & \textcolor{blue}{60} &1 & 70 & \textcolor{blue}{70} & \alert{70} & \alert{0} \\
+2 & \textcolor{magenta}{70} &1 & 80 & \textcolor{magenta}{80} & \alert{70} & \alert{10} \\
+3 & \textcolor{blue}{60} & 0 & 60 & \alert{60} & \textcolor{blue}{60} & \alert{0}\\
+4 & \textcolor{magenta}{70} &0& 70 & \alert{80} & \textcolor{magenta}{70} & \alert{10} \\
+5 & \textcolor{blue}{60} & 0&70 & \alert{70} & \textcolor{blue}{70} & \alert{0} \\
+6 & \textcolor{blue}{60}& 0 & 80 & \alert{80} & \textcolor{blue}{80} & \alert{0} \\
+\end{array}
+$$
+
+- To get an *aggregate summary* of the effect of MHT, we can average the two within-subpopulation effects.
+$$
+\begin{aligned}
+\text{ATE} 
+&= \E\qty[ \E\qty{ Y_i(1) - Y_i(0) \mid X_i } ] \\
+&= \E\qty[ \E\qty{ Y_i \mid W_i=1, X_i } - \E\qty{ Y_i \mid W_i=0, X_i } ] \\
+&= \E\qty[ CATE(X_i) ] 
+\end{aligned}
+$$
+
+- We can estimate this with a weighted average of our two estimates.
+$$
+\begin{aligned}
+\widehat{ATE} &= \textcolor{blue}{\frac{4}{6}} \widehat{CATE}(60) + \textcolor{magenta}{\frac{2}{6}} \widehat{CATE}(70) \\
+&=\textcolor{blue}{\frac{4}{6}} \cdot \left\{\frac{70}{1} -  \frac{60+70+80}{3}\right\} + \textcolor{magenta}{\frac{2}{6}} \cdot \left\{\frac{80}{1} -  \frac{70}{1}\right\} \\
+&= \frac{20}{6}
+\end{aligned}
+$$
+
+## The ATT and ATC
+
+$$
+\begin{array}{cccc|ccc}
+i & X_i & W_i & Y_i & Y_i(1) & Y_i(0) & Y_i(1)-Y_i(0) \\
+\hline
+1 & \textcolor{blue}{60} &1 & 70 & \textcolor{blue}{70} & \alert{70} & \alert{0} \\
+2 & \textcolor{magenta}{70} &1 & 80 & \textcolor{magenta}{80} & \alert{70} & \alert{10} \\
+3 & \textcolor{blue}{60} & 0 & 60 & \alert{60} & \textcolor{blue}{60} & \alert{0}\\
+4 & \textcolor{magenta}{70} &0& 70 & \alert{80} & \textcolor{magenta}{70} & \alert{10} \\
+5 & \textcolor{blue}{60} & 0&70 & \alert{70} & \textcolor{blue}{70} & \alert{0} \\
+6 & \textcolor{blue}{60}& 0 & 80 & \alert{80} & \textcolor{blue}{80} & \alert{0} \\
+\end{array}
+$$
+
+- We can, if we prefer, average the CATE over different distributions of units.
+- This changes our weights. And therefore gives us different summaries of the effect.
+
+:::: columns
+::: column
+
+$$
+\begin{aligned}
+\text{ATT} 
+&= \E\qty[ \E\qty{ Y_i(1) - Y_i(0) \mid X_i } \mid W_i = 1] \\
+&= \E\qty[ \E\qty{ Y_i \mid W_i=1, X_i } - \E\qty{ Y_i \mid W_i=0, X_i } \mid W_i=1] \\
+&= \E\qty[ CATE(X_i) \mid W_i=1] \\
+& \\
+\widehat{ATT} &= \textcolor{blue}{\frac{1}{2}} \widehat{CATE}(60) + \textcolor{magenta}{\frac{1}{2}} \widehat{CATE}(70) \\
+&=\textcolor{blue}{\frac{1}{2}} \cdot \left\{\frac{70}{1} -  \frac{60+70+80}{1}\right\} + \textcolor{magenta}{\frac{1}{2}} \cdot \left\{\frac{80}{1} -  \frac{70}{1}\right\} \\
+&= \frac{10}{2}
+\end{aligned}
+$$
+
+:::
+::: column
+
+$$
+\begin{aligned}
+\text{ATC} 
+&= \E\qty[ \E\qty{ Y_i(1) - Y_i(0) \mid X_i } \mid W_i = 0] \\
+&= \E\qty[ \E\qty{ Y_i \mid W_i=0, X_i } - \E\qty{ Y_i \mid W_i=0, X_i } \mid W_i=0] \\
+&= \E\qty[ CATE(X_i) \mid W_i=0] \\
+& \\
+\widehat{ATC} &= \textcolor{blue}{\frac{3}{4}} \widehat{CATE}(60) + \textcolor{magenta}{\frac{1}{4}} \widehat{CATE}(70) \\
+&=\textcolor{blue}{\frac{3}{4}} \cdot \left\{\frac{70}{1} -  \frac{60+70+80}{1}\right\} + \textcolor{magenta}{\frac{1}{4}} \cdot \left\{\frac{80}{1} -  \frac{70}{1}\right\} \\
+&= \frac{10}{4}
+\end{aligned}
+$$
+
+:::
+::::
+
+## Working With All the Data
+```{r}
+#| out-height: 400px
+#| layout-ncol: 2 
+#| fig-asp: .4 
+summarized.pop
+summarized.counterfactual.pop
+```
+
+- This formalizes what we were talking about earlier.
+- It tells us we can use subpopulation means *that we can estimate* in place of *counterfactual means* we (otherwise) cannot.
+
+$$
+\begin{aligned}
+\E[Y(1) \mid W_i=1] &=  \E[ \E[Y_i \mid W_i=1, X_i]] = \sum_x \ingreen{p(1,x)\mu(1,x)}  \approx \sum_x \ingreen{\hat p(1,x) \hat\mu(1,x)} \\
+\E[Y(0) \mid W_i=1] &=  \E[ \E[Y_i \mid W_i=0, X_i]] = \sum_x \ingreen{p(1,x)}\inred{\mu(0,x)} \approx \sum_x \ingreen{\hat p(1,x)} \inred{\hat\mu(0,x)} \\
+\text{ATT} &= \sum_{x} \ingreen{p(1,x)}\qty{ \ingreen{\mu(1,x)} - \inred{\mu(0,x)} } \approx \sum_{x} \ingreen{\hat p(1,x)}\qty{ \ingreen{\hat\mu(1,x)} - \inred{\hat\mu(0,x)} } && \text{ and similarly } \\
+\text{ATC} &= \sum_{x} \inred{p(0,x)}\qty{ \ingreen{\mu(1,x)} - \inred{\mu(0,x)} } \approx \sum_{x} \ingreen{\hat p(1,x)}\qty{ \ingreen{\hat\mu(1,x)} - \inred{\hat\mu(0,x)} }.
+\end{aligned}
+$$
+
+- So the adjusted gap we were talking about last time *is* the ATC.
+- Given randomization. And we can calculate an estimate pretty easily. 
+
+```{r}
+x = ages
+Y = data$Y
+X = data$X
+W = data$W
+```
+
+```{r}
+#| echo: true
+mu.hat = function(w,x) { mean(Y[X==x & W==w]) }         |> Vectorize()
+p.hat  = function(w,x) { sum(X==x & W==w) / sum(W==w) } |> Vectorize()
+ATC.hat = sum(p.hat(0,x)*(mu.hat(1,x) - mu.hat(0,x)))
+ATT.hat = sum(p.hat(1,x)*(mu.hat(1,x) - mu.hat(0,x)))
+```
+
+- The ATT and ATC are `{r} approx(ATT.hat)` and `{r} approx(ATC.hat)` respectively.
+
+
+
+
+
+
+

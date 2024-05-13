@@ -1,0 +1,448 @@
+---
+title: "Homework 2"
+subtitle: "QTM 220"
+---
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false 
+library(ggplot2)
+library(tidyverse)
+library(scales)
+```
+
+```{r}
+
+if (knitr::is_latex_output())
+  knitr::opts_chunk$set(dev = "cairo_pdf")
+theme_set(theme_minimal())
+```
+
+::: hidden
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+$$
+:::
+
+
+# Summary
+This problem set will not be graded. But if you have the time, it might be worth doing---or at least looking over---before you take the practice exam. It's meant to prompt you to review the right things. That way, you'll be taking the practice exam in circumstances closer to those of the actual exam, having already done some targeted revision.
+
+That said, you only have some much time, so let me offer some guidance on what to focus on here. @exr-mean, @exr-consistency, and @exr-sample-size are similar in character to stuff you might see on the exam. The rest of the stuff---the stuff in the middle---isn't. The exam will not talk about convergence in probability or Markov's inequality. That said, it is good practice working with expectations and thinking about how coverage probabilities are calculated and how interval estimates are calibrated, so if you've got the time, it might be worth a look.
+
+# Consistency
+
+We call an estimator *consistent* if, when our sample size $n$ is large enough, it converges to the thing we intend to estimate. There are multiple ways to talk about the
+convergence of random variables, but we'll start with once called *convergence in mean square*. An estimator $\hat\mu$ converges in mean-square to $\mu$ if $\E\qty[(\hat \mu - \mu)^2] \to 0$ as $n \to \infty$.
+What does that mean? Well, let's recall our `excess' formula for the variance. 
+$$ 
+\Var\qty[\hat\mu - \mu] = \E\qty[(\hat\mu - \mu)^2] - \qty(\E[\hat\mu - \mu])^2 \qqtext{ and equivalently } \underset{\text{mean squared error}}{\E\qty[(\hat\mu - \mu)^2]} =  \underset{\text{bias}^2}{\qty(\E[\hat\mu - \mu])^2} + \underset{\text{variance}}{\Var\qty[\hat\mu - \mu]}.
+$$
+The rearranged form of this, which decomposes the estimator's mean squared error as the sum of its squared bias and its variance, is called the \emph{bias/variance decomposition}. 
+Since $\text{bias}^2$ and \text{variance} are positive, this tells us that an estimator is consistent if and only if both its bias and its variance go to zero. That is,
+if by using a large enough sample size, we can make two things happen.
+
+1. We can make the center of its sampling distribution arbitrarily close to the estimation target $\mu$. That's the bias part.
+2. We can make the spread of the sampling distribution arbitrarily small. That's the variance part.
+
+One example of a consistent estimator, when we observe a sample with replacement $Y_1 \ldots Y_n$ from a population with mean $\mu$
+and standard deviation $\sigma$, is the sample mean $\hat \mu = \frac{1}{n}\sum_{i=1}^n Y_i$.
+
+::: { #exr-mean  .callout-exercise}
+When we have a sample of size $n$, what is the bias of $\hat\mu?$ What is its standard deviation? 
+:::
+
+::: {.callout-solution}
+This is straight out of lectures 7 and 8. The estimator's bias is zero and its standard deviation is $\sigma/\sqrt{n}$. I didn't ask for proof, but I'll include a proof that the bias is zero, i.e. that $\E[\hat\mu]=\mu$, below. The estimator's standard deviation is the square root of its variance, $\sigma^2/n$, which was calculated below in the prompt for Practice Problem 4. 
+
+$$
+\begin{aligned}
+\E[\hat\mu] 
+&=\E\qty[\frac1n\sum_{i=1}^n Y_i]  && \text{ definition of $\hat\mu$} \\
+&= \frac1n\sum_{i=1}^n \E[Y_i]                      && \text{ via linearity } \\
+&= \frac1n\sum_{i=1}^n \frac{1}{m}\sum_{j=1}^m y_j  && \text{ because $Y_i=y_1\ldots y_m$ each w.p. $1/m$  } \\
+&= \frac1n\sum_{i=1}^n \mu                          && \text{ because $\mu$ is what we call the mean of $y_1\ldots y_m$} \\
+&= \frac1n \times n \times \mu = \mu.               && \text{ counting copies of $\mu$ in our sum and then dividing}
+\end{aligned}
+$$
+:::
+
+
+Now lets's try to get a sense of what consistency does and doesn't look like. The plot below shows the sampling distributions of three estimators at three sample sizes. 
+The vertical line indicates the mean of the sampling distribution. 
+
+
+```{r}
+#| echo: false
+#| out-height: 4in 
+set.seed(1234)
+error = 2*rnorm(100000)
+bias = list(a=function(n) 0, b=function(n) sqrt(10)/sqrt(n), c=function(n) 1)
+
+plotdata = expand_grid(estimator=names(bias), n=c(10,40,160)) %>%
+  pmap(function(estimator, n) {
+    thebias = bias[[estimator]](n)
+    data.frame(estimator=estimator, n=n, muhat=thebias + error / sqrt(n))
+    }) |> bind_rows() 
+summaries = plotdata |> group_by(n, estimator) |> summarize(mean=mean(muhat))
+
+breaks = seq(-4, 4, by=2)/2 
+signs  = case_when(
+  breaks < 0 ~ '-', 
+  breaks == 0 ~ '',
+  breaks > 0 ~ '+')
+offsets = case_when(
+  breaks != 0 ~ sprintf('%d', abs(breaks)),
+  breaks == 0 ~ '')
+labels.abstract = sprintf('μ %s %s', signs, offsets)
+
+ggplot(plotdata) + 
+  geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100, alpha=.4) + 
+  geom_vline(aes(xintercept=mean), data=summaries) + 
+  scale_x_continuous(breaks=breaks, labels=labels.abstract, limits=range(breaks)) + 
+  theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1)) + 
+  xlab('') + ylab('') + 
+  facet_grid(n ~ estimator, labeller=labeller(n=label_both, estimator=label_both))  
+```
+
+::: { #exr-consistency  .callout-exercise}
+Which of these estimators are consistent? Circle zero or more: a, b, c.
+:::
+
+::: {.callout-solution}
+Estimators $a$ and $b$ are consistent. Estimator $c$ is not; it converges to $\mu+1$, not $\mu$.
+:::
+
+# Convergence in Probability
+Now let's think about another notion of convergence. If an estimator's sampling distribution
+ends up in the right location ($\text{bias} \to 0$) with arbitrarily little spread ($\text{variance} \to 0$),
+then it makes sense that \emph{any draw from it} will be close to the estimation target $\mu$. 
+
+Recall that you can visualize your estimator as a single dot drawn
+from its sampling distribution. Like the black one below. And if you want to think of what happens if you were to repeat your survey 100 times, you can visualize the results by plotting 100 dots. Like the purple ones.
+```{r}
+K = 100
+plotdata$height = runif(nrow(plotdata), 0, 1.2)
+dotplotdata = plotdata |> filter(n==40 & estimator=='b')
+dotplotsummaries = summaries |> filter(n==40 & estimator=='b')
+
+ggplot(dotplotdata) + 
+  geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100, alpha=.4) + 
+  geom_vline(aes(xintercept=mean), data=dotplotsummaries) + 
+  geom_point(aes(x=muhat, y=height), alpha=.2,
+             color='purple', data=dotplotdata[2:K,]) +
+  geom_point(aes(x=muhat, y=height), alpha=1,
+            color='black', data=dotplotdata[1,]) + 
+  scale_x_continuous(breaks=breaks, labels=labels.abstract, limits=range(breaks)) + 
+  theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1)) + 
+  xlab('') + ylab('') 
+
+```
+
+
+We formalize this idea by talking about \emph{convergence in probability}. We say an estimator $\hat\mu$ converges in probability to $\mu$ if, for anyone's idea of `sufficiently close', the probability that $\hat\mu$ is sufficiently close to $\mu$ goes to one. Or equivalently, the probability that it isn't sufficiently close goes to zero.
+$$
+P(\lvert\hat\mu - \mu\rvert \ge \epsilon) \to 0 \qqtext{ as } n \to \infty
+$$
+Convergence in mean square *implies* convergence in probability. Let's see why. We'll use *Markov's inequality*.
+
+
+Markov's inequality says that the probability the absolute value of a random variable $X$ 
+exceeds some threshold $t$ is bounded by the ratio of its expectated absolute value and $t$, i.e.,
+$$ P(X \geq t) \leq \frac{\E[X]}{t}$$
+Often, instead of using this to bound the random variable we're interested in directly,
+e.g. $X=\lvert\hat\mu - \mu\rvert$, we use it to bound its square. $X \ge t$ if and only if $X^2 \ge t^2$, so the probability that $X \ge t$ is the same as the probability that $X^2 \ge t^2$. Applying Markov's inequality to the random variable $X^2$ gives us a bound in terms of $X$'s mean square.
+$$
+P(X \ge t) = P(X^2 \ge t^2) \leq \frac{\E[X^2]}{t^2} \qqtext{ e.g. } 
+P(\lvert\hat\mu - \mu\rvert \ge \epsilon) = P((\hat\mu - \mu)^2 \ge \epsilon^2) \leq \frac{\E[(\hat\mu - \mu)^2]}{\epsilon^2}
+$$
+
+This tells us, in terms of the mean squared error of $\hat\mu$, how likely it is that $\hat\mu$ is far from $\mu$. And, in particular, it tells us that if the mean squared error goes to zero, then the probability that $\hat\mu$ is any distance $\epsilon$ away from $\mu$ goes to zero. 
+
+
+Now we're going to do two things. First, we're going to prove Markov's inequality. It's good practice working with expectations and probabilities. Second, we're going to look at what Markov's inequality tells us about
+how close $\hat\mu$ is to $\mu$, i.e., we're going to use it to calculate the coverage of an interval estimate.
+
+
+## Proving Markov's Inequality
+
+::: { #exr-markov  .callout-exercise}
+Prove Markov's inequality. 
+:::
+
+::: {.callout-solution}
+We can think of $P(X \ge t)$ as the expected value of a binary random variable --- an indicator $1_{\ge t}(X)$ 
+for $X$ exceeding $t$. After all, the expected value of any binary random variable $Z$ is just the probability that it's one:
+$\E[Z] = 0 P(Z=0) + 1 P(Z=1) = P(Z=1)$. And this indicator $1_{\ge t}(x)$ is smaller than $u(x)=x/t$ for all non-negative values of $x$, i.e., all values $X$ takes on. For $x < t$ the indicator is zero and $x/t$ is at least zero and for $x \ge t$
+the indicator is one and $x/t$ is at least one. It follows that $\E[1_{\ge t}(X)] \le \E[u(X)]$. Now we combine the pieces and we're done.
+$$
+P(X \ge t) = \E[1_{\ge t}(X)] \le \E[u(X)]= \frac{\E[X]}{t} \quad \text{ with the last step via linearity}
+$$
+
+:::
+
+To help you out, I'll outline the proof. You'll need to fill in the details. But treat this like an 'essay question', not a 'short-answer' thing. Write out the whole argument, so you can read it without the outline.
+
+Here's the outline. We'll be thinking about a binary random variable $1_{\ge t}(X)$. This is the random variable we get by plugging the random variable $X$ into the *indicator function* for exceeding $t$.
+$$
+1_{\ge t}(x) = \begin{cases} 1 & \text{ if } x \ge t \\ 0 & \text{ if } x < t \end{cases}
+$$
+
+1. The expectation of $1_{\ge t}(X)$ is the probability that $X$ exceeds $t$, $P(X \ge t)$. Explain why.
+2. If we have some function of $u(x)$ that's always larger than $1_{\ge t}(x)$, i.e., 
+   one satisfying $u(x) \ge 1_{\ge t}(x)$ for all $x$, we know that $\E[u(X)] \ge \E 1_{\ge t}(X)$.^[You can take this as given, but it's easy to prove. Use linearity of expectations to show that $\E[u(X)] - \E[ 1_{\ge t}(X)] \ge 0$ when $u(x) - 1_{\ge t}(x) \ge 0$ for all $x$.] Argue that the function $u(x)=x/t$ does the trick by considering the two cases: $x \ge t$ and $x < t$.
+3. What is $\E[u(X)]$? Are you done?
+
+## Markov's Inequality and Interval Estimation
+
+So far, when we've calculated the coverage of an interval estimate in terms of its mean and variance, we've relied on normal approximation. That is, we've been using a different formula for 
+$P(\lvert\hat\mu - \mu\rvert \ge \epsilon)$ based on the idea that $\hat\mu-\mu$ has approximately the same distribution as a normally-distributed random variable $Z$ with the same mean---zero---and variance $\sigma_{\hat\mu}^2=\Var[\hat\mu-\mu]$. We can use this approximation, in combination with our knowlege of the probability density of the normal approximation, to get a bound on the probability that $\lvert\hat\mu - \mu\rvert \ge \epsilon$.
+
+$$
+P(\abs{\hat\mu - \mu} \ge \epsilon) \approx P(\abs{Z} \ge \epsilon) = 1-P(\abs{Z} < \epsilon) = 1- \int_{-\epsilon}^{\epsilon} f_{\sigma_{\hat\mu}}(z) dz \qfor f_{\sigma}(z) = \frac{1}{\sqrt{2\pi}\sigma} e^{-z^2/2\sigma_{\hat\mu}^2}
+$$
+
+The reason we're always talking about intervals of the form $\hat\mu \pm 2 \sigma_{\hat\mu}$ is that, using this approximation, that yields 95% coverage. That is, $P(\abs{Z} < 2 \sigma_{\hat\mu}) \approx .95$. To see why we tend to use normal approximation instead of Markov's inequality, let's see what Markov's inequality tells us about the coverage of this interval.
+
+::: { #exr-markov-interval  .callout-exercise}
+We'll start with an abstraction of the problem.
+Suppose $Z$ is a random variable, not necessarily normally distributed, 
+with mean zero and variance $\sigma_Z^2$. What does Markov's inequality tell 
+us about the probability that $P(\abs{Z} \ge t\sigma_Z)$ for $t=2$?
+And how big do we need to make $t$ for it to tell us that $P(\abs{Z} \ge t\sigma_Z)$ is less than .05?
+:::
+::: {.callout-solution}
+It tells us that $P(\abs{Z} \ge t\sigma_Z) \le 1/t^2$. 
+$$
+P(\abs{Z} \ge t\sigma_Z) = P\qty(Z^2 \ge t^2\sigma_Z^2) \le \frac{\E[Z^2]}{t^2\sigma_Z^2} = \frac{\sigma_Z^2}{t^2\sigma_Z^2} = \frac{1}{t^2}
+$$
+Taking $t=2$, this tell us that $P(\abs{Z} \ge 2\sigma_Z) \le 1/4$. And to make this bound $.05$, i.e. $1/20$, we solve $1/t^2=1/20$ for $t$: we get $t=\sqrt{20}\approx `r round(sqrt(20), 1)`$.
+:::
+
+::: { #exr-markov-interval-practical  .callout-exercise}
+Now let's translate that into practical terms. In a previous exercise, you calculated the mean $\E[\mu]$ and variance $\sigma_{\hat\mu}^2$ of the sample mean $\hat\mu$ when we have a sample of size $n$ drawn with replacement from a population with mean $\mu$ and variance $\sigma^2$. What does Markov's inequality tell us about the coverage probability of the interval $\hat\mu \pm 2\sigma_{\hat\mu}$, i.e., the probability that $\abs{\hat\mu - \mu} < 2\sigma_{\hat\mu}$? And how big do we need to make $t$ for it to tell us that $\hat\mu \pm t\sigma_{\hat\mu}$ has coverage probability .95?
+:::
+::: {.callout-solution}
+It tells us that the first interval has coverage probability at least $1-1/4=.75$ and that, to get an interval for which it implies a coverage probability of at least .95, we need to make $t=\sqrt{20}\approx `r round(sqrt(20), 1)`$. 
+
+I didn't ask for this here, but let me offer an interpretation. Where normality of our estimator's sampling distribution would imply 95\% coverage for the interval $\hat\mu \pm 2\sigma_{\hat\mu}$,  Markov's inequality implies 75\%. Where to get a 95\% interval based on normality we'd use $\hat\mu \pm 2\sigma_{\hat\mu}$, to get a 95\% interval based on Markov's inequality we'd use $\hat\mu \pm `r round(sqrt(20), 1)`\sigma_{\hat\mu}$---an interval over twice as wide. That's why we don't use Markov's inequality for much if we have a better alternative, e.g., if normal approximation is justified or we can use the bootstrap. It's not wrong, but what we can say based on it is more conservative than what we can say based on other techniques.
+:::
+
+Finally, let's visualize it in the context of a real dataset. We'll be estimating the mean number of points NBA players scored over the course of a season. As our estimate, we'll us the corresponding mean of a sample of these players---the one in 'nba_sample_1.csv' from Problem Set 1.
+
+::: { #exr-bootstrap-interval  .callout-exercise}
+As in Problem Set 1, draw 10,000 samples from the bootstrap sampling distribution of the sample mean $\hat\mu$.
+Make a histogram showing the bootstrap sampling distribution of the sample mean. Then plot three 95\% confidence intervals. The first should be, as in Problem Set 1, based on the width of the bootstrap sampling distribution;
+the second, an interval $\hat\mu \pm 2\hat\sigma_{\mu}$ based on normal approximation where $\hat\sigma_{\mu}$ is the standard deviation of your bootstrap samples; and the third, an interval $\hat\mu \pm t\sigma_{\hat\mu}$ for the appropriate threshold based on Markov's inequality. And give a short, e.g. one-sentence, answer to this question. Why do we usually prefer the intervals based on the bootstrap and normal approximation to the one based on Markov's inequality? 
+:::
+::: {.callout-solution}
+```{r width-code}
+width = function(samples, center=mean(samples), alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( center - w/2 <= samples & samples <= center + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-center))))$root
+}
+```
+
+From bottom to top, we see 95\% intervals calibrated via the bootstrap, normal approximation, and Markov's inequality. We prefer the first two --- as long as they actually do get 95\% coverage, which they will for everything we talk about in this class --- because they're narrower. Markov's inequality is more conservative, i.e., it gives us a wider interval. 
+
+```{r}
+Y = read.csv('nba_sample_1.csv')$PTS
+bootstrap.means = array(dim=10000)
+for(ii in 1:length(bootstrap.means)) {
+  bootstrap.means[ii] = mean(sample(Y, replace=TRUE))
+}
+muhat = mean(Y)
+height = dnorm(0, mean=0, sd=sd(bootstrap.means))
+
+wboot = width(bootstrap.means, alpha=.05)
+wnorm = 2*1.96*sd(bootstrap.means)
+wmarkov = 2*sqrt(20)*sd(bootstrap.means)
+
+ggplot() + 
+  geom_histogram(aes(x=bootstrap.means, y=after_stat(density)), bins=100, alpha=.2) + 
+  geom_pointrange(aes(x=muhat, y=.2*height, xmin=muhat-wboot/2,   xmax=muhat+wboot/2)) +
+  geom_pointrange(aes(x=muhat, y=.4*height, xmin=muhat-wnorm/2,   xmax=muhat+wnorm/2)) +
+  geom_pointrange(aes(x=muhat, y=.6*height, xmin=muhat-wmarkov/2, xmax=muhat+wmarkov/2))
+```
+
+:::
+
+
+# Sample Size and Precision
+
+
+```{r}
+approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+our.seed = 0
+width = function(samples, alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( mean(samples) - w/2 <= samples & samples <= mean(samples) + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
+}
+
+default.height = function(samples) { dnorm(0, mean=0, sd=sd(samples)) }
+
+annotate.histogram = function(histplot, samples, shade=FALSE, 
+                              shade.width=width(samples, alpha=.05), shade.color='green', shade.alpha=.15) { 
+    annotations = data.frame(mu=mean(samples), 
+                             w66 = width(samples, alpha=1/3),
+                             w95 = width(samples, alpha=.05),
+                             shade.width=shade.width)
+    p = histplot + 
+           geom_vline(aes(xintercept=mu), color="blue", data=annotations) +
+           geom_vline(aes(xintercept=mu-w66/2), color="blue", linetype='dashed', data=annotations) +
+           geom_vline(aes(xintercept=mu+w66/2), color="blue", linetype='dashed', data=annotations) +
+           geom_vline(aes(xintercept=mu-w95/2), color="blue", linetype='dotted', data=annotations) +
+           geom_vline(aes(xintercept=mu+w95/2), color="blue", linetype='dotted', data=annotations) 
+    if(shade) { 
+      p + geom_rect(aes(xmin=mu-shade.width/2, 
+                        xmax=mu+shade.width/2, 
+                        ymin=0, ymax=Inf), alpha=shade.alpha, fill=shade.color, data=annotations)
+    } else { p }
+}
+
+default.highlight.colors = c('black', 'magenta', 'cyan', 'gray')
+with.points = function(histplot, samples, K=100, highlight=4, height=default.height(samples)) {
+    set.seed(our.seed)
+    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
+    heights = sample(height*(1:K)/K)
+    data = data.frame(y=heights, x=samples[1:K], 
+                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
+                      alpha=c(rep(1, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
+    histplot + geom_point(aes(y=y, x=x, color=I(color), alpha=I(alpha)), data=data)
+}
+
+with.intervals = function(histplot, samples, w=width(samples, alpha=.05), K=100, 
+                          highlight=4, highlight.alpha=1, height=default.height(samples)) { 
+    set.seed(our.seed)
+    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
+    heights = sample(height*(1:K)/K)
+    data = data.frame(y=heights, x=samples[1:K], w=w,
+                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
+                      alpha=c(rep(highlight.alpha, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
+    histplot + 
+        geom_pointrange(aes(y=y, x=x, xmin=x-w/2, xmax=x+w/2, color=I(color), alpha=I(alpha)), data=data)
+}
+```
+
+```{r}
+#| cache: true
+nsw = read.csv('https://davidahirshberg.bitbucket.io/teaching/regression/fall2021/data/nsw.csv')
+nsw.experimental = nsw[nsw$dataset=='nsw', ]
+X = as.numeric(0+nsw.experimental$treated)
+Y=as.numeric(nsw.experimental$income78)
+n = length(Y)
+
+difference = mean(Y[X==1]) - mean(Y[X==0])
+difference.bootstrap.samples = array(dim=10000)
+for(rr in 1:10000) {
+    I = sample(1:n, n, replace=TRUE)
+    Xstar = X[I]
+    Ystar = Y[I]
+    difference.bootstrap.samples[rr] = mean(Ystar[Xstar==1]) - mean(Ystar[Xstar==0])
+}
+```
+
+```{r}
+#| out-height: 250px
+#| fig-asp: .25 
+ 
+xx = seq(min(difference.bootstrap.samples), max(difference.bootstrap.samples), length.out=1000)
+wboot=width(difference.bootstrap.samples, alpha=.05)
+nsw.interval.numeric = difference + c(-1,1)*wboot/2
+
+bootstrap.histogram = ggplot(data.frame(samples=difference.bootstrap.samples)) +
+  geom_histogram(aes(x=samples, y=after_stat(density)), alpha=.3, bins=100) 
+
+annotated.bootstrap.difference.histogram = 
+  annotate.histogram(bootstrap.histogram, difference.bootstrap.samples,
+  shade=FALSE)
+
+inflation.factor = 3.5
+nsw.interval.plot = with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, highlight=0) + 
+  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+w/2), 
+                  data=data.frame(x=difference, y=.4*default.height(difference.bootstrap.samples), w=wboot), color='black')  
+nsw.interval.plot + xlab('') + ylab('') + scale_y_continuous(labels=label_dollar())
+```
+
+
+Let's think back to our discussion of the NSW experiment/job-training program. 
+This was what we learned about the effect of the program. Measured in 1978 dollars, 
+$$
+\mu(1)-\mu(0) \in `r approx(difference)` \pm `r approx(wboot/2)` \quad \text{is a 95\% confidence interval}
+$$
+
+We disappointed with the results of the experiment because our interval is so wide
+we can't tell if the program is worth running or not. Let's talk about how we might fix this.
+To do this, we'll work with our formula for the variance of a difference in subsamples means.
+
+$$
+\begin{aligned}
+\Var[\hat\mu(1) - \hat\mu(0)] = \E\qty[\frac{\sigma^2(1)}{N_1} + \frac{\sigma^2(0)}{N_0}] \quad \text{ for } \quad \sigma^2(x) &= \Var[Y \mid X=x] \\ \text{ and } \quad N_x &= \sum_{i:X_i=x} 1
+\end{aligned}
+$$
+
+We'll approximate this by substituting estimates of the subpopulation variances and 
+replacing the expected inverse samples sizes $E[1/N_1]$ and $E[1/N_0]$ by $1/N_1$ and $N_0$
+themselves. That is, we'll use this formula instead.
+
+$$
+\hVar[\hat\mu(1) - \hat\mu(0)] = \frac{\hat\sigma^2(1)}{N_1} + \frac{\hat\sigma^2(0)}{N_0} \quad \text{ where } \quad \hat\sigma^2(x) = \frac{1}{N_x}\sum_{i:X_i=x} \qty{Y_i - \hat\mu(x)}^2.
+$$
+
+```{r}
+N1 = sum(X==1)
+N0 = sum(X==0)
+sigma.1 = sqrt((N1-1)/N1)*sd(Y[X==1])
+sigma.0 = sqrt((N0-1)/N0)*sd(Y[X==0]) 
+```
+
+Here's what the numbers in this formula actually are when we calculate them out.
+$$
+\begin{array}{lll}
+x & \hat\sigma^2(x) & N_x \\
+1 & `r approx(sigma.1^2)` & `r sum(X==1)` \\
+0 & `r approx(sigma.0^2)` & `r sum(X==0)` \\
+\end{array}
+$$
+
+To get a sense of what's making our interval big, let's plug in our numbers.
+$$
+\hVar[\hat\mu(1) - \hat\mu(0)] = \frac{`r approx(sigma.1^2)`}{`r sum(X==1)`} + \frac{`r approx(sigma.0^2)`}{`r sum(X==0)`} = `r approx(sigma.1^2/sum(X==1))` + `r approx(sigma.0^2/sum(X==0))` = `r approx(sigma.1^2/sum(X==1) + sigma.0^2/sum(X==0))` 
+$$
+
+Now let's think about how we might get a better estimate of the effect of the program. 
+
+::: { #exr-sample-size  .callout-exercise}
+The program is over, so we can't *treat* anyone else. $N_1$ is what it is. But we could, conceivably, make a comparison to a larger group of people we *didn't treat*. That is, we could increase $N_0$. Suppose that, when running this study, we actually randomized `r sum(X==1)` people to treatment 
+and $`r sum(X==0)` \times 4 = `r sum(X==0)*4`$ people to control but, to save our interviewers time late in the game, we only followed up with `r sum(X==0)` of the people we randomized to control. That is, suppose that it's possible to make some calls and effectively increase our sample size
+to `r sum(X==0)*4`. Roughly what would the variance of our estimate be then? And how much narrower would the resulting interval be, i.e., what is the ratio of the width of this new interval to the width of the old one based on a control group of `r sum(X==0)` people?
+:::
+
+::: {.callout-solution}
+The variance of our estimate would be roughly this.
+$$
+\hVar[\hat\mu(1) - \hat\mu(0)] = \frac{`r approx(sigma.1^2)`}{`r sum(X==1)`} + \frac{`r approx(sigma.0^2)`}{`r 4*sum(X==0)`} = `r approx(sigma.1^2/sum(X==1))` + `r approx(sigma.0^2/(4*sum(X==0)))` = `r approx(sigma.1^2/sum(X==1) + sigma.0^2/(4*sum(X==0)))` 
+$$
+
+And as the interval widths are 4 times the square root of the variances, the ratio of interval widths is the square root of the ratio of the variances. It's this.
+$$
+\text{width ratio} = 
+\sqrt{\frac{`r approx(sigma.1^2/sum(X==1))` + `r approx(sigma.0^2/(4*sum(X==0)))`}{`r approx(sigma.1^2/sum(X==1))` + `r approx(sigma.0^2/sum(X==0))`}}
+= \sqrt{\frac{`r approx(sigma.1^2/sum(X==1) + sigma.0^2/(4*sum(X==0)))`}{`r approx(sigma.1^2/sum(X==1) + sigma.0^2/sum(X==0))`}} = `r approx(sqrt((sigma.1^2/sum(X==1) + sigma.0^2/(4*sum(X==0)))/(sigma.1^2/sum(X==1) + sigma.0^2/sum(X==0))))`
+$$
+
+Note that increasing $N_0$ isn't helping that much. That's because the second term in the variance---the one increasing $N_0$ reduces---is smaller than the first term to begin with.
+Reducing it that term---even dramatically---doesn't make that much of a difference overall.
+:::

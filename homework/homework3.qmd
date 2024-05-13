@@ -1,0 +1,629 @@
+---
+title: "Problem Set 3"
+subtitle: "QTM 220"
+---
+
+
+::: hidden
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+$$
+:::
+
+
+# Summary
+
+In this problem set, we're going to generalize some of the skills we've developed focusing on binary covariates 
+to data with multiple and many-valued covariates. We'll working with basketball data. 
+
+Here are the libraries we'll need.
+```{r}
+#| echo: true
+library(ggplot2)
+library(tidyverse)
+```
+
+And some settings to configure how our plots and code output looks.
+```{r}
+#| echo: true
+theme_set(theme_minimal())
+options(scipen = 1, digits = 2)
+```
+
+# NBA Draft Data
+
+You'll be looking at the performance of NBA players in the 2021-2022 season.
+You'll be thinking about to what extent teams get it right in the draft, i.e.,
+how much better first-round picks tend to be than second-round picks and
+second-round picks from undrafted players. 
+
+We have data describing the whole population, i.e. every player who played in the league in that season. But to get in some practice doing statistics, we'll start by working with a sample. 
+
+Start by loading the data.
+```{r}
+nba.population = read.csv("nba_draft_population.csv")
+nba.sample = read.csv("nba_draft_sample.csv")
+```
+It has the following variables.
+
+-  playername: name of player 
+-  teamabbreviation : name of the team the player played on at the end of the season 
+-  age: age of player 
+-  playerheight : height in cm 
+-  playerweight: weight in kg 
+-  college: name of college player attended 
+-  country : name of country where player was born 
+-  draftyear : year player was drafted (‘Undrafted’ if undrafted) 
+-  draftround : draft round player was selected 
+-  draftnumber : number selected in his draft round (‘Undrafted’ if undrafted)
+-  gp: games played through season 
+-  pts: average points scored 
+-  reb: average rebounds 
+-  ast: average assists 
+-  net_rating : team’s point differential per 100 possessions while player is on the court 
+-  orebpct : percentage of available offensive rebounds grabbed 
+-  drebpct: percentage of available defensive rebounds grabbed 
+-  usgpct: percentage of team plays used (FGA + Possession Ending FTA + TO)/POSS
+-  tspct: shooting efficiency (PTS/(2*(FGA + 0.44*FTA))
+-  astpct : percent of teammate field goals assisted 
+-  draftlevel : draft round player was selected with undrafted players coded as 3 
+
+You are interested in the average net rating, the team's point differential per 100 possessions while the player is on the court, among different draft levels---players drafted in the first round, second round, or undrafted. Start with some visualization. This code draws as scatter plot with draft round on the x-axis and net rating on the y-axis. As usual, it also plots the within-group mean $\pm$ one standard deviation.
+
+```{r}
+#| echo: true
+coords = coord_cartesian(ylim=c(-100, 100)) 
+ggplot(nba.sample, aes(x=draftlevel, y=net_rating)) + 
+    geom_point(alpha=.3, position=position_jitter(width=0.2, height=0)) +
+    stat_summary(geom='pointrange', fun=mean, 
+                                    fun.min=\(x)mean(x)-sd(x), 
+                                    fun.max=\(x)mean(x)+sd(x)) + coords
+
+```
+
+
+## A Non-Problem
+This is pretty funny looking. How can you have a net rating of $-100$? 
+That threw me for a minute---I thought maybe our data was bad---but I 
+did some googling and figured it out. Let's look at *who* it is.
+```{r}
+nba.sample[nba.sample$net_rating == -100, 
+            c('player_name', 'team_abbreviation', 'net_rating', 'gp')]
+```
+It's Matt Mooney, who played in one game for the Knicks against 
+the Thunder on December 31, 2021. The Thunder won by 15. If he'd 
+played the whole game, he'd have a net rating around -15, as there
+are usually about 100 possesions in a game. But he only played
+1.9 minutes. I don't have the details, but perhaps the Thunder 
+scored four points and the Knicks zero in 4 possessions. 
+It's not a bug, it's just a weird data point. There's an argument
+to be made for dropping players who barely played from our analysis.
+But let's leave it. It is just a homework assignment, after all. 
+
+## Summarizing the Sample
+
+Let's get a sense of how informative draft round is about player performance. Here's a table of the mean net rating for each draft level.
+
+```{r}
+#| echo: true
+summaries = nba.sample |> group_by(draftlevel) |> 
+              summarize(mean_net_rating = mean(net_rating), 
+                        sd_net_rating = sd(net_rating),
+                        Nx=n())
+summaries
+```
+
+
+## The Average Increment over Rounds
+
+::: {#exr-avg-incr-over-rounds.callout-exercise}
+Calculate the average increment in mean net rating as we increase draft round, i.e.,
+$$
+\frac{1}{2} \sum_{x=1}^2 \{\hat{\mu}(x) - \hat{\mu}(x+1)\}
+$$
+If you like, you can do it by hand using the table above. 
+But you'll want to be able to do it in R, too, because you'll need to later.
+If you're not confident in your programming abilities, do it both ways and check
+that they agree.
+:::
+::: {.callout-solution}
+By hand.
+$$
+\begin{aligned}
+\frac{\{\hat\mu(1)-\hat\mu(2)\} + \{\hat\mu(2)-\hat\mu(3)\}}{2}  
+&= \frac{\{`r summaries$mean_net_rating[1]` - `r summaries$mean_net_rating[2]`\} + 
+       \{`r summaries$mean_net_rating[2]` - `r summaries$mean_net_rating[3]`\}}{2} \\
+&= \frac{`r summaries$mean_net_rating[1] - summaries$mean_net_rating[2]` + 
+        `r summaries$mean_net_rating[2] - summaries$mean_net_rating[3]`}{2} \\
+&= `r (summaries$mean_net_rating[1] - summaries$mean_net_rating[2] + 
+     summaries$mean_net_rating[2] - summaries$mean_net_rating[3])/2`
+\end{aligned}
+$$
+
+And in code.
+```{r}
+#| echo: true
+average.incremental.diff = 
+(1/2)*((mean(nba.sample$net_rating[nba.sample$draftlevel==1]) - 
+        mean(nba.sample$net_rating[nba.sample$draftlevel==2])) + 
+       (mean(nba.sample$net_rating[nba.sample$draftlevel==2]) -
+        mean(nba.sample$net_rating[nba.sample$draftlevel==3])))
+
+average.incremental.diff
+```
+
+You can also do this a bit more simply, by just taking the difference between the last and first means.
+$$
+\begin{aligned}
+\frac{1}{2} \sum_{x=1}^2 \{\hat{\mu}(x) - \hat{\mu}(x+1)\} 
+&= \frac{1}{2} \qty[ \qty{\hat\mu(1) - \hat\mu(2)} - \qty{\hat\mu(2) - \hat\mu(3)}] \\
+&= \frac{1}{2} \qty[ \hat\mu(1) - \hat\mu(3) ] \\
+\end{aligned}
+$$
+As discussed in class, this has a visual interpretation.
+It's the (negated/downward) slope of the \textcolor{blue}{secant line} connecting the 
+means at the first and last draft rounds, 
+```{r}
+#| fig-height: 4
+ggplot(nba.sample, aes(x=draftlevel, y=net_rating)) + 
+    geom_point(alpha=.3, position=position_jitter(width=0.2, height=0)) +
+    stat_summary(geom='pointrange', fun=mean, 
+                                    fun.min=\(x)mean(x)-sd(x), 
+                                    fun.max=\(x)mean(x)+sd(x)) +
+    geom_line(data=summaries[summaries$draftlevel %in% c(1,3), ],
+                aes(x=draftlevel, y=mean_net_rating), color='blue') + 
+    coord_cartesian(ylim=c(-45, 25))
+```
+
+I'll leave the arithmetic and the code for this approach to you.
+:::
+
+::: {#exr-avg-incr-over-rounds-interpretation .callout-exercise}
+Explain what this quantity means in the context of the data. If it's positive, why is it positive? If negative, why negative?
+:::
+
+::: {.callout-solution}
+It's a summary of the change in net rating from round to round. It
+describes much better the typical performance level of players drafted in round $x$ is
+than that of those drafted a round later, in round $x+1$, among players drafted in rounds 1 and 2. 
+It's positive because better players go in earlier rounds---as round increases, player performance decreases.
+:::
+
+Now, just to get in some practice, let's calculate this another way.
+
+::: {#exr-avg-incr-over-rounds-rewrite .callout-exercise}
+Rewrite the average incremental difference as a linear combination of sub-sample means, $\sum_{x}\alpha(x) \hat{\mu}(x)$. What are your weights $\alpha(x)$? Write them out in a table by hand. Then write an **R** function `alpha(x)` that calculates these these weights and it to re-calculate the average incremental difference. Check that you get the same answer as before.
+:::
+
+::: {.callout-tip}
+You'll need a function `muhat(x)` that calculates the mean net rating for each draft level, too. 
+Here's one for you. You may want to modify this code to implement `alpha(x)`. 
+
+```{r}
+#| echo: true
+
+muhat = function(x) { 
+    case_when(
+        x == 1 ~ summaries$mean_net_rating[summaries$draftlevel==1],
+        x == 2 ~ summaries$mean_net_rating[summaries$draftlevel==2],
+        x == 3 ~ summaries$mean_net_rating[summaries$draftlevel==3]
+    )
+}
+```
+
+Note that it's `vectorized', so you can pass it a vector of draft levels and it will return a vector of means. This'll give you all of them.
+```{r}
+#| echo: true 
+muhat(1:3)
+``` 
+
+And this'll give you one corresponding to each player's draft round. I won't show you the output because it's long.
+```{r}
+#| echo: true
+#| eval: false
+muhat(nba.sample$draftlevel)
+``` 
+:::
+
+::: {.callout-solution}
+$$ 
+\alpha(x) = 
+\begin{cases}
++\frac{1}{2} & if \ x = 1 \\
+-\frac{1}{2} & if  \ x =3 \\
+0 & otherwise
+\end{cases}
+$$
+
+```{r}
+#| echo: true
+alpha = function(x) { 
+    case_when(
+        x == 1 ~ +1/2,
+        x == 3 ~ -1/2,
+        TRUE ~ 0
+    )   
+}
+
+x=1:3
+average.incremental.diff.recalculated = sum(alpha(x)*muhat(x))
+average.incremental.diff.recalculated
+```
+
+And let's check that we got the same answer as before.
+```{r}
+#| echo: true
+average.incremental.diff - average.incremental.diff.recalculated 
+```
+
+:::
+
+## The Average Increment over Players
+
+Now, let's repeat this exercise.  But instead of averaging the mean increment over draft rounds, 
+we'll average it over drafted players.
+$$
+\frac{\sum_{i:X_i \le 2} \qty{\hat\mu(X_i) - \hat\mu(X_i+1)}}{\sum_{i:X_i \le 2} 1}
+$$
+
+The interpretation will be left to you. 
+
+::: {#exr-avg-incr-over-players-interp .callout-exercise}
+Explain what this summary means in the context of the data. 
+In particular, explain how it differs from the average-over-rounds summary. Is it bigger or smaller? How do you know? And why, considering the context, do you think that is?
+:::
+
+::: {.callout-tip}
+You can answer the 'bigger or smaller' question by actually doing the calculation. But I encourage you to try to answer it using the plot first. That might help you answer the 'why' question.
+:::
+
+::: {.callout-solution}
+Here's a hand-waving explanation. It describes the change in net rating a team would expect if they traded away their first-round pick indefinitely so their typical player was 'one round' worse.
+This does, of course, ignore all the other mechanisms by which teams get players.
+
+It's smaller than the average-over-rounds summary. Looking at the scatter plot, we can see (i) that the increment between round 1 and round 2 is smaller than the increment between round 2 and `round 3' and (ii) that among current players, more were drafted in round 1 than in round 2.  The first we see by looking at the within-group means and the second by looking at the number of dots. And it is that way, with more first round picks still playing than second-round picks, because first-round picks are better and therefore more likely to stay in the league. Our friend Matt Mooney, after playing a couple minutes for the Knicks in 2021, is now playing in the top tier of Italian basketball. 
+:::
+
+::: {#exr-avg-incr-over-players-rewrite .callout-exercise}
+Rewrite this summary as a linear combination of sub-sample means, $\sum_{x}\hat\alpha(x) \hat{\mu}(x)$. What are your weights $\hat\alpha(x)$? Write them our by hand. Then write a corresponding **R** function`alphahat(x)` and use it --- and `muhat(x)` --- to calculate the summary. 
+:::
+
+::: {.callout-tip}
+If you want to check your work, you can compare it to a more direct calculation: one
+in which you actually calculate the increment for each player and then average.
+:::
+
+::: {.callout-solution}
+We introduced an approach to this in lecture. First, we rewrite our average over people as a proportion-weighted 
+average over draft levels. Then, we unravel that weighted average of increments into a linear combination of sub-sample means. Like this.
+$$
+\begin{aligned}
+\text{summary}
+&=\sum_{i:X_i <=2} \qty{\hat\mu(X_i) - \hat\mu(X_i-1)} && \\ 
+&=\sum_{x=1}^2 P_x \qty{ \hat\mu(x) - \hat\mu(x+1)} && \qfor P_x = \frac{N_x}{\sum_{x=1}^2 N_x} \\
+&= P_1 \qty{\hat\mu(1) - \hat\mu(2)} + P_2 \qty{\hat\mu(2) - \hat\mu(3)} && \\
+&= P_1 \hat\mu(1) + (P_2-P_1) \hat\mu(2) - P_2 \hat\mu(3) && \\
+&= \sum_{x=1}^3 \hat\alpha(x) \hat\mu(x) && \qfor \hat\alpha(x) = \begin{cases}
+\hat\alpha(x) = P_1      & \ if \ x = 1 \\
+\hat\alpha(x) = P_2 - P_1 & \ if \ x = 2 \\
+\hat\alpha(x) = -P_2       & \ if \ x = 3 \\
+\end{cases}
+\end{aligned}
+$$
+
+In code, it looks like this.
+```{r}
+#| echo: true
+P = function(x) { summaries$Nx[summaries$draftlevel==x] / sum(summaries$Nx[summaries$draftlevel %in% 1:2]) }
+alphahat = function(x) { 
+    case_when(
+        x == 1 ~  P(1),
+        x == 2 ~  P(2)-P(1),
+        x == 3 ~  -P(2)
+    )   
+}
+average.over.players = sum(alphahat(1:3)*muhat(1:3))
+average.over.players
+```
+
+Let's check our work by calculating the average increment over players directly.
+```{r}
+average.over.players.recalculated = 
+    mean(muhat(nba.sample$draftlevel[nba.sample$draftlevel <= 2]) - 
+         muhat(nba.sample$draftlevel[nba.sample$draftlevel <= 2] + 1))
+average.over.players - average.over.players.recalculated
+```
+
+:::
+
+## Inference for Population Summaries
+
+We can use these sample summaries to estimate corresponding population summaries. Let's start by estimating the variance of our two summaries. Or, to be more precise, we'll do what we did in lecture.
+We'll estimate the variance of our first summary and a lower bound on the variance of our second summary---the one that we get by ignoring the variance associated with the randomness of the weights $\hat\alpha(x)$. To do this, we'll write out our formulas, make a table to help us calculate our terms, and sum them up. 
+
+Here are the formulas.
+$$
+\begin{aligned}
+\Var\qty[\sum_x \alpha(x) \hat\mu(x)]  
+&=   \sum_x \E\qty[\frac{\alpha^2(x) \sigma^2(x)}{N_x}] \\
+&\approx \sum_x \frac{\alpha^2(x) \hat\sigma^2(x)}{N_x} \\
+\Var\qty[\sum_x \hat\alpha(x) \hat\mu(x)] 
+&\ge \sum_x \E\qty[\frac{\hat\alpha^2(x) \sigma^2(x)}{N_x}] \\
+&\approx \sum_x \frac{\hat\alpha^2(x) \hat\sigma^2(x)}{N_x}
+\end{aligned}
+$$
+
+::: {#exr-variance-byhand .callout-exercise}
+Calculate these two variance estimates by hand. Make a table to help you.
+:::
+
+::: {#exr-variance-in-r .callout-exercise}
+Check your work by calculating these two variance estimates in **R**.
+:::
+::: {.callout-solution}
+```{r}
+#| echo: true
+sigmahat = Vectorize(function(x) { summaries$sd_net_rating[summaries$draftlevel==x] })
+N = Vectorize(function(x) { summaries$Nx[summaries$draftlevel==x] })
+
+over.rounds.variance = sum(alpha(1:3)^2*sigmahat(1:3)^2/N(1:3))
+over.players.variance = sum(alphahat(1:3)^2*sigmahat(1:3)^2/N(1:3))
+
+over.rounds.variance
+over.players.variance
+```
+:::
+
+What's the point of doing this?  Well, one thing we can do---at least for the first summary---is to use normal approximation to construct a confidence interval like this.
+$$
+\hat \theta \pm 1.96 \sqrt{\widehat{\Var}[\hat\theta]} \qqtext{where} \hat\theta \qqtext{ is our sample summary. } 
+$$
+
+But we don't really have to do that. We can use the bootstrap. Before we get into our real reasons, let's pause to think about why we have this 'at least ...' qualification.
+
+::: {#exr-why-not .callout-exercise}
+Why can't we necessarily do this, using what we've calculated above, for the second summary? A sentence or two is enough.
+:::
+
+::: {.callout-solution}
+We've estimated a lower bound on the variance, not the variance itself, so plugging it in may give us an interval that's too narrow. If the additional variance that's not in the lower bound isn't small enough to be irrelevant, our coverage would be less than 95%.
+:::
+
+::: {.callout-note collapse="true"}
+### Why Learn These Variance Formulas?
+I got here writing this assignment and struggled a bit trying to give you concrete reason for learning these variance formulas. I thought about using small pilot studies to estimate these variances and then 
+decide what sample size you need to get a sufficiently precise estimate. But you don't need them for that. You can just bootstrap your estimate in the pilot study to get a wide interval and divide its width by the square root of the  $\text{pilot sample size}/\text{eventual sample size}$ ratio to approximate the width of the interval you'd get with the larger sample. The best reason for formulas, in my opinion, is to understand how to design specialized sampling schemes --- `weighted dies' that are more likely to select some individuals in our population than others --- that give you better precision *for the specific summary you're interested in* with the same sample size. But we're not talking about that this semester. 
+
+Here's what I've got for now. If you can come up with a reasonable guess at $\sigma^2(x)$ and you know $N_x$, then you can get a rough approximation to the variance of your estimator with no pilot study. For example, if your outcome were different, i.e. something that involved a wearable device like a heart rate monitor, you might be able to decide how many heart rate monitors you need to distribute (at random) at the beginning of the season. 
+:::
+
+
+## Normal Approximation vs. the Bootstrap 
+
+But let's make sure this approach to sample size calculation is reasonable. Let's construct these normal-approximation-based confidence intervals and compare them to bootstrap intervals.
+
+::: {#exr-bootstrap-vs-normal .callout-exercise}
+Draw histograms of the bootstrap sampling distributions of the two summaries. Plot these and, on top of them, two 95% intervals: one based on normal approximation and another with width calculated using the bootstrap. And answer this. How do your bootstrap intervals compare to the normal approximation intervals? If you see much of a difference, try to explain why.
+:::
+
+::: {.callout-tip}
+You should be able to borrow code for all of this---width calculation and plotting---from Problem Set 1. 
+:::
+
+::: {.callout-solution}
+
+I'm going to write some code I can reuse for the next couple exercises by making everything a function of our data.
+Here that data will be the sample `nba.sample` for our point estiamte and a sample with replacement from it for our bootstrap distribution.
+In the next couple exercises, it'll be the population `nba.population` for our point estimate and a sample with replacement from that.
+
+```{r}
+#| echo: true
+
+# copied from PS1
+width = function(samples, center=mean(samples), alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( center - w/2 <= samples & samples <= center + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2.1*max(abs(samples-center))))$root 
+}
+
+# copied from above
+alpha = function(x) { 
+    case_when(
+        x == 1 ~ +1/2,
+        x == 3 ~ -1/2,
+        TRUE ~ 0
+    )   
+}
+ 
+both.averages = function(data) {  
+    # copied from above, but based on the data passed in to the function
+    summaries = data |> group_by(draftlevel) |> 
+                summarize(mean_net_rating = mean(net_rating),  sd_net_rating = sd(net_rating), Nx=n())
+    P = function(x) { summaries$Nx[summaries$draftlevel==x] / sum(summaries$Nx[summaries$draftlevel %in% 1:2]) } 
+    alphahat = function(x) { 
+        case_when(
+            x == 1 ~  P(1),
+            x == 2 ~  P(2)-P(1),
+            x == 3 ~  -P(2)
+        )
+    }
+    muhat = function(x) { 
+        case_when(
+            x == 1 ~ summaries$mean_net_rating[summaries$draftlevel==1],
+            x == 2 ~ summaries$mean_net_rating[summaries$draftlevel==2],
+            x == 3 ~ summaries$mean_net_rating[summaries$draftlevel==3]
+        )
+    }
+
+    sigmahat = Vectorize(function(x) { summaries$sd_net_rating[summaries$draftlevel==x] })
+    N = Vectorize(function(x) { summaries$Nx[summaries$draftlevel==x] })
+
+    # summaries as above
+    data.frame(over.rounds = sum(alpha(1:3)*muhat(1:3)), 
+               over.players = sum(alphahat(1:3)*muhat(1:3)),
+               over.rounds.variance = sum(alpha(1:3)^2*sigmahat(1:3)^2/N(1:3)),
+               over.players.variance = sum(alphahat(1:3)^2*sigmahat(1:3)^2/N(1:3)))
+}
+
+sampling.distribution = function(population, summaries, n, replications=1000) {
+    map(1:replications, function(rep) { 
+        m = nrow(population)
+        
+        sam = population[sample(1:m, n, replace=TRUE), ]
+        # If we draw a sample with no players in some round, our estimators don't really make sense.
+        # They're based on the means of empty columns. So we'll just redraw the sample when that happens.
+        # This came up when I was calculating coverage for the population summaries.
+        # This is a hack, but it's rare to get a sample like this, so it's not a big deal.
+        while(!all(c(1,2,3) %in% sam$draftlevel)) { 
+            sam = population[sample(1:m, n, replace=TRUE), ] 
+        }
+
+        summaries(sam)
+    }) |> bind_rows()
+}
+
+the.averages = both.averages(nba.sample)
+point.estimate = the.averages |> 
+    select(!ends_with('variance')) |> 
+    pivot_longer(cols=everything(), names_to='summary', values_to='estimate')
+
+normal.width.estimate = data.frame(over.rounds  = 2*1.96*sqrt(the.averages$over.rounds.variance),
+                                   over.players = 2*1.96*sqrt(the.averages$over.players.variance)) |>
+    pivot_longer(cols=everything(), names_to='summary', values_to='width')
+                    
+set.seed(0)
+bootstrap.sampling.dist = nba.sample |> 
+    sampling.distribution(both.averages, n=nrow(nba.sample)) |> 
+    select(!ends_with('variance')) |>
+    pivot_longer(cols=everything(), names_to='summary', values_to='estimate')
+
+bootstrap.width.estimate = bootstrap.sampling.dist |> 
+    group_by(summary) |>
+    summarize(width = width(estimate))
+```
+
+
+```{r}
+#| echo: true
+interval.estimate = function(point.estimate, width.estimate) { 
+    full_join(point.estimate, width.estimate, by = 'summary')
+}
+
+ggplot() + geom_histogram(aes(x=estimate), bins=100, alpha=.2, data = bootstrap.sampling.dist) +
+           geom_pointrange(aes(x=estimate, xmin=estimate-width/2, xmax=estimate+width/2, y=5), color='blue', 
+                data=interval.estimate(point.estimate, bootstrap.width.estimate)) +
+           geom_pointrange(aes(x=estimate, xmin=estimate-width/2, xmax=estimate+width/2, y=6), color='red', 
+                data=interval.estimate(point.estimate, normal.width.estimate))    + 
+           facet_grid(cols = vars(summary)) + coord_flip()
+```
+
+For the average over rounds, the normal approximation interval (in red) matches the bootstrap interval (in blue) pretty well. 
+For the average over players, the normal approximation interval is not too bad, but maybe a bit too narrow. 
+This is because we're underestimating its variance: we've ignored the variance associated with the randomness of the weights $\hat\alpha(x)$. 
+:::
+
+## Checking Coverage for the Population Summary
+
+Now we'll take advantage of the fact that we have population data. We can actually calculate the population summaries. And the sampling distribution of our estimates. This means we can check whether our so-called 95\% confidence intervals have 95\% coverage. Let's do it.
+
+::: {#exr-population-summaries .callout-exercise}
+Write out, in mathematical notation, population summaries analogous to the two sample summaries we've been looking at.
+That is, summarize the incremental value of a higher-round pick in the population *exactly the same way* we summarized the value in the sample.  Then, however you like, calculate these summaries.
+:::
+
+::: {.callout-solution}
+$$
+\begin{aligned}
+\text{average over rounds}  &= \sum_{x \in 1\ldots 2}      \qty{\mu(x) - \mu(x+1)} \qfor \mu(x) = \sum_{j : x_j=x} y_j / \sum_{j : x_j=x} 1 \\
+\text{average over players} &= \sum_{j:x_j \in 1 \ldots 2} \qty{\mu(x_j) - \mu(x_j)} / \sum_{j:x_j \in 1 \ldots 2} 1 
+\end{aligned}
+$$
+
+We can calculate these in the same way we calculated the sample summaries, but using the population data.
+```{r}
+#| echo: true
+population.summaries = both.averages(nba.population) |> select(!ends_with('variance'))
+population.summaries
+```
+
+:::
+
+Now that we've got these, let's check coverage: the fraction of samples of size `{r} nrow(nba.sample)`,
+drawn with replacement from our population `nba.population`, in which a confidence intervals constructed
+like we did in the previous exercise contains corresponding the population summary.
+
+::: {#exr-population-coverage .callout-exercise}
+Draw 1000 samples of size `{r} nrow(nba.sample)`, with replacement, from the population. 
+Use these to plot a histogram of the sampling distribution of each summary. Draw vertical lines
+indicating the corresponding population summary. Then plot the four 95% intervals you got using `nba.sample` --- the ones from @exr-bootstrap-vs-normal --- on the corresponding histogram. Finally, calculate analogous intervals based on each sample, count up how many contain the population summary, and report their coverage probabilities.
+:::
+
+
+::: {.callout-solution}
+Here's the plot. I'm showing the actual sampling distribution in gray and the bootstrap sampling distribution, which I didn't you to include but liked including myself for comparison, in blue. The population summary is in green. As above, the bootstrap intervals are in blue and the normal approximation intervals are in red.
+```{r}
+#| echo: true
+sampling.dist = nba.population |> sampling.distribution(both.averages, n=nrow(nba.sample)) |>
+                select(!ends_with('variance')) |>
+                pivot_longer(cols=everything(), names_to='summary', values_to='estimate')
+pop.summaries = population.summaries |> pivot_longer(cols=everything(), names_to='summary', values_to='estimand')
+
+ggplot() + geom_histogram(aes(x=estimate), bins=100, alpha=.2, data = sampling.dist) +
+           geom_histogram(aes(x=estimate), bins=100, alpha=.2, data = bootstrap.sampling.dist, fill='blue') + 
+           geom_pointrange(aes(x=estimate, xmin=estimate-width/2, xmax=estimate+width/2, y=5), color='blue', 
+                data=interval.estimate(point.estimate, bootstrap.width.estimate)) +
+           geom_pointrange(aes(x=estimate, xmin=estimate-width/2, xmax=estimate+width/2, y=6), color='red', 
+                data=interval.estimate(point.estimate, normal.width.estimate))    + 
+           geom_vline(aes(xintercept=estimand), color='green', data=pop.summaries) +
+           facet_grid(cols = vars(summary)) + coord_flip()
+```
+
+A here's some code to calculate coverage. This is a bit more complicated because, to get the bootstrap intervals, we need to calculate the bootstrap sampling distribution based on each sample. That said, with the code we have above, it's not too bad. It's all about organizing our code in a way that lets us reuse it. This takes practice to get good at that, and it tends to involve some amount of going back and tweaking organization to make your code reusable the way you want it to, but in the long term it can be a skill worth developing. That's what I've done. That said, it's totally fine to write code that works for each task separately, and sometimes that's the best way to go.
+
+Here's some code that calculates each interval in 1000 samples from the population.
+
+```{r}
+#| echo: true
+#| cache: true
+
+interval.covers = function(data) { 
+    the.averages = both.averages(data)
+    point.estimate = the.averages 
+    normal.width.estimate = data.frame(over.rounds  = 2*1.96*sqrt(the.averages$over.rounds.variance),
+                                       over.players = 2*1.96*sqrt(the.averages$over.players.variance))
+
+    bootstrap.dist = data |> sampling.distribution(both.averages, n=nrow(data), replications=1000) 
+    bootstrap.width.estimate = data.frame(over.rounds  = width(bootstrap.dist$over.rounds, point.estimate$over.rounds),
+                                          over.players = width(bootstrap.dist$over.players, point.estimate$over.players))
+    
+    in_interval = function(x, interval) { interval[1] <= x & x <= interval[2] }
+    in_ci = function(summary.name, width) { 
+        ci = point.estimate[[summary.name]] + c(-1,1)*width[[summary.name]]/2 
+        population.summaries[[summary.name]] |> in_interval(ci)
+    }
+    covers = data.frame(over.rounds.normal     = in_ci('over.rounds',  normal.width.estimate),
+                        over.rounds.bootstrap  = in_ci('over.rounds',  bootstrap.width.estimate),
+                        over.players.normal    = in_ci('over.players', normal.width.estimate),
+                        over.players.bootstrap = in_ci('over.players', bootstrap.width.estimate))
+    covers
+}
+
+set.seed(0)
+covers.replications = nba.population |> sampling.distribution(interval.covers, n=nrow(nba.sample), replications=1000) 
+```
+
+And here's some code that averages over samples to get coverage probabilities.  I've had to ignore a few samples in which the variance estimates we based our normal approximation intervals on were NA. That happens because we're unable to estimate $\sigma^2(x)$ when there's a single player from that round in our sample. This is a bit of a hack, but samples like this are pretty rare, so it doesn't really matter much how we count them. 
+
+```{r}
+#| echo: true
+covers.replications |> colMeans(, na.rm=TRUE)
+```
+
+What we find is that we get about 95% coverage no matter what we do. Apparently we aren't underestimating the variance of our average-over-players summary all that badly after all.
+:::
