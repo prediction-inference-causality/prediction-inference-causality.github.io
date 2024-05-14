@@ -1,58 +1,55 @@
 ---
 title: "Practice Midterm 1"
 subtitle: "QTM 220"
-execute:
-  echo: false
-  warning: false
-format: 
-  pdf:
-    include-in-header: 
-      text: |
-        \usepackage{amsmath}
-        \usepackage{setspace}
-        \onehalfspacing
-        \usepackage{amssymb}
-        \usepackage{physics}
-        \usepackage{color}
-        \usepackage{fullpage}
-        \usepackage{graphicx}
-        \usepackage{cancel}
-        \usepackage{physics}
-        \usepackage{fullpage}
-        \DeclareMathOperator{\E}{E}
-        \DeclareMathOperator{\Var}{V}
-        \DeclareMathOperator{\bias}{bias}
-        \usepackage{environ}
-        %\NewEnviron{answer}{}{}
-        \NewEnviron{answer}{\color{blue}\paragraph{Answer.}\BODY\color{black}}{}
 ---
 
-```{r setup} 
-library(ggplot2)
-library(tidyverse)
-library(magrittr)
-if (knitr::is_latex_output())
-  knitr::opts_chunk$set(dev = "cairo_pdf")
+
+```{r}
+#| echo: false
+library(tidyverse) 
+library(scales)
+
+theme_set(theme_minimal())
+options(scipen = 1, digits = 2)
 ```
 
-\section*{Practice Problem 1}
-We call an estimator \emph{consistent} if, when our sample size $n$ is large enough, it converges to the thing we intend to estimate.
+::: hidden
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+\DeclareMathOperator*{argmin}{argmin}
+\newcommand{\model}{\mathcal{M}}
+$$
+:::
+
+::: {.callout-warning}
+Some students have complained that this exam is not enough like the actual exam. I agree. Let's work on that.
+Some of these problems may be better as homework. We may also want to make Problem 4, which does match up well,
+a bit clearer by choice of number---$[0,.02]$ vs $[0,.03]$ isn't really a big difference.
+:::
+
+# Problem 1
+We call an estimator *consistent* if, when our sample size $n$ is large enough, it converges to the thing we intend to estimate.
 That is, an estimator $\hat\mu$ is a consistent estimator of $\mu$ if $\E (\hat \mu - \mu)^2 \to 0$ as $n \to \infty$. 
 One example of a consistent estimator, when we observe a sample with replacement $Y_1 \ldots Y_n$ from a population with mean $\mu$
 and standard deviation $\sigma$, is the sample mean $\hat \mu = \frac{1}{n}\sum_{i=1}^n Y_i$.
 
-It can be helpful to think in terms of \emph{location} and \emph{spread}. An estimator is consistent if and only if both its bias and variance go to zero as the sample size goes to infinity. Here's proof.
-\begin{align*}
+It can be helpful to think in terms of *location* and *spread*. An estimator is consistent if and only if both its bias and variance go to zero as the sample size goes to infinity. Here's proof.
+$$
+\begin{aligned}
 \E\qty[ \qty{\hat\mu - \mu}^2 ] 
 &= \E\qty[ \qty{\qty(\hat\mu - \E[\hat\mu]) + \qty(\E[\hat\mu] - \mu)}^2 ] \\
 &= \E\qty[ \qty(\hat\mu - \E[\hat\mu])^2 + 2\qty(\E[\hat\mu] - \mu)\qty(\hat\mu - \E[\hat\mu]) + \qty(\E[ \hat \mu] - \mu)^2 ] \\
 &= \E\qty(\hat\mu - \E[\hat\mu])^2 + 2\qty(\E[\hat\mu] - \mu)\E\qty(\hat\mu - \E[\hat\mu])+ \qty(\E[\hat \mu] - \mu)^2  \\
 &= \Var(\hat\mu) + 2\bias(\hat\mu) \times 0 + \bias(\hat\mu)^2 = \Var(\hat\mu) + \bias(\hat\mu)^2 
-\end{align*}
+\end{aligned}
+$$
 
 
-\subsection*{Part 1}
-
+::: {.callout-exercise}
+### Part A
 The plot below shows the sampling distributions of three estimators at three sample sizes. 
 The vertical line indicates the mean of the sampling distribution. Which of these estimators are consistent? 
 Circle zero or more: a, b, c.
@@ -89,30 +86,29 @@ ggplot(plotdata) + geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100,
                    xlab('') + ylab('')
 ```
 
-\begin{answer}
+:::
+::: {.callout-solution}
 Estimators $a$ and $b$ are consistent. Estimator $c$ is not; it converges to $\mu+1$, not $\mu$.
-\end{answer}
+:::
 
-
-\section*{Practice Problem 2}
+::: {.callout-exercise}
+### Part B
  Suppose you have a sample $Y_1, Y_2, \ldots, Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma > 0$. 
-
  Consider the estimator $\hat\mu=Y_1$. Is this estimator consistent? Why or why not?
-
-\begin{answer}
+:::
+::: {.callout-solution}
 No. Its variance does not go to zero. At any sample size $n$, its variance will be $\Var[Y] = \sigma^2 > 0$.
-\end{answer}
+:::
 
-\section*{Practice Problem 3}
-
+::: {.callout-exercise}
+### Part C
 
 In the plot below, I've shown a bootstrap estimate of the sampling distribution of an estimator $\hat\mu$.
 Suppose it's a good estimate---you can get away with thinking of it as the estimator's \emph{actual} sampling distribution.
 On top of it, I've drawn four interval estimates. 
-\begin{itemize}
-\item Which have at least 95\% coverage? Put a check next to those.
-\item Which have almost exactly 95\% coverage? Circle your check for those.
-\end{itemize}
+
+- Which have at least 95\% coverage? Put a check next to those.
+- Which have almost exactly 95\% coverage? Circle your check for those.
 
 ```{r}
 our.seed = 220
@@ -164,13 +160,13 @@ ggplot() + geom_histogram(aes(x=bootstrap.estimates, y=after_stat(density)), alp
            xlab('') + ylab('') + theme_bw()
 ```
 
-
-\begin{answer}
+:::
+::: {.callout-solution}
 From the top, the first, third, and fourth have 95\% coverage---the widest 3. They're wide enough to span at least 95\% of draws from (i.e. probability mass of the) sampling distribution.
 The third and fourth, which are roughly the same, have almost exactly 95\% coverage.  The first is too wide for that---it spans almost all draws from the sampling distribution---so its coverage is closer to 99\%.
-\end{answer}
+:::
 
-\section*{Practice Problem 4}
+## Problem 2
 The miracle of random sampling is that we're able to estimate
 the mean of a population with a very small sample from that population.
 But for that to work, our observations have to be independent---or close to it.
@@ -192,53 +188,57 @@ $$
 \end{aligned}
 $$
 
+::: {.callout-exercise}
 Now suppose that you've been lazy, and instead of calling $n$ different people, you've just called
 one and reported their income $n$ times. That is, you've got 'a sample of size n', $\tilde Y_1 \ldots \tilde Y_n$,
 with $\tilde Y_1=Y_1, \tilde Y_2 = Y_1, \tilde Y_3 = Y_1, \ldots$. What is the variance of the mean of this 'sample',
 $\frac1n\sum_{i=1}^n \tilde Y_i$? And if it's not $\sigma^2/n$ like we got for the mean of $Y_1 \ldots Y_n$,
 explain---with reference to the calculation above---why it is not. If there's a line or lines where something different happens,
 say which; say what happens instead; and explain why.
-
-\begin{answer}
+:::
+::: {.callout-solution}
 The problem is in the second to last line. Note that if we replace each instance of $Y_i$ with $\tilde Y_i=Y_1$, then
 $Z_i=Y_1 - \E Y_1$ for all $i$ and $Z_iZ_j=(Y_1-\E Y_1)^2$ for all $i$ and $j$. This means that 
 $\E Z_i Z_j=\sigma^2$ always instead of only when $i=j$ and, as a result, $\frac{1}{n^2}\sum_i\sum_j \E Z_i Z_j$
 is an average of $n^2$ copies of $\sigma^2$ --- one for each pair $(i,j)$. It's $\sigma^2$.
-\end{answer}
-    
+::: 
 
-\section*{Practice Problem 5}
-
+# Problem 3
 
 Suppose Emory has developed a new 4+1 (Bachelors+Masters) program in Engineering
 and they want to compare it to the extant Emory/Georgia Tech dual degree program.
 Letting $Y_1(1) \ldots Y_n(1)$ and $Y_1(0) \ldots Y_n(0)$ be outcomes (e.g. post-program starting salaries) $n$ qualified applicants would receive in the 4+1 program and the dual degree program respectively, they are interested in estimating the average treatment effect $\tau = \E[Y_i(1)-Y_i(0)]$. Suppose all applicants are willing to participate in either program but 3/4 prefer the Emory/Tech one.
 
 Two approaches to erollment are being considered.
-\begin{enumerate}
-\item Let students participate in the program they prefer. 
-\item Randomize acceptance into these two programs, assigning each applicant to the 4+1 with probability $1/2$ and the Emory/GA Tech program with probability $1/2$. 
-\end{enumerate}
+
+1. Let students participate in the program they prefer. 
+2. Randomize acceptance into these two programs, assigning each applicant to the 4+1 with probability $1/2$ and the Emory/GA Tech program with probability $1/2$. 
+   
 Either way, we'll estimate the average treatment effect by comparing the mean outcome for students participating in the 4+1 program to the mean outcome for students participating in the Emory/Tech program. That is, we'll use this difference-in-means estimator.  
 
 
 $$
 \hat \tau = \hat \mu(1) - \hat \mu(0) \qfor \hat\mu(x)=\frac{1}{N_x}\sum_{i:X_i=x}Y_i \qand N_x = \sum_{i:X_i=x} 1
 $$
+
 Here $X_i$ is a binary variable indicating which program student $i$ participates in.
+
 $$
 X_i = \begin{cases} 1 & \text{if student $i$ participates in the 4+1} \\ 0 & \text{if student $i$ participates in the Emory/Tech program} \end{cases} 
 $$
+
 And the variance of this difference in means is this.
+
 $$
 \Var[\hat\tau] = \E\qty[\frac{\sigma^2(1)}{N_1} + \frac{\sigma^2(0)}{N_0}] 
 $$
 
-\subsection*{Part 1}
+::: {.callout-exercise}
+### Part A
 The first approach has the benefit of allowing people to make choices for themselves.
 Explain why the university might prefer the second one. Give two reasons. One must be valid \emph{even if} students preferences were, in fact, randomized. 
-
-\begin{answer}
+:::
+::: {.callout-solution}
 The first reason is that without randomization, the groups of students who enter the two programs may not be comparable.
 For example, if the extant program has a reputation for being more rigorous, then the students who choose it may be more
 into doing hard work, which might translate into higher salaries after graduation \emph{irrespective of program}.
@@ -257,10 +257,10 @@ That's not dramatically bigger but it's bigger: it's $(16/3)/4 = 4/3$ times as b
 Note that my answer here is way more than I'd expect you to write on a real exam. 
 I'm just trying to give you as complete an explanation as I can. 
 That'll be true of the next two, too.
-\end{answer}
+:::
 
-\subsection*{Part 2}
-
+::: {.callout-exercise}
+### Part B
 Suppose the university does adopt the second approach.  And let 
 $Y_i$ be that student's employment status at graduation, i.e. $Y_i=1$ if student $i$ has a job on graduation and $0$ otherwise. In our sample of $n=100$ students, half of the students were assigned to the 4+1 program and half to the Emory/Tech program. And within each group, half of the students have jobs at graduation.
 Report a 95\% confidence interval for the average treatment effect $\tau$.
@@ -269,8 +269,8 @@ Please show your work. And while we would like your answer fully simplified, i.e
 in the form $[a,b]$ for two numbers $a$ and $b$, don't worry about being precise with your arithmetic.
 It may be helpful to remember that the variance of a binary random variable $Y_i$ with mean $p$ 
 is $p(1-p)$.
-
-\begin{answer}
+:::
+::: {.callout-solution}
 Our point estimate, $\hat\mu(1) - \hat\mu(0)$, is $1/2 - 1/2 = 0$.
 We'll report a 95% interval of the form $\text{estimate} \pm 1.96 \times \text{estimated standard error}$,
 which in this case is just $\pm 1.96 \times \text{estimated standard error}$.  To make that a number,
@@ -279,9 +279,9 @@ the square root of $\E[ \sigma^2(1)/N_1 + \sigma^2(0)/N_0]$ where $\sigma^2(x) =
 to estimate this, we'll plug in $1/(n/2)$ and $1/(n/2)$ as estimates of their respective expectations and, the variance of a binary random variable $Y_i$ with expectation $p$ being $p(1-p)$, we'll estimate $\sigma^2(x)=\Var[Y_i \mid X_i=x]$ by $\hat p (1-\hat p)$ where $\hat p$ is the average of $Y_i$ in the corresponding subsample. This is $1/2$ in both groups, so our estimate of $\sigma^2(x)$ is $(1/2)(1-1/2)=1/4$ for both $x=0$ and $x=1$. Thus, our estimated standard error is the square root of $(1/4)/(n/2) + (1/4)/(n/2) = (1/2)/n + (1/2)/n = 1/n$, i.e., it's $1/\sqrt{n}$.
 As a result, our confidence interval is $[-1.96/\sqrt{n}, 1.96/\sqrt{n}]$. 
 Plugging in $n=100$, we get $[-.196, .196]$.
-\end{answer}
+:::
 
-\section*{Practice Problem 6}
+# Problem 4
 
 A brewer delivers 100,000 bottles to its distributor.
 Everyone accepts that there'll be a bad bottle now and then, but the distributor
@@ -290,10 +290,11 @@ is small. The brewer says they've checked 100 bottles from the same batch and
 only one was off. And they're claiming, on the basis of this, to have a 95% confidence
 interval of $[0,.02]$ for the proportion of bad bottles in the delivery. 
 
+::: {.callout-exercise}
 Is this reasonable? Explain why or why not. You may think of the bottles that have been checked as a sample drawn,
 with replacement, from the 100,000 that were delivered.
-
-\begin{answer}
+:::
+::: {.callout-solution}
 Let's calculate an interval we think they should be using. 
 This is a bit easier than the one we just did. We're just estimating a proportion, not a difference in proportions,
 so the sample mean's standard error is the square root of $p(1-p)/n$ where $p$ is the proportion of bad bottles in the delivery.
@@ -303,4 +304,4 @@ $1-1/100 \approx 1$.}  Because our sample mean is $1/100$ too, this means our in
 $[1/100 - 1.96 \times 1/100, \ 1/100 + 1.96 \times 1/100] \approx [1/100 - 2/100, \ 1/100 + 2/100] = [-.01, .03]$. Because a proportion can't be negative, we'd usually report that as $[0, .03]$.
 
 Now let's think about what the brewer is telling us. The upper bound on their interval is $.02$, substantially smaller. They're understating their uncertainty about the quality of what they've delivered---i.e. they're saying it's better than they can justify based on the size of the sample they've checked. Not reasonable.
-\end{answer}
+:::

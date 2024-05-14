@@ -1,42 +1,37 @@
 ---
-title: "Exam 1 (March 6)"
+title: "Midterm 1"
 subtitle: "QTM 220"
-execute:
-  echo: false
-  warning: false
-format: 
-  pdf:
-    include-in-header: 
-      text: |
-        \usepackage{amsmath}
-        \usepackage{setspace}
-        \onehalfspacing
-        \usepackage{amssymb}
-        \usepackage{physics}
-        \usepackage{color}
-        \usepackage{fullpage}
-        \usepackage{graphicx}
-        \usepackage{cancel}
-        \usepackage{physics}
-        \usepackage{fullpage}
-        \DeclareMathOperator{\E}{E}
-        \DeclareMathOperator{\Var}{V}
-        \DeclareMathOperator{\bias}{bias}
-        \newenvironment{answer}{\ \\ \color{white}}{\color{black}}
-        % replace 'red' with 'white' above  to hide solutions (in printout)
 ---
 
-```{r setup} 
-library(ggplot2)
-library(tidyverse)
-library(magrittr)
-if (knitr::is_latex_output())
-  knitr::opts_chunk$set(dev = "cairo_pdf")
+
+```{r}
+#| echo: false
+library(tidyverse) 
+library(scales)
+
+theme_set(theme_minimal())
+options(scipen = 1, digits = 2)
 ```
 
-\vspace{-1in}
+::: hidden
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+\DeclareMathOperator*{argmin}{argmin}
+\newcommand{\model}{\mathcal{M}}
+$$
+:::
 
-\section*{Problem 1}
+::: {.callout-warning}
+I got a lot of answers on Problem 1 that explain what the code calculates in terms of the vector $Y$, not in terms of the sample or the population it's drawn from. In later exams, esp. the final, I tried to fix that. Let's try to do that here. 
+
+And maybe let's give the estimator $\tilde{Y}$ from Problem 3 a bit more story behind it, e.g. dividing by $n+2$ with the intention of 
+reducing variance instead of $n-2$.
+:::
+
+# Problem 1
 Suppose we have a sample $Y_1 \ldots Y_n$ stored on an \textbf{R} vector $Y$ of length $n$.
 We run this code.
 
@@ -71,7 +66,8 @@ ggplot() + geom_histogram(aes(x=Y.bar, y=after_stat(density)), alpha=.3) +
            geom_pointrange(aes(x=mean(Y.bar), xmin=mean(Y.bar)-1.96*sd(Y)/sqrt(n), xmax=mean(Y.bar)+1.96*sd(Y)/sqrt(n), y=5)) + theme_bw() + xlab('') + ylab('')
 ```
 
-\subsection*{Part a}
+::: {.callout-exercise}
+### Part A
 What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket
 if necessary for clarity, on the appropriate plot above.
 ```{r}
@@ -80,13 +76,13 @@ if necessary for clarity, on the appropriate plot above.
 mean(Y)
 ```
 
-\begin{answer}
+:::
+::: {.callout-solution}
 The sample mean. It's indicated by the solid vertical line on the left histogram.
-\vspace{.5in}
-\end{answer}
+:::
 
-
-\subsection*{Part b}
+::: {.callout-exercise}
+### Part B
 What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 ```{r}
 #| echo: true
@@ -94,12 +90,13 @@ What does this code calculate? State it in words and mark it with a 'b', and an 
 sd(Y)
 ```
 
-\begin{answer}
+:::
+::: {.callout-solution}
 The sample standard deviation. It's the distance between the solid vertical and either dashed vertical line on the left histogram.
-\vspace{.5in}
-\end{answer}
+:::
 
-\subsection*{Part c}
+::: {.callout-exercise}
+### Part C
 What does this code calculate? State it in words and mark it with an 'c', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 ```{r}
 #| echo: true
@@ -107,15 +104,14 @@ What does this code calculate? State it in words and mark it with an 'c', and an
 sd(Y.bar)
 ```
 
-\begin{answer}
+:::
+::: {.callout-solution}
 The bootstrap sampling distribution's standard deviation. 
 It's the distance between the solid vertical and either dashed vertical line on the left histogram.
-\vspace{.5in}
-\end{answer}
+:::
 
-\newpage
-
-\subsection*{Part d}
+::: {.callout-exercise}
+### Part D
 What does this code calculate? State it in words and mark it with an 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 ```{r}
 #| echo: true
@@ -124,29 +120,27 @@ mean(Y) - 1.96* sd(Y)/sqrt(n)
 mean(Y) + 1.96* sd(Y)/sqrt(n)
 ```
 
-\begin{answer}
+:::
+::: {.callout-solution}
 A 95\% confidence interval --- based on normal approximation --- for the mean of the population our sample $Y_1 \ldots Y_n$ is drawn from. This is indicated by the horizontal segment (with a dot in the middle) on the right histogram.
-\vspace{.5in}
-\end{answer}
+:::
 
-\subsection*{Part e}
-How could you calculate roughly the same thing as in part d using 'sd(Y.bar)' and not 'sd(Y)'?
+::: {.callout-exercise}
+### Part E
+How could you calculate roughly the same thing as in part d using `sd(Y.bar)` and not `sd(Y)`?
+:::
+::: {.callout-solution}
+We can use the standard deviation of the bootstrap sampling distribution, rather than `sd(Y)/sqrt(n)`, as our estimate of standard error.
+```{r}
+#| echo: true
+#| eval: false
+mean(Y) - 1.96* sd(Y.bar)
+mean(Y) + 1.96* sd(Y.bar)
+```
 
-\begin{answer}
+:::
 
-We can use the standard deviation of the bootstrap sampling distribution, rather than 'sd(Y)/sqrt(n)', as our estimate of standard error.
-
-\begin{verbatim}
-mean(Y) - 1.96 * sd(Y.bar)
-mean(Y) + 1.96 * sd(Y.bar)
-\end{verbatim}
-
-\vspace{.5in}
-\end{answer}
-
-
-\newpage
-\section*{Problem 2}
+# Problem 2
 In 2015, Berkeley implemented a penny-per-ounce tax on soda. Advocates claimed the tax would reduce the rate of diabetes in the city's population. Now we want to check this claim---in a sense. What we want to know is the 
 difference between the rate of diabetes among residents of Berkeley --- one city in the San Francisco Bay Area --- to the rate among residents of the Bay Area as a whole. 
 
@@ -161,89 +155,95 @@ $$
 We have a sample $(X_1, Y_1) \ldots (X_n, Y_n)$ drawn with replacement from this population.
 
 
-\subsection*{Part a}
+::: {.callout-exercise}
+### Part A
 Express your estimand --- the population summary you want to estimate--- in terms of $(x_1, y_1) \ldots (x_m,y_m)$.
-
-\begin{answer}
+:::
+::: {.callout-solution}
 $$
 \frac{\sum_{j=1}^m x_j y_j}{\sum_{j=1}^m x_j} - \frac{\sum_{j=1}^m y_j}{m}
 $$
-\vspace{1in}
-\end{answer}
+:::
 
-\subsection*{Part b} 
+::: {.callout-exercise}
+### Part B
 Express that estimand, using conditional and unconditional expectations, in terms of a single pair of random variables $(X_i,Y_i)$ drawn from this population.
+:::
+::: {.callout-solution}
+$$ 
+\E[Y_i \mid X_i=1] - \E[Y_i] 
+$$
+:::
 
-\begin{answer}
-$$ \E[Y_i \mid X_i=1] - \E[Y_i] $$
-
-\vspace{1in}
-\end{answer}
-
-\subsection*{Part c} 
-In terms of $\overline{X}=\frac1n\sum_{i=1}^n X_i$, $\overline{Y}=\frac1n\sum_{i=1}^n Y_i$, and $\overline{XY}=\frac1n\sum_{i=1}^n X_i Y_i$, state an \emph{unbiased point estimate}.
-
-\begin{answer}
+::: {.callout-exercise}
+### Part C
+In terms of $\overline{X}=\frac1n\sum_{i=1}^n X_i$, $\overline{Y}=\frac1n\sum_{i=1}^n Y_i$, and $\overline{XY}=\frac1n\sum_{i=1}^n X_i Y_i$, state an *unbiased point estimate*.
+:::
+::: {.callout-solution}
 $$
 \frac{\sum_{i=1}^n X_i Y_i}{\sum_{i=1}^n X_i} - \frac{\sum_{i=1}^n Y_i}{n} = \overline{XY}/\overline{X} - \overline{Y}
 $$
-\vspace{1in}
-
-\end{answer}
+:::
 
 
-\newpage
-\section*{Problem 3}
+# Problem 3
 
  Suppose you have a sample $Y_1, Y_2, \ldots, Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma$. 
  
  
  Consider the following estimator for $\mu$: $\tilde{Y} = \frac{1}{n-2} \sum_{i=1}^n Y_i$.
 
- \subsection*{Part a} 
+::: {.callout-exercise}
+### Part A
  What is $E[\tilde{Y}]$?
-
-\begin{answer}
- \begin{align*}
- E\qty[\tilde{Y}] &= E\qty[ \frac{1}{n-2} \sum_{i=1}^n Y_i] \\
+:::
+::: {.callout-solution}
+$$
+\begin{aligned}
+ \E\qty[\tilde{Y}] &= E\qty[ \frac{1}{n-2} \sum_{i=1}^n Y_i] \\
  &= \frac{1}{n-2} E\qty[ \sum_{i=1}^n Y_i]\\
  &= \frac{1}{n-2} \qty(\sum_{i=1}^n E[Y_i])\\
  &=\frac{1}{n-2} \qty(\sum_{i=1}^n \mu )\\
  &=\frac{1}{n-2} n\mu \\
  &= \frac{n}{n-2}\mu
- \end{align*}
-\vspace{2in}
-\end{answer}
+\end{aligned}
+$$
+:::
 
-\subsection*{Part b} 
+::: {.callout-exercise}
+### Part B
 What is the estimator's bias, $E[\tilde{Y}] - \mu$?
-
-\begin{answer}
- \begin{align*}
- E[\tilde{Y} - \mu] &= \frac{n}{n-2}\mu - \mu \\
+:::
+::: {.callout-solution}
+$$
+\begin{aligned}
+ \E[\tilde{Y} - \mu] &= \frac{n}{n-2}\mu - \mu \\
  &= \qty(\frac{n}{n-2} - 1)\mu \\
  &= \qty(\frac{n}{n-2} - \frac{n-2}{n-2})\mu \\
  &= \frac{2}{n-2}\mu
-  \\\end{align*}
-\vspace{2in}
- \end{answer}
+\end{aligned}
+$$
+:::
 
- \subsection*{Part c}
- Showing your work, calculate $Var[\tilde{Y}]$.
-
-\begin{answer}
- \begin{align*}
- V[\tilde{Y}] &= V[ \frac{1}{n-2} \displaystyle \sum_{i=1}^n Y_i] \\
- &= \frac{1}{(n-2)^2} V[ \sum_{i=1}^n Y_i]\\
+::: {.callout-exercise}
+### Part C
+Showing your work, calculate $Var[\tilde{Y}]$.
+:::
+::: {.callout-solution}
+ $$
+ \begin{aligned}
+ \Var\qty[\tilde{Y}] &= \Var\qty[ \frac{1}{n-2} \displaystyle \sum_{i=1}^n Y_i] \\
+ &= \frac{1}{(n-2)^2} \Var[ \sum_{i=1}^n Y_i]\\
  &= \frac{1}{(n-2)^2} \qty(\sum_{i=1}^n V[Y_i])\\
  &=\frac{1}{(n-2)^2} \qty(\sum_{i=1}^n \sigma^2 )\\
  &=\frac{1}{(n-2)^2} n\sigma^2 \\
  &= \frac{n\sigma^2}{(n-2)^2}
-\vspace{2in}
-\end{align*}
-\end{answer}
+\end{aligned}
+$$
+:::
 
-\subsection*{Part d}
+::: {.callout-exercise}
+### Part D
 The plot below shows the sampling distributions of three estimators at three sample sizes. 
 The vertical line indicates the mean of the sampling distribution. Which of these estimators is
 $\tilde{Y}$? Is it a, b, or c?
@@ -285,28 +285,27 @@ ggplot(plotdata) + geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100,
                    xlab('') + ylab('')
 ```
 
-\begin{answer}
+:::
+::: {.callout-solution}
 It's b. $a$ is unbiased and $c$'s bias doesn't decrease with $n$.
-\vspace{1in}
-\end{answer}
+:::
 
-\newpage
-\section*{Problem 4}
+# Problem 4
 
 Suppose a friend has polled 100 of Georgia's registered voters
 about their intention to vote in the 2024 election. The interval
 estimate they report for turnout is [.59,.61]. 
+
+::: {.callout-exercise}
 Could this interval estimate have 95\% coverage?
 Explain your answer. \emph{Hint. If $Y$ is a binary random variable
 that takes on the value 1 with probability $p$ (and 0 with probability $1-p$), $\Var[Y]=p(1-p)$.}
+:::
 
-
-\begin{answer}
+::: {.callout-solution}
 No. The standard error of the mean of $100$ binary random variables
  $Y_i$ with $\E Y_i=p$ is $\sqrt{p(1-p)/100}$. Because we know that $p\approx 6/10$, this is roughly $(6/10)(4/10)/100=\sqrt{24}/100 \approx 5/100$. 
  As a result, a 95\% confidence interval should have a width of roughly
  $2 \times 1.96 \times 5/100 \approx 20/100=.2$. The width of their interval is 
  $1/10$ of this.
-\vspace{2in}
- \end{answer}
-
+:::
