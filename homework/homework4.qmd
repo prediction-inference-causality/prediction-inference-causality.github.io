@@ -405,16 +405,15 @@ Here's a plot a lot like the one we made for the bone density data. We'll show t
 2. There are way more columns.
 3. The outcome is binary, so all the points in each column stack on top of each other.
 
-To make the plot more readable, we'll make the points transparent and jitter them a bit---both horizontally and vertically --- so they're not quite on top of each other. It helps, but it's still a bit hard to look at the raw data. The means and proportions are still easy enough to see, though.
+To make the plot more readable, we'll make the points transparent and jitter them a bit---both horizontally and vertically --- so they're not quite on top of each other. It helps, but it's still a bit hard to look at the raw data. The means and proportions are still easy enough to see, though. I'm also going to plot points for a random quarter of our survey recipients, rather than all of them, to help reduce the size of the images and therefore the strain they put on our web browser. This won't have much of an effect visually.
 
 ```{r}
 #| echo: true
 #| out-width: 100%
 
 plotX = function(w,x) { x + 0.75*(w-0.5) } 
-
 turnout.summary.plot = 
-  ggplot(turnout.data) + 
+  ggplot() + 
     stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W)),
                  geom='pointrange', fun=mean, 
                                     fun.min=\(x)mean(x)-sd(x), 
@@ -422,9 +421,11 @@ turnout.summary.plot =
     geom_bar(aes(x=plotX(W, X), y=10*after_stat(prop), fill=factor(W), color=factor(W)), 
              position='identity', alpha=.1, linewidth=.1) + xlab('') 
 
+
+plot.point = sample(1:nrow(turnout.data), round(nrow(turnout.data)/4))
 turnout.plot = turnout.summary.plot + 
   geom_point(aes(x=plotX(W, X), y=Y,  color=factor(W)),
-            alpha=.01, size=.01, position=position_jitter(width=0.25, height=.1, seed=2))  
+            alpha=.01, size=.01, position=position_jitter(width=0.25, height=.1, seed=2), data=turnout.data[plot.point,])  
 
 turnout.plot
 ```
