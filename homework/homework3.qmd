@@ -1,5 +1,5 @@
 ---
-title: "Problem Set 3"
+title: "Homework 3"
 subtitle: "QTM 220"
 ---
 
@@ -586,19 +586,20 @@ ggplot() + geom_histogram(aes(x=estimate), bins=100, alpha=.2, data = sampling.d
 
 A here's some code to calculate coverage. This is a bit more complicated because, to get the bootstrap intervals, we need to calculate the bootstrap sampling distribution based on each sample. That said, with the code we have above, it's not too bad. It's all about organizing our code in a way that lets us reuse it. This takes practice to get good at that, and it tends to involve some amount of going back and tweaking organization to make your code reusable the way you want it to, but in the long term it can be a skill worth developing. That's what I've done. That said, it's totally fine to write code that works for each task separately, and sometimes that's the best way to go.
 
-Here's some code that calculates each interval in 1000 samples from the population.
+Here's some code that calculates each interval in 400 samples from the population and 400 bootstrap samples per sample.
 
 ```{r}
 #| echo: true
 #| cache: true
 
+reps = 400
 interval.covers = function(data) { 
     the.averages = both.averages(data)
     point.estimate = the.averages 
     normal.width.estimate = data.frame(over.rounds  = 2*1.96*sqrt(the.averages$over.rounds.variance),
                                        over.players = 2*1.96*sqrt(the.averages$over.players.variance))
 
-    bootstrap.dist = data |> sampling.distribution(both.averages, n=nrow(data), replications=1000) 
+    bootstrap.dist = data |> sampling.distribution(both.averages, n=nrow(data), replications=reps) 
     bootstrap.width.estimate = data.frame(over.rounds  = width(bootstrap.dist$over.rounds, point.estimate$over.rounds),
                                           over.players = width(bootstrap.dist$over.players, point.estimate$over.players))
     
@@ -615,7 +616,7 @@ interval.covers = function(data) {
 }
 
 set.seed(0)
-covers.replications = nba.population |> sampling.distribution(interval.covers, n=nrow(nba.sample), replications=1000) 
+covers.replications = nba.population |> sampling.distribution(interval.covers, n=nrow(nba.sample), replications=reps) 
 ```
 
 And here's some code that averages over samples to get coverage probabilities.  I've had to ignore a few samples in which the variance estimates we based our normal approximation intervals on were NA. That happens because we're unable to estimate $\sigma^2(x)$ when there's a single player from that round in our sample. This is a bit of a hack, but samples like this are pretty rare, so it doesn't really matter much how we count them. 
