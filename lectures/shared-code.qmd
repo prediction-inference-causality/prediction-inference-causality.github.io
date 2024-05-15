@@ -49,8 +49,22 @@ theme_set(simplified.theme)
 
 ```{r}
 #| label: define-colors
-twocolor.red = rgb(248,118,109, maxColorValue=255)
-twocolor.green = rgb(0,191,196, maxColorValue=255)
+twocolor.red   = rgb(248,118,109, maxColorValue=255)
+twocolor.green = rgb(0,191,196,   maxColorValue=255)
+
+pink     = '#ef476f'  # rgb(239,71,111)
+mustard  = '#ffd166'  # rgb(255,209,102)
+mustard  = '#dfb146'  # rgb(255,209,102)
+green    = '#06d6a0'  # rgb(6, 214,160)
+teal     = '#118ab2'  # rgb(17,138,178)
+midnight = '#073b4c'  # rgb(7,59,76)
+# fwiw, col2rgb is a function that converts a color to its RGB values
+
+map.background = green
+polla  = midnight
+pollb  = pink
+pollc  = teal
+polld  = green
 ```
 
 ::: hidden
@@ -60,16 +74,28 @@ $$
 \DeclareMathOperator{\Var}{\V}
 \DeclareMathOperator{\Cov}{Cov}
 \DeclareMathOperator*{\argmin}{argmin}
-\newcommand{\inred}[1]{\textcolor[RGB]{248,118,109}{#1}}
-\newcommand{\ingreen}[1]{\textcolor[RGB]{0,191,196}{#1}}
-\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
-\newcommand{\alert}[1]{\textcolor{red}{#1}}
-
 \newcommand{\ind}[1]{1_{\{#1\}}}
-\newcommand{\with}{\ingreen{\text{degree}}}
-\newcommand{\without}{\inred{\text{no degree}}}
-\newcommand{\model}{\mathcal{M}}
 \newcommand{\R}{\mathbb{R}}
+\newcommand{\model}{\mathcal{M}}
+
+\newcommand{\mapbg}{\color[RGB]{6,214,160}}
+\newcommand{\polla}{\color[RGB]{7,59,76}}
+\newcommand{\pollb}{\color[RGB]{239,71,111}}
+\newcommand{\pollc}{\color[RGB]{17,138,178}}
+\newcommand{\polld}{\color[RGB]{6,214,160}}
+\newcommand{\groupa}{\color[RGB]{248,118,109}}
+\newcommand{\groupb}{\color[RGB]{0,191,196}}
+
+\newcommand{\inmapbg}[1]{\textcolor[RGB]{6,214,160}{#1}}
+\newcommand{\inpolla}[1]{\textcolor[RGB]{7,59,76}{#1}}
+\newcommand{\inpollb}[1]{\textcolor[RGB]{239,71,111}{#1}}
+\newcommand{\inpollc}[1]{\textcolor[RGB]{17,138,178}{#1}}
+\newcommand{\inpolld}[1]{\textcolor[RGB]{6,214,160}{#1}}
+\newcommand{\ingroupa}[1]{\textcolor[RGB]{248,118,109}{#1}}
+\newcommand{\ingroupb}[1]{\textcolor[RGB]{0,191,196}{#1}}
+
+\newcommand{\with}{\ingroupb{\text{degree}}}
+\newcommand{\without}{\ingroupa{\text{no degree}}}
 $$
 :::
 
@@ -114,6 +140,11 @@ sample(1:5)
 ```
 
 ```{r}
+#| label: ggplot-utils
+mean_sd = function(x, mult = 1) { mean_se(x, mult = mult*sqrt(length(stats::na.omit(x)))) }
+```
+
+```{r}
 #| label: coarsen
 coarsen = function(x, group, seed=0) {
   with_seed(function(seed) { 
@@ -153,8 +184,8 @@ width_cdf = function(cdf, center, limits, alpha=.05) {
 #| label: distribution-plot-annotations
 
 default.dot.size = 2
-default.height = function(samples) { dnorm(0, mean=0, sd=sd(samples)) }
-default.highlight.colors = c('black', 'magenta', 'cyan', 'gray')
+default.highlight.colors = c(polla, pollb, pollc, polld)
+default_height = function(samples) { dnorm(0, mean=0, sd=sd(samples)) }
     
 with_annotations = function(samples,
                             estimand = NA,
@@ -164,7 +195,7 @@ with_annotations = function(samples,
                                       highlight.dots=3, 
                                       highlighted.dot.alpha=1, 
                                       unhighlighted.dot.alpha=.15,
-                                      height=default.height(samples), 
+                                      height=default_height(samples), 
                             seed=default.seed) { 
     highlight.colors = if(highlight.dots) default.highlight.colors[1:min(dots,highlight.dots)] else c()
     summary.data = data.frame(
@@ -187,8 +218,8 @@ with_annotations = function(samples,
         # fussy code to make sure the heights of the highlighted 
         # dots don't change when the total number of dots changes
         heights = (\(){ 
-              highlight.dot.heights = sample(1:highlight.dots)/highlight.dots
-              unhighlighted.dot.heights = setdiff(sample(1:dots), 1:highlight.dots)/dots
+              highlight.dot.heights = sample(1:highlight.dots)/(highlight.dots + 1)
+              unhighlighted.dot.heights = setdiff(sample(1:dots), 1:highlight.dots)/(dots + 1)
               height*c(highlight.dot.heights[1:min(dots,highlight.dots)], 
                        unhighlighted.dot.heights) 
             }) |> with_seed(seed)

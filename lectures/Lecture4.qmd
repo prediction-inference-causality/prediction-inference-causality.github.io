@@ -3,167 +3,35 @@ title: "Lecture 4"
 subtitle: "Estimating Sampling Distributions using the Bootstrap"
 ---
 
-```{r setup}
-library(usmap)
-library(sf)
-
-library(ggplot2)
-
-library(scales)
-library(knitr)
-
-percent = label_percent(accuracy=1)
-approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
-```
-
-```{r ggplot-themes}
-class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
-        panel.background = element_rect(fill = "transparent", colour = NA),
-                    legend.background = element_rect(fill="transparent", colour = NA),
-                    legend.box.background = element_rect(fill="transparent", colour = NA),
-                    legend.key = element_rect(fill="transparent", colour = NA),
-        axis.ticks.x = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.x  = element_text(colour = "#aaaaaa"),
-        axis.text.y  = element_text(colour = "#aaaaaa"),
-        axis.title.x  = element_text(colour = "#aaaaaa"),
-        axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
-)
-
-theme_set(class.theme)
-theme_update(axis.title.x  = element_blank(),
-             axis.title.y  = element_blank())
-simplified.theme = theme_get()
-
-theme_update(axis.text.x   = element_blank(), 
-              axis.text.y   = element_blank())
-blank.theme = theme_get()
-
-theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
-           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
-grid.theme = theme_get()
-
-theme_set(simplified.theme)
-```
-
-```{r population}
-our.seed = 0
-set.seed(our.seed)
-N=7233584
-p=4999960/N
-y= c(rep(1,p*N), rep(0, (1-p)*N))
-y=sample(y) # shuffle the order 
-population.proportion = p
-m=N
-```
-
-```{r sample}
-set.seed(our.seed)
-
-n = 625
-J = sample(N, n, replace=TRUE)
-Y = y[J]
-sample.proportion = mean(Y)
-```
-
-```{r mapping}
-#| cache: true
-
-# Create fake locations for the people in our population
-# by taking random convex combinations of state vertices
-set.seed(0)
-ga.shape = us_map(include = c("GA"))
-
-# To reduce computation, we'll have 10K locations + jitter
-M = 10000 
-V = nrow(ga.shape)
-weights = abs(rt(M*V,1))
-dim(weights) = c(M,V)
-weights = (1/rowSums(weights)) * weights 
-base.x = weights %*% ga.shape$x
-base.y = weights %*% ga.shape$y
-base.ind = 1 + ( (0:(N-1)) %% M )
-locations = data.frame(x=base.x[base.ind] + rnorm(N, sd=.01),
-                       y=base.y[base.ind] + rnorm(N, sd=.01))
-
-ga = ggplot() + geom_polygon(data=ga.shape, aes(x = x, y = y), fill="white", color="black") + coord_fixed() + blank.theme
-```
-
-
 ## Point and Interval Estimation
 
+{{< include shared-code.qmd >}}
+{{< include ga-turnout.qmd >}}
 
 ```{r}
 #| out-height: 400px
 #| fig-asp: .3 
-
-width = function(samples, alpha=.05) {
-  covg.dif = function(w) { 
-    actual = mean( mean(samples) - w/2 <= samples & samples <= mean(samples) + w/2)
-    nominal = 1-alpha 
-    actual - nominal  
-  }
-  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
-}
+our.seed = default.seed
 
 set.seed(our.seed)
 Js = array(dim=c(10000, n))
 Ys = array(dim=c(10000, n))
 for(rr in 1:10000) {
-  Js[rr,] = sample(N, n, replace=TRUE)
+  Js[rr,] = sample(m, n, replace=TRUE)
   Ys[rr,] = y[Js[rr,]]
 }
 meanY.samples = rowMeans(Ys)
-default.height = .04
-scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) 
-scale_y = scale_y_continuous(breaks=seq(0,default.height,by=.01), limits=c(0, default.height))
+pmf.height = max(dbinom(0:n, n, mean(y))) 
 
-annotate.histogram = function(histplot, samples, shade=FALSE, 
-                              shade.width=width(samples, alpha=.05), shade.color='green', shade.alpha=.15) { 
-    w66 = width(samples, alpha=1/3)
-    w95 = width(samples, alpha=.05)
-    p = histplot + 
-           geom_vline(aes(xintercept=mean(samples)), color="blue") +
-           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w66/2), color="blue", linetype='dashed') +
-           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w95/2), color="blue", linetype='dotted') 
-    if(shade) { 
-      p + geom_rect(aes(xmin=mean(samples)-shade.width/2, 
-                        xmax=mean(samples)+shade.width/2, 
-                        ymin=0, ymax=Inf), alpha=shade.alpha, fill=shade.color)
-    } else { p }
-}
+scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025)) 
+scale_y = scale_y_continuous(breaks=seq(0, pmf.height,by=.01))
 
-annotated.bar = function(samples, ...) { 
-    p = ggplot() + geom_bar(aes(x=samples, y=after_stat(prop)), alpha=.3) +
-        geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7)
-    annotate.histogram(p, samples, ...) + scale_x + scale_y
-}
-
-default.highlight.colors = c('black', 'magenta', 'cyan', 'gray')
-with.points = function(histplot, samples, K=100, highlight=4, height=default.height) {
-    set.seed(our.seed)
-    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
-    heights = sample(height*(1:K)/K)
-    data = data.frame(y=heights, x=samples[1:K], 
-                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
-                      alpha=c(rep(1, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
-    histplot + geom_point(aes(y=y, x=x, color=I(color), alpha=I(alpha)), data=data)
-}
-
-with.intervals = function(histplot, samples, w=width(samples, alpha=.05), K=100, 
-                          highlight=4, highlight.alpha=1, height=default.height) { 
-    set.seed(our.seed)
-    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
-    heights = sample(height*(1:K)/K)
-    data = data.frame(y=heights, x=samples[1:K], w=w,
-                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
-                      alpha=c(rep(highlight.alpha, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
-    histplot + 
-        geom_pointrange(aes(y=y, x=x, xmin=x-w/2, xmax=x+w/2, color=I(color), alpha=I(alpha)), data=data)
-}
-
-annotated.histogram = annotated.bar(meanY.samples)
-with.intervals(annotated.histogram, meanY.samples)
+bar.plot = ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), alpha=.3) +
+                      geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7) + 
+                      scale_x + scale_y
+                      
+bar.plot + with_annotations(meanY.samples, interval.width=width(meanY.samples), height=pmf.height) + 
+           coord_cartesian(xlim=c(.6,.8), ylim=c(0, pmf.height))
 ```
 
 - Last week, we talked about estimating population proportions.
@@ -176,13 +44,10 @@ with.intervals(annotated.histogram, meanY.samples)
 ```{r}
 #| out-height: 400px
 #| fig-asp: .3
-p = mean(y)
-xx= seq(0,n)
 
-w=width(meanY.samples, alpha=.05)
-calibrated.width.histogram = annotated.histogram + 
-    geom_rect(aes(xmin=mean(y)-w/2, xmax=mean(y)+w/2, ymin=0, ymax=Inf), alpha=.15, fill='green')
-with.intervals(calibrated.width.histogram, meanY.samples)
+bar.plot + with_annotations(meanY.samples, interval.width=width(meanY.samples), 
+                                          shade.width=width(meanY.samples), height=pmf.height) +
+           coord_cartesian(xlim=c(.6,.8), ylim=c(0, pmf.height))
 ```
 
 - We can do that using the **sampling distribution** of our point estimate.
@@ -204,28 +69,28 @@ with.intervals(calibrated.width.histogram, meanY.samples)
 #| - Our estimate of its sampling distribution 
 
 estimated.dist.samples = rbinom(10000, n, mean(Y)) / n 
-w.est=width(estimated.dist.samples, alpha=.05)
-calibrated.width.histogram.estimated = annotated.bar(estimated.dist.samples, shade=TRUE, shade.color='red')
-calibrated.width.histogram.noshade   = annotated.bar(meanY.samples, shade=FALSE)
+bar.plot.estimated = ggplot() + 
+  geom_bar(aes(x=estimated.dist.samples, y=after_stat(prop)), alpha=.3) +
+  geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7) + 
+  scale_x + scale_y 
 
-set.seed(our.seed)
-K = 100
-heights = sample(default.height*(1:K)/K)
+xx = seq(0,n)
+p.parametric.truth = bar.plot + 
+  with_annotations(meanY.samples, interval.width=width(meanY.samples), highlight.dots=1, height=pmf.height) +
+  geom_line(aes(x=xx/n, y=dbinom(xx, n, mean(y))), color='black', alpha=.6) 
+p.parametric.estimate = bar.plot.estimated  +
+  with_annotations(c(mean(Y), estimated.dist.samples), highlight.dots=1, height=pmf.height,
+                   shade.width=width(estimated.dist.samples), shade.color='red') +
+  geom_line(aes(x=xx/n, y=dbinom(xx, n, mean(Y))), color='black') 
 
-p.parametric.truth = 
-  with.intervals(calibrated.width.histogram.noshade, meanY.samples, w=w.est, highlight=1) +
-            geom_line(aes(x=xx/n, y=dbinom(xx, n, mean(y))), color='black', alpha=.6) + coord_flip()
-p.parametric.estimate = 
-  with.intervals(calibrated.width.histogram.estimated, estimated.dist.samples, highlight=0) +
-            geom_line(aes(x=xx/n, y=dbinom(xx, n, mean(Y))), color='black') +
-            geom_point(aes(x=mean(Y), y=heights[1])) + coord_flip()
-p.parametric.truth
-p.parametric.estimate
+coord  = coord_flip(xlim=c(.6,.8), ylim=c(0, pmf.height))
+p.parametric.truth + coord 
+p.parametric.estimate + coord
 ```
 
  - It helps to know the **parametric form** of the sampling distribution: it's **binomial**.
-    - It's the distribution of the proportion heads in `r n` flips of a coin with probability $p \approx `r approx(p)`$ of heads.
-    - where $p \approx `r approx(p)`$ is the proportion of **registered voters** who will vote.
+    - It's the distribution of the proportion heads in `r n` flips of a coin with probability $p \approx `r approx(mean(y))`$ of heads.
+    - where $p \approx `r approx(mean(y))`$ is the proportion of **registered voters** who will vote.
 - By *parametric form*, I mean a formula in terms of some parameters. 
   - That tells us what parameters we need to estimate to estimate the sampling distribution.
   - In this case, the only (unknown) parameter is the probability of heads, $p$.
@@ -246,8 +111,8 @@ p.parametric.estimate
 #| - Our point estimate and its sampling distribution
 #| - Our estimate of its sampling distribution 
 
-p.parametric.truth
-p.parametric.estimate
+p.parametric.truth + coord
+p.parametric.estimate + coord 
 ```
 
 - In `R`, `dbinom(x, n, p)`, calculates this formula where ...
@@ -266,11 +131,18 @@ p.parametric.estimate
 
 sample.locations = locations[J, ]
 boot.ind = sample(1:n, n, replace=TRUE)
-resampled.locations = sample.locations[boot.ind, ]
 
-ga + geom_point(aes(x = x, y = y), alpha=.05, data=locations[1:M,], size=.05)
-ga + geom_point(aes(x = x, y = y), alpha=.2, data=sample.locations, size=1) 
-ga + geom_point(aes(x = x, y = y), alpha=.2, data=resampled.locations, size=1)
+displaypop = pop[1:50000,]
+sam$times.replicated = as.numeric(table(c(1:n, boot.ind)) - 1)
+
+pop.map  = state.plot + geom_point(aes(x = long, y = lat), alpha=.05, data=displaypop, size=.025, color=polla)  + scale_size_area()
+sam.map  = state.plot + geom_point(aes(x = long, y = lat), alpha=.2,  data=sam,        size=2,    color=polla)   + scale_size_area()
+boot.map = state.plot + geom_point(aes(x = long, y = lat, size=times.replicated), alpha=.2, data=sam, color=polla) +
+             scale_size_area() + guides(size='none') 
+
+pop.map
+sam.map
+boot.map
 ```
 
 - The estimated sampling distribution is $\text{Binomial}(n,p)/n$ for $n=`r n`$ and $p=\bar Y\approx `r approx(mean(Y))`$.
@@ -292,9 +164,10 @@ ga + geom_point(aes(x = x, y = y), alpha=.2, data=resampled.locations, size=1)
 #| out-height: 300px
 #| fig-asp: .8
 #| layout-ncol: 3
-ga + geom_point(aes(x = x, y = y), alpha=.05, data=locations[1:M,], size=.05)
-ga + geom_point(aes(x = x, y = y), alpha=.2, data=sample.locations, size=1) 
-ga + geom_point(aes(x = x, y = y), alpha=.2, data=resampled.locations, size=1)
+
+pop.map
+sam.map
+boot.map
 ```
 
 - If we plot our voters on a map, you can see the idea in visual terms.
@@ -345,8 +218,8 @@ The Population
 
 $$
 \begin{array}{r|rrrr|r}
-j & 1 & 2 & \dots &   `r approx(N)` & \bar{y}_{`r approx(N)`}  \\
-y_{j} & `r y[1]` & `r y[2]` & \dots & `r y[N]`   & `r approx(mean(y))`  \\
+j & 1 & 2 & \dots &   `r approx(m)` & \bar{y}_{`r approx(m)`}  \\
+y_{j} & `r y[1]` & `r y[2]` & \dots & `r y[m]`   & `r approx(mean(y))`  \\
 \end{array}
 $$
 
@@ -372,8 +245,8 @@ Notation. We use stars to distinguish the bootstrap sample from our original sam
 
 bootstrap.samples = array(dim=10000)
 for(rr in 1:10000) {
-    Y.boot = Y[sample(1:n, n, replace=TRUE)]
-    bootstrap.samples[rr] = sum(Y.boot)/n 
+    Y.star = Y[sample(1:n, n, replace=TRUE)]
+    bootstrap.samples[rr] = mean(Y.star) 
 }
 ```
 
@@ -392,46 +265,17 @@ ggplot() + geom_bar(aes(x=bootstrap.samples, y=after_stat(prop)), alpha=.3, posi
   
 ## Comparing Black and Non-Black Turnout
 
-```{r population-and-sample-black-vs-nonblack}
-#| echo: false 
-our.seed = 0
-set.seed(4)
-N = 7233584
-n = 625
-
-b0 = floor(.7*N)
-b1 = ceiling(.3*N)
-y0 = rbinom(n=b0,size=1,prob=.68)
-y1 = rbinom(n=b1,size=1,prob=.74)
-dfpop = data.frame(y=c(y0,y1), x=c(rep(0,b0),rep(1,b1)))
-dfpop = dfpop[sample(1:N),] # shuffle the rows
-x = dfpop$x
-y = dfpop$y
-
-
-# Generate Sample Data for us (J1) and three friends (J2,J3,JM)
-set.seed(our.seed)
-J1 = sample(1:N,size=n,replace=T)
-J2 = sample(1:N,size=n,replace=T)
-J3 = sample(1:N,size=n,replace=T)
-JM = sample(1:N,size=n,replace=T)
-
-J = J1
-dfsam = dfpop[J,]
-Y = dfsam$y
-X = dfsam$x
-```
-
 $$
 \small{
-\begin{array}{r|rr|rr|r|rr|rrrr}
+\begin{array}{r|rr|rr|r|rr|rrrrr}
 \text{call} &  1  & & 2  & & \dots & `r n`  & & & & & & \\
-\text{question}  & X_1 & Y_1 &  X_2 & Y_2 & \dots &  X_{`r n`} & Y_{`r n`} & \overline{X}_{`r n`} & \overline{Y}_{`r n`} &\frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} \\
+\text{question}  & X_1 & Y_1 &  X_2 & Y_2 & \dots &  X_{`r n`} & Y_{`r n`} & \overline{X}_{`r n`} & \overline{Y}_{`r n`} &\frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \text{difference} \\
 \text{outcome}    &  \underset{\textcolor{gray}{x_{`r J[1]`}}}{`r X[1]`} & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
                   & \underset{\textcolor{gray}{x_{`r J[2]`}}}{`r X[2]`} & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`}
                   & \dots 
                   & \underset{\textcolor{gray}{x_{`r J[n]`}}}{`r X[n]`} & \underset{\textcolor{gray}{y_{`r J[n]`}}}{`r Y[n]`}
-                  & `r approx(mean(X))` & `r approx(mean(Y))` & `r approx(mean(Y[X==1]))` & `r approx(mean(Y[X==0]))` \\
+                  & `r approx(mean(X))` & `r approx(mean(Y))` & `r approx(mean(Y[X==0]))` & `r approx(mean(Y[X==1]))` 
+                  & `r approx(mean(Y[X==1])-mean(Y[X==0]))` \\
 \end{array}
 }
 $$
@@ -447,14 +291,15 @@ $$
 
 $$
 \small{
-\begin{array}{r|rr|rr|r|rr|rrrr}
+\begin{array}{r|rr|rr|r|rr|rrrrr}
 \text{call} &  1  & & 2  & & \dots & `r n`  & & & & & & \\
-\text{question}  & X_1 & Y_1 &  X_2 & Y_2 & \dots &  X_{`r n`} & Y_{`r n`} & \overline{X}_{`r n`} & \overline{Y}_{`r n`} &\frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} \\
+\text{question}  & X_1 & Y_1 &  X_2 & Y_2 & \dots &  X_{`r n`} & Y_{`r n`} & \overline{X}_{`r n`} & \overline{Y}_{`r n`} &\frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \text{difference} \\
 \text{outcome}    &  \underset{\textcolor{gray}{x_{`r J[1]`}}}{`r X[1]`} & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
                   & \underset{\textcolor{gray}{x_{`r J[2]`}}}{`r X[2]`} & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`}
                   & \dots 
                   & \underset{\textcolor{gray}{x_{`r J[n]`}}}{`r X[n]`} & \underset{\textcolor{gray}{y_{`r J[n]`}}}{`r Y[n]`}
-                  & `r approx(mean(X))` & `r approx(mean(Y))` & `r approx(mean(Y[X==1]))` & `r approx(mean(Y[X==0]))` \\
+                  & `r approx(mean(X))` & `r approx(mean(Y))` & `r approx(mean(Y[X==0]))` & `r approx(mean(Y[X==1]))` 
+                  & `r approx(mean(Y[X==1])-mean(Y[X==0]))` \\
 \end{array}
 }
 $$
@@ -473,38 +318,49 @@ $$
 ## A Table of Imaginary Polls
 
 $$
-\small{
 \begin{array}{r|rr|rr|r|rr|rrrr}
 \text{call} &  1 & & 2 & &  \dots & `r n` & & & & & & \\
-\text{pollster} &  X_1 & Y_1 &  X_2 & Y_2   & \dots &  X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  &\frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \text{difference} \\
+\text{poll} &  X_1 & Y_1 &  X_2 & Y_2   & \dots &  X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  &\frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \text{difference} \\
 \hline
-\color{black}   1   
-    & \color{black}   `r J=J1; Y=y[J]; X=x[J]; X[1]`      & \color{black} `r Y[1]` 
-    &                            \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
-                                                        & \color{black}   \dots 
-    &                            \color{black}   `r X[n]`     & \color{black} `r Y[n]`       
-    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(Y[X==1]))` & `r approx(mean(Y[X==0]))` & \color{black} `r approx(mean(Y[X==1]) - mean(Y[X==0]))` \\
-\color{magenta}   2   
-    & \color{magenta}   `r J=J2; Y=y[J]; X=x[J]; X[1]`      & \color{magenta} `r Y[1]` 
-    & \color{magenta}   `r X[2]`      & \color{magenta} `r Y[2]`      
-                                                        & \color{magenta}   \dots 
-    & \color{magenta}   `r X[n]`     & \color{magenta} `r Y[n]`       
-    & \color{magenta}   `r approx(mean(X))`   & \color{magenta} `r approx(mean(Y))`   &  \color{magenta}  `r approx(mean(Y[X==1]))` & \color{magenta} `r approx(mean(Y[X==0]))` &  \color{magenta} `r approx(mean(Y[X==1]) - mean(Y[X==0]))`  \\
-\color{cyan}    3   
-    & \color{cyan}   `r J=J3; Y=y[J]; X=x[J]; X[1]`      & \color{cyan} `r Y[1]`
-    & \color{cyan}   `r X[2]`      & \color{cyan} `r Y[2]`      
-                                                        & \color{cyan}   \dots
-    & \color{cyan}   `r X[n]`     & \color{cyan} `r Y[n]`
-    & \color{cyan}   `r approx(mean(X))`   & \color{cyan} `r approx(mean(Y))`   &  \color{cyan}  `r approx(mean(Y[X==1]))` & \color{cyan} `r approx(mean(Y[X==0]))` & \color{cyan} `r approx(mean(Y[X==1]) - mean(Y[X==0]))` \\
+\polla   1   
+    & \polla   `r J=J1; Y=y[J]; X=x[J]; X[1]`      & \polla `r Y[1]` 
+    & \polla   `r X[2]`                            & \polla `r Y[2]`      
+    & \polla   \dots 
+    & \polla   `r X[n]`                            & \polla `r Y[n]`       
+    & \polla   `r approx(mean(X))`                 & \polla `r approx(mean(Y))`   
+    & \polla   `r approx(mean(Y[X==0]))`           & \polla `r approx(mean(Y[X==1]))` 
+    & \polla   `r approx(mean(Y[X==1]) - mean(Y[X==0]))` \\
+
+\pollb   1   
+    & \pollb   `r J=J2; Y=y[J]; X=x[J]; X[1]`      & \pollb `r Y[1]` 
+    & \pollb   `r X[2]`                            & \pollb `r Y[2]`      
+    & \pollb   \dots 
+    & \pollb   `r X[n]`                            & \pollb `r Y[n]`       
+    & \pollb   `r approx(mean(X))`                 & \pollb `r approx(mean(Y))`   
+    & \pollb   `r approx(mean(Y[X==0]))`           & \pollb `r approx(mean(Y[X==1]))` 
+    & \pollb   `r approx(mean(Y[X==1]) - mean(Y[X==0]))` \\
+    
+\pollc   1   
+    & \pollc   `r J=J3; Y=y[J]; X=x[J]; X[1]`      & \pollc `r Y[1]` 
+    & \pollc   `r X[2]`                            & \pollc `r Y[2]`      
+    & \pollc   \dots 
+    & \pollc   `r X[n]`                            & \pollc `r Y[n]`       
+    & \pollc   `r approx(mean(X))`                 & \pollc `r approx(mean(Y))`   
+    & \pollc   `r approx(mean(Y[X==0]))`           & \pollc `r approx(mean(Y[X==1]))` 
+    & \pollc   `r approx(mean(Y[X==1]) - mean(Y[X==0]))` \\
+    
 \vdots & \vdots & \vdots &  \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\color{gray}    1M   
-    & \color{gray}   `r J=JM; Y=y[J]; X=x[J]; X[1]`      & \color{gray} `r Y[1]`
-    & \color{gray}   `r X[2]`      & \color{gray} `r Y[2]`      
-                                                        & \color{gray}   \dots
-    & \color{gray}   `r X[n]`     & \color{gray} `r Y[n]`
-    & \color{gray}   `r approx(mean(X))`   & \color{gray} `r approx(mean(Y))`   &  \color{gray}  `r approx(mean(Y[X==1]))` & \color{gray} `r approx(mean(Y[X==0]))` & \color{gray} `r approx(mean(Y[X==1]) - mean(Y[X==0]))` \\
+
+\polld   1   
+    & \polld   `r J=JM; Y=y[J]; X=x[J]; X[1]`      & \polld `r Y[1]` 
+    & \polld   `r X[2]`                            & \polld `r Y[2]`      
+    & \polld   \dots 
+    & \polld   `r X[n]`                            & \polld `r Y[n]`       
+    & \polld   `r approx(mean(X))`                 & \polld `r approx(mean(Y))`   
+    & \polld   `r approx(mean(Y[X==0]))`           & \polld `r approx(mean(Y[X==1]))` 
+    & \polld   `r approx(mean(Y[X==1]) - mean(Y[X==0]))` \\
+    
 \end{array}
-}
 $$
 
 
@@ -540,11 +396,9 @@ for(rr in 1:10000) {
 ```{r}
 #| out-height: 400px 
 #| fig-asp: .3 
-w=width(difference.samples, alpha=.05)
-difference.histogram=ggplot() + geom_histogram(aes(x=difference.samples, y=after_stat(density)), bins=100, alpha=.3)
-annotated.difference.histogram = annotate.histogram(difference.histogram, difference.samples, 
-  shade=TRUE, shade.color='green') 
-with.intervals(annotated.difference.histogram, difference.samples, height=10)
+difference.histogram = ggplot() + geom_histogram(aes(x=difference.samples, y=after_stat(density)), bins=100, alpha=.3)
+difference.histogram + 
+  with_annotations(difference.samples, shade.width=width(difference.samples), interval.width=width(difference.samples)) 
 ```
 
 - Here's what the **sampling distribution** of this difference in turnout looks like.
@@ -561,35 +415,60 @@ with.intervals(annotated.difference.histogram, difference.samples, height=10)
 #| fig-cap:
 #|  - Our Sample
 #|  - Three Bootstrap Samples---The First Person 'Polled'
-sample.locations$label = 1:n
+sam$label = 1:n
 set.seed(our.seed)
 boot.ind1 = sample(1:n, n, replace=TRUE)
 boot.ind2 = sample(1:n, n, replace=TRUE)
 boot.ind3 = sample(1:n, n, replace=TRUE)
-bootstrap.locations = 
-  rbind(sample.locations[boot.ind,], 
-        sample.locations[boot.ind2,], 
-        sample.locations[boot.ind3,])
-bootstrap.locations$color=rep(c('magenta','cyan', 'gray'), each=n)
-bootstrap.locations$i=rep(1:n, 3)
-
-ga + geom_text(aes(x = x, y = y, label=label), alpha=.5, size=3, data=sample.locations) 
-ga + geom_text(aes(x = x, y = y, label=label, color=I(color)), alpha=.5, size=3, data=bootstrap.locations[bootstrap.locations$i == 1, ])
+bootstrap.sam = 
+  rbind(sam[boot.ind,], 
+        sam[boot.ind2,], 
+        sam[boot.ind3,])
+bootstrap.sam$color=rep(c(pollb,pollc,polld), each=n)
+bootstrap.sam$i=rep(1:n, 3)
 ```
 
+:::: {.r-stack}
+::: {.fragment .fade-out data-fragment-index="0"}
+```{r}
+#| out-height: 300px
+#| fig-asp: .5
+#| layout-ncol: 2
+#| fig-cap:
+#|  - Our Sample
+#|  - Three Bootstrap Samples---The First 'Call'
+state.plot + geom_text(aes(x = long, y = lat, label=label), color=polla, alpha=.7, size=3, data=sam) 
+state.plot + geom_text(aes(x = long, y = lat, label=label, color=I(color)), alpha=1, size=3, data=bootstrap.sam[bootstrap.sam$i == 1, ])
+```
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+```{r}
+#| out-height: 300px
+#| fig-asp: .5
+#| layout-ncol: 2
+#| fig-cap:
+#|  - Our Sample
+#|  - Three Bootstrap Samples---The First, Second, and Last 'Call'
+state.plot + geom_text(aes(x = long, y = lat, label=label), color=polla, alpha=.7, size=3, data=sam) 
+state.plot + geom_text(aes(x = long, y = lat, label=label, color=I(color)), alpha=1, size=3, data=bootstrap.sam[bootstrap.sam$i %in% c(1,2,n), ])
+```
+:::
+::::
 
 $$
 \small{
 \begin{array}{r|rr|rr|r|rr|rrrr}
 \text{call} &  1 & & 2 & & \dots & `r n` & & & & & & \\
-\text{pollster} &  X_1 & Y_1 &  X_2 & Y_2   & \dots &  X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  &\frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \text{difference} \\
+\text{poll} &  X_1 & Y_1 &  X_2 & Y_2   & \dots &  X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  &\frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \text{difference} \\
 \hline
-\color{black}   1   
-    & \color{black}   `r J=J1; Y=y[J]; X=x[J]; X[1]`      & \color{black} `r Y[1]` 
-    &                            \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
-                                                        & \color{black}   \dots 
-    &                            \color{black}   `r X[n]`     & \color{black} `r Y[n]`       
-    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(Y[X==1]))` & `r approx(mean(Y[X==0]))` & \color{black} `r approx(mean(Y[X==1]) - mean(Y[X==0]))` \\
+\polla   1   
+    & \polla   `r J=J1; Y=y[J]; X=x[J]; X[1]`      & \polla `r Y[1]` 
+    & \polla                         `r X[2]`      & \polla `r Y[2]`      
+    & \polla   \dots 
+    & \polla                         `r X[n]`      & \polla `r Y[n]`       
+    & \polla   `r approx(mean(X))`   & \polla `r approx(mean(Y))`   
+    & \polla   `r approx(mean(Y[X==0]))` & `r approx(mean(Y[X==1]))` 
+    & \polla   `r approx(mean(Y[X==1]) - mean(Y[X==0]))` 
 \end{array}
 }
 $$
@@ -598,39 +477,39 @@ $$
 \small{
 \begin{array}{r|rr|rr|r|rr|rrrr}
 \text{`call'} &  1 & &  2 & &  \dots & `r n` & & & & & & \\
-\text{`pollster'} &  X_1^* & Y_1^* &  X_2^* & Y_2^*   & \dots &  X^*_{`r n`} & Y^*_{`r n`}  & \overline{X}^* & \overline{Y}^*  &\frac{\sum_{i:X_i^*=1} Y_i}{\sum_{i:X_i^*=1} 1} & \frac{\sum_{i:X_i^*=0} Y_i}{\sum_{i:X_i^*=0} 1} & \text{difference} \\
+\text{`poll'} &  X_1^* & Y_1^* &  X_2^* & Y_2^*   & \dots &  X^*_{`r n`} & Y^*_{`r n`}  & \overline{X}^* & \overline{Y}^*  &\frac{\sum_{i:X_i^*=0} Y_i}{\sum_{i:X_i^*=0} 1} & \frac{\sum_{i:X_i^*=1} Y_i}{\sum_{i:X_i^*=1} 1} & \text{difference} \\
 \hline
-\color{magenta}   `r I=boot.ind1; 1`
-    & \color{magenta}   X_{`r I[1]`}  & \color{magenta} Y_{`r I[1]`} 
+\pollb   `r I=boot.ind1; 1`
+    & \pollb   X_{`r I[1]`}  & \pollb Y_{`r I[1]`} 
     & &
-    & \color{magenta}   \dots
-    & &
-    & & & & & & \\
-    & \color{magenta}   `r X[I[1]]`   & \color{magenta} `r Y[I[1]]`
-    & &
-    & \color{magenta}   \dots
+    & \pollb   \dots
     & &
     & & & & & & \\
-\color{cyan}   `r I=boot.ind2; 2`
-    & \color{cyan}   X_{`r I[1]`}  & \color{cyan} Y_{`r I[1]`} 
+    & \pollb   `r X[I[1]]`   & \pollb `r Y[I[1]]`
     & &
-    & \color{cyan}   \dots
-    & &
-    & & & & & & \\
-    & \color{cyan}   `r X[I[1]]`   & \color{cyan} `r Y[I[1]]`
-    & &
-    & \color{cyan}   \dots
+    & \pollb   \dots
     & &
     & & & & & & \\
-\color{gray}   `r I=boot.ind3; 3`
-    & \color{gray}   X_{`r I[1]`}  & \color{gray} Y_{`r I[1]`} 
+\pollc   `r I=boot.ind2; 2`
+    & \pollc   X_{`r I[1]`}  & \pollc Y_{`r I[1]`} 
     & &
-    & \color{gray}   \dots
+    & \pollc   \dots
     & &
     & & & & & & \\
-    & \color{gray}   `r X[I[1]]`   & \color{gray} `r Y[I[1]]`
+    & \pollc   `r X[I[1]]`   & \pollc `r Y[I[1]]`
     & &
-    & \color{gray}   \dots
+    & \pollc   \dots
+    & &
+    & & & & & & \\
+\polld   `r I=boot.ind3; 3`
+    & \polld   X_{`r I[1]`}  & \polld Y_{`r I[1]`} 
+    & &
+    & \polld   \dots
+    & &
+    & & & & & & \\
+    & \polld   `r X[I[1]]`   & \polld `r Y[I[1]]`
+    & &
+    & \polld   \dots
     & &
     & & & & & & \\
 \end{array}
@@ -648,8 +527,8 @@ $$
 #|  - Our Sample
 #|  - Three Bootstrap Samples
 
-ga + geom_text(aes(x = x, y = y, label=label), alpha=.5, size=3, data=sample.locations) 
-ga + geom_text(aes(x = x, y = y, label=label, color=I(color)), alpha=.5, size=3, data=bootstrap.locations)
+state.plot + geom_text(aes(x = long, y = lat, label=label), alpha=.7, size=3, data=sam) 
+state.plot + geom_text(aes(x = long, y = lat, label=label, color=I(color)), alpha=.5, size=3, data=bootstrap.sam)
 ```
 
 
@@ -657,14 +536,16 @@ $$
 \small{
 \begin{array}{r|rr|rr|r|rr|rrrr}
 \text{call} &  1 & & 2 & & \dots & `r n` & & & & & & \\
-\text{pollster} &  X_1 & Y_1 &  X_2 & Y_2   & \dots &  X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  &\frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \text{difference} \\
+\text{poll} &  X_1 & Y_1 &  X_2 & Y_2   & \dots &  X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  &\frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 0} & \text{difference} \\
 \hline
-\color{black}   1   
-    & \color{black}   `r J=J1; Y=y[J]; X=x[J]; X[1]`      & \color{black} `r Y[1]` 
-    &                            \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
-                                                        & \color{black}   \dots 
-    &                            \color{black}   `r X[n]`     & \color{black} `r Y[n]`       
-    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(Y[X==1]))` & `r approx(mean(Y[X==0]))` & \color{black} `r approx(mean(Y[X==1]) - mean(Y[X==0]))` \\
+\polla   1   
+    & \polla   `r J=J1; Y=y[J]; X=x[J]; X[1]`      & \polla `r Y[1]` 
+    & \polla                         `r X[2]`      & \polla `r Y[2]`      
+    & \polla   \dots 
+    & \polla                         `r X[n]`      & \polla `r Y[n]`       
+    & \polla   `r approx(mean(X))`   & \polla `r approx(mean(Y))`   
+    & \polla  `r approx(mean(Y[X==0]))` & `r approx(mean(Y[X==1]))` 
+    & \polla `r approx(mean(Y[X==1]) - mean(Y[X==0]))` 
 \end{array}
 }
 $$
@@ -673,47 +554,47 @@ $$
 \small{
 \begin{array}{r|rr|rr|r|rr|rrrr}
 \text{`call'} &  1 & &  2 & &  \dots & `r n` & & & & & & \\
-\text{`pollster'} &  X_1^* & Y_1^* &  X_2^* & Y_2^*   & \dots &  X^*_{`r n`} & Y^*_{`r n`}  & \overline{X}^* & \overline{Y}^*  &\frac{\sum_{i:X_i^*=1} Y_i}{\sum_{i:X_i^*=1} 1} & \frac{\sum_{i:X_i^*=0} Y_i}{\sum_{i:X_i^*=0} 1} & \text{difference} \\
+\text{`poll'} &  X_1^* & Y_1^* &  X_2^* & Y_2^*   & \dots &  X^*_{`r n`} & Y^*_{`r n`}  & \overline{X}^* & \overline{Y}^*  &\frac{\sum_{i:X_i^*=0} Y_i}{\sum_{i:X_i^*=0} 1} & \frac{\sum_{i:X_i^*=1} Y_i}{\sum_{i:X_i^*=1} 1} & \text{difference} \\
 \hline
-\color{magenta}   `r I=boot.ind1; 2`
-    & \color{magenta}   X_{`r I[1]`}  & \color{magenta} Y_{`r I[1]`} 
-    & \color{magenta}   X_{`r I[2]`}  & \color{magenta} Y_{`r I[2]`}      
-    & \color{magenta}   \dots
-    & \color{magenta}   X_{`r I[n]`}  & \color{magenta} Y_{`r I[n]`} 
+\pollb   `r I=boot.ind1; 2`
+    & \pollb   X_{`r I[1]`}  & \pollb Y_{`r I[1]`} 
+    & \pollb   X_{`r I[2]`}  & \pollb Y_{`r I[2]`}      
+    & \pollb   \dots
+    & \pollb   X_{`r I[n]`}  & \pollb Y_{`r I[n]`} 
     & & & & & & \\
-    & \color{magenta}   `r X[I[1]]`   & \color{magenta} `r Y[I[1]]`
-    & \color{magenta}   `r X[I[2]]`      & \color{magenta} `r Y[I[2]]`      
-    & \color{magenta}   \dots
-    & \color{magenta}   `r X[I[n]]`     & \color{magenta} `r Y[I[n]]` 
-    & \color{magenta}   `r approx(mean(X[I]))`   & \color{magenta} `r approx(mean(Y[I]))`   
-    &  \color{magenta}  `r approx(mean(Y[I][X[I]==1]))` & \color{magenta} `r approx(mean(Y[I][X[I]==0]))` 
-    & \color{magenta} `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
-\color{cyan}   `r I=boot.ind2; 3`
-    & \color{cyan}   X_{`r I[1]`}  & \color{cyan} Y_{`r I[1]`} 
-    & \color{cyan}   X_{`r I[2]`}  & \color{cyan} Y_{`r I[2]`}      
-    & \color{cyan}   \dots
-    & \color{cyan}   X_{`r I[n]`}  & \color{cyan} Y_{`r I[n]`} 
+    & \pollb   `r X[I[1]]`   & \pollb `r Y[I[1]]`
+    & \pollb   `r X[I[2]]`      & \pollb `r Y[I[2]]`      
+    & \pollb   \dots
+    & \pollb   `r X[I[n]]`     & \pollb `r Y[I[n]]` 
+    & \pollb   `r approx(mean(X[I]))`   & \pollb `r approx(mean(Y[I]))`   
+    &  \pollb  `r approx(mean(Y[I][X[I]==0]))` & \pollb `r approx(mean(Y[I][X[I]==1]))` 
+    & \pollb `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
+\pollc   `r I=boot.ind2; 2`
+    & \pollc   X_{`r I[1]`}  & \pollc Y_{`r I[1]`} 
+    & \pollc   X_{`r I[2]`}  & \pollc Y_{`r I[2]`}      
+    & \pollc   \dots
+    & \pollc   X_{`r I[n]`}  & \pollc Y_{`r I[n]`} 
     & & & & & & \\
-    & \color{cyan}   `r X[I[1]]`   & \color{cyan} `r Y[I[1]]`
-    & \color{cyan}   `r X[I[2]]`      & \color{cyan} `r Y[I[2]]`      
-    & \color{cyan}   \dots
-    & \color{cyan}   `r X[I[n]]`     & \color{cyan} `r Y[I[n]]` 
-    & \color{cyan}   `r approx(mean(X[I]))`   & \color{cyan} `r approx(mean(Y[I]))`   
-    &  \color{cyan}  `r approx(mean(Y[I][X[I]==1]))` & \color{cyan} `r approx(mean(Y[I][X[I]==0]))` 
-    & \color{cyan} `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
-\color{gray}   `r I=boot.ind3; 1`
-    & \color{gray}   X_{`r I[1]`}  & \color{gray} Y_{`r I[1]`} 
-    & \color{gray}   X_{`r I[2]`}  & \color{gray} Y_{`r I[2]`}      
-    & \color{gray}   \dots
-    & \color{gray}   X_{`r I[n]`}  & \color{gray} Y_{`r I[n]`} 
+    & \pollc   `r X[I[1]]`   & \pollc `r Y[I[1]]`
+    & \pollc   `r X[I[2]]`      & \pollc `r Y[I[2]]`      
+    & \pollc   \dots
+    & \pollc   `r X[I[n]]`     & \pollc `r Y[I[n]]` 
+    & \pollc   `r approx(mean(X[I]))`   & \pollc `r approx(mean(Y[I]))`   
+    & \pollc  `r approx(mean(Y[I][X[I]==0]))` & \pollc `r approx(mean(Y[I][X[I]==1]))` 
+    & \pollc `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
+\polld   `r I=boot.ind3; 1`M
+    & \polld   X_{`r I[1]`}  & \polld Y_{`r I[1]`} 
+    & \polld   X_{`r I[2]`}  & \polld Y_{`r I[2]`}      
+    & \polld   \dots
+    & \polld   X_{`r I[n]`}  & \polld Y_{`r I[n]`} 
     & & & & & & \\
-    & \color{gray}   `r X[I[1]]`   & \color{gray} `r Y[I[1]]`
-    & \color{gray}   `r X[I[2]]`      & \color{gray} `r Y[I[2]]`      
-    & \color{gray}   \dots
-    & \color{gray}   `r X[I[n]]`     & \color{gray} `r Y[I[n]]` 
-    & \color{gray}   `r approx(mean(X[I]))`   & \color{gray} `r approx(mean(Y[I]))`   
-    &  \color{gray}  `r approx(mean(Y[I][X[I]==1]))` & \color{gray} `r approx(mean(Y[I][X[I]==0]))` 
-    & \color{gray} `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
+    & \polld   `r X[I[1]]`   & \polld `r Y[I[1]]`
+    & \polld   `r X[I[2]]`      & \polld `r Y[I[2]]`      
+    & \polld   \dots
+    & \polld   `r X[I[n]]`     & \polld `r Y[I[n]]` 
+    & \polld   `r approx(mean(X[I]))`   & \polld `r approx(mean(Y[I]))`   
+    & \polld  `r approx(mean(Y[I][X[I]==0]))` & \polld `r approx(mean(Y[I][X[I]==1]))` 
+    & \polld `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
 \end{array}
 }
 $$
@@ -739,21 +620,19 @@ for(rr in 1:10000) {
 #| layout-ncol: 2 
 
 scale_x_dif = scale_x_continuous(limits=c(-.1,.2))
+w = width(difference.samples, alpha=.05)
 wboot=width(difference.bootstrap.samples, alpha=.05)
-annotated.difference.histogram.noshade = annotate.histogram(difference.histogram, difference.samples, shade=FALSE) 
 
-pboot=ggplot() + geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
-annotated.bootstrap.difference.histogram = annotate.histogram(pboot, difference.bootstrap.samples,
-  shade=TRUE, shade.color='red')
+bootstrap.difference.histogram = ggplot() + 
+  geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
 
-with.points(annotated.difference.histogram.noshade, difference.samples, height=10, highlight=0) + 
-  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+w/2), 
-                  data=data.frame(x=difference.samples[1], y=5, w=wboot), color='black') + 
-                  coord_flip() + scale_x_dif
+difference.histogram + 
+  with_annotations(difference.samples, interval.width=wboot, highlight.dots=1) + 
+  coord_flip() + scale_x_dif
 
-with.points(annotated.bootstrap.difference.histogram, 
-            c(difference.samples[1], difference.bootstrap.samples), 
-            height=10, highlight=4) + coord_flip() + scale_x_dif
+bootstrap.difference.histogram + 
+  with_annotations(c(difference.samples[1], difference.bootstrap.samples), shade.width=wboot, shade.color='red') + 
+  coord_flip() + scale_x_dif
 ```
 
 - Not bad. Our bootstrap sampling distribution looks a lot like our actual sampling distribution.
@@ -778,19 +657,19 @@ with.points(annotated.bootstrap.difference.histogram,
 #| 
 K = 3
 ps = quantile(meanY.samples, c(.025, .5, .975))
-p = population.proportion
+p = mean(y)
 
 density.stability.plot = ggplot() + 
            geom_line(aes(x=x/n, y=dbinom(x,n,p)), data=expand.grid(p=p, x=0:n), alpha=.5) +
            geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n), linetype='dotted') +
            geom_line(aes(x=x/n, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
-           geom_pointrange(aes(x=p, xmin=qbinom(.025,n,p)/n, xmax=qbinom(.975,n,p)/n, y=.6*default.height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
+           geom_pointrange(aes(x=p, xmin=qbinom(.025,n,p)/n, xmax=qbinom(.975,n,p)/n, y=.6*pmf.height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
            xlim(.6,.8) + guides(color=FALSE) + geom_vline(xintercept=mean(y), color='green', size=2, alpha=.5)
 centered.density.stability.plot = ggplot() + 
            geom_line(aes(x=x/n-p, y=dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n), alpha=.5) +
            geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n-mean(y)), linetype='dotted') +
            geom_line(aes(x=x/n-p, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
-           geom_pointrange(aes(x=0, xmin=qbinom(.025,n,p)/n-p, xmax=qbinom(.975,n,p)/n-p, y=.6*default.height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
+           geom_pointrange(aes(x=0, xmin=qbinom(.025,n,p)/n-p, xmax=qbinom(.975,n,p)/n-p, y=.6*pmf.height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
            xlim(-.1,.1) + guides(color=FALSE)
 
 density.stability.plot
@@ -872,11 +751,14 @@ $$
 #| - A histogram of draws from the bootstrap sampling distribution and its normal approximation. 
  
 xx = seq(-.2,.3, length=1000)
-annotated.difference.histogram + 
+difference.histogram + 
+  with_annotations(difference.samples, shade.width=width(difference.samples), highlight.dots=1) +
   geom_line(aes(x=xx, y=dnorm(xx, mean(difference.samples), sd(difference.samples))), color='black') +
   coord_flip() + scale_x_dif
 
-annotated.bootstrap.difference.histogram +
+bootstrap.difference.histogram +
+  with_annotations(c(difference.bootstrap.samples), 
+                   shade.width=width(difference.bootstrap.samples), shade.color='red', highlight.dots=0) +
   geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='black') + 
   coord_flip() + scale_x_dif
 ```
