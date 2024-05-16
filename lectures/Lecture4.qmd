@@ -11,9 +11,8 @@ subtitle: "Estimating Sampling Distributions using the Bootstrap"
 ```{r}
 #| out-height: 400px
 #| fig-asp: .3 
-our.seed = default.seed
 
-set.seed(our.seed)
+set.seed(default.seed)
 Js = array(dim=c(10000, n))
 Ys = array(dim=c(10000, n))
 for(rr in 1:10000) {
@@ -129,16 +128,21 @@ p.parametric.estimate + coord
 #| fig-asp: .8 
 #| layout-ncol: 3
 
-sample.locations = locations[J, ]
 boot.ind = sample(1:n, n, replace=TRUE)
 
 displaypop = pop[1:50000,]
-sam$times.replicated = as.numeric(table(c(1:n, boot.ind)) - 1)
+pop$sam.replicated   = as.numeric(table(c(1:m, Js[1,])) - 1)
+pop$boot.replicated  = as.numeric(table(c(1:m, Js[1, boot.ind])) - 1)
 
-pop.map  = state.plot + geom_point(aes(x = long, y = lat), alpha=.05, data=displaypop, size=.025, color=polla)  + scale_size_area()
-sam.map  = state.plot + geom_point(aes(x = long, y = lat), alpha=.2,  data=sam,        size=2,    color=polla)   + scale_size_area()
-boot.map = state.plot + geom_point(aes(x = long, y = lat, size=times.replicated), alpha=.2, data=sam, color=polla) +
-             scale_size_area() + guides(size='none') 
+pop.map  = state.plot + geom_point(aes(x = long, y = lat), 
+                                   alpha=.05, data=displaypop, size=.025, color=polla) + 
+                        scale_size_area() + guides(size='none')
+sam.map  = state.plot + geom_point(aes(x = long, y = lat, size=sam.replicated),   
+                                   alpha=.2, data=pop[pop$sam.replicated > 0, ], color=polla) + 
+                        scale_size_area(max_size=3) + guides(size='none')
+boot.map = state.plot + geom_point(aes(x = long, y = lat, size=boot.replicated),   
+                                   alpha=.2, data=pop[pop$boot.replicated > 0, ], color=polla)   +
+                        scale_size_area(max_size=6) + guides(size='none')
 
 pop.map
 sam.map
@@ -172,12 +176,13 @@ boot.map
 
 - If we plot our voters on a map, you can see the idea in visual terms.
     - On the left, we have the population. 
-    - In the middle, we have our sample.
-    - On the right, we have locations drawn, with replacement, from the sample.
-- Each 'call' is one transparent dot, so we see darker dots ...
-    - or actually multiple copies of the same dot overlaid
-    - where we've drawn someone multiple times.
-- 2x darker means we've called them twice, 3x darker means we've called them three times, etc.
+    - In the middle, we have our sample. It's drawn, with replacement, from the population.
+    - On the right, we have something else. A new sample drawn, with replacement, *from the sample*.
+- Each 'call' that a person receives increases the size of their dot: $\text{circle area} \propto \text{number of calls}$.
+- In the sample, even though it's drawn with replacement, all dots are the same size.
+  - Because we draw from such a large population, nobody gets called twice.
+- In the bootstrap sample, dots vary in size.
+  - Because we draw $n$ people from a sample of size $n$, it's almost impossible not to call somebody twice. 
 
 ## Bootstrapping
 
@@ -379,7 +384,7 @@ for(rr in 1:10000) {
 ```
 
 ```{r}
-set.seed(our.seed)
+set.seed(default.seed)
 difference.samples = array(dim=10000)
 difference.sd.samples = array(dim=10000)
 for(rr in 1:10000) {
@@ -416,7 +421,7 @@ difference.histogram +
 #|  - Our Sample
 #|  - Three Bootstrap Samples---The First Person 'Polled'
 sam$label = 1:n
-set.seed(our.seed)
+set.seed(default.seed)
 boot.ind1 = sample(1:n, n, replace=TRUE)
 boot.ind2 = sample(1:n, n, replace=TRUE)
 boot.ind3 = sample(1:n, n, replace=TRUE)

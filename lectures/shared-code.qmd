@@ -186,7 +186,19 @@ width_cdf = function(cdf, center, limits, alpha=.05) {
 default.dot.size = 2
 default.highlight.colors = c(polla, pollb, pollc, polld)
 default_height = function(samples) { dnorm(0, mean=0, sd=sd(samples)) }
-    
+
+# fussy code to make sure the heights of the highlighted 
+# dots don't change when the total number of dots changes
+annotation_dot_heights = function(dots, highlight.dots, height, seed=default.seed) {
+    heights = (\(){ 
+        highlight.dot.heights = sample(1:highlight.dots)/(highlight.dots + 1)
+        unhighlighted.dot.heights = setdiff(sample(1:dots), 1:highlight.dots)/(dots + 1)
+        height*c(highlight.dot.heights[1:min(dots,highlight.dots)], 
+                 unhighlighted.dot.heights) 
+        }) |> with_seed(seed)
+    heights
+}
+
 with_annotations = function(samples,
                             estimand = NA,
                             shade.width = NA, shade.color='green', shade.alpha=.15,
@@ -215,14 +227,7 @@ with_annotations = function(samples,
                   fill=shade.color, alpha=shade.alpha, 
                   data=summary.data)
     dot.geom = if(dots == 0) geom_blank() else {
-        # fussy code to make sure the heights of the highlighted 
-        # dots don't change when the total number of dots changes
-        heights = (\(){ 
-              highlight.dot.heights = sample(1:highlight.dots)/(highlight.dots + 1)
-              unhighlighted.dot.heights = setdiff(sample(1:dots), 1:highlight.dots)/(dots + 1)
-              height*c(highlight.dot.heights[1:min(dots,highlight.dots)], 
-                       unhighlighted.dot.heights) 
-            }) |> with_seed(seed)
+        heights = annotation_dot_heights(dots, highlight.dots, height, seed)
         dot.data = data.frame(
             x=samples[1:dots], 
             y=heights, 
