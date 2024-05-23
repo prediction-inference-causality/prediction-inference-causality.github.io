@@ -40,12 +40,12 @@ $$
 \begin{array}{r|rrrrr|r}
 i & 1 & 2 & 3 & 4 & 5 & \bar{Y}  \\
 J_i & `r J[1]` & `r J[2]` & `r J[3]` & `r J[4]` & `r J[5]` & \\
-Y_i & `r Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \inred{`r approx(mean(Y))`} \\
+Y_i & `r Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \inpollb{`r approx(mean(Y))`} \\
 \end{array}
 $$
 
 - Much faster. And if you do bother to count them all... 
-- You'll find [our estimate]{.fg text="style:red"} is pretty close to [the actual proportion]{.fg text="style:blue"}
+- You'll find [our estimate]{.fg text="style:red"} is pretty close to [the actual proportion]{.pollb}
 - But is this approach trustworthy? After all, the answer we got *is* random.
 - To talk about this, we'll think about the *sampling distribution* of our estimate.
 
@@ -68,8 +68,8 @@ dice.bar = function(Ys) {
   dice.roll.1 = data.frame(x=mean(Ys[1,]), y=.1)
   dice.roll.2 = data.frame(x=mean(Ys[2,]), y=.2)
   ggplot() + geom_bar(aes(x=p, y=after_stat(prop)), alpha=.3, data=dice.summaries) + 
-    geom_point(aes(x=x,y=y), color=twocolor.red,   size=5,  data=dice.roll.1) +
-    geom_point(aes(x=x,y=y), color=twocolor.green, size=5,  data=dice.roll.2) + scale_dice 
+    geom_point(aes(x=x,y=y), color=pollb,   size=5,  data=dice.roll.1) +
+    geom_point(aes(x=x,y=y), color=pollc, size=5,  data=dice.roll.2) + scale_dice 
 }
 s = dice.samples()
 Js = s$Js 
@@ -92,10 +92,10 @@ $$
 i & 1 & 2 & 3 & 4 & 5 & \bar{Y}  \\
 \hline
 J_i & `r J=Js[1,]; J[1]` & `r J[2]` & `r J[3]` & `r J[4]` & `r J[5]` & \\
-Y_i & `r Y=y[J];   Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \inred{`r approx(mean(Y))`} \\
+Y_i & `r Y=y[J];   Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \inpollb{`r approx(mean(Y))`} \\
 \hline
 J_i & `r J=Js[2,]; J[1]` & `r J[2]` & `r J[3]` & `r J[4]` & `r J[5]` & \\
-Y_i & `r Y=y[J];   Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \ingreen{`r approx(mean(Y))`} \\
+Y_i & `r Y=y[J];   Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \inpollc{`r approx(mean(Y))`} \\
 \hline
 \vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
 \end{array}
@@ -133,9 +133,15 @@ dice.bar(s.rep$Ys)
 {{< include ga-turnout.qmd >}}
 
 ```{r}
-height = .04
-scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) 
-scale_y = scale_y_continuous(breaks=seq(0,height,by=.01), limits=c(0, height))
+height = pmf.height = max(dbinom(0:n, n, mean(y))) 
+
+scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025)) 
+scale_y = scale_y_continuous(breaks=seq(0, pmf.height,by=.01))
+coord = coord_cartesian(xlim=c(.6,.8), ylim=c(0, pmf.height))
+
+bar.plot = ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), alpha=.3) +
+                      geom_vline(aes(xintercept=mean(y)), color='green', size=2, alpha=.7) + 
+                      scale_x + scale_y
 ```
 
 ## Context
@@ -243,10 +249,9 @@ is close to the population proportion $`r approx(sum(y))` / `r approx(m)` \appro
 ::: {.fragment .fade-out data-fragment-index="0"}
 
 ```{r}
-#| out-height: 300px
-sample.locations = locations[J, ]
-sample.locations$label = J
-ga + geom_text(aes(x = x, y = y, label=label), alpha=.5, data=sample.locations[c(1,2,n),]) 
+#| out-height: 300px 
+sam$label = J
+state.plot + geom_text(aes(x = long, y = lat, label=label), color=polla, alpha=.7, size=3, data=sam[c(1,2,n),]) 
 ```
 
 :::
@@ -254,13 +259,13 @@ ga + geom_text(aes(x = x, y = y, label=label), alpha=.5, data=sample.locations[c
 
 ```{r}
 #| out-height: 300px
-ga + geom_text(aes(x = x, y = y, label=label), alpha=.2, data=sample.locations) 
+state.plot + geom_text(aes(x = long, y = lat, label=label), color=polla, alpha=.7, size=3, data=sam)
 ```
 :::
 ::: {.fragment .current-visible data-fragment-index="1"}
 ```{r}
 #| out-height: 300px
-ga + geom_point(aes(x = x, y = y), alpha=.2, data=sample.locations) 
+state.plot + geom_point(aes(x = long, y = lat), color=polla, alpha=.7, size=3, data=sam)
 ```
 :::
 ::::
@@ -278,7 +283,7 @@ $$
 $$ 
 
 :::: aside
-Obviously these locations are fake. Most people in Georgia live near Atlanta, not where these dots are. This is just to illustrate the sampling scheme. 
+These locations are fake. This is just to illustrate the sampling scheme. 
 :::
 
 ## Our Poll
@@ -286,11 +291,11 @@ Obviously these locations are fake. Most people in Georgia live near Atlanta, no
 
 ```{r}
 J = J1
-Y = y[J1]
+sam = pop[J,]
+sam$label = J
+Y = sam$y
 
-sample.locations = locations[J, ]
-sample.locations$label = J
-ga + geom_text(aes(x = x, y = y, label=label), alpha=.2, data=sample.locations) 
+state.plot + geom_point(aes(x = long, y = lat), color=polla, alpha=.7, size=3, data=sam)
 ```
 
 
@@ -310,11 +315,11 @@ $$
 
 ```{r}
 J = J2
-Y = y[J2]
+sam = pop[J,]
+sam$label = J
+Y = sam$y
 
-sample.locations = locations[J, ]
-sample.locations$label = J
-ga + geom_text(aes(x = x, y = y, label=label), color='magenta', alpha=.2, data=sample.locations)
+state.plot + geom_point(aes(x = long, y = lat), color=pollb, alpha=.7, size=3, data=sam)
 ```
 
 $$
@@ -333,11 +338,11 @@ $$
 
 ```{r}
 J = J3
-Y = y[J3]
+sam = pop[J,]
+sam$label = J
+Y = sam$y
 
-sample.locations = locations[J,]
-sample.locations$label = J
-ga + geom_text(aes(x = x, y = y, label=label), color='cyan', alpha=.2, data=sample.locations)
+state.plot + geom_point(aes(x = long, y = lat), color=pollc, alpha=.7, size=3, data=sam)
 ```
 
 $$
@@ -358,23 +363,23 @@ $$
 \text{call} &  1 & & 2 & & \dots & `r n` & &  \\
 \text{pollster} & J_1 & Y_1 & J_2 & Y_2   & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
 \hline
-\color{black}   1   
-    & \color{black}   `r J=J1; Y=y[J]; J[1]`    & \color{black}  `r Y[1]` 
-    & \color{black}   `r J[2]`   & \color{black}   `r Y[2]`           & \color{black}   \dots 
-    & \color{black}   `r J[n]`   & \color{black}   `r Y[n]`           & \color{black}   `r approx(mean(Y))` \\
-\color{magenta} 2   
-    & \color{magenta} `r J=J2; Y=y[J]; J[1]`    & \color{magenta}  `r Y[1]` 
-    & \color{magenta} `r J[2]`   & \color{magenta}  `r Y[2]`          & \color{magenta} \dots 
-    & \color{magenta} `r J[n]`   & \color{magenta} `r Y[n]`           & \color{magenta} `r approx(mean(Y))` \\
-\color{cyan}    3   
-    & \color{cyan}    `r J=J3; Y=y[J]; J[1]`    & \color{cyan}     `r Y[1]` 
-    & \color{cyan}    `r J[2]`   & \color{cyan}    `r Y[2]`           & \color{cyan}    \dots 
-    & \color{cyan}    `r J[n]`   & \color{cyan}    `r Y[n]`           & \color{cyan}    `r approx(mean(Y))` \\
+\polla   1   
+    & \polla   `r J=J1; Y=y[J]; J[1]`    & \polla  `r Y[1]` 
+    & \polla   `r J[2]`   & \polla   `r Y[2]`           & \polla   \dots 
+    & \polla   `r J[n]`   & \polla   `r Y[n]`           & \polla   `r approx(mean(Y))` \\
+\pollb 2   
+    & \pollb `r J=J2; Y=y[J]; J[1]`    & \pollb  `r Y[1]` 
+    & \pollb `r J[2]`   & \pollb  `r Y[2]`          & \pollb \dots 
+    & \pollb `r J[n]`   & \pollb `r Y[n]`           & \pollb `r approx(mean(Y))` \\
+\pollc    3   
+    & \pollc    `r J=J3; Y=y[J]; J[1]`    & \pollc     `r Y[1]` 
+    & \pollc    `r J[2]`   & \pollc    `r Y[2]`           & \pollc    \dots 
+    & \pollc    `r J[n]`   & \pollc    `r Y[n]`           & \pollc    `r approx(mean(Y))` \\
 {\vdots} & {\vdots} & {\vdots}  & {\vdots} & {\vdots}  & {\vdots} & {\vdots} & {\vdots} &  {\vdots} \\ 
-\color{gray}    1M   
-    & \color{gray}    `r J=JM; Y=y[J]; J[1]`    & \color{gray}     `r Y[1]` 
-    & \color{gray}    `r J[2]`   & \color{gray}    `r Y[2]`           & \color{gray}    \dots 
-    & \color{gray}    `r J[n]`   & \color{gray}    `r Y[n]`           & \color{gray}    `r approx(mean(Y))` \\
+\polld    1M   
+    & \polld    `r J=JM; Y=y[J]; J[1]`    & \polld     `r Y[1]` 
+    & \polld    `r J[2]`   & \polld    `r Y[2]`           & \polld    \dots 
+    & \polld    `r J[n]`   & \polld    `r Y[n]`           & \polld    `r approx(mean(Y))` \\
  {\vdots} & {\vdots} & {\vdots} & {\vdots} & {\vdots}  & {\vdots} & {\vdots} & {\vdots}  & {\vdots} \\ 
 \end{array}
 

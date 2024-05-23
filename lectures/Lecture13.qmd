@@ -11,6 +11,17 @@ subtitle: "Causal Inference in Conditionally Randomized Experiments"
 
 
 ```{r}
+# plotting options
+# the colors are given css definitions in class.scss. If you change them here, change them there.
+
+counterfactual.color = 'magenta'
+population.color = 'green'
+sample.color = 'blue'
+mean.size  = 1.5
+mean.shape = 23
+```
+
+```{r}
 #| out-height: 400px
 #| fig-asp: .4 
  
@@ -35,13 +46,13 @@ data = pop[sample(nrow(pop), n, replace=TRUE),]
 plotX = function(X,W) { X + .15*(2*W-1) }
 pop.scatter = ggplot(pop) + 
   geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.2) + 
-  guides(color=FALSE)
+  guides(color='none')
 counterfactual.pop.scatter = ggplot(counterfactual.pop) +
   geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.2) + 
-  guides(color=FALSE)
+  guides(color='none')
 scatter = ggplot(data) + 
   geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.1, position=position_jitter(w=.15, h=0)) + 
-  guides(color=FALSE)
+  guides(color='none')
 
 big.coords = coord_cartesian(xlim=c(50,80), ylim=c(-1.5,2.5))
 narrow.coords = coord_cartesian(xlim=c(60,70), ylim=c(-1.5,2.5))
@@ -147,7 +158,7 @@ $$
 #|   - "Real Population: Green People Did MHT, Red People Didn't"
 #|   - "Counterfactual Population: Green People Didn't Do MHT, Red People Did" 
 #| 
-mean.shape=21
+mean.shape=mean.shape
 
 summarized.pop = pop.scatter + 
   stat_summary(aes(x=plotX(X,W), y=Y), geom="point", color='black', shape=mean.shape, fun=mean) + 
@@ -253,7 +264,7 @@ summarized.pop + tight.coords
 #| out-height: 500px
 #| fig-asp: .4
 #| 
-ages = c(60,70)
+ages = c(55,75)
 twolevel.pop = pop[pop$X %in% ages, ]
 twolevel.pop = twolevel.pop[1:200, ]
 
@@ -282,32 +293,55 @@ twolevel.pop.scatter + twolevel.coord
 
 ## Randomization and Sampling
 
-:::: r-stack
-
-::: {.fragment .fade-out fragment-index="0"}
 ```{r}
-#| out-height: 500px
-#| fig-asp: .4 
 
-potential.outcome.plot = ggplot(twolevel.pop) + 
-  geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3) + 
-  geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3) + 
-  geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
-  guides(color='none') + scale_x_continuous(breaks=ages) + twolevel.coord
+meanX = mean(ages)
+potential.outcome.means = 
+  list(stat_summary(aes(x=plotX2(0,X)-.2, y=Y0, fill=w0), 
+        geom="pointrange", fun.data=mean_sd, size=mean.size, shape=mean.shape, color=counterfactual.color),
+      stat_summary(aes(x=plotX2(1,X)+.2, y=Y1, fill=w1), 
+        geom="pointrange", fun.data=mean_sd, size=mean.size, shape=mean.shape, color=counterfactual.color))
 
-population.plot = function(seed=1) {
+potential.outcome.aggregate.mean = 
+  list(stat_summary(aes(x=meanX-jitter.width+.4, y=Y0, fill=w0), 
+        geom="pointrange", fun.data=mean_sd, size=mean.size, shape=mean.shape, color=counterfactual.color),
+      stat_summary(aes(x=meanX+jitter.width+.4, y=Y1, fill=w1), 
+        geom="pointrange", fun.data=mean_sd, size=mean.size, shape=mean.shape, color=counterfactual.color))
+
+potential.outcome.plot = function(means=FALSE, aggregate.mean=FALSE) { 
+  p = ggplot(twolevel.pop) + 
+    geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3) + 
+    geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3) + 
+    geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
+    guides(color='none', fill='none') + scale_x_continuous(breaks=ages) + twolevel.coord
+  if(means) { p = p + potential.outcome.means }
+  if(aggregate.mean) { p = p + potential.outcome.aggregate.mean }
+  p 
+}
+
+population.means = 
+  list(stat_summary(aes(x=plotX2(W,X)+.1*(2*W-1), y=Y,  fill=factor(W)), 
+        geom="pointrange", fun.data=mean_sd, size=mean.size, shape=mean.shape, color=population.color))
+population.aggregate.mean = 
+  list(stat_summary(aes(x=meanX+(jitter.width+.2)*(2*W-1), y=Y,  fill=factor(W)), 
+        geom="pointrange", fun.data=mean_sd, size=mean.size, shape=mean.shape, color=population.color))
+
+population.plot = function(seed=1, means=FALSE, aggregate.mean=FALSE) {
   twolevel.pop$W =(\() rbinom(nrow(twolevel.pop), 1, pi(twolevel.pop$X))) |> with_seed(seed)
   twolevel.pop$fW = factor(twolevel.pop$W)
   twolevel.pop$Y = twolevel.pop$Y0*(1-twolevel.pop$W) + twolevel.pop$Y1*twolevel.pop$W
-  ggplot(twolevel.pop) + 
+  p = ggplot(twolevel.pop) + 
     geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3, shape=1) + 
     geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3, shape=1) + 
     geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
     geom_point(aes(x=plotX2(W,jX), y=Y, color=fW), alpha=.5, size=3) +  
-    guides(color='none') + scale_x_continuous(breaks=ages) + twolevel.coord
+    guides(color='none', fill='none') + scale_x_continuous(breaks=ages) + twolevel.coord
+  if(means) { p = p + potential.outcome.means + population.means }
+  if(aggregate.mean) { p = p + potential.outcome.aggregate.mean + population.aggregate.mean }
+  p
 }
 
-sample.plot = function(randomization.seed=1, sample.seed=1) {  
+sample.plot = function(randomization.seed=1, sample.seed=1, means=FALSE, aggregate.mean=FALSE) {  
   twolevel.pop$W =(\() rbinom(nrow(twolevel.pop), 1, pi(twolevel.pop$X))) |> with_seed(randomization.seed)
   twolevel.pop$fW = factor(twolevel.pop$W)
   twolevel.pop$Y = twolevel.pop$Y0*(1-twolevel.pop$W) + twolevel.pop$Y1*twolevel.pop$W
@@ -315,17 +349,35 @@ sample.plot = function(randomization.seed=1, sample.seed=1) {
   sample.ind = (\() sample(nrow(twolevel.pop), 50, replace=TRUE)) |> with_seed(sample.seed)
   twolevel.pop$sampled = sapply(1:nrow(twolevel.pop), function(i) sum(sample.ind==i))
 
-  ggplot(twolevel.pop) + 
+  p = ggplot(twolevel.pop) + 
     geom_point(aes(x=plotX2(0,jX), y=Y0, color=w0), alpha=.5, size=3, shape=1, data=twolevel.pop[twolevel.pop$sampled==0,]) + 
     geom_point(aes(x=plotX2(1,jX), y=Y1, color=w1), alpha=.5, size=3, shape=1, data=twolevel.pop[twolevel.pop$sampled==0,]) + 
     geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), alpha=.05, linewidth=.5) +
     geom_point(aes(x=plotX2(W,jX), y=Y, color=fW), alpha=.5, size=3, shape=13, data=twolevel.pop[twolevel.pop$sampled==0,]) +  
     geom_point(aes(x=plotX2(W,jX), y=Y, color=fW, size=sampled), alpha=.8) +  
-    guides(color='none', size='none') + scale_x_continuous(breaks=ages) + scale_size_area() + twolevel.coord
-  
+    guides(color='none', fill='none', size='none') + scale_x_continuous(breaks=ages) + scale_size_area() + twolevel.coord
+  if(means) { 
+    p = p + potential.outcome.means + population.means +
+        stat_summary(aes(x=plotX2(W,X), y=Y, fill=factor(W)), 
+                     geom="pointrange", fun.data=mean_sd, shape=mean.shape, size=mean.size, color=sample.color, data=twolevel.pop[sample.ind, ]) 
+  }
+  if(aggregate.mean) { 
+    p = p + potential.outcome.aggregate.mean + population.aggregate.mean +
+        stat_summary(aes(x=meanX+jitter.width*(2*W-1), y=Y, fill=factor(W)), 
+                     geom="pointrange", fun.data=mean_sd, shape=mean.shape, size=mean.size, color=sample.color, data=twolevel.pop[sample.ind, ]) 
+  }
+  p
 }
+```
 
-potential.outcome.plot
+:::: r-stack
+
+::: {.fragment .fade-out fragment-index="0"}
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+potential.outcome.plot()
 ```
 
 :::
@@ -408,7 +460,7 @@ sample.plot(3, 3)
     - This is random, too.
 :::
 
-## What Happens to Means
+## What Happens to Within-Group Means
 
 :::: r-stack
 
@@ -417,8 +469,7 @@ sample.plot(3, 3)
 #| out-height: 500px
 #| fig-asp: .4 
 
-potential.outcome.plot + 
-  stat_summary(aes(x=plotX2(0,X), y=Y0, color=w0), geom="pointrange", fun.data=mean_sd)
+potential.outcome.plot(means=TRUE) 
 ```
 
 :::
@@ -428,7 +479,9 @@ potential.outcome.plot +
 #| out-height: 500px
 #| fig-asp: .4 
 
-population.plot(1) 
+
+
+population.plot(1, means=TRUE)
 ```
 
 :::
@@ -438,7 +491,7 @@ population.plot(1)
 #| out-height: 500px
 #| fig-asp: .4 
 
-population.plot(2)
+population.plot(2, means=TRUE) 
 ```
 
 :::
@@ -448,7 +501,7 @@ population.plot(2)
 #| out-height: 500px
 #| fig-asp: .4 
 
-population.plot(3)
+population.plot(3, means=TRUE)
 ```
 
 :::
@@ -458,7 +511,7 @@ population.plot(3)
 #| out-height: 500px
 #| fig-asp: .4 
 
-sample.plot(3, 1)
+sample.plot(3, 1, means=TRUE) 
 ```
 
 :::
@@ -467,16 +520,16 @@ sample.plot(3, 1)
 #| out-height: 500px
 #| fig-asp: .4 
 
-sample.plot(3, 2)
+sample.plot(3, 2, means=TRUE) 
 ```
 
 :::
-::: {.fragment .current-visible fragment-index="5"}
+::: {.fragment .fade-in fragment-index="5"}
 ```{r}
 #| out-height: 500px
 #| fig-asp: .4 
 
-sample.plot(3, 3)
+sample.plot(3, 3, means=TRUE)
 ```
 
 :::
@@ -485,27 +538,130 @@ sample.plot(3, 3)
 ::: {.fragment .semi-fade-out fragment-index="0"}
 1. We start with two potential outcomes for each person in our population.
    - Those are the connected dots we see in the plot.
+   - At each level of $X$, these potential outcomes have [a mean]{.counterfactual}.
 :::
 ::: {.fragment .fade-in fragment-index="0"}
 ::: {.fragment .semi-fade-out fragment-index="3"}
 2. Each one flips a coin --- one with weight depending on their age --- to determine whether they're treated.
    - The winning outcomes --- the ones that actually happen --- are the ones that don't fade out.
-   - This is, of course, random. So different this happen each time we do it.
+   - These have [a mean]{.population}, too. And it is, of course, random. It changes if our population flips again.
 :::
 :::
 ::: {.fragment .fade-in fragment-index="3"}
-3. Then we sample --- with replacement --- from our population. 
-    - &olcross; marks a person who isn't sampled.
-    - small dots mark people sampled once.
-    - bigger dots mark people sampled 2,3,... times.
-    - This is random, too.
+3. Then we sample --- with replacement --- from our population.
+    - Dot size shows how many times a person is sampled. &olcross; means 0 times.
+    - Our sample has [a mean]{.sample} within in group, too. A random one.
 :::
 
+::: {.fragment .fade-in fragment-index="4"}
+How different are these means? 
+:::
+::: {.fragment .fade-in fragment-index="5"}
+Not very different. Why?
+:::
+
+## What Happens to (Not Within-Group) Means
+
+
+:::: r-stack
+
+::: {.fragment .fade-out fragment-index="0"}
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+potential.outcome.plot(means=TRUE, aggregate.mean=TRUE) 
+```
+
+:::
+::: {.fragment .current-visible fragment-index="0"}
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
 
 
 
+population.plot(1, means=TRUE, aggregate.mean=TRUE)
+```
 
-## Implications (TODO: IMPROVE/MAKE VISUAL)
+:::
+::: {.fragment .current-visible fragment-index="1"}
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+population.plot(2, means=TRUE, aggregate.mean=TRUE) 
+```
+
+:::
+::: {.fragment .current-visible fragment-index="2"}
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+population.plot(3, means=TRUE, aggregate.mean=TRUE)
+```
+
+:::
+::: {.fragment .current-visible fragment-index="3"}
+
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+sample.plot(3, 1, means=TRUE, aggregate.mean=TRUE) 
+```
+
+:::
+::: {.fragment .current-visible fragment-index="4"}
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+sample.plot(3, 2, means=TRUE, aggregate.mean=TRUE)
+```
+
+:::
+::: {.fragment .fade-in fragment-index="5"}
+```{r}
+#| out-height: 500px
+#| fig-asp: .4 
+
+sample.plot(3, 3, means=TRUE, aggregate.mean=TRUE)
+```
+
+:::
+::::
+
+::: {.fragment .semi-fade-out fragment-index="0"}
+1. We start with two potential outcomes for each person in our population.
+   - Those are the connected dots we see in the plot.
+   - These have [a mean]{.counterfactual} outright---ignoring $X$. Often, that's what we're interested in.
+:::
+::: {.fragment .fade-in fragment-index="0"}
+::: {.fragment .semi-fade-out fragment-index="3"}
+2. Each one flips a coin --- one with weight depending on their age --- to determine whether they're treated.
+   - The winning outcomes --- the ones that actually happen --- are the ones that don't fade out.
+   - We can look at [the means]{.population} of people who actually flip '[heads]{.groupb}' and '[tails]{.groupa}', too. It's random.
+:::
+:::
+::: {.fragment .fade-in fragment-index="3"}
+3. Then we sample --- with replacement --- from our population.
+    - Dot size shows how many times a person is sampled. &olcross; means 0 times.
+    - And we can look a [the means]{.sample} of *sampled* people who flip '[heads]{.groupb}' and '[tails]{.groupa}'. That's random, too.
+:::
+
+::: {.fragment .fade-in fragment-index="4"}
+How different are these means? 
+:::
+::: {.fragment .fade-in fragment-index="5"}
+The counterfactual and population means are very different. Why?
+:::
+
+## Doing Calculations (TODO: Refine?)
 
 $$
 \begin{array}{cccc|ccc}
