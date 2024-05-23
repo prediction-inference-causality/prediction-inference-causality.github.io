@@ -3,15 +3,11 @@ title: "Lecture 18"
 subtitle: "Inverse Probability Weighting"
 ---
 
-
-# Misspecification and Summaries
-
-# None of these models fits the data well.
+## None of these models fits the data well.
 
 {{< include shared-code.qmd >}}
 
 ```{r}
-library(tidyverse)
 set.seed(1) 
 m = 1e6 
 pi = function(x) { ifelse(x <= 65, .2, .8) }
@@ -145,7 +141,7 @@ mht.plot
 ```
 
 - Let's think about what we're estimating: the ATT.
-- This is a weighted avearage of column means.
+- This is a weighted average of column means.
 
 $$
 \begin{aligned}
@@ -158,21 +154,29 @@ $$
 
 - What you may notice is that, because these proportions $p(w,x)$ are piecewise-constant, they're in the model.
 
-## Claim
+## 
+### A Claim
 
 - You'll get an unbiased estimate of the summary $\sum_{w,x}\alpha(w,x) \mu(w,x)$
 - if the regression model $\model$ contains at least one of ...
     - the subpopulation mean function $\mu(w,x)$ 
     - the weights $\alpha(w,x)$
 
-**Prove it**. 
+### Proof Ideas 
+
+1. Remember that our sampling distribution's mean is our summary with the *population least squares fit* $\tilde\mu$ plugged in for $\mu$.
 $$
-\textbf{Hint.} \qquad \frac{1}{n}\sum_{i=1}^n \qty{Y_i - \hat\mu(W_i,X_i)} m(W_i,X_i)  = 0 \qqtext{ for every } m \in \model 
+\E\qty[\widehat{\text{ATT}}] = \widetilde{\text{ATT}} := \ingreen{p(1,x)} \qty{ \ingreen{\tilde \mu(1,x)} - \inred{\tilde \mu(0,x)}}
 $$
 
-::: fragment
+2. Think about what we know about *population least squares residuals*.
 
-:::
+$$
+\begin{aligned}
+\frac{1}{n}\sum_{i=1}^n \qty{Y_i - \hat\mu(W_i,X_i)} m(W_i,X_i) &= 0 \qqtext{ for every } m \in \model && \text{\textcolor{gray}{(sample least squares residuals)}} \\
+\E\qty[ \qty{Y_i - \tilde\mu(W_i,X_i)} m(W_i,X_i)] &= 0 \qqtext{ for every } m \in \model  && \text{\textcolor{gray}{(population least squares residuals)}} \\
+\end{aligned} 
+$$
 
 
 ## Weighted Least Squares
@@ -181,10 +185,13 @@ $$
 
 - This sort of feels like an 'a stopped clock is right twice a day' thing.
 - We chose a 'bad model' for $\mu$ but it worked because it was a good model for $\alpha$.
-- But we can make this more systematic by using **weighted least squares**.
+- But we can make this more systematic by using **[weight]{style="color:blue"}ed least squares**.
 
 $$
-\hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \quad \text{ satisfies } \quad \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - \hat\mu(W_i,X_i)} m(W_i,X_i)  = 0 \qqtext{ for every } m \in \model
+\begin{aligned}
+\hat \mu = \argmin_{m \in \model} \frac{1}{n}\sum_{i=1}^n \inblue{\gamma(W_i,X_i)} \qty{Y_i - m(W_i,X_i)}^2 \quad \text{ satisfies } \quad &\frac{1}{n}\sum_{i=1}^n \inblue{\gamma(W_i,X_i)} \qty{Y_i - \hat\mu(W_i,X_i)} m(W_i,X_i)  = 0 && \qqtext{ for every } m \in \model  \\
+\tilde\mu = \argmin_{m \in \model} \E\qty[ \inblue{\gamma(W_i,X_i)} \qty{Y_i - m(W_i,X_i)}^2 ] \quad \text{ satisfies } \quad &\E\qty[ \inblue{\gamma(W_i,X_i)} \qty{Y_i - \tilde\mu(W_i,X_i)} m(W_i,X_i)]  = 0 && \qqtext{ for every } m \in \model 
+\end{aligned}
 $$
 
 - Our weights should reflect our summary.
@@ -203,31 +210,65 @@ mht.plot
 - We're averaging the the red and green curves over the distribution of the green points.
 
 $$
-\begin{aligned}
-\text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(w,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(w,x)} \\
-\end{aligned}
 $$
 
-
-## Does the First Term Cause Any Trouble?
+:::: columns
+::: {.column width="33%"}
 
 $$
 \begin{aligned}
-\text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(w,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(w,x)} \\
+\text{ATT}
+&= \sum_{x} \ingreen{p(1,x)} \qty{ \ingreen{\mu(1,x)} - \inred{\mu(0,x) }} \\
+&= \underset{\text{\ingreen{matched} \textcolor{gray}{term}}}{\sum_{x} \ingreen{p(1,x) \tilde\mu(1,x)}} - \underset{\text{\ingreen{misma}\inred{tched} \textcolor{gray}{term}}}{\sum_{x} \ingreen{p(1,x)} \inred{\tilde\mu(0,x)}} \\
 \end{aligned}
+$$
+
+:::
+::: {.column width="33%"}
+
+$$
+\begin{aligned}
+\widetilde{\text{ATT}}
+&= \sum_{x} \ingreen{p(1,x)} \qty{ \ingreen{\tilde\mu(1,x)} - \inred{\tilde\mu(0,x) }} \\
+&= \underset{\text{\ingreen{matched} \textcolor{gray}{term}}}{\sum_{x} \ingreen{p(1,x) \tilde\mu(1,x)}} - \underset{\text{\ingreen{misma}\inred{tched} \textcolor{gray}{term}}}{\sum_{x} \ingreen{p(1,x)} \inred{\tilde\mu(0,x)}} \\
+\end{aligned}
+$$
+
+:::
+::: {.column width="33%"}
+
+$$
+\begin{aligned}
+\text{bias}
+&= \widetilde{\text{ATT}} - \text{ATT} \\
+&= \underset{\text{\ingreen{matched} \textcolor{gray}{term}}}{\faint{\sum_x \quad ? \quad}} - \underset{\text{\ingreen{misma}\inred{tched} \textcolor{gray}{term}}}{\faint{\sum_x \quad ? \quad }}
+\end{aligned}
+$$
+
+:::
+::::
+
+## Does the Matched Term Cause Any Trouble?
+
+```{r} 
+#| out-height: 250px
+#| fig-asp: .25
+mht.plot 
+```
+
+$$
+\text{bias} = \sum_{x} \ingreen{p(1,x) \qty{\tilde\mu(1,x) - \mu(1,x)}}  \faint{ - \sum_{x} p(1,x) \qty{\tilde\mu(0,x)-\mu(0,x)}} 
 $$
 
 - If our model has treatment-group indicators, no.
 
 $$
 \begin{aligned}
-0 &= \E\qty[ \frac{1}{n}\sum_{i=1}^n \qty{Y_i - \hat\mu(W_i,X_i)} 1(W_i=1) ] \\
-&=\E\qty[ \qty{\mu(W_i,X_i) - \hat\mu(W_i,X_i)} 1(W_i=1) ] \\
-&=\E\qty[ \qty{\mu(1,X_i) - \hat\mu(1,X_i)} 1(W_i=1) ] \\
-&=\E\qty[ \qty{\mu(1,X_i) - \hat\mu(1,X_i)} \mid W_i=1 ] P(W_i=1) \\
-&= p_1 \sum_{x} \ingreen{p(1,x)} \qty{\mu(1,x) - \hat\mu(1,x)}
+0 &= \E\qty[ \qty{Y_i - \tilde\mu(W_i,X_i)} 1(W_i=1) ] \\
+&=\E\qty[ \qty{\mu(W_i,X_i) - \tilde\mu(W_i,X_i)} 1(W_i=1) ] \\
+&=\E\qty[ \qty{\mu(1,X_i) - \tilde\mu(1,X_i)} 1(W_i=1) ] \\
+&=\E\qty[ \qty{\mu(1,X_i) - \tilde\mu(1,X_i)} \mid W_i=1 ] P(W_i=1) \\
+&=\sum_{x} \ingreen{p(1,x) \qty{\mu(1,x) - \hat\mu(1,x)}} \times P(W_i=1)
 \end{aligned}
 $$
 
@@ -236,24 +277,27 @@ $$
 - So, even if our model is 'bad' most places, its average is still right.
 
 
-## What About the Second?
+## What About the Mismatched Term? 
+
+```{r} 
+#| out-height: 250px
+#| fig-asp: .25
+mht.plot 
+```
 
 $$
-\begin{aligned}
-\text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(w,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(w,x)} \\
-\end{aligned}
+\text{bias} = \faint{\sum_{x} \tilde p(1,x) \qty{ \tilde\mu(1,x) - \mu(1,x)} -} \sum_{x} \ingreen{\tilde p(1,x)} \inred{\qty{\tilde\mu(0,x) - \mu(0,x)}} 
 $$
 
 - Even when our model has treatment-group indicators, it's still trouble. Let's try what we just did.
 
 $$
 \begin{aligned}
-0 &= \E\qty[ \frac{1}{n}\sum_{i=1}^n \qty{Y_i - \hat\mu(W_i,X_i)} 1(W_i=0) ] \\
-&=\E\qty[ \qty{\mu(W_i,X_i) - \hat\mu(W_i,X_i)} 1(W_i=0) ] \\
-&=\E\qty[ \qty{\mu(0,X_i) - \hat\mu(0,X_i)} 1(W_i=1) ] \\
-&=\E\qty[ \qty{\mu(,X_i) - \hat\mu(0,X_i)} \mid W_i=0 ] P(W_i=0) \\
-&= p_0 \sum_{x} \inred{p(0,x)} \qty{\mu(0,x) - \hat\mu(0,x)}
+0 &= \E\qty[ \qty{Y_i - \tilde\mu(W_i,X_i)} 1(W_i=0) ] \\
+&=\E\qty[ \qty{\mu(W_i,X_i) - \tilde\mu(W_i,X_i)} 1(W_i=0) ] \\
+&=\E\qty[ \qty{\mu(0,X_i) - \tilde\mu(0,X_i)} 1(W_i=1) ] \\
+&=\E\qty[ \qty{\mu(0,X_i) - \tilde\mu(0,X_i)} \mid W_i=0 ] P(W_i=0) \\
+&= \sum_{x} \inred{p(0,x) \qty{\mu(0,x) - \tilde\mu(0,x)}} \times P(W_i=0)
 \end{aligned}
 $$
 
@@ -262,31 +306,36 @@ $$
 
 
 ## The Second: A Weighted Version
+```{r} 
+#| out-height: 250px
+#| fig-asp: .25
+mht.plot 
+```
+
 $$
-\begin{aligned}
-\text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(w,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(w,x)} \\
-\end{aligned}
+\text{bias} = \faint{\sum_{x} \tilde p(1,x) \qty{ \tilde\mu(1,x) - \mu(1,x)} -} \sum_{x} \ingreen{\tilde p(1,x)} \inred{\qty{\tilde\mu(0,x) - \mu(0,x)}} 
 $$
 
-- Recall what we know about weighted least squares.
+- Recall what we know about weighted least squares and its residuals.
 $$
-\hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \quad \text{ satisfies } \quad \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - \hat\mu(W_i,X_i)} m(W_i,X_i)  = 0 \qqtext{ for every } m \in \model
+\tilde \mu = \argmin_{m \in \model} \E\qty[ \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 ] \quad \text{ satisfies } \quad \E\qty[ \gamma(W_i,X_i) \qty{Y_i - \tilde\mu(W_i,X_i)} m(W_i,X_i)]  = 0 \qqtext{ for every } m \in \model
 $$
 
 - Let's try 'upweighting' the red points on the right side by the ratio of the number of green points to red ones.
 
 $$
 \begin{aligned}
-0 &= \E\qty[ \frac{1}{n}\sum_{i=1}^n \gamma(X_i) \qty{Y_i - \hat\mu(W_i,X_i)} 1(W_i=0) ] \qfor \gamma(x)= \frac{\ingreen{p(1,x)}}{\inred{p(0,x)}} \\
-&=\E\qty[ \gamma(X_i)\qty{\mu(W_i,X_i) - \hat\mu(W_i,X_i)} 1(W_i=0) ] \\
-&=\E\qty[ \gamma(X_i)\qty{\mu(0,X_i) - \hat\mu(0,X_i)} 1(W_i=1) ] \\
-&=\E\qty[ \gamma(X_i)\qty{\mu(,X_i) - \hat\mu(0,X_i)} \mid W_i=0 ] P(W_i=0) \\
-&= p_0 \sum_{x} \qty{\gamma(x) \inred{p(0,x)}} \qty{\mu(0,x) - \hat\mu(0,x)} \\
-&= p_0 \sum_{x} \qty{\frac{\ingreen{p(1,x)}}{\inred{p(0,x)}} \inred{p(0,x)}} \qty{\mu(0,x) - \hat\mu(0,x)} \\
-&= p_0 \sum_{x} \ingreen{p(1,x)} \qty{\mu(0,x) - \hat\mu(0,x)}
+0 &= \E\qty[ \gamma(X_i) \qty{Y_i - \tilde\mu(W_i,X_i)} 1(W_i=0) ] \qfor \gamma(x)= \frac{\ingreen{p(1,x)}}{\inred{p(0,x)}} \\
+&=\E\qty[ \gamma(X_i)\qty{\mu(W_i,X_i) - \tilde\mu(W_i,X_i)} 1(W_i=0) ] \\
+&=\E\qty[ \gamma(X_i)\qty{\mu(0,X_i) - \tilde\mu(0,X_i)} 1(W_i=1) ] \\
+&=\E\qty[ \gamma(X_i)\qty{\mu(,X_i) - \tilde\mu(0,X_i)} \mid W_i=0 ] \faint{P(W_i=0)} \\
+&= \sum_{x} \inred{p(0,x)} \gamma(0,x) \inred{\qty{\mu(0,x) - \tilde\mu(0,x)}} \faint{\times P(W_i=0)} \\
+&= \sum_{x} \inred{p(0,x)} \frac{\ingreen{p(1,x)}}{\inred{p(0,x)}}  \inred{\qty{\mu(0,x) - \tilde\mu(0,x)}} \faint{\times P(W_i=0)}\\
+&= \sum_{x} \ingreen{p(1,x)} \inred{\qty{\mu(0,x) - \tilde\mu(0,x)}} \faint{\times P(W_i=0)}
 \end{aligned}
 $$
+
+- This works. Intuitively, using these weights means that we're 'fitting the data in the right place' again.
 
 ## Summary
 
@@ -310,14 +359,16 @@ mht.plot.ipw
 
 $$
 \begin{aligned}
-\text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x) \hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \frac{\ingreen{p(1,x)}}{p(w,x)}
+\widehat{\text{ATT}} 
+= \sum_{x} \ingreen{\hat p(1,x)} \qty{ \ingreen{\hat\mu(1,x)} - \inred{\hat\mu(0,x)}} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \frac{\ingreen{p(1,x)}}{p(w,x)}
 \end{aligned}
 $$
 
 - This is the 'inverse probability weighted least squares' estimate of the ATT.
 - We give equal weight to the green points because that's the distribution we're averaging over.
-- But we weight the red points by the ratio of the number of green points to red ones so they look like they have that distribution too.
+- But we weight the red points by the ratio of the number of green points to red ones so that ...
+  - if we 'count them by weight' ...
+  - then they look like they have that distribution too.
   
 
 
@@ -376,21 +427,30 @@ mht.plot.ipw +
   facet_wrap(~model, ncol=3)
 ```
 
-
 $$
 \begin{aligned}
-\text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
+\widehat{\text{ATT}} 
+= \sum_{x} \ingreen{\hat p(1,x)} \qty{ \ingreen{\hat\mu(1,x)} - \inred{\hat\mu(0,x)}} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \frac{\ingreen{p(1,x)}}{p(w,x)}
 \end{aligned}
 $$
 
+
+
+:::: columns
+::: {.column width="30%"}
+```{r}
+o = order(att.comparison$model)
+att.comparison[o , c('model', 'true', 'unweighted', 'weighted')] |> kable(digits=2)
+```
+
+:::
+::: {.column width="70%"}
 - This is the 'inverse probability weighted least squares' estimate of the ATT.
 - We give equal weight to the green points because that's the distribution we're averaging over.
 - But we weight the red points by the ratio of the number of green points to red ones so they look like they have that distribution too.
 
-```{r}
-round(att.comparison[ , c('true', 'unweighted', 'weighted')], 3)
-```
+:::
+::::
 
 ## This Works For Any Distribution of Assignments
 
@@ -481,123 +541,7 @@ mht.plot.ipw +
 ```
 
 
-$$
-\begin{aligned}
-\text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
-\end{aligned}
-$$
-
-- This is the 'inverse probability weighted least squares' estimate of the ATT.
-- We give equal weight to the green points because that's the distribution we're averaging over.
-- But we weight the red points by the ratio of the number of green points to red ones so they look like they have that distribution too.
-
 ```{r}
-round(att.comparison[ , c('true', 'unweighted', 'weighted')], 3)
+att.comparison[o, c('model', 'true', 'unweighted', 'weighted')] |> kable(digits=2)
 ```
 
-
-## Even Weird Ones
-
-```{r}
-
-set.seed(1) 
-m = 1e6 
-pi = function(x) { .5 + .3*sin(3*((x-50)/5)^2) } 
-mu = function(w, x) { 2 - (x-50)/30 + w*((x-50)/30)^2/2 }  
-
-X = 50+round(30*runif(m))
-W = 0 + (runif(m) <= pi(X))
-epsilon0 = rnorm(m)
-epsilon1 = rnorm(m)
-Y0 = mu(0,X) + .15*epsilon0
-Y1 = mu(1,X) + .15*epsilon1
-
-pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
-
-n = 10000
-data = pop[sample(nrow(pop), n, replace=TRUE),]
-
-prediction.function = function(model) { 
-  function(w, x) { 
-    predict(model, newdata=data.frame(W=w, X=x))
-  }
-}
-
-
-mht.plot.ipw = ggplot(data) + 
-  geom_point(aes(x=plotX(W,X), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.05) + 
-  stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W), size=W + (1-W)*pi(X)/(1-pi(X))), geom="pointrange", alpha=.15, 
-                 fun=mean, 
-                 fun.min = function(x) mean(x) - sd(x), 
-                 fun.max = function(x) mean(x) + sd(x)) +
-  geom_bar(aes(x=plotX(W,X), y=15*after_stat(prop), fill=factor(W), color=factor(W)), 
-          alpha=.5, linewidth=.2) + 
-          xlab('') + ylab('') + 
-          guides(color='none', fill='none', size='none') +
-          scale_x_continuous(breaks=seq(50,80,by=5)) + scale_size_area(max_size=1)
-
-data$weights = ifelse(data$W, 1, pi(data$X)/(1-pi(data$X)))
-
-ipwfits = list(
-B =  lm(Y ~ X, data=data, weights=weights),
-D =  lm(Y ~ W, data=data, weights=weights),
-E =  lm(Y ~ W + I(X <= 65), data=data, weights=weights),
-A =  lm(Y ~ W + X, data=data, weights=weights),
-C =  lm(Y ~ W * I(X <= 65), data=data, weights=weights),
-F =  lm(Y ~ W * X, data=data, weights=weights))
-
-ATT.estimates.ipw = muhats.ipw |> map(\(muhat) { 
-  data.frame(estimate=mean(muhat(1, pop$X[pop$W==1]) - muhat(0, pop$X[pop$W==1])))
-}) |> bind_rows(.id='model')
-
-
-fits = list(
-B =  lm(Y ~ X, data=pop),
-D =  lm(Y ~ W, data=pop), 
-E =  lm(Y ~ W + I(X <= 65), data=pop),
-A =  lm(Y ~ W + X, data=pop),
-C =  lm(Y ~ W * I(X <= 65), data=pop),
-F =  lm(Y ~ W * X, data=pop))
-muhats = fits |> map(prediction.function)
-
-ATT.estimates = muhats |> map(\(muhat) { 
-  data.frame(estimate=mean(muhat(1, pop$X[pop$W==1]) - muhat(0, pop$X[pop$W==1])))
-}) |> bind_rows(.id='model')
-ATT.estimates$true = mean(mu(1,pop$X[pop$W==1]) - mu(0,pop$X[pop$W==1]))
-
-att.comparison = left_join(ATT.estimates, ATT.estimates.ipw, by='model') |> 
-    rename(unweighted=estimate.x, weighted=estimate.y)
-
-grid = expand_grid(W=c(0,1), X=seq(50,80,by=.01))
-predictions.ipw = muhats.ipw |> map(\(muhat) { 
-  grid$muhat = muhat(grid$W, grid$X)
-  grid
-}) |> bind_rows(.id='model') 
-predictions = muhats |> map(\(muhat) { 
-  grid$muhat = muhat(grid$W, grid$X)
-  grid
-}) |> bind_rows(.id='model') 
-
-
-mht.plot.ipw + 
-  geom_line(data=predictions.ipw, aes(x=X, y=muhat, color=factor(W)), linewidth=.5) + 
-  geom_line(data=predictions, aes(x=X, y=muhat, color=factor(W)), linewidth=.5, linetype='dashed') + 
-  facet_wrap(~model, ncol=3)
-```
-
-
-$$
-\begin{aligned}
-\text{ATT} 
-= \sum_{x} \ingreen{p(1,x) \hat\mu(1,x)} - \sum_{x} \ingreen{p(0,x)} \inred{\hat\mu(0,x)} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \gamma(w,x) = \frac{\ingreen{p(1,x)}}{p(w,x)}
-\end{aligned}
-$$
-
-- This is the 'inverse probability weighted least squares' estimate of the ATT.
-- We give equal weight to the green points because that's the distribution we're averaging over.
-- But we weight the red points by the ratio of the number of green points to red ones so they look like they have that distribution too.
-
-```{r}
-round(att.comparison[ , c('true', 'unweighted', 'weighted')], 3)
-```
