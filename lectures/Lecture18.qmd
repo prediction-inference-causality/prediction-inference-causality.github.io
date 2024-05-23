@@ -125,7 +125,7 @@ ests = 1:100 |> map(estimates) |> bind_rows(.id='rep')
 ```
 
 ```{r}
-#| out-height: 600px
+#| out-height: 500px
 theATT = mean(ests$true)
 ggplot(ests) +
         geom_histogram(aes(x=estimate, y=after_stat(density)), bins=30, alpha=.3) + 
@@ -136,7 +136,7 @@ ggplot(ests) +
 ## Why?
 
 ```{r} 
-#| out-height: 500px
+#| out-height: 400px
 mht.plot 
 ```
 
@@ -182,16 +182,17 @@ $$
 ## Weighted Least Squares
 
 
-
 - This sort of feels like an 'a stopped clock is right twice a day' thing.
 - We chose a 'bad model' for $\mu$ but it worked because it was a good model for $\alpha$.
 - But we can make this more systematic by using **[weight]{style="color:blue"}ed least squares**.
 
 $$
+\small{
 \begin{aligned}
-\hat \mu = \argmin_{m \in \model} \frac{1}{n}\sum_{i=1}^n \inblue{\gamma(W_i,X_i)} \qty{Y_i - m(W_i,X_i)}^2 \quad \text{ satisfies } \quad &\frac{1}{n}\sum_{i=1}^n \inblue{\gamma(W_i,X_i)} \qty{Y_i - \hat\mu(W_i,X_i)} m(W_i,X_i)  = 0 && \qqtext{ for every } m \in \model  \\
-\tilde\mu = \argmin_{m \in \model} \E\qty[ \inblue{\gamma(W_i,X_i)} \qty{Y_i - m(W_i,X_i)}^2 ] \quad \text{ satisfies } \quad &\E\qty[ \inblue{\gamma(W_i,X_i)} \qty{Y_i - \tilde\mu(W_i,X_i)} m(W_i,X_i)]  = 0 && \qqtext{ for every } m \in \model 
+\hat \mu = \argmin_{m \in \model} \frac{1}{n}\sum_{i=1}^n \inblue{\gamma(W_i,X_i)} \qty{Y_i - m(W_i,X_i)}^2 \ \text{ satisfies } \ &\frac{1}{n}\sum_{i=1}^n \inblue{\gamma(W_i,X_i)} \qty{Y_i - \hat\mu(W_i,X_i)} m(W_i,X_i)  = 0 && \ \text{ for every } \ m \in \model  \\
+\tilde\mu = \argmin_{m \in \model} \E\qty[ \inblue{\gamma(W_i,X_i)} \qty{Y_i - m(W_i,X_i)}^2 ] \ \text{ satisfies } \ &\E\qty[ \inblue{\gamma(W_i,X_i)} \qty{Y_i - \tilde\mu(W_i,X_i)} m(W_i,X_i)]  = 0 && \ \text{ for every } \ m \in \model 
 \end{aligned}
+}
 $$
 
 - Our weights should reflect our summary.
@@ -201,7 +202,7 @@ $$
 ## Inverse Probability Weighting
 
 ```{r} 
-#| out-height: 500px
+#| out-height: 400px
 mht.plot 
 ```
 
@@ -216,33 +217,33 @@ $$
 ::: {.column width="33%"}
 
 $$
-\begin{aligned}
+\small{\begin{aligned}
 \text{ATT}
 &= \sum_{x} \ingreen{p(1,x)} \qty{ \ingreen{\mu(1,x)} - \inred{\mu(0,x) }} \\
 &= \underset{\text{\ingreen{matched} \textcolor{gray}{term}}}{\sum_{x} \ingreen{p(1,x) \tilde\mu(1,x)}} - \underset{\text{\ingreen{misma}\inred{tched} \textcolor{gray}{term}}}{\sum_{x} \ingreen{p(1,x)} \inred{\tilde\mu(0,x)}} \\
-\end{aligned}
+\end{aligned}}
 $$
 
 :::
 ::: {.column width="33%"}
 
 $$
-\begin{aligned}
+\small{\begin{aligned}
 \widetilde{\text{ATT}}
 &= \sum_{x} \ingreen{p(1,x)} \qty{ \ingreen{\tilde\mu(1,x)} - \inred{\tilde\mu(0,x) }} \\
 &= \underset{\text{\ingreen{matched} \textcolor{gray}{term}}}{\sum_{x} \ingreen{p(1,x) \tilde\mu(1,x)}} - \underset{\text{\ingreen{misma}\inred{tched} \textcolor{gray}{term}}}{\sum_{x} \ingreen{p(1,x)} \inred{\tilde\mu(0,x)}} \\
-\end{aligned}
+\end{aligned}}
 $$
 
 :::
 ::: {.column width="33%"}
 
 $$
-\begin{aligned}
+\small{\begin{aligned}
 \text{bias}
 &= \widetilde{\text{ATT}} - \text{ATT} \\
 &= \underset{\text{\ingreen{matched} \textcolor{gray}{term}}}{\faint{\sum_x \quad ? \quad}} - \underset{\text{\ingreen{misma}\inred{tched} \textcolor{gray}{term}}}{\faint{\sum_x \quad ? \quad }}
-\end{aligned}
+\end{aligned}}
 $$
 
 :::
@@ -250,18 +251,14 @@ $$
 
 ## Does the Matched Term Cause Any Trouble?
 
-```{r} 
-#| out-height: 250px
-#| fig-asp: .25
-mht.plot 
-```
-
 $$
 \text{bias} = \sum_{x} \ingreen{p(1,x) \qty{\tilde\mu(1,x) - \mu(1,x)}}  \faint{ - \sum_{x} p(1,x) \qty{\tilde\mu(0,x)-\mu(0,x)}} 
 $$
 
 - If our model has treatment-group indicators, no.
 
+:::: columns
+::: {.column width="60%"}
 $$
 \begin{aligned}
 0 &= \E\qty[ \qty{Y_i - \tilde\mu(W_i,X_i)} 1(W_i=1) ] \\
@@ -272,6 +269,18 @@ $$
 \end{aligned}
 $$
 
+:::
+::: {.column width="40%"}
+```{r} 
+#| out-height: 300px
+#| fig-asp: .8
+theme_set(blank.theme)
+mht.plot 
+```
+
+:::
+::::
+
 - Intuitively, this is because we're 'fitting the data in the right place'
 - We're averaging over the same distribution of points we've fit our curve to.
 - So, even if our model is 'bad' most places, its average is still right.
@@ -279,11 +288,6 @@ $$
 
 ## What About the Mismatched Term? 
 
-```{r} 
-#| out-height: 250px
-#| fig-asp: .25
-mht.plot 
-```
 
 $$
 \text{bias} = \faint{\sum_{x} \tilde p(1,x) \qty{ \tilde\mu(1,x) - \mu(1,x)} -} \sum_{x} \ingreen{\tilde p(1,x)} \inred{\qty{\tilde\mu(0,x) - \mu(0,x)}} 
@@ -291,40 +295,52 @@ $$
 
 - Even when our model has treatment-group indicators, it's still trouble. Let's try what we just did.
 
+:::: columns
+::: {.column width="60%"}
 $$
-\begin{aligned}
+\small{\begin{aligned}
 0 &= \E\qty[ \qty{Y_i - \tilde\mu(W_i,X_i)} 1(W_i=0) ] \\
 &=\E\qty[ \qty{\mu(W_i,X_i) - \tilde\mu(W_i,X_i)} 1(W_i=0) ] \\
 &=\E\qty[ \qty{\mu(0,X_i) - \tilde\mu(0,X_i)} 1(W_i=1) ] \\
 &=\E\qty[ \qty{\mu(0,X_i) - \tilde\mu(0,X_i)} \mid W_i=0 ] P(W_i=0) \\
 &= \sum_{x} \inred{p(0,x) \qty{\mu(0,x) - \tilde\mu(0,x)}} \times P(W_i=0)
-\end{aligned}
+\end{aligned}}
 $$
+
+:::
+::: {.column width="40%"}
+```{r} 
+#| out-height: 300px
+#| fig-asp: .8
+mht.plot 
+```
+
+:::
+::::
 
 - This is not the right average. It's the one that occurs in the 'unadjusted gap', not the ATT.
 - We need to adjust for the fact that we're averaging over a different distribution of points.
 
 
 ## The Second: A Weighted Version
-```{r} 
-#| out-height: 250px
-#| fig-asp: .25
-mht.plot 
-```
 
 $$
 \text{bias} = \faint{\sum_{x} \tilde p(1,x) \qty{ \tilde\mu(1,x) - \mu(1,x)} -} \sum_{x} \ingreen{\tilde p(1,x)} \inred{\qty{\tilde\mu(0,x) - \mu(0,x)}} 
 $$
 
+
 - Recall what we know about weighted least squares and its residuals.
 $$
-\tilde \mu = \argmin_{m \in \model} \E\qty[ \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 ] \quad \text{ satisfies } \quad \E\qty[ \gamma(W_i,X_i) \qty{Y_i - \tilde\mu(W_i,X_i)} m(W_i,X_i)]  = 0 \qqtext{ for every } m \in \model
+\tilde \mu = \argmin_{m \in \model} \E\qty[ \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 ] \ \text{ satisfies } \ \E\qty[ \gamma(W_i,X_i) \qty{Y_i - \tilde\mu(W_i,X_i)} m(W_i,X_i)]  = 0 \ \text{ for every } \ m \in \model
 $$
 
 - Let's try 'upweighting' the red points on the right side by the ratio of the number of green points to red ones.
 
+:::: {.columns}
+::: {.column width="60%"}
+
 $$
-\begin{aligned}
+\small{\begin{aligned}
 0 &= \E\qty[ \gamma(X_i) \qty{Y_i - \tilde\mu(W_i,X_i)} 1(W_i=0) ] \qfor \gamma(x)= \frac{\ingreen{p(1,x)}}{\inred{p(0,x)}} \\
 &=\E\qty[ \gamma(X_i)\qty{\mu(W_i,X_i) - \tilde\mu(W_i,X_i)} 1(W_i=0) ] \\
 &=\E\qty[ \gamma(X_i)\qty{\mu(0,X_i) - \tilde\mu(0,X_i)} 1(W_i=1) ] \\
@@ -332,14 +348,26 @@ $$
 &= \sum_{x} \inred{p(0,x)} \gamma(0,x) \inred{\qty{\mu(0,x) - \tilde\mu(0,x)}} \faint{\times P(W_i=0)} \\
 &= \sum_{x} \inred{p(0,x)} \frac{\ingreen{p(1,x)}}{\inred{p(0,x)}}  \inred{\qty{\mu(0,x) - \tilde\mu(0,x)}} \faint{\times P(W_i=0)}\\
 &= \sum_{x} \ingreen{p(1,x)} \inred{\qty{\mu(0,x) - \tilde\mu(0,x)}} \faint{\times P(W_i=0)}
-\end{aligned}
+\end{aligned}}
 $$
+
+:::
+::: {.column width="40%"}
+```{r} 
+#| out-height: 300px
+#| fig-asp: .8
+mht.plot 
+```
+
+:::
+::::
 
 - This works. Intuitively, using these weights means that we're 'fitting the data in the right place' again.
 
 ## Summary
 
 ```{r} 
+theme_set(class.theme)
 #| out-height: 500px
 mht.plot.ipw = ggplot(data) + 
   geom_point(aes(x=plotX(W,X), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.15, h=0), size=.05) + 
@@ -375,7 +403,10 @@ $$
 ## Summary
 
 ```{r} 
-#| out-height: 500px
+#| out-height: 400px
+#| fig-asp: .4
+#| 
+theme_set(blank.theme)
 data$weights = ifelse(data$W, 1, pi(data$X)/(1-pi(data$X)))
 
 ipwfits = list(
@@ -428,23 +459,25 @@ mht.plot.ipw +
 ```
 
 $$
+\small{
 \begin{aligned}
 \widehat{\text{ATT}} 
 = \sum_{x} \ingreen{\hat p(1,x)} \qty{ \ingreen{\hat\mu(1,x)} - \inred{\hat\mu(0,x)}} \qfor \hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i,X_i) \qty{Y_i - m(W_i,X_i)}^2 \qfor \frac{\ingreen{p(1,x)}}{p(w,x)}
 \end{aligned}
+}
 $$
 
 
 
 :::: columns
-::: {.column width="30%"}
+::: {.column width="40%"}
 ```{r}
 o = order(att.comparison$model)
-att.comparison[o , c('model', 'true', 'unweighted', 'weighted')] |> kable(digits=2)
+att.comparison[o , c('model', 'true', 'unweighted', 'weighted')] |> kable(digits=2, row.names=FALSE)
 ```
 
 :::
-::: {.column width="70%"}
+::: {.column width="60%"}
 - This is the 'inverse probability weighted least squares' estimate of the ATT.
 - We give equal weight to the green points because that's the distribution we're averaging over.
 - But we weight the red points by the ratio of the number of green points to red ones so they look like they have that distribution too.
@@ -455,6 +488,9 @@ att.comparison[o , c('model', 'true', 'unweighted', 'weighted')] |> kable(digits
 ## This Works For Any Distribution of Assignments
 
 ```{r}
+#| out-height: 400px
+#| fig-asp: .4
+theme_set(blank.theme)
 
 set.seed(1) 
 m = 1e6 
@@ -542,6 +578,6 @@ mht.plot.ipw +
 
 
 ```{r}
-att.comparison[o, c('model', 'true', 'unweighted', 'weighted')] |> kable(digits=2)
+att.comparison[o, c('model', 'true', 'unweighted', 'weighted')] |> kable(digits=2, row.names=FALSE) 
 ```
 
