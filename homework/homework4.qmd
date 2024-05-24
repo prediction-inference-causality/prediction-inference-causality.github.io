@@ -23,7 +23,6 @@ Here are the libraries we'll need.
 ```{r}
 #| echo: true
 #| output: false 
-library(ggplot2)
 library(tidyverse)
 library(rpart)
 ```
@@ -413,13 +412,14 @@ To make the plot more readable, we'll make the points transparent and jitter the
 
 plotX = function(w,x) { x + 0.75*(w-0.5) } 
 turnout.summary.plot = 
-  ggplot() + 
+  ggplot(turnout.data) + 
     stat_summary(aes(x=plotX(W,X), y=Y, color=factor(W)),
                  geom='pointrange', fun=mean, 
                                     fun.min=\(x)mean(x)-sd(x), 
                                     fun.max=\(x)mean(x)+sd(x), alpha=.2, size=.5, linewidth=.5) +    
     geom_bar(aes(x=plotX(W, X), y=10*after_stat(prop), fill=factor(W), color=factor(W)), 
-             position='identity', alpha=.1, linewidth=.1) + xlab('') 
+             position='identity', alpha=.1, linewidth=.1) + 
+    guides(fill='none', color='none') + xlab('') 
 
 
 plot.point = sample(1:nrow(turnout.data), round(nrow(turnout.data)/4))
@@ -427,7 +427,7 @@ turnout.plot = turnout.summary.plot +
   geom_point(aes(x=plotX(W, X), y=Y,  color=factor(W)),
             alpha=.01, size=.01, position=position_jitter(width=0.25, height=.1, seed=2), data=turnout.data[plot.point,])  
 
-turnout.plot
+turnout.plot 
 ```
 
 Now let's fit a few models and plot those in. We'll actually leave the individual points out because there are so many that the plots get a bit busy, so what we'll be plotting over are the means and proportions. We'll use the all-functions model, additive model, the parallel lines model, and the horizontal lines model. We already know the least squares fit of the all-functions model is going to go through the column means we've already plotted, so we don't really need to plot that. But to set up later code, we'll plot it anyway. 
