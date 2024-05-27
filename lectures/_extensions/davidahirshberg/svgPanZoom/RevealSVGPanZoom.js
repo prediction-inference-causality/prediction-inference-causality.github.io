@@ -49,7 +49,7 @@ const initRevealSVGPanZoom = function (Reveal) {
   var onSlide = function(slide) {
     const config = Reveal.getConfig();
     
-    var svgs = Array.from(slide.querySelectorAll('object.img'));
+    var svgs = Array.from(slide.querySelectorAll('svg'));
     var slidePanZooms = svgs.map(function (svg) {
         var options = { zoomEnabled: true, 
                         minZoom: 1, 
