@@ -1,3 +1,22 @@
+window.RevealSlideCanvas = window.RevealSlideCanvas || {
+  id: 'RevealSlideCanvas',
+  init: function (deck) {
+    initRevealSlideCanvas(deck);
+  }
+};
+
+initRevealSlideCanvas = function (Reveal) {
+  console.log('RevealSlideCanvas initialized')
+  console.log(Reveal);
+  window.addEventListener('load', function (event) { 
+    console.log('RevealSlideCanvas loaded')
+    console.log(event)
+    initializePenSettings()
+    Reveal.on('slidechanged', switchCanvas)
+    switchCanvas({ currentSlide: Reveal.getCurrentSlide() })
+  }, false)
+}
+
 // Gets coordinates of touch events on iPad.
 function offsetCoords(e) { 
     var slides = document.querySelector('.slides')
@@ -21,12 +40,12 @@ function currentCanvas() {
     var slide = Reveal.getCurrentSlide();
     return canvases[slide.id][canvases[slide.id].length - 1];
 }
-
 const requestIdleCallback = window.requestIdleCallback || function (fn) { setTimeout(fn, 1) };
-document.addEventListener("DOMContentLoaded", function(event) {
-    initializePenSettings()
-    Reveal.on('slidechanged', switchCanvas)
-}, false)
+
+function updateTool(newTool) {
+  tool = newTool;
+  currentCanvas().canvas.style['pointer-events'] = tool=='pointer' ? 'none' : 'auto';
+}
 
 function switchCanvas(event) {
     isMousedown = false
@@ -37,10 +56,36 @@ function switchCanvas(event) {
       canvas.addEventListeners();
       canvases[slide.id] = [canvas];
     }
+    updateTool(tool);
 }
 
 function initializePenSettings() {
+
+
   // set up color/size picker
+  var swatches = [
+    '#ffffff00',
+    '#00ff0050',
+    '#067bc2',
+    '#84bcda',
+    '#80e377',
+    '#ecc30b',
+  ]
+  function updateColor(color, force=false) {
+    if(color == swatches[0] ) { updateTool('eraser'); }
+    else if(color == swatches[1]) { updateTool('pointer'); }
+    else { updateTool('pen'); strokeStyle = color;  }
+    
+    if(force) { 
+      var colorPicker = document.querySelector('.coloris')
+      colorPicker.value = color
+      colorPicker.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  document.addEventListener('coloris:pick', event => {
+    updateColor(event.detail.color);
+  });
+
   var penSettings = document.createElement('div')
     penSettings.setAttribute('class', 'pen-settings circle')
     penSettings.setAttribute('style', 'position: absolute; bottom: 12px; left: 12px; z-index: 11')
@@ -53,22 +98,13 @@ function initializePenSettings() {
   var reveal = document.querySelector('.reveal')
   var controls = document.querySelector('.controls')
   reveal.insertBefore(penSettings, controls)
-
+  
   Coloris({
   el: '.coloris', 
   theme: 'polaroid',
-  
-  swatches: [
-    '#ffffff00',
-    '#067bc2',
-    '#84bcda',
-    '#80e377',
-    '#ecc30b',
-    '#f37748',
-  ], onChange: (color) => { 
-                if(color == '#ffffff00') { tool = 'eraser'; }
-                else { tool = 'pen'; strokeStyle = color;}
-  }})
+  swatchesOnly: true,  
+  swatches: swatches })
+
   var hueSelector = document.querySelector('.clr-hue')
   var alphaSelector = document.querySelector('.clr-alpha')
   var sizeSelector  = alphaSelector.cloneNode(true)
@@ -89,8 +125,6 @@ function initializePenSettings() {
   sizeSlider.oninput()
   hueSelector.parentNode.insertBefore(sizeSelector, hueSelector)
 }
-
-
 
 SlideCanvas = function(slide, strokeHistory) {   
   this.slide = slide;
