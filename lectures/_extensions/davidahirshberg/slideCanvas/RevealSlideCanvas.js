@@ -6,12 +6,9 @@ window.RevealSlideCanvas = window.RevealSlideCanvas || {
 };
 
 initRevealSlideCanvas = function (Reveal) {
-  console.log('RevealSlideCanvas initialized')
   console.log(Reveal);
   window.addEventListener('load', function (event) { 
-    console.log('RevealSlideCanvas loaded')
-    console.log(event)
-    initializePenSettings()
+    initializePenSettings(Reveal.getConfig())
     Reveal.on('slidechanged', switchCanvas)
     switchCanvas({ currentSlide: Reveal.getCurrentSlide() })
   }, false)
@@ -29,12 +26,15 @@ function offsetCoords(e) {
 }
 
 // state
+var strokePersistence = Infinity;
 var tool = 'pen';
-var toolsize = 10;
-var strokeStyle = 'black';
 var canvases = {}
-var lineWidth;
+var lineWidth=5;
+var strokeStyle='#00000000'; 
+var fadeSteps;
+
 var isMousedown;
+var toolsize;
 
 function currentCanvas() {
     var slide = Reveal.getCurrentSlide();
@@ -59,32 +59,35 @@ function switchCanvas(event) {
     updateTool(tool);
 }
 
-function initializePenSettings() {
-
-
+function initializePenSettings(config) {
   // set up color/size picker
-  var swatches = [
-    '#ffffff00',
-    '#00ff0050',
-    '#067bc2',
-    '#84bcda',
-    '#80e377',
-    '#ecc30b',
-  ]
+  var swatches = config.pen.swatches;
   function updateColor(color, force=false) {
-    if(color == swatches[0] ) { updateTool('eraser'); }
-    else if(color == swatches[1]) { updateTool('pointer'); }
-    else { updateTool('pen'); strokeStyle = color;  }
-    
+    if(color == swatches[0] ) { 
+      updateTool('pen'); 
+      strokeStyle = color;
+      strokePersistence = config.pen['highlight-fade-time'];  
+    } else if(color == swatches.at(-2)) { 
+      updateTool('eraser'); 
+    } else if(color == swatches.at(-1)) { 
+      updateTool('pointer'); 
+    } else {
+      updateTool('pen') 
+      strokeStyle = color;
+      strokePersistence = Infinity;
+    }
+
     if(force) { 
       var colorPicker = document.querySelector('.coloris')
       colorPicker.value = color
       colorPicker.dispatchEvent(new Event('input', { bubbles: true }));
     }
   }
+
   document.addEventListener('coloris:pick', event => {
     updateColor(event.detail.color);
   });
+   
 
   var penSettings = document.createElement('div')
     penSettings.setAttribute('class', 'pen-settings circle')
@@ -113,17 +116,26 @@ function initializePenSettings() {
   var sizeMarker = sizeSelector.childNodes[1]
   sizeSlider.setAttribute('id', 'size-slider')
   sizeSlider.setAttribute('name', 'size-slider')
-  sizeSlider.setAttribute('min', '5')
-  sizeSlider.setAttribute('max', '50')
-  sizeSlider.setAttribute('value', '15')
+  sizeSlider.setAttribute('min',   config.pen['min-size'])
+  sizeSlider.setAttribute('max',   config.pen['max-size'])
+  sizeSlider.setAttribute('value', config.pen['default-size'])
   sizeMarker.setAttribute('id', 'size-marker')
   sizeMarker.setAttribute('name', 'size-marker')
   sizeSlider.oninput = function() { 
         sizeMarker.style.left = (this.value-this.min) / (this.max-this.min) * 100 + '%';
         toolsize = this.value; 
   }
+  
+  // initialize state/config variables
   sizeSlider.oninput()
   hueSelector.parentNode.insertBefore(sizeSelector, hueSelector)
+
+  var colorPicker = document.querySelector('.coloris')
+  colorPicker.value = swatches[0];
+  strokeStyle = swatches[0]
+  strokePersistence = config.pen['highlight-fade-time'];  
+  fadeSteps = config.pen['highlight-fade-steps'];
+  colorPicker.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 SlideCanvas = function(slide, strokeHistory) {   
@@ -236,11 +248,18 @@ for (const ev of ['touchend', 'mouseup']) {
 
     isMousedown = false
     if(tool==='pen') {
-        strokeRecord = { points: [...points], drawn: Date.now(), erased: null }
+        strokeRecord = { points: [...points], drawn: Date.now(), erased: Infinity, persistence: strokePersistence }
         requestIdleCallback(function () { 
           slideCanvas.strokeHistory.push(strokeRecord);
           points = []
         })
+        if(strokeRecord.persistence < Infinity) {
+          for(var i = 0; i < fadeSteps; i++) {
+            setTimeout(function() { 
+              requestIdleCallback(function () { slideCanvas.redraw() })
+            }, strokeRecord.persistence*i/fadeSteps)
+          }
+        }
     }
     if(tool==='eraser') { points = []; }
     lineWidth = 0
@@ -306,12 +325,12 @@ SlideCanvas.prototype.redraw = function(time) {
   context.clearRect(0, 0, canvas.width, canvas.height)
   strokeHistory.map(function (strokeRecord) {
     let stroke = strokeRecord.points;
-    if(strokeRecord.drawn <= time && 
-       (strokeRecord.erased === null || time < strokeRecord.erased) && 
-       stroke.length > 1) {
+    if(strokeRecord.drawn <= time && time < strokeRecord.erased && 
+       time - strokeRecord.drawn < strokeRecord.persistence && stroke.length > 1) {
           context.beginPath()
           let strokePath = [];
           stroke.map(function (point) {
+              point.lineWidth = point.lineWidth * Math.max(0, 1 - (time - strokeRecord.drawn) / strokeRecord.persistence)
               strokePath.push(point)
               slideCanvas.penOnCanvas(strokePath)
           })
