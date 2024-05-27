@@ -3,240 +3,34 @@ title: "Lecture 8"
 subtitle: "Causal Inference in Randomized Experiments"
 ---
 
+## Summary
 
-```{r load-libraries}
-library(purrr)
-library(tibble)
-library(dplyr)
-library(magrittr)
-library(stringr)
-library(ggplot2)
-library(htmltools)
-library(kableExtra)
-library(scales)
-library(cpsR)
-library(mapdata)
-library(usmap)
-
-options(knitr.kable.NA = '')
-
-percent = label_percent(accuracy=1)
-approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
-```
-
-```{r ggplot-themes}
-class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
-        panel.background = element_rect(fill = "transparent", colour = NA),
-                    legend.background = element_rect(fill="transparent", colour = NA),
-                    legend.box.background = element_rect(fill="transparent", colour = NA),
-                    legend.key = element_rect(fill="transparent", colour = NA),
-        axis.ticks.x = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.x  = element_text(colour = "#aaaaaa"),
-        axis.text.y  = element_text(colour = "#aaaaaa"),
-        axis.title.x  = element_text(colour = "#aaaaaa"),
-        axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
-)
-
-theme_set(class.theme)
-theme_update(axis.title.x  = element_blank(),
-             axis.title.y  = element_blank())
-simplified.theme = theme_get()
-
-theme_update(axis.text.x   = element_blank(), 
-              axis.text.y   = element_blank())
-blank.theme = theme_get()
-
-theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
-           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
-grid.theme = theme_get()
-
-theme_set(simplified.theme)
-```
-
-```{r table-styling}
-ellipsis <- function(df, nhead=5L, ntail=2) {
-    rownames(df) = as.character(1:nrow(df))
-    stopifnot("data.frame" %in% class(df))
-    els <- rep(NA, ncol(df)) %>% 
-        matrix(nrow=1, dimnames=list(NULL, names(df))) %>% 
-        data.frame(stringsAsFactors=FALSE) %>% 
-        tibble::as_tibble()
-    rownames(els) = "⋮"
-    dplyr::bind_rows(head(df, nhead), els, tail(df, ntail))
-}
-```
-
-```{r population-and-sample-black-vs-nonblack}
-#| echo: false 
-our.seed = 0
-set.seed(4)
-N = 7233584
-n = 625
-m = N
-
-b0 = floor(.7*N)
-b1 = ceiling(.3*N)
-y0 = rbinom(n=b0,size=1,prob=.68)
-y1 = rbinom(n=b1,size=1,prob=.74)
-dfpop = data.frame(y=c(y0,y1), x=c(rep(0,b0),rep(1,b1)))
-dfpop = dfpop[sample(1:N),] # shuffle the rows
-x = dfpop$x
-y = dfpop$y
-
-
-# Generate Sample Data for us (J1) and three friends (J2,J3,JM)
-set.seed(our.seed)
-J1 = sample(1:N,size=n,replace=T)
-J2 = sample(1:N,size=n,replace=T)
-J3 = sample(1:N,size=n,replace=T)
-JM = sample(1:N,size=n,replace=T)
-
-J = J1
-dfsam = dfpop[J,]
-Y = dfsam$y
-X = dfsam$x
-```
+{{< include shared-code.qmd >}}
+{{< include ga-turnout.qmd >}}
 
 ```{r}
-#| cache: true 
+#| out-height: 300px
+#| fig-asp: .3 
 
-set.seed(our.seed)
-difference.samples = array(dim=10000)
-difference.sd.samples = array(dim=10000)
-turnout.samples = array(dim=10000)
-for(rr in 1:10000) {
-    I = sample(1:m, n, replace=TRUE)
-    X = x[I]
-    Y = y[I]
-    turnout.samples[rr] = mean(Y)
-    difference.samples[rr] = mean(Y[X==1]) - mean(Y[X==0])
-    p1 = mean(Y[X==1])
-    p0 = mean(Y[X==0])
-    difference.sd.samples[rr] = sqrt(p1*(1-p1)/sum(X==1) + p0*(1-p0)/sum(X==0))
-}
-
-turnout.bootstrap.samples = array(dim=10000)
-difference.bootstrap.samples = array(dim=10000)
-for(rr in 1:10000) {
-    I = sample(1:n, n, replace=TRUE)
-    Xstar = X[I]
-    Ystar = Y[I]
-    turnout.bootstrap.samples[rr] = mean(Ystar)
-    difference.bootstrap.samples[rr] = mean(Ystar[Xstar==1]) - mean(Ystar[Xstar==0])
-}
-```
-
-```{r}
-width = function(samples, alpha=.05) {
-  covg.dif = function(w) { 
-    actual = mean( mean(samples) - w/2 <= samples & samples <= mean(samples) + w/2)
-    nominal = 1-alpha 
-    actual - nominal  
-  }
-  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
-}
-
-set.seed(our.seed)
+set.seed(default.seed)
 Js = array(dim=c(10000, n))
 Ys = array(dim=c(10000, n))
 for(rr in 1:10000) {
-  Js[rr,] = sample(N, n, replace=TRUE)
+  Js[rr,] = sample(m, n, replace=TRUE)
   Ys[rr,] = y[Js[rr,]]
 }
 meanY.samples = rowMeans(Ys)
-default.height = .04
-scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) 
-scale_y = scale_y_continuous(breaks=seq(0,default.height,by=.01), limits=c(0, default.height))
+pmf.height = max(dbinom(0:n, n, mean(y))) 
 
-annotate.histogram = function(histplot, samples, shade=FALSE, 
-                              shade.width=width(samples, alpha=.05), shade.color='green', shade.alpha=.15) { 
-    w66 = width(samples, alpha=1/3)
-    w95 = width(samples, alpha=.05)
-    p = histplot + 
-           geom_vline(aes(xintercept=mean(samples)), color="blue") +
-           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w66/2), color="blue", linetype='dashed') +
-           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w95/2), color="blue", linetype='dotted') 
-    if(shade) { 
-      p + geom_rect(aes(xmin=mean(samples)-shade.width/2, 
-                        xmax=mean(samples)+shade.width/2, 
-                        ymin=0, ymax=Inf), alpha=shade.alpha, fill=shade.color)
-    } else { p }
-}
+scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025)) 
+scale_y = scale_y_continuous(breaks=seq(0, pmf.height,by=.01))
 
-annotated.bar = function(samples, ...) { 
-    p = ggplot() + geom_bar(aes(x=samples, y=after_stat(prop)), alpha=.3) +
-        geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7)
-    annotate.histogram(p, samples, ...) + scale_x + scale_y
-}
-
-default.highlight.colors = c('black', 'magenta', 'cyan', 'gray')
-with.points = function(histplot, samples, K=100, highlight=4, height=default.height) {
-    set.seed(our.seed)
-    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
-    heights = sample(height*(1:K)/K)
-    data = data.frame(y=heights, x=samples[1:K], 
-                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
-                      alpha=c(rep(1, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
-    histplot + geom_point(aes(y=y, x=x, color=I(color), alpha=I(alpha)), data=data)
-}
-
-with.intervals = function(histplot, samples, w=width(samples, alpha=.05), K=100, 
-                          highlight=4, highlight.alpha=1, height=default.height) { 
-    set.seed(our.seed)
-    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
-    heights = sample(height*(1:K)/K)
-    data = data.frame(y=heights, x=samples[1:K], w=w,
-                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
-                      alpha=c(rep(highlight.alpha, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
-    histplot + 
-        geom_pointrange(aes(y=y, x=x, xmin=x-w/2, xmax=x+w/2, color=I(color), alpha=I(alpha)), data=data)
-}
-```
-
-## Summary
-
-
-::: {.hidden}
-$$
-% color defs aren't making it into MathJax
-%\definecolor{twocolor-red}{RGB}{248, 118, 109}   % red   used by ggplot in plots w/ 2 colors 
-%\definecolor{twocolor-green}{RGB}{0, 191, 196}   % green used by ggplot in plots w/ 2 colors
-% so create commands for using those colors instead
-\newcommand{\inred}[1]{\textcolor[RGB]{248,118,109}{#1}}
-\newcommand{\ingreen}[1]{\textcolor[RGB]{0,191,196}{#1}}
-\newcommand{\inblue}[1]{\textcolor{blue}{#1}}
-\newcommand{\alert}[1]{\inred{#1}}
-
-\newcommand{\ind}[1]{1_{\{#1\}}}
-\newcommand{\with}{\ingreen{\text{degree}}}
-\newcommand{\without}{\inred{\text{no degree}}}
-
-\DeclareMathOperator{\E}{E}degredegre
-\DeclareMathOperator{\Var}{Var}
-$$ 
-
-:::
-
-```{r}
-#| out-height: 300px 
-#| fig-asp: .3 
- 
-xx = seq(-.2,.3, length=1000)
-scale_x_dif = scale_x_continuous(limits=c(-.2,.2))
-wboot=width(difference.bootstrap.samples, alpha=.05)
-
-difference.bootstrap.samples = difference.bootstrap.samples - mean(difference.bootstrap.samples) + difference.samples[1]
-pboot=ggplot() + geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
-annotated.bootstrap.difference.histogram = annotate.histogram(pboot, difference.bootstrap.samples,
-  shade=FALSE)
-
-with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, height=10, highlight=0) + 
-  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+w/2), 
-                  data=data.frame(x=difference.samples[1], y=5, w=wboot), color='black') + 
-  geom_line(aes(x=xx, y=dnorm(xx, difference.samples[1], sd(difference.bootstrap.samples))), color='black') + 
-  geom_vline(xintercept=mean(y[x==1])-mean(y[x==0]), color='green', linewidth=1.5, alpha=.7) +
-  scale_x_dif
+bar.plot = ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), alpha=.3) +
+                      geom_vline(aes(xintercept=mean(y)), color='green', linewidth=3, alpha=.7) + 
+                      scale_x + scale_y
+                      
+bar.plot + with_annotations(meanY.samples, interval.width=width(meanY.samples), height=pmf.height) + 
+           coord_cartesian(xlim=c(.6,.8), ylim=c(0, pmf.height))
 ```
 
 - Recently, we've talked about estimating a difference in turnout between Black and non-Black voters.
@@ -332,19 +126,16 @@ for(rr in 1:10000) {
 #| out-height: 300px
 #| fig-asp: .3 
  
-xx = seq(.05, .1, length=1000)
 scale_x_dif = scale_x_continuous(limits=c(.07,.095), labels=label_percent())
 wboot=width(difference.bootstrap.samples, alpha=.05)
 
 difference.bootstrap.samples = difference.bootstrap.samples - mean(difference.bootstrap.samples) + difference
-pboot=ggplot() + geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
-annotated.bootstrap.difference.histogram = annotate.histogram(pboot, difference.bootstrap.samples,
-  shade=FALSE)
+difference.bootstrap.histogram = ggplot() + 
+  geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) + scale_x_dif
 
-with.points(annotated.bootstrap.difference.histogram, difference.bootstrap.samples, height=150, highlight=0) + 
+difference.bootstrap.histogram + with_annotations(difference.bootstrap.samples, highlight.dots=0) +
   geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+wboot/2), 
-                  data=data.frame(x=difference, y=50, w=wboot), color='black')  +
-  scale_x_dif
+                  data=data.frame(x=difference, y=50, w=wboot), color='black')  
 ``` 
 
 - If we compare turnout in the groups who do and don't get the letter, we see a difference.
