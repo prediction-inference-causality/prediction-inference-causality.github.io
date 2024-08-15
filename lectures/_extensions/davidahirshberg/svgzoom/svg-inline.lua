@@ -1,3 +1,4 @@
+---@diagnostic disable: trailing-space
 ---Split a string by character sequence.
 ---@param str string a string that may have multiple lines in it
 ---@param chars string a character string to split on
@@ -40,7 +41,10 @@ local uids = {}
 local function read_svg(path)
   local svg_content = read(path)
   local svg_lines = split(svg_content, "\r\n")
-  table.remove(svg_lines, 1) --- remove the XML header
+  --- remove the XML header
+  table.remove(svg_lines, 1) 
+  --- remove the 'pt' units from the width and height. It should use the default 'px' units this way.
+  svg_lines[1] = string.gsub(svg_lines[1], '(%d+[.]?%d*)pt', '%1')
   
   if uids[svg_content] then
     local use_tag = string.gsub('<g class="svg-zoom"> \n<use href="#$uid"/> \n</g>', 

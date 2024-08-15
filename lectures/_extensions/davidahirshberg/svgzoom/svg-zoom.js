@@ -7,7 +7,6 @@ window.RevealSVGZoom = window.RevealSVGZoom || {
 
 const initRevealSVGZoom = function (Reveal) {
   const zoomconfig = Reveal.getConfig().svgzoom;
-  
   var addZoom = function(zoomOn, zoomFor) { 
     // This selection.nodes().map(d3.select).forEach(d=>...) works,
     // but it seems like something less convoluted should too.
@@ -15,7 +14,7 @@ const initRevealSVGZoom = function (Reveal) {
     zoomOn.nodes().map(d3.select).forEach(d=> { 
       d.call(d3.zoom()
        .scaleExtent([1, zoomconfig['max-zoom-factor']])
-       .translateExtent([[0, 0], [d.attr('width'), d.attr('height')]])
+       .translateExtent([[0, 0], [d.node().viewBox.baseVal.width, d.node().viewBox.baseVal.height]])
        .on("zoom", ({transform}) => { 
           zoomFor(d).selectAll('g.svg-zoom')
                     .attr("transform", transform)
