@@ -241,7 +241,7 @@ scatter.by.group(sam)
 #| out-width: 100%
 scatter.by.group(sam) + 
   geom_bar(aes(x=xco(group, education), y=300000*after_stat(prop), fill=group, color=group), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none')
+                 position='identity', alpha=.05, linewidth=.4) + guides(color='none', fill='none')
 ```
 :::
 ::::
@@ -281,7 +281,6 @@ ggplot(sam) + geom_bar(aes(x=education, y=after_stat(prop), fill=group, color=se
 
 ```{r}
 #| out-width: 100%
-#| fig-asp: 1 
 #| label: fig-covariate-shift-with-cdf
 ggplot(sam) + geom_bar(aes(x=education, y=after_stat(prop), fill=sex, color=sex), 
                  position='identity', alpha=.05, linewidth=.2) + 
@@ -291,24 +290,42 @@ ggplot(sam) + geom_bar(aes(x=education, y=after_stat(prop), fill=sex, color=sex)
 - When we're looking for covariate shift, it can be helpful to look at the cumulative distribution.
   - Our bar plots show shows the proportion of people with *exactly* $x$ years of education.
   - The cumulative distribution is the proportion of people with *no more than* $x$ years of education.
-  - That's the height of all bars up to and including the one at $x$, stacked. These are drawn in using dashed lines.
+    - That's the height of all bars up to and including the one at $x$, stacked. 
+    - These cumulative proportions are drawn using dashed lines.
+- If you want to the proportion of people with *more than* $x$ years, look at the whole thing upside down.
+  -  It's the space between the dashed line and the horizontal line $y=1$ at the top of the plot.
 - What we see is that the [green one]{.groupb} is consistently higher than the [red one]{.groupa}. What does this mean? 
+  - Suppose we have equal numbers of [male]{.groupb} and [female]{.groupa} respondents. 
+  - There are really [`r sum(sam$sex=='male')`]{.groupb} and [`r sum(sam$sex == 'female')`]{.groupa}. Close enough.
+- If we've $N$ [female respondents]{.groupa} with $\le x$ years of education, we've more than $N$ [male respondents]{.groupb} like that.
+- Conversely, if we've $N$ [female respondents]{.groupa} with $> x$, years of education, we've *fewer* than $N$ such [male ones]{.groupb}.
+- But maybe the best way to think of it is in terms of *pairs of respondents*. 
 
-### A Thought Experiment [that needs refinement]
-  
-- Suppose we have equal numbers of male and female respondents. Close enough.
-  - We line each group up, starting with the people with the least education and ending with those with the most. 
-  - And put them side-by-side, effectively pairing up each male respondent with a female one and vice versa.
-  - What do we know about the pairs?
-- If the male respondents' cumulative distribution lies above the females' *at some $x$*, that means ...
-  - there are too many male respondents with $\le x$ years of education to stand a female one next to each.
-  - and conversely, too many female respondents with $> x$ years of education to stand a male one next to each.
-- If this happens for every $x$, then *every female respondent* is standing next to a male respondent that is not more educated.
-  - To convince ourselves, we move left to right ....
- [ Proof ?]
+## Cumulative Distributions and Pairing
+```{r}
+#| layout-ncol: 2
+scatter.by.group(sam)
+ggplot(sam) + geom_bar(aes(x=xco(group, education), y=after_stat(prop), fill=group, color=group), 
+                 position='identity', alpha=.05, linewidth=.4) + guides(color='none', fill='none') +
+                  stat_ecdf(aes(x=education, color=group), geom='step', linetype='dashed')
+
+```
+
+- Suppose we have two groups of equal size and we line them up side-by-side.
+  - This effectively pairing off each person in one group with one in the other.
+  - And if we line them up sorted by education, these pairs are 'as similar as possible' in terms of education.
+- What happens if the cumulative distribution of education is consistently higher for one group?
+- Then in each pair, the person ...
+  - To convince ourselves, let's pair off our dots.
+  - ... 
+
+
+## Implications
   - You could see why they'd be pissed if they grew up thinking that education is *the key* to making money. 
   - They're looking at someone who 'should' be making less.
-  - But that's not what's happening.
+  - If that were the case, maybe you'd say 'oh well, I guess I should've gone to school longer'.
+    - You probably wouldn't ..., but you might.
+  - Anyway, that's not what's happening.
 
 
 ## Homework Idea: Visualization Strengths and Weaknesses
