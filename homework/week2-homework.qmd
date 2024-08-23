@@ -1,0 +1,121 @@
+---
+title: "Week 2 Homework"
+format: html
+---
+
+```{r}
+#| echo: false
+library(ggplot2)
+theme_set(theme_minimal())
+```
+
+# NBA Players
+
+You and a friend each assemble some data describing the performance of NBA players in the 2023 season. 
+From the population of all players that played in the league that year, you each draw a sample of 100 players
+with replacement. Then you record some information about each player in your sample. 
+
+```{r}
+#| echo: true
+sample.1 = read.csv("nba_sample_1.csv") 
+sample.2 = read.csv("nba_sample_2.csv") 
+```
+
+Here's a list of variables.
+
+- Player - The player's name.
+- Team: The team whose this player is playing for this season in abbreviated term.
+- Age:  The Age of the player.
+- GP: The number of games that the player has played in this season.
+- W: The number of games won in which the player has played.
+- L: The numer of games lost in which the player has played.
+- Min: The minutes the player has played for this season.
+- PTS: The number of points made by the player.
+
+## Working with the Sample
+
+::: {#exr-nba-histogram-pts .callout-exercise}
+
+Let's look the variable 'PTS'---the number of points players scored over the course of the season. For sample 1, calculate the mean and standard deviation. Then, draw a histogram with the mean and mean plus or minus two standard deviations indicated by vertical lines. Repeat this for sample 2.
+
+:::
+
+::: {#exr-nba-histogram-pts-compare .callout-exercise}
+Using sample 1, calculate a 95% confidence interval for the population mean. To calibrate it, use the bootstrap.
+Then draw the interval on top of your histogram from Exercise 1. And draw it on top of a similarly annotated histogram of the sample mean's bootstrap sampling distribution, too---one with lines indicating its mean plus or minus one and two standard deviations. 
+:::
+
+ If you've got a ggplot called 'histogram' and have calculated the center ('center') and width ('w') of your interval, you can add the interval like this.
+
+```{r}
+#| echo: true
+#| eval: false
+
+histogram + geom_pointrange(y=0, x=center, xmin=center-w/2, xmax=center+w/2)
+```
+
+
+To get you started, I'll give you a function that'll calculate your interval's width. What you'll need to do is draw samples from the bootstrap sampling distribution and pass them in.
+
+```{r width-code}
+width = function(samples, center=mean(samples), alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( center - w/2 <= samples & samples <= center + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-center))))$root
+}
+```
+
+Do this using at least 10,000 bootstrap samples. 
+
+::: {#exr-nba-histogram-pts-compare-repeat .callout-exercise}
+Repeat this exercise using sample 2.
+:::
+
+::: {.callout-tip}
+### About the code
+In essence, it tries different widths $w$ until it finds one for which 95% of the samples fall in the interval $\text{center} \pm \text{w}/2$. It's easy to find one because the number of samples included is *increasing* with the width of the interval. You know to increase it if you're below 95% and decrease it if you're above. That's what the `R` built-in function `uniroot` does---it searches for $w$ for which the difference between the actual proportion of samples included and 95% is zero. I'll explain how this works a little more precisely later on in class. Note that it's the argument `alpha` that specifies that we want a 95% interval---`alpha` is the proportion of samples we want to *exclude* from the interval. If the proportion of samples we want to include is $.95$, the proportion we want to exclude is $1-.95=.05$. 
+:::
+
+::: {#exr-nba-histogram-pts-compare-calibrate .callout-exercise}
+Let's compare our 95% interval to differently-calibrated intervals. We'll use sample 1 for this exercise.
+Calculate, then draw into your plot of the bootstrap sampling distribution from the previous exercise, 90% and 99% intervals in addition to the 95% interval you already have. How do your three intervals compare? It'll help to read the 'about the code' paragraph above if you haven't already. 
+:::
+
+::: {#tip-y-spacing}
+You'll want to specify different 'y' values in `geom_pointrange` so your intervals aren't drawn on top of each other. 
+Choose whatever makes sense to you visually. 
+:::
+
+## Comparing Sample and Population
+
+Noting your interest in NBA stats, a benevolent data analyst sends you data for the full population. That is, they send you a table like the one you've been working with, but with a row for every player in the league the 2023 season. 
+
+```{r}
+population = read.csv("nba_population.csv")
+```
+
+We're going to use this to check our work. We can draw samples of size `r n`, 
+just like the two we actually have, from this population.
+And we can use them to calculate the actual sampling distribution of the mean number of points players scored. This is just like what we did for our turnout poll using our post-election knowledge of turnout.
+
+
+::: {#exr-nba-population-covers .callout-exercise}
+What is the mean number of points scored for players in our population? How does it compare to our two sample means? Is it in our 95% confidence intervals? What about our 90% and 99% intervals?
+:::
+
+::: {#exr-nba-population-sampling-distribution .callout-exercise}
+
+By drawing samples of size $n=`r nrow(sample.1)`$ with replacement from the population, 
+you can simulate the surveys you and your friend ran earlier. Do this 10,000 times, calculating the sample mean each time, and use the results to draw a histogram showing the sampling distribution of your sample mean.
+Then add the following to your plot.
+
+- The sampling distribution's mean and mean plus or minus one and two standard deviations, just like you did for the bootstrap sampling distribution. 
+- The population mean as a vertical line. Make it green like I have in lecture. 
+- Your two 95\% confidence intervals based on samples 1 and 2. Use different 'y' values so they don't overlap. 
+
+If either interval doesn't include the population mean, explain what's gone wrong. Is it an unusually bad point estimate? A too-narrow interval? Or both? Refer to the plot.
+
+:::
