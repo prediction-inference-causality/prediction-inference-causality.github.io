@@ -72,16 +72,15 @@ all.earnings = data.frame(age=cps.data$a_age,
                                            23  ~ "White-Black-AI-Asian",
                                            24  ~ "White-AI-Asian-HP",
                                            25  ~ "Other 3 race comb.",
-                                           26  ~ "Other 4 or 5 race comb"))
+                                           26  ~ "Other 4 or 5 race comb")) |>
+  mutate(sex = fct_reorder(sex, sex == 'female'),
+         race = fct_reorder(race, race, .fun = \(x) -length(x)),
+         degree = factor(education >= 16,
+                         levels=c(0, 1), 
+                         labels=c('no 4-year degree','4-year degree')))
 
-in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
 all.earnings$employed<- ifelse(cps.data$a_wkstat >5, 0,ifelse(cps.data$a_wkstat<2,NA,1))
-all.earnings$degree = factor(all.earnings$education >= 16,
-                    levels=c(0, 1), 
-                    labels=c('no 4-year degree','4-year degree')) 
-all.earnings$sex = factor(all.earnings$sex, 
-                          levels=c('female', 'male'))
-all.earnings$race = factor(all.earnings$race)
+in.interval = function(X, interval) { interval[1] <= X & X <= interval[2] }
 rownames(all.earnings)==NULL
 earnings = all.earnings[all.earnings$age %>% in.interval(c(25,35)) & 
                         all.earnings$state.code %in% state.codes & 
