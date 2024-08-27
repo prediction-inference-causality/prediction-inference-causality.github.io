@@ -3,9 +3,8 @@ title: "Lecture 12"
 subtitle: "Multivariate Analysis and Regression Adjustment"
 ---
 
-# Introduction
+# Multivariate Analysis
 
-## Multivariate Analysis
 
 {{< include shared-code.qmd >}}
 {{< include ca-income.qmd >}}
@@ -23,7 +22,9 @@ sam.dot = list(size=1,    alpha=.15)
 pop.dot = list(size=.25,    alpha=.05)
 scatter.by.group = function(data, dot=sam.dot, width=sd, 
                             highlight=NULL, 
-                            highlight.color='yellow', highlight.alpha=.25) { 
+                            highlight.color='yellow', highlight.alpha=.25,
+                            group.means.alpha=NULL)
+                            { 
   p = ggplot(data)
   if(!is.null(highlight)) {
     p = p + annotate('rect', 
@@ -32,6 +33,10 @@ scatter.by.group = function(data, dot=sam.dot, width=sd,
                       ymin=-Inf, ymax=Inf, 
                       fill=highlight.color, alpha=highlight.alpha)
   } 
+  if(!is.null(group.means.alpha)) {
+    summaries = data |> group_by(group) |> summarize(income=mean(income))
+    p = p + geom_hline(aes(yintercept=income, color=group), alpha=group.means.alpha, data=summaries) 
+  }
   p + geom_point(aes(x=xco(group, education),  y=income, color=group), 
                size=dot$size, position=position_jitter(seed=0,w=.15), alpha=dot$alpha) +
       stat_summary(aes(x=xco(group, education), y=income, color=group), geom="pointrange", alpha=.7,
@@ -41,16 +46,31 @@ scatter.by.group = function(data, dot=sam.dot, width=sd,
     scale_x() + scale_y() + scale_alpha(range=c(0,1)) + guides(color='none')
 }
 
+scatter.by.sex.only = function(data, dot=sam.dot, width=sd) {
+    ggplot(data) + 
+      geom_point(aes(x=sex,  y=income, color=group), 
+                 size=dot$size, position=position_jitter(seed=0,w=.15), alpha=dot$alpha) +
+    stat_summary(aes(x=sex, y=income, color=group), geom="pointrange", alpha=.7,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - width(x), 
+                 fun.max = function(x) mean(x) + width(x)) + 
+    scale_y() + guides(color='none')
+}
+
 money = function(x) { sprintf('%2.1fk', round(x/1000, digits=1)) }  
+```
+
+## Multivariate Analysis
+
+```{r}
+sam$group = sam$sex == 'female'
+scatter.by.group(sam)
 ```
 
 ```{r}
 muhat.male = mean(sam$income[sam$sex=='male']) 
 muhat.female = mean(sam$income[sam$sex=='female'])
-sam$group = sam$sex == 'male'
-scatter.by.group(sam)
 ```
-
 
 - Today, we're going to talk about how to analyze data when we have multiple covariates.
 - An important application is analyzing disparities to think about discrimination.
@@ -59,9 +79,9 @@ scatter.by.group(sam)
   - $Y_i$, their income, is on the $y$-axis.
   - $X_i$, their education level, is on the $x$-axis.
   - $W_i$, their sex, is indicated by color. And a slight shift along the $x$-axis.
-    - $\ingroupa{W_i=0}$ indicates female, $\ingroupb{W_i=1}$ indicates male.
+    - $\ingroupa{W_i=0}$ indicates male, $\ingroupb{W_i=1}$ indicates female.
 - As usual, we've drawn in each group's income mean and standard deviation too.
-- We'll write $\ingroupa{\hat\mu(0,x)}$ and $\ingroupb{\hat\mu(1,x)}$ for the mean income of female and male respondents with $x$ years of education. 
+- We'll write $\ingroupa{\hat\mu(0,x)}$ and $\ingroupb{\hat\mu(1,x)}$ for the mean income of male and female respondents with $x$ years of education. 
 
 
 ## A Few Summaries 
@@ -69,42 +89,36 @@ scatter.by.group(sam)
 ::: free-zoom
 
 ```{r}
-#| out-width: 50%
+#| fig-width: 7
 #| layout-ncol: 2 
 #| fig-cap: 
 #|  - income vs. sex (aggregated)
 #|  - income vs. education and sex (disaggregated)
- 
-Y = sam$income
-X = sam$education
-W = sam$sex == 'male'
-muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
-
-dot = sam.dot
-scatter.by.sex.only = ggplot(sam) + 
-    geom_point(aes(x=sex,  y=income, color=group), 
-               size=dot$size, position=position_jitter(seed=0,w=.15), alpha=dot$alpha) +
-    stat_summary(aes(x=sex, y=income, color=group), geom="pointrange", alpha=.7,
-                 fun=mean, 
-                 fun.min = function(x) mean(x) - width(x), 
-                 fun.max = function(x) mean(x) + width(x)) + 
-    scale_y() + guides(color='none')
-
-scatter.by.sex.only
+scatter.by.sex.only(sam)
 scatter.by.group(sam, highlight=12)
 ```
 
 :::
 
+```{r}
+Y = sam$income
+X = sam$education
+W = sam$sex == 'female'
+N1 = sum(W==1)
+N0 = sum(W==0)
+muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
+```
+
+
 :::: columns
 ::: {.column width="48%"}
 ### Female Respondents
-...earn \$`r money(muhat.male-muhat.female)` less, on average, than male respondents.
+... earn \$`r money(muhat.male-muhat.female)` less, on average, than male respondents.
 $$
 \color{gray}
 \begin{aligned}
-\ingroupa{\hat\mu(0)} \ - \  \ingroupb{\hat\mu(1)}  
-&\approx \ingroupa{`r money(muhat.female)`} \ - \ \ingroupb{`r money(muhat.male)`} \\
+\ingroupb{\hat\mu(1)} \ - \  \ingroupa{\hat\mu(0)}  
+&\approx \ingroupb{`r money(muhat.female)`} \ - \ \ingroupa{`r money(muhat.male)`} \\
 &\approx `r money(muhat.female - muhat.male)` 
 \end{aligned}
 $$
@@ -112,32 +126,32 @@ $$
 $$
 \color{gray}
 \begin{aligned}
-\ingroupa{\hat\mu(0)} \ / \ \ingroupb{\hat\mu(1)} 
-&\approx \ingroupa{`r money(muhat.female)`} \ / \  \ingroupb{`r money(muhat.male)`} \\
+\ingroupb{\hat\mu(1)} \ / \ \ingroupa{\hat\mu(0)} 
+&\approx \ingroupb{`r money(muhat.female)`} \ / \  \ingroupa{`r money(muhat.male)`} \\
 &\approx {`r round(muhat.female/muhat.male, 2)`} \\
 \end{aligned}
 $$
 :::
 ::: {.column width="52%"}
 ### ... with High School Educations 
-... earn \$`r money(muhat(1, 12)-muhat(0, 12))` 
+... earn \$`r money(muhat(0, 12)-muhat(1, 12))` 
 less than similarly-educated male ones.
 $$
 \color{gray}
 \begin{aligned}
-\ingroupa{\hat\mu(0, 12)} \ - \  \ingroupb{\hat\mu(1, 12)}  
-&\approx \ingroupa{`r money(muhat(0, 12))`} \ - \ \ingroupb{`r money(muhat(1, 12))`} \\
-&\approx `r money(muhat(0, 12)-muhat(1, 12))`
+\ingroupb{\hat\mu(1, 12)} \ - \  \ingroupa{\hat\mu(0, 12)}  
+&\approx \ingroupb{`r money(muhat(1, 12))`} \ - \ \ingroupa{`r money(muhat(0, 12))`} \\
+&\approx `r money(muhat(1, 12)-muhat(0, 12))`
 \end{aligned}
 $$
 
-... earn `r 100*round(muhat(0, 12)/muhat(1, 12), 2)` cents for every dollar a male one does.
+... earn `r 100*round(muhat(1, 12)/muhat(0, 12), 2)` cents for every dollar a male one does.
 $$
 \color{gray}
 \begin{aligned}
-\ingroupa{\hat\mu(0, 12)} \ / \ \ingroupb{\hat\mu(1, 12)} 
-&\approx \ingroupa{`r money(muhat(0, 12))`} \ / \  \ingroupb{`r money(muhat(1, 12))`} \\
-&\approx {`r round(muhat(0, 12)/muhat(1, 12), 2)`} \\
+\ingroupb{\hat\mu(1, 12)} \ / \ \ingroupa{\hat\mu(0, 12)} 
+&\approx \ingroupb{`r money(muhat(1, 12))`} \ / \  \ingroupa{`r money(muhat(0, 12))`} \\
+&\approx {`r round(muhat(1, 12)/muhat(0, 12), 2)`} \\
 \end{aligned}
 $$
 :::
@@ -149,17 +163,15 @@ $$
 - On the right, we compared fine-grained groups in the disaggregated data.
   - This is nice because it's more of a 'like-with-like' comparison.
 
-##  What If We Want Both Things?
+##  What If We Want Simplicity *and* Comparability?
 
 ```{r}
-#| out-width: 100%
- 
 scatter.by.group(sam)
 ```
 
 **Exercise.** Describe how, using information in this plot, you would summarize the typical difference in income ...
 
-  - between female respondents and **similarly educated male respondents**
+  - between [female respondents]{.groupb} and **similarly educated** [male respondents]{.groupa}
   - using only one number.
   
   Use mathematical notation, e.g., $\ingroupa{\hat\mu(0, x)}$ and $\ingroupb{\hat\mu(1, x)}$ for within-group means.
@@ -171,11 +183,12 @@ scatter.by.group(sam)
 ## Solution 1. An Average over Levels of Education
 
 ```{r}
-#| out-width: 100%
- 
+scatter.by.group(sam)
+```
+
+```{r}
 years = sort(unique(sam$education))
 years.str = paste(years, collapse=', ') 
-scatter.by.group(sam)
 ```
 
 $$
@@ -183,58 +196,55 @@ $$
 \begin{aligned}
 \text{summary} 
 &= \frac{1}{`r length(years)`}\sum_{x \in \text{years}}  
-\qty{ \ingroupa{\hat\mu(0,x)} - \ingroupb{\hat \mu(1, x)} } && \qqtext{where} \text{years} =\{ `r years.str ` \}  \\
-&= \frac{\{\ingroupa{\hat\mu(0, 8)} - \ingroupb{\hat\mu(1, 8)}\} + \{\ingroupa{\hat\mu(0, 9)} - \ingroupb{\hat\mu(1, 9)}\} + \ \ldots \ + \{\ingroupa{\hat\mu(0, 20)} - \ingroupb{\hat\mu(1, 20)}\}}{`r length(years)`} && \qqtext{includes} `r length(years)` \ \text{levels}. \\
-&\approx \frac{  \{ \ingroupa{`r money(muhat(0, 8))`}-\ingroupb{`r money(muhat(1, 8))`}\} \ + \ \{\ingroupa{`r money(muhat(0, 9))`}-\ingroupb{`r money(muhat(1, 9))`} \} + \ldots + \{ \ingroupa{`r money(muhat(0, 20))`}-\ingroupb{`r money(muhat(1, 20))`} \} }{`r length(years)`} \\
-&\approx \frac{  \{`r money(muhat(0, 8) - muhat(1, 8))`\} + \{`r money(muhat(0, 9) - muhat(1, 9))`\} \ + \ldots \ + \{`r money(muhat(0, 20) - muhat(1, 20))`\}}{`r length(years)`} \\
-&\approx `r money(mean(muhat(0, years) - muhat(1, years)))` 
+\qty{ \ingroupb{\hat\mu(1,x)} - \ingroupa{\hat \mu(0, x)} } \qfor \text{years} =\{ `r years.str ` \}  \quad (`r length(years)` \text{ levels}) \\
+&= \frac{\{\ingroupb{\hat\mu(1, 8)} - \ingroupa{\hat\mu(0, 8)}\} + \{\ingroupb{\hat\mu(1, 9)} - \ingroupa{\hat\mu(0, 9)}\} + \ \ldots \ + \{\ingroupb{\hat\mu(1, 20)} - \ingroupa{\hat\mu(0, 20)}\}}{`r length(years)`} \\
+&\approx \frac{  \{ \ingroupb{`r money(muhat(1, 8))`}-\ingroupa{`r money(muhat(0, 8))`}\} \ + \ \{\ingroupb{`r money(muhat(1, 9))`}-\ingroupa{`r money(muhat(0, 9))`} \} + \ \ldots \ + \{ \ingroupb{`r money(muhat(1, 20))`}-\ingroupa{`r money(muhat(0, 20))`} \} }{`r length(years)`} \\
+&\approx \frac{  \{`r money(muhat(1, 8) - muhat(0, 8))`\} + \{`r money(muhat(1, 9) - muhat(0, 9))`\} \ + \ldots \ + \{`r money(muhat(1, 20) - muhat(0, 20))`\}}{`r length(years)`} \\
+&\approx `r money(mean(muhat(1, years) - muhat(0, years)))` 
 \end{aligned}
 $$
 
-- This is, coincidentally, the same as the difference for respondents with 12 years of education.
-  - after rounding to the nearest \$100.
+- This is, coincidentally, the same as the difference for respondents with 12 years of education.^[After rounding to the nearest \$100.]
 - But is it a good summary of how much less female respondents are making? Probably not. 
-  - Very few---only `r sum(X[W==0]==8)`---have 8 years of education.
-  - Many respondents---`r sum(X[W==0]==12)`---have 12 years of education.
+  - Very few---only `r sum(X[W==1]==8)`---have 8 years of education.
+  - Many---`r sum(X[W==1]==12)`---have 12 years of education.
   - And we're giving the same weight to the mean difference at each level of education.
 - What we get isn't necessarily typical *for female respondents*.
 - We've counted the ones with 8 years of education 
-$`r sum(X[W==0]==12)`/`r sum(X[W==0]==8)` \approx `r round(sum(X==12)/sum(X==8))`$ times more than the ones with 12. 
+$`r sum(X[W==1]==12)`/`r sum(X[W==1]==8)` \approx `r round(sum(X[W==1]==12)/sum(X[W==1]==8))`$ times more than the ones with 12. 
 
 ## Solution 2. An Average over Respondents
 ```{r}
-#| out-width: 100%
 scatter.by.group(sam)
-N0 = sum(W==0)
 ```
 
 $$
 \color{gray}
 \begin{aligned}
 \text{summary} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}} \qty{ \ingroupa{\hat \mu(0,X_i)} - \ingroupb{\hat \mu(1, X_i)} }  && \qfor N_w = \sum_{i: W_i=w} 1 \\
-&= \frac{ \{\ingroupa{\hat \mu(0, `r X[W==0][1]`)} - \ingroupb{\hat \mu(1, `r X[W==0][1]`)}\} + 
-\{\ingroupa{\hat \mu(0, `r X[W==0][2]`)} - \ingroupb{\hat \mu(1, `r X[W==0][2]`)}\} + 
+&= \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} \qty{ \ingroupb{\hat \mu(1, X_i) - \ingroupa{\hat \mu(0,X_i)} } }  \qfor N_w = \sum_{i: W_i=w} 1 \\
+&= \frac{ \{ \ingroupb{\hat \mu(1, `r X[W==1][1]`)} - \ingroupa{\hat \mu(0, `r X[W==1][1]`)} \} + 
+\{\ingroupb{\hat \mu(1, `r X[W==1][2]`)} - \ingroupa{\hat \mu(0, `r X[W==1][2]`)} \} + 
 \ \ldots \ +
-\{\ingroupa{\hat \mu(0, `r X[W==0][N0]`)} - \ingroupb{\hat \mu(1, `r X[W==0][N0]`)}\} }{`r sum(W==0)`} \\
-&\approx \frac{ \{\ingroupa{`r money(muhat(0, X[W==0][1]))`} - \ingroupb{`r money(muhat(1, X[W==0][1]))`}\} +
-\{\ingroupa{`r money(muhat(0, X[W==0][2]))`} - \ingroupb{`r money(muhat(1, X[W==0][2]))`}\} +
+\{\ingroupb{\hat \mu(1, `r X[W==1][N1]`)} - \ingroupa{\hat \mu(0, `r X[W==1][N1]`)} \} }{`r N1`} \\
+&\approx \frac{ \{\ingroupb{`r money(muhat(0, X[W==1][1]))`} - \ingroupa{`r money(muhat(1, X[W==1][1]))`}\} +
+\{ \ingroupb{`r money(muhat(1, X[W==1][2]))`} - \ingroupa{`r money(muhat(0, X[W==1][2]))`} \} +
 \ \ldots \ +
-\{\ingroupa{`r money(muhat(0, X[W==0][N0]))`} - \ingroupb{`r money(muhat(1, X[W==0][N0]))`}\} }{`r sum(W==0)`} \\
-&\approx \frac{ \{`r money(muhat(0, X[W==0][1]) - muhat(1, X[W==0][1]))`\} +
-\{`r money(muhat(0, X[W==0][2]) - muhat(1, X[W==0][2]))`\} +
+\{ \ingroupb{`r money(muhat(1, X[W==1][N1]))`} - \ingroupa{`r money(muhat(0, X[W==1][N1]))`}\}  }{`r N1`} \\
+&\approx \frac{ \{`r money(muhat(1, X[W==1][1]) - muhat(0, X[W==1][1]))`\} +
+\{`r money(muhat(1, X[W==1][2]) - muhat(0, X[W==1][2]))`\} +
 \ \ldots \ +
-\{`r money(muhat(0, X[W==0][N0]) - muhat(1, X[W==0][N0]))`\} }{`r sum(W==0)`} \\
-& \approx `r money(mean(Y[W==0] - muhat(1,X[W==0])))`
+\{`r money(muhat(1, X[W==1][N1]) - muhat(0, X[W==1][N1]))`\} }{`r N1`} \\
+& \approx `r money(mean(muhat(1,X[W==1]) - muhat(0,X[W==1])))`
 \end{aligned}
 $$
 
 - This is a comparison that focuses on what's typical *for our female respondents*.
 - Each female respondent gets equal weight in 'deciding' what is typical. 
-  - That's why $X_i=13$ occurs twice in the three (of `r sum(W==0)`) terms we actually write out above.
+  - That's why $X_i=13$ occurs twice in the three (of `r N1`) terms we actually write out above.
   - It's a fairly common level of education.
     
-## A Closer Look
+## Reinterpreting Solution 2
 
 ```{r}
 #| out-width: 100%
@@ -242,167 +252,194 @@ scatter.by.group(sam)
 ```
 
 - We can, in fact, think of this as the average difference between the income of
-  - each female respondent's income, $\ingroupa{Y_i}$ 
-  - the mean income among males at their level of education, $\ingroupb{\hat \mu(1, X_i)}$.
+  - each female respondent's income, $\ingroupb{Y_i}$ 
+  - the mean income among males at their level of education, $\ingroupa{\hat \mu(0, X_i)}$.
 
 $$
 \color{gray}
 \begin{aligned}
 \text{summary} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}} \qty{ \ingroupa{\hat \mu(0,X_i)} - \ingroupb{\hat \mu(1, X_i)} }  
-= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}} \qty{ \ingroupa{Y_i} - \ingroupb{\hat \mu(1, X_i)} }
+&= \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} \qty{ \ingroupb{\hat \mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} }  
+= \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} \qty{ \ingroupb{Y_i} - \ingroupa{\hat \mu(0, X_i)} }
 \end{aligned}
 $$
 
-- **Q.** Why are these two mathematical expressions equivalent? 
-  - Think about what happens when we change the second into the first.
-  - We replace the sum of each individual's income $\ingroupa{Y_i}$ with the sum of their column's mean $\ingroupa{\hat \mu(1, X_i)}$.
-  - *Hint*. We've seen something like this this earlier in the semester.
+- These two expressions will always be equal, no matter what the actual values of $W_i,X_i,Y_i$ are.
+- **Q.** Why are the equal?
+- *Hint*. We've seen something like this this earlier in the semester.
+  - Think about what happens when we change the second into the first. 
+  - In our average over [female respondents]{.groupb}, ...
+  - we replace each respondents' income $\ingroupb{Y_i}$ with their column's mean income $\ingroupb{\hat \mu(1, X_i)}$.
 
 ::: fragment
 
 - **A.** We can think of the first one as a version of the second where we sum in a certain order. \
 
 :::: columns
+
+::: {.column width="50%"}
+```{r}
+#| fig-width: 7
+scatter.by.group(sam)
+```
+
+[The same plot as above, for convenience.]{.fg style="color:gray"}
+:::
 ::: {.column width="50%"}
 $$
 \color{gray}
 \begin{aligned}
 \sum_{i: W_i=w} Y_i 
 &\explain{=}{We sum first over dots in a column, then over columns.}
-\sum_{x} \sum_{\substack{i: W_i=w, X_i=x}} Y_i    \\
+\sum_{x} \sum_{\substack{i: W_i=w, \ X_i=x}} Y_i    \\
 &\explain{=}{The column sum is the column's mean times its number of dots.}
-\sum_{x} \hat \mu(w, x) \times N_{w,x} \qfor N_{w,x} = \sum_{\substack{i: W_i=w, X_i=x}} 1  \\
+\sum_{x} \hat \mu(w, x) \times N_{w,x} \qfor N_{w,x} = \sum_{\substack{i: W_i=w, \ X_i=x}} 1  \\
 &\explain{=}{Or equivalently, its mean summed over the dots.}
-\sum_{x} \sum_{\substack{i: W_i=w, X_i=x}} \hat \mu(w,x) \\ 
+\sum_{x} \sum_{\substack{i: W_i=w, \  X_i=x}} \hat \mu(w,x) \\ 
 &\mathexplain{=}{\hat\mu(w,x)=\hat\mu(w,X_i) \text{ within a column}.} 
-\sum_{x} \sum_{\substack{i: W_i=w, X_i=x}} \hat \mu(w, X_i) \\
+\sum_{x} \sum_{\substack{i: W_i=w, \ X_i=x}} \hat \mu(w, X_i) \\
 &\explain{=}{We 'unorder' that sum to get back to the form we started with.} 
 \sum_{i: W_i=w} \hat \mu(w, X_i)       
 \end{aligned}
 $$
 
 :::
-::: {.column width="50%"}
-```{r}
-#| out-width: 50%
-#| fig-asp: .6
-scatter.by.group(sam)
-```
-
-:::
 ::::
 :::
 
 ## Variations
-```{r}
-#| out-width: 100%
-scatter.by.group(sam)
-```
 
 - If we prefer, we could summarize this disparity by focusing on what's typical for *male respondents*.
   - Or for respondents in general.
   - Or for respondents who, e.g., have not attended college.
-- These are all averages of the same *within-column differences*, but over different groups of dots (i.e. respondents).
-- **Exercise**. For each of the summaries above, say what group we're averaging over. 
-- Describe each group two ways. 
-  1. As you'd describe the people in them, e.g. 'all female respondents'.
-  2. As you'd describe the dots in the plot, e.g. 'all green dots' 
-  
+    
+### Exercise
+
+  - Here are a few summaries of the income disparity between similarly-educated male and female respondents.
+  - They are all averages of the same [within-column]{.groupb} [differences]{.groupa}.
+  - But they're averages over different groups of dots (i.e. respondents).
+  - For each of these summaries, describe the group we're averaging over. Do it in two ways.
+    1. As you'd describe the people in them, e.g. 'all female respondents'.
+    2. As you'd describe the dots in the plot, e.g. 'all green dots' 
+
+:::: columns  
+::: column
+```{r}
+#| fig-width: 7
+scatter.by.group(sam)
+```
+
+:::
+::: column
 $$
 \color{gray}
 \begin{aligned}
 \Delta_1 
 &\explain{=}{All male respondents. All red dots} 
-\ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} \qty{ \ingroupa{\hat\mu(0,X_i)} - \ingroupb{\hat \mu(1, X_i)} } \\
+\ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}} \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } \\
 \Delta_2 
 &\explain{=}{All female respondents. All green dots} 
-\ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}} \qty{ \ingroupa{\hat\mu(0,X_i)} - \ingroupb{\hat \mu(1, X_i)} } \\
+\ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } \\
 \Delta_3 
-&\explain{=}{All respondents with 8-11 years of education. All dots in the leftmost 4 (pairs of) columns.} 
-\frac{1}{N_{x \le 12}}\sum_{i: X_i \le 12} \qty{ \ingroupa{\hat\mu(0,X_i)} - \ingroupb{\hat \mu(1, X_i)} } \\
+&\explain{=}{All respondents who didn't attend college. All dots in the leftmost 4 (pairs of) columns.} 
+\frac{1}{N_{x \le 12}}\sum_{i: X_i \le 12} \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } \qfor N_{x \le 12} = \sum_{i: X_i \le 12} 1  \\
 \Delta_4 
 &\explain{=}{All respondents outright. All dots.} 
-\frac{1}{n} \qty{ \ingroupa{\hat\mu(0,X_i)} - \ingroupb{\hat \mu(1, X_i)} } 
+\frac{1}{n} \sum_{i=1}^n \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } 
 \end{aligned}
 $$
+
+:::
+::::
 
 ### Terminology
 
-- Unfortunately, it's common to use the same words to describe each of these summaries.
+- It's common to use the same words to describe each of these summaries.
   - 'The average difference in income between male and female respondents, **adjusted for education**'.
-  - Or sometimes '..., *controlling for education*'.
+  - Or sometimes '..., *controlling for education*'.^[This can be confusing because it has a different --- but related --- meaning when when we're talking about designing an experiment.]
 - This results in a lot of confusion. 
 - There is more precise terminology out there. 
   - But it tends to be used when we're talking about differences between groups *receiving different treatments*.
-  - We'll talk about that terminology, and how it gets used in contexts like this, next time.
+  - We'll get into that more precise terminology next time. 
+  - And talk briefly about how it gets used in contexts like this, where we're not talking about treatments.
+  - Today, when we talk about the adjusted difference, that'll mean the average over [female respondents]{.groupb}.
 
-## Raw vs. Adjusted Differences
+# Covariate Shift
 
-```{r}
-
-
-
-#| out-width: 100%
- 
-sam$group = sam$sex == 'male'
-scatter.by.group(sam)
-```
-
-- Female respondents earn \$`r money(-mean(Y[W==0] - muhat(1,X[W==0])))` less, on average, than **similarly educated** male respondents.
-$$
-\color{gray}
-\begin{aligned}
-\text{adjusted difference} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}}  \qty{ \ingroupa{Y_i} - \ingroupb{\hat \mu(1, X_i)} }
-\approx `r money(mean(Y[W==0] - muhat(1,X[W==0])))` && \qfor 
-N_w = \sum_{i: W_i=w} 1. \\
-\end{aligned}
-$$
-
-- This is the average---over female respondents---of the difference between their income ...
-- ... and the average income of male respondents with the same level of education.
-- This is bigger than the difference we looked at a moment ago, of the average male and female incomes.
-$$
-\color{gray}
-\begin{aligned}
-\text{raw difference} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0} Y_i} - \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1} Y_i}  
-\approx `r money(mean(Y[W==0]) - mean(Y[W==1]))`.
-\end{aligned}
-$$
-
-- What's going on here?  You may have a guess. But let's work through it in steps.
-
-## Step 1. Using *dot language* to find what's changed
+## Comparisons with and without Adjustment
 
 ```{r}
-#| out-width: 100%
- 
-scatter.by.group(sam)
+#| fig-width: 7
+#| layout-ncol: 2
+#| fig-cap:
+#|  - income vs. sex (aggregated)
+#|  - income vs. education and sex (disaggregated)
+
+scatter.by.sex.only(sam)
+scatter.by.group(sam, group.means.alpha=.2)
 ```
 
 :::: columns
 ::: {.column width="48%"}
-### The Adjusted Difference
+### The Raw Difference
+Female respondents earn \$`r money(muhat.male-muhat.female)` less, \
+on average, than male respondents.
 $$
 \color{gray}
-\ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}}  \qty{ \ingroupa{Y_i} - \ingroupb {\hat \mu(1, X_i)} } 
+\ingroupb{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} \ - \ \ingroupa{\frac{1}{N_0}\sum_{i:W_i=0} Y_i}  
+\approx `r money(muhat.female - muhat.male)` 
 $$
-is what we get when we ...
 
-  1. Look at the height of each [red dot]{.groupa}.
-  2. Subtract the average height of the \
-  [green dots]{.groupb} in the same column.
-  3. Average these differences.
 :::
+::: {.column width="52%"}
+### The Adjusted Difference
+ \
+And they earn `r money(mean(Y[W==1] - muhat(0,X[W==1])))` less than similarly-educated ones.
+$$
+\color{gray}
+\ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}}  \qty{ \ingroupb{Y_i} \ - \ \ingroupa{\hat \mu(0, X_i)} }
+\approx `r money(mean(Y[W==1] - muhat(0,X[W==1])))` 
+$$
+
+:::
+::::
+
+- When people talk about comparisons like this, they're often pretty imprecise with their language.
+- Here are a few things you might want to think about when hear about a comparison between two groups.
+  1. What's being reported.
+    - A raw difference or an adjusted one?
+    - What variable(s) are being adjusted for? 
+    - What group is being averaged over?
+  2. How the things *they could report* might differ.
+  3. Why they're reporting what they're reporting.
+- 1 & 3 are very important skills, but you really need to practice them in context.
+- Today we're going to focus on 2.
+  - i.e., developing skills to help us understand and communicate about different comparisons ... 
+  - that seem like they're answers to the same question but may not be.
+
+::: aside
+The averages shown in the plot on the left ---  the average incomes of all [male]{.groupa} and [female]{.groupb}
+respondents --- are included as faint horizontal lines in the plot on the right.
+:::
+
+
+## What's the Difference?
+
+```{r}
+scatter.by.group(sam, group.means.alpha=.2)
+```
+
+:::: columns
 
 ::: {.column width="52%"}
 ### The Raw Difference
+
 $$
 \color{gray}
-\ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}} \qty{ \ingroupa{Y_i} - \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1} Y_i } } \qfor N_w = \sum_{i: W_i=w} 1.
+\ingroupb{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} \ - \ \ingroupa{\frac{1}{N_0}\sum_{i:W_i=0} Y_i}  
+\approx `r money(muhat.female - muhat.male)` 
 $$
+
 is what we get when we ...
   
 ::: {.incremental}
@@ -411,39 +448,59 @@ is what we get when we ...
   3. Average these differences.
 :::
 :::
-::::
 
-**Q.** Why is the adjusted difference is bigger in magnitude (i.e. smaller, being negative)?
-
-::: fragment
-**A.** For the average [female respondent]{.groupa}, [males]{.groupb} *at their education level* make more than the average *for all male respondents*. 
+::: {.column width="48%"}
+### The Adjusted Difference
 $$
 \color{gray}
-\text{same} - \text{bigger} = \text{smaller}
+\ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}}  \qty{ \ingroupb{Y_i} \ - \ \ingroupa{\hat \mu(0, X_i)} }
+\approx `r money(mean(Y[W==1] - muhat(0,X[W==1])))` 
 $$
-:::
-Why is that the case?
 
-## Step 2. Making sense of the change
+is what we get when we ...
+
+  1. Look at the height of each [red dot]{.groupa}.
+  2. Subtract the average height of the \
+  [green dots]{.groupb} in the same column.
+  3. Average these differences.
+:::
+::::
+
+
+ - **Q**. Why is the adjusted difference is bigger in magnitude (i.e. smaller, being negative)?
+ - *Hint*. $\color{gray} \text{same} - \text{bigger} = \text{smaller}$
+   
+::: fragment
+ - **A.** For most [female respondents]{.groupa}, the average [male]{.groupb} income *at their education level* \
+ is bigger than the average for *all male respondents*. Let's see if we can work out why.
+:::
+
+## Covariate Shift
 
 :::: r-stack
 ::: {.fragment .fade-out data-fragment-index="0"} 
 ```{r}
-#| out-width: 100%
 scatter.by.group(sam) 
 ```
 :::
 ::: {.fragment .current-visible data-fragment-index="0"}
 ```{r}
-#| out-width: 100%
-scatter.by.group(sam) + 
-  geom_bar(aes(x=xco(group, education), y=300000*after_stat(prop), fill=group, color=group), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(color='none', fill='none')
+scaled.interleaved.bars = list(geom_bar(aes(x=xco(group, education), y=300000*after_stat(prop), fill=group, color=group), 
+                        position='identity', alpha=.05, linewidth=.4), 
+                        guides(color='none', fill='none'))
+interleaved.bars = list(geom_bar(aes(x=xco(group, education), y=after_stat(prop), fill=group, color=group), 
+                        position='identity', alpha=.05, linewidth=.4), 
+                        guides(color='none', fill='none'))
+bars= list(geom_bar(aes(x=education, y=after_stat(prop), fill=group, color=group), 
+                     position='identity', alpha=.05, linewidth=.4), 
+            guides(color='none', fill='none'))
+
+scatter.by.group(sam) + scaled.interleaved.bars
 ```
 :::
 ::::
 
-- It's the case because the [female respondents]{.groupa} tend to be better-educated than the [male ones]{.groupb}.
+- This happens because the [male respondents]{.groupa} tend to be less educated than the [female ones]{.groupb}.
   - We call this phenomenon **covariate shift**. 
   - The distribution of $X$ *shifts* when we go from looking at one group (i.e. sex) to another.
 - We can see this shift --- with a lot of effort --- by counting the dots in each column.
@@ -451,103 +508,52 @@ scatter.by.group(sam) +
 - We draw in bars showing the proportion of people, within a group, that have each level of education. 
     - The bars' absolute height is meaningless---they're scaled to fit into the plot.
     - But the relative height tells us how education is distributed within each group.
-    - The [red]{.groupa} and [green]{.groupb} bars show how education is distributed among [female]{.groupa} and [male respondents]{.groupb}.
-    - *Notation.* We write $\ingroupa{\hat p_{0}(x)}$ and $\ingroupb{\hat p_{1}(x)}$ for these proportions at $x=x$.
-- And we see that the [red bars]{.groupa} tend to be higher than the [green bars]{.groupb} on the right side of the plot, esp. for $x > 12$.
-  - This may be a bit easier to see when we draw our bar plots side-by-side instead of interleaved @fig-covariate-shift-in-isolation.
+    - The [red]{.groupa} and [green]{.groupb} bars show how education is distributed among [male]{.groupa} and [female]{.groupb} respondents.
+    - *Notation.* We write $\ingroupa{\hat p_{0}(x)}$ and $\ingroupb{\hat p_{1}(x)}$ for these proportions at education level $x$.
+- And we see that the [green bars]{.groupb} tend to be higher than the [red bars]{.groupa} on the right side of the plot, esp. for $x > 12$.
   - *Interpretation*. Higher levels of education are more common for female respondents.
-
-
-
-```{r}
-#| out-width: 100%
-#| label: fig-covariate-shift-in-isolation
-#| fig-cap: The distribution of education among male and female respondents.
-ggplot(sam) + geom_bar(aes(x=education, y=after_stat(prop), fill=group, color=sex), 
-                 position='identity', alpha=.05, linewidth=.4) + 
-                 guides(fill='none', color='none') + facet_wrap(~sex) 
-``` 
-
-
-## Covariate Shift and the Cumulative Distribution
+  - This can be easier to see in different visualizations of the covariate distributions.
+  
+### Another Visualization of Covariate Shift
 
 ```{r}
-#| out-width: 100%
-#| label: fig-covariate-shift-with-cdf
-ggplot(sam) + geom_bar(aes(x=education, y=after_stat(prop), fill=sex, color=sex), 
-                 position='identity', alpha=.05, linewidth=.2) + 
-                 guides(fill='none', color='none') + stat_ecdf(aes(x=education, color=sex), geom='step', linetype='dashed')
+facet.by.group = list(facet_grid(row=vars(group)), theme(strip.background=element_blank(), strip.text=element_blank()))
+ggplot(sam) + bars + facet.by.group
 ``` 
 
-- When we're looking for covariate shift, it can be helpful to look at the cumulative distribution.
-  - Our bar plots show shows the proportion of people with *exactly* $x$ years of education.
-  - The cumulative distribution is the proportion of people with *no more than* $x$ years of education.
-    - That's the height of all bars up to and including the one at $x$, stacked. 
-    - These cumulative proportions are drawn using dashed lines.
-- If you want to the proportion of people with *more than* $x$ years, look at the whole thing upside down.
-  -  It's the space between the dashed line and the horizontal line $y=1$ at the top of the plot.
-- What we see is that the [green one]{.groupb} is consistently higher than the [red one]{.groupa}. What does this mean? 
-  - Suppose we have equal numbers of [male]{.groupb} and [female]{.groupa} respondents. 
-  - There are really [`r sum(sam$sex=='male')`]{.groupb} and [`r sum(sam$sex == 'female')`]{.groupa}. Close enough.
-- If we've $N$ [female respondents]{.groupa} with $\le x$ years of education, we've more than $N$ [male respondents]{.groupb} like that.
-- Conversely, if we've $N$ [female respondents]{.groupa} with $> x$, years of education, we've *fewer* than $N$ such [male ones]{.groupb}.
-- But maybe the best way to think of it is in terms of *pairs of respondents*. 
+- This is exactly the same information we had overlaid on the previous plot. They're exactly the same bars.
+- What's changed is *layout*. Our groups are shown one above the other rather than interleaved as before.
+- This makes it easier to see that the [red one]{.groupa} has more mass *on the left* side than the [green one]{.groupb}.
 
-## Cumulative Distributions and Pairing
+
+## Covariate Shift *reduces* this Disparity
+::: free-zoom
 ```{r}
 #| layout-ncol: 2
-scatter.by.group(sam)
-ggplot(sam) + geom_bar(aes(x=xco(group, education), y=after_stat(prop), fill=group, color=group), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(color='none', fill='none') +
-                  stat_ecdf(aes(x=education, color=group), geom='step', linetype='dashed')
-
+#| fig-width: 7
+scatter.by.group(sam) + scaled.interleaved.bars
+ggplot(sam) + bars + facet.by.group
 ```
+:::
 
-- Suppose we have two groups of equal size and we line them up side-by-side.
-  - This effectively pairing off each person in one group with one in the other.
-  - And if we line them up sorted by education, these pairs are 'as similar as possible' in terms of education.
-- What happens if the cumulative distribution of education is consistently higher for one group?
-- Then in each pair, the person ...
-  - To convince ourselves, let's pair off our dots.
-  - ... 
-- You're standing next to ...
-- This isn't all that dissimilar to what happens in reality.
-  - You're not standing in a line like this. 
-  - But you probably tend to know people who are similar to you in terms of education.
-  - You went to school with them. Maybe work with them. etc.
+- Our plot shows that, at virtually all levels of education, male respondents out-earn female ones.
+- And the typical magnitude of this disparity is something like \$15k.
+  - Sometimes it's about \$20k (e.g. at 11, 14, and 18 years of education)
+  - Sometimes it's about \$10k (e.g. at 16 years)
+- That's summarized reasonably by the adjusted difference, \$`r money(abs(mean(Y[W==1] - muhat(0,X[W==1]))))`.
+  The raw difference, \$`r money(abs(mean(Y[W==1]) - mean(Y[W==0])))`, is much smaller. 
+- So we're seeing that covariate shift *reduces* the disparity --- it makes it smaller than what we see within levels.
+- That's two factors working together.
+  1. *A Downward Shift*. Male respondents tend to have less education than female ones.
+  2. *An Upward Trend*.   Income tends be higher at higher levels of education.
+- The relationship between the raw and adjusted difference depends on both. 
 
-
-## Covariate Shift *attenuates* the Disparity
+## Covariate Shift *increases* this other Disparity
 ```{r}
-#| out-width: 100%
-scatter.by.group(sam) + 
-  geom_bar(aes(x=xco(group, education), y=300000*after_stat(prop), fill=group, color=group), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(color='none', fill='none')
+adj.mf.ca = mean(Y[W==1] - muhat(0,X[W==1]))
+raw.mf.ca = mean(Y[W==1]) - mean(Y[W==0])
 ```
 
-$$
-\color{gray}
-\begin{aligned}
-\text{adjusted difference} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}}  \qty{ \ingroupa{Y_i} - \ingroupb{\hat \mu(1, X_i)} }
-\approx `r money(mean(Y[W==0] - muhat(1,X[W==0])))` && \qfor 
-N_w = \sum_{i: W_i=w} 1. \\
-\text{raw difference} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0} Y_i} - \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1} Y_i}  
-\approx `r money(mean(Y[W==0]) - mean(Y[W==1]))`.
-\end{aligned}
-$$
-
-- The raw
-- You could see why a female respondent might be angry about this.
-- There's some amount of messaging that education is *the key* to making money. 
-- They're looking at someone who 'should' be making less.
-  - If that were the case, maybe you'd say 'oh well, I guess I should've gone to school longer'.
-    - You probably wouldn't ..., but you might.
-  - That can happen. But it's not what's happening here.
-- We're going
-
-## Covariate Shift *exacerbates* this Disparity
 ```{r}
 #| cache: true
 georgia.state.code = 13
@@ -556,142 +562,312 @@ ga.sam = income(georgia.state.code)$sample
 
 ```{r}
 #| out-width: 100%
-this.sam = sam |> mutate(group == rbinom(nrow(sam), 1, .5))
+this.sam = ga.sam |> mutate(group = race == 'Black only') |> filter(race %in% c('Black only', 'White only'))
 
 W = this.sam$group
 X = this.sam$education
 Y = this.sam$income
-scatter.by.group(this.sam) + 
-  geom_bar(aes(x=xco(group, education), y=300000*after_stat(prop), fill=group, color=group), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(color='none', fill='none')
+N1 = sum(W==1)
+N0 = sum(W==0)
+muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
 ```
 
-$$
-\color{gray}
-\begin{aligned}
-\text{adjusted difference} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}}  \qty{ \ingroupa{Y_i} - \ingroupb{\hat \mu(1, X_i)} }
-\approx `r money(mean(Y[W==0] - muhat(1,X[W==0])))` \\
-\text{raw difference} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0} Y_i} - \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1} Y_i}  
-\approx `r money(mean(Y[W==0]) - mean(Y[W==1]))`.
-\end{aligned}
-$$
+::: free-zoom
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+scatter.by.group(this.sam) + scaled.interleaved.bars
+ggplot(this.sam) + bars + facet.by.group
+```
+:::
 
-- Here we're making the same comparison, but for [Black]{.groupa} and [White](.groupb) respondents in Georgia.
-- The within-group differences are analogous (using the same dot colors) to the ones we've just looked at.
-  - [Black]{.groupa} respondents make less than comparably-educated White ones.
-- But the covariate shift is in the opposite direction
-  - [Black]{.groupa} respondents tend to have fewer years of education than white ones. 
-- As a result, the raw disparity is *larger* than the adjusted one.
+
+- Here we're making the same comparison, but for [Black]{.groupb} and [white]{.groupa} respondents in Georgia.
+- The within-group differences are similar (using the same dot colors) to the ones we've just looked at.
+  - The trend is still upward --- more education means more income.
+  - And [Black]{.groupb} respondents make less at most levels of education, esp. the common ones.
+- But the covariate shift is in the opposite direction.
+  - [Black]{.groupb} respondents tend to have fewer years of education than [white ones]{.groupa}. 
+- As a result, the raw difference is *larger* than the adjusted one. Covariate shift *increases* the disparity.
+  - The adjusted difference is about \$`r money(abs(mean(Y[W==1] - muhat(0,X[W==1]))))`. The raw one is about \$`r money(abs(mean(Y[W==1]) - mean(Y[W==0])))`.
+- This is a bigger shift --- and in the opposite direction --- compared to what we saw in the previous example.
+  - That was \$`r money(abs(adj.mf.ca))` adjusted &rarr; \$`r money(abs(raw.mf.ca))` raw.  
 
 ## Sometimes there isn't much Covariate Shift
+
 ```{r}
-#| out-width: 100%
-this.sam = sam |> mutate(group == rbinom(nrow(sam), 1, .5))
+this.sam = sam 
+this.sam$group = (\() runif(nrow(this.sam)) <= .5) |> with_seed(10)
 
 W = this.sam$group
 X = this.sam$education
 Y = this.sam$income
-scatter.by.group(this.sam) + 
-  geom_bar(aes(x=xco(group, education), y=300000*after_stat(prop), fill=group, color=group), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(color='none', fill='none')
+N1 = sum(W==1)
+N0 = sum(W==0)
+muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
 ```
 
-$$
-\color{gray}
-\begin{aligned}
-\text{adjusted difference} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}}  \qty{ \ingroupa{Y_i} - \ingroupb{\hat \mu(1, X_i)} }
-\approx `r money(mean(Y[W==0] - muhat(1,X[W==0])))` \\
-\text{raw difference} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0} Y_i} - \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1} Y_i}  
-\approx `r money(mean(Y[W==0]) - mean(Y[W==1]))`.
-\end{aligned}
-$$
-
-## Sometimes it's Complicated
+::: free-zoom
 ```{r}
-#| out-width: 100%
+#| layout-ncol: 2
+#| fig-width: 7
+scatter.by.group(this.sam) + scaled.interleaved.bars
+ggplot(this.sam) + bars + facet.by.group
+```
+:::
+
+- We're back in California comparing respondents in two *randomly assigned* groups.
+  - I flipped a coin for each to decide whether they're [red]{.groupa} or [green]{.groupb}.
+- Because of randomization, there isn't really any covariate shift.
+  - The distribution of education is the same in both groups. The bars are the same height.
+  - As a result, the raw disparity (\$`r money(abs(mean(Y[W==1] - muhat(0,X[W==1]))))`) is 
+  about the same as the adjusted one (\$`r money(abs(mean(Y[W==1]) - mean(Y[W==0])))`).
+- There's also little difference in mean income --- at any level --- between the groups. That's why both are about \$0.
+- But if we did something as a result of the coin flip, e.g. gave one group a treatment, that might *induce* a difference.
+- Next class, we'll see how randomization can help us estimate this induced difference---the treatment's effect.
+
+
+## Sometimes Covariate Shift is Complicated
+```{r}
 this.sam = sam |> filter(race %in% c('Black only', 'White only')) |> 
-                  mutate(group = race == 'White only')
+                  mutate(group = race == 'Black only') 
 
 W = this.sam$group
 X = this.sam$education
 Y = this.sam$income
-scatter.by.group(this.sam) + 
-  geom_bar(aes(x=xco(group, education), y=300000*after_stat(prop), fill=group, color=group), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(color='none', fill='none')
+N1 = sum(W==1)
+N0 = sum(W==0)
+muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
 ```
 
+::: free-zoom
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+scatter.by.group(this.sam) + scaled.interleaved.bars
+ggplot(this.sam) + bars + facet.by.group
+```
+:::
+
+- Now we're comparing [Black]{.groupb} and [white]{.groupa} respondents in California.
+- Here we see a more complicated pattern of covariate shift---a shift toward the center.
+  - [Black]{.groupb} respondents tend to have *less extreme* levels of education than [white ones]{.groupa}.
+  - Visually, the [green bars]{.groupb} are higher in the middle than the [red ones]{.groupa}.
+- In a sense, the  rightward shift on the left side compensates for a leftward shift on the left side.
+- As a result, we don't see a big difference in the raw and adjusted differences.
+  - The adjusted difference is about \$`r money(abs(mean(Y[W==1] - muhat(0,X[W==1]), na.rm=TRUE)))` 
+  - The raw difference is about \$`r money(abs(mean(Y[W==1]) - mean(Y[W==0])))`.
+
+## What Would You Report?
+
+```{r}
+this.sam = ga.sam |> mutate(group = race == 'Black only') |> filter(race %in% c('Black only', 'White only'))
+
+W = this.sam$group
+X = this.sam$education
+Y = this.sam$income
+N1 = sum(W==1)
+N0 = sum(W==0)
+muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
+```
+
+::: {.panel-tabset}
+### California
+```{r}
+scatter.by.group(sam) + scaled.interleaved.bars
+```
+### Georgia
+```{r}
+scatter.by.group(this.sam) + scaled.interleaved.bars
+```
+:::
+
+### Exercise
+
+*Context*. You're writing an article about income disparities in the US. 
+
+1. Flip a coin. \
+
+  - **Tails**. It's on the disparity between [female]{.groupb} and [male]{.groupa} residents of California.  
+  - **Heads**. It's on the disparity between [Black]{.groupb} and [white]{.groupa} residents of Georgia.
+    
+2. You're going to include one summary in your headline---either the raw or the adjusted difference. Decide which.
+
+3. Write down, in a sentence or two, why you chose what you did.
+
+## Thoughts on the Exercise
+
+::: {.panel-tabset}
+### California
+```{r}
+scatter.by.group(sam) + scaled.interleaved.bars
+```
+### Georgia
+```{r}
+scatter.by.group(this.sam) + scaled.interleaved.bars
+```
+:::
+
+
+- There's no right answer---either in general or in any particular case.
+- And  reasons may be context-specific, e.g.  
+- Theory beyond ...; stats is about measurement, whereas your decision might be about ...
+- fsdf
+
+
+## Plan for the rest of class
+
+1. How extreme the impact of covariate shift can be.
+2. Statistical Inference.
+  - We've focused on an income disparity among *CPS respondents* living in California. 
+    - That's a sample.
+    - We're probably not particularly interested in that.
+  - What we really want to know about is the disparity among *all residents* of California.
+    - That's the population we've sampled from.
+    - And we can use our sample to learn about it.
+  - This'll be quick because it's *exactly* the same as what we've been doing.
+3. Practice with Visualization and Explanation
+4. What to Adjust For.
+  - More than One Thing?
+  - Matching 
+  - Audit Studies 
+
+
+# Testing the Limits
+## A Famously Paradoxical Example
+```{r}
+Y = c(rep(c(0,1), c(4704, 3738)), 
+      rep(c(0,1), c(2827, 1494)))
+W = c(rep(0, 4704+3738), rep(1, 2827+1494))
+
+berkeley = data.frame(admit=Y, sex=factor(c('male', 'female'), levels=c('male','female'))[W+1])
+
+dot = pop.dot
+ggplot(berkeley) + 
+      geom_point(aes(x=sex,  y=admit, color=sex), 
+                 size=dot$size, position=position_jitter(seed=0,w=.15,h=.075), alpha=dot$alpha) +
+    stat_summary(aes(x=sex, y=admit, color=sex), geom="pointrange", alpha=.7,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - width(x), 
+                 fun.max = function(x) mean(x) + width(x)) + guides(color='none') + 
+                 coord_cartesian(ylim=c(-.1,1.1)) + 
+                 scale_y_discrete(breaks=c(0,1), labels=c('Rejected', 'Admitted'))
+```
+
+
+- Let's shift our attention from income today to graduate school admissions in the 1970s.
+- Berkeley graduate programs were admitting a much higher proportion of [male applicants]{.groupa} than [female ones]{.groupb}.
+  - $\ingroupa{`r sum(Y[W==0])`/`r sum(W==0)`\approx `r round(100*mean(Y[W==0]))`}$% of male applicants were admitted
+  vs.  $\ingroupb{`r sum(Y[W==1])`/`r sum(W==1)`\approx `r round(100*mean(Y[W==1]))`}$% of female ones. 
+  - People were concerned that this difference was evidence of discrimination against female applicants.
 $$
 \color{gray}
-\begin{aligned}
-\text{adjusted difference} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}}  \qty{ \ingroupa{Y_i} - \ingroupb{\hat \mu(1, X_i)} }
-\approx `r money(mean(Y[W==0] - muhat(1,X[W==0])))` \\
-\text{raw difference} 
-&= \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0} Y_i} - \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1} Y_i}  
-\approx `r money(mean(Y[W==0]) - mean(Y[W==1]))`.
-\end{aligned}
+\text{raw difference} = \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1} Y_i} - \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0} Y_i} \approx `r round(mean(Y[W==1]) - mean(Y[W==0]), 2)`
 $$
 
-
-## Why Report One Or The Other?
-
-
-
-## Plan for Today
-
-- Work out how to see what's going on by eye and relate it to our calculations.
-- Famous Berkeley Example, Simpson's paradox.
-- Finally, we'll talk a little about how to make sense of this stuff in the context of discrimination.
-- A Warning---Statistics alone won't do it. Statistics is about measurement. 
-- All it does for is is tell us how to use a sample to estimate population summaries.
-- It doesn't tell us what these summaries mean.
+- But, on closer examination, most departments were admitting a larger proportion of their female applicants than of their male ones.
+- What's going on?  Let's see if we can figure it out by working with some stylized data.
 
 
-- To get a feel for this stuff, let's work with a very small, stylized dataset.
-
-# Covariate Shift in Stylized Data
-
+## 
 
 ```{r}
-x = c(1,1,1,0,0,0)
-y = c(0,3,3,0,0,3)
-w = c(0,1,1,0,0,1)
-jitter.y = .1*c(0,1,-1,1,-1,0)
+x = c(1,1,1,0,0,0,  0,1,1)
+y = c(1,1,1,0,0,0,  1,0,1)
+w = c(0,0,1,0,1,1,  1,0,0)   
+jitter.y = .07*c(0,0,0,0,0,0,    0,0,-1)
+jitter.x = .035*c(-1,0,1,-1,0,1,  0,0,0)  
+data = data.frame(x=x, jitter.x=jitter.x, y=y, jitter.y=jitter.y, w=w)
 
-exercise.grid = ggplot() + geom_point(aes(x=w, y=y+jitter.y), shape=1, size=5) + blank.theme
-exercise.grid.rotated = ggplot() + geom_point(aes(x=x, y=y+jitter.y), shape=1, size=5) + blank.theme
+exercise.grid = function(data) { 
+  ggplot(data) + geom_point(aes(x=x+jitter.x, y=y+jitter.y), shape=1, size=8) +
+    scale_y_continuous(breaks=c(0, 1/3, 2/3, 1), labels=c('0', '1/3', '2/3', '1')) + scale_x_continuous(breaks=c(0,1))
+}
+
+solution.grid = function(data) { 
+  exercise.grid(data) +
+    geom_point(aes(x=x+jitter.x, y=y+jitter.y, color=factor(w)), size=8, alpha=.5, data=data) + 
+    stat_summary(aes(x=x, y=y, color=factor(w)), geom="point", size=12, shape=0, data=data) +
+    geom_hline(aes(yintercept=mean.y, color=factor(w)), 
+      data=data |> group_by(w) |> summarize(mean.y=mean(y))) + 
+    guides(color='none')
+}
 ```
+
+:::: free-zoom 
 
 ```{r}
-#| out-height: 500px
-#| fig-asp: .4
+#| fig-asp: .5
+#| fig-width: 10
 
-exercise.grid
+exercise.grid(data[1:6,])
 ```
 
-- On the left ($x=0$),  we have the department where *nobody* gets in.
-- On the right ($x=1$), we have the department where *everybody* does.
-- And we have six dots for six applicants: three for each department.
-  - The $y$-coordinate of each dot is the applicant's score.
+- Above is a stylized version of the Berkeley data in which we have two departments.
+  - At the department on the left ($x=0$),  getting in is hard.
+  - At the department on the right ($x=1$), getting in is easy.
+- We'll draw dots for each applicant. 
+  - The $y$-coordinate indicates whether they were admitted ($y=1$) or not ($y=0$).
 
-- Draw in the means for the two columns.
-- Then color 3 points red and 3 green so that the red 
+::: {.panel-tabset}
 
-the points so that
-- Draw in the means for the two columns. 
-- Color the points so that
+### Warm-up Exercise
+- Color three dots red and three green so that ...
+  1. Within each column, the mean of the green dots is *equal to* the mean of the red dots.
+  2. The mean of all the green dots is *lower* than the mean of the red ones. 
+- In red and green ...
+  1. Draw squares to show the within-column means of that color's dots.
+  2. Draw a horizontal line to show the mean of all the dots of that color.
+    
+### Follow-up Exercise
+- Add three more dots --- two red and one green --- so that ...
+  1. Within each column, the mean of the green dots is *now higher* the mean of the red ones. 
+  2. The mean of all the red dots is *still lower* than the mean of the red ones. 
+- Move the squares and lines so these new dots are included.
 
-blah blah blah.
+### Warm-up Solution
+
+```{r}
+#| fig-asp: .5
+#| fig-width: 10
+solution.grid(data[1:6,])
+```
+
+### Follow-up Solution
+
+```{r}
+#| fig-asp: .5
+#| fig-width: 10
+solution.grid(data)
+```
 
 
-# Main Bit
+:::
+::::
 
-## The Black/White Income Gap in California
+## Simpson's Paradox
 
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+
+solution.grid(data)
+ggplot(data) + geom_bar(aes(x=x, y=after_stat(prop), fill=factor(w), color=factor(w)), 
+                     position='identity', alpha=.05, linewidth=.4) +
+              guides(color='none', fill='none') +
+              facet_grid(rows=vars(factor(w))) +
+              theme(strip.background=element_blank(), strip.text=element_blank())
+```
+
+
+- What we're seeing here is covariate shift so extreme that it flips the disparity.
+
+
+
+
+# Stuff
+
+## Yup
 
 ```{r}
 filtered = \(rows) rows[rows$income < 5e5 & rows$race %in% c('White only', 'Black only'),]
