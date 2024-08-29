@@ -46,19 +46,23 @@ local function read_svg(path)
   --- remove the 'pt' units from the width and height. It should use the default 'px' units this way.
   svg_lines[1] = string.gsub(svg_lines[1], '(%d+[.]?%d*)pt', '%1')
   
-  if uids[svg_content] then
-    local use_tag = string.gsub('<g class="svg-zoom"> \n<use href="#$uid"/> \n</g>', 
-                                "%$(%w+)", {uid=uids[svg_content]})
-    return table.concat({svg_lines[1], use_tag, svg_lines[#svg_lines]}, " \n")
-  else
-    uids[svg_content] = 'unique-content-' .. (table_size(uids) + 1)
-    local group_open = string.gsub('<g class="svg-zoom"> \n<g id="$uid">', 
-                                   "%$(%w+)", {uid=uids[svg_content]})
+  --- This attempt to avoid duplicating the SVG content is not working. 
+  --- I'm seeing nothing when these ones with use tags get rendered 
+  
+  --- if uids[svg_content] then
+  ---  local use_tag = string.gsub('<g class="svg-zoom"> \n<use href="$uid"/> \n</g>', 
+  ---                              "%$(%w+)", {uid=uids[svg_content]})
+  ---  return table.concat({svg_lines[1], use_tag, svg_lines[#svg_lines]}, " \n")
+  --- else
+  ---  uids[svg_content] = 'svg-content-' .. (table_size(uids) + 1)
+  ---  local group_open = string.gsub('<g class="svg-zoom"> \n<g id="$uid">', 
+  ---                                 "%$(%w+)", {uid=uids[svg_content]})
+    local group_open = '<g class="svg-zoom"><g>'                            
     local group_close = "</g></g>"
     table.insert(svg_lines, 2, group_open)
     table.insert(svg_lines, #svg_lines, group_close)
     return table.concat(svg_lines, " \n")
-  end
+  --- end
 end
 
 function Image (elem)
