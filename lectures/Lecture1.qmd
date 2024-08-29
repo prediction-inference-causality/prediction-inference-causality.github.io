@@ -57,16 +57,21 @@ sam = pop[J,]
 ```
 
 ```{r}
-j.plot = sample(1:nrow(pop))[1:23000]
+display.frac = 1/10
+n.display = round(display.frac * nrow(pop))
+j.plot = sample(1:nrow(pop))[1:n.display]
+
 xco = function(w,x,scale=.3) { x + (scale/2)*(2*as.numeric(w) - 1) }
 
 social.pressure.plot = ggplot(pop[j.plot,], aes(x=xco(treatment==' Neighbors', age), y=as.numeric(voted=='Yes'), color=treatment, shape=p2002)) +
-  geom_point(alpha=.2, size=.5, position=position_jitter(h=.1, w=.05)) +
+  geom_point(alpha=.2, size=1, position=position_jitter(h=.1, w=.05, seed=0)) +
   guides(color='none', shape='none') + 
   scale_y_continuous(breaks=c(0,.5, 1), labels=c('No','','Yes')) + 
   scale_x_continuous(breaks=seq(20,105,5)) 
 
-annotated.social.pressure.plot = social.pressure.plot + stat_summary(geom='point', fun=mean)
+annotated.social.pressure.plot = social.pressure.plot + 
+  stat_summary(geom='point', fun=mean, data=pop)
+
 ```
 
 ```{r}
@@ -106,11 +111,12 @@ social.pressure.plot
 ### The Data
 
 ```{r}
-triangle =  '&#9650;'
+triangle =  '&#9652;'
 circle = '&#9679;'
 ```
 
-Each person is a dot
+Each person is a dot.
+
 - Their current age determines where it is on the x-axis.
 - It's a `r triangle` if they voted in the 2002 primary and a `r circle` if they didn't.
 - It's [green]{.groupb} if they got the [neighbors letter]{.groupb} and [red]{.groupa} if they got [no letter]{.groupa}.
@@ -120,7 +126,7 @@ Each person is a dot
 :::
 
 ::: aside
-We're not really showing a dot for each person. It's hard for your browser to display that many, so we're choosing a tenth of the randomly and showing those.
+We're not really showing a dot for each person. It's hard for your browser to display that many, so we're choosing  `r percent(display.frac)` of them randomly and showing those.
 :::
 
 ## A Missed Opportunity?
@@ -163,10 +169,10 @@ social.pressure.plot
 - We get out our list of voters aged 25-35 and look at the first two.
 
 
- Name | Age | Voted 2002 | Voted 2006 | Voted 2006 given Letter 
+ Name | Age | Voted 2002 | Voted 2006 | if sent letter 
 ------|-----|------------|------------|------------------------ 
- Rush Hoogendyk | 27 | Yes | No  | ?
- Mitt DeVos     | 31 | No  | No  | ?
+ Rush Hoogendyk | 27  | `r triangle` Yes | No  | ?
+ Mitt DeVos     | 31  | `r circle`   No   | No  | ?
 
 
 ```{r}
@@ -223,11 +229,11 @@ annotated.social.pressure.plot
 - That is, we can fill in all the **?**s in our table below.
  made a prediction for each person. I did one more.
 
- Name | Age | Voted 2002 | Voted 2006 | Voted 2006 given Letter 
+ Name | Age | Voted 2002 | Voted 2006 | if sent letter 
 ------|-----|------------|------------|------------------------ 
- Rush Hoogendyk | 27 | Yes | No  | No (`r percent(mean(rush.votes))` of Rush-types voted) 
- Mitt DeVos     | 31 | No  | No  | No (`r percent(mean(mitt.votes))` of Mitt-types voted)
- Al   Granholm  | 34 | No  | No  | No (`r percent(mean(al.votes))`   of Al-types voted)
+ Rush | 27 | `r triangle` Yes | No  | No (`r percent(mean(rush.votes))` of [Rush-types]{.groupb} voted) 
+ Mitt     | 31 | `r circle` No   | No  | No (`r percent(mean(mitt.votes))` of [Mitt-types]{.groupb} voted)
+ Al   | 34 | `r circle` No   | No  | No (`r percent(mean(al.votes))`   of [Al-types]{.groupb} voted)
  ...            | ...|...  |...  | ?
 
 
@@ -300,9 +306,9 @@ $$
 \begin{aligned}
 \text{predicted turnout among 25-35s}  
 =& \ \ingroupb{`r 100*round(voting_rate(' Neighbors'),3)`\%} 
-&& \text{ with the Neighbors letter} \\
+&& \text{ with the \ingroupb{neighbors letter}} \\
 vs. =& \ \ingroupa{`r 100*round(voting_rate(' Control'),3)`\%}
-&& \text{ with no letter }
+&& \text{ with \ingroupa{no letter}}
 \end{aligned}
 $$
 
@@ -355,7 +361,7 @@ estimates.plot + scales
 :::
 ::: {.fragment .current-visible data-fragment-index="0"}
 ```{r}
-estimates.plot + faint.intervals + strong.interval + scales
+estimates.plot +  strong.interval + scales
 ```
 :::
 ::: {.fragment .current-visible data-fragment-index="1"}
@@ -383,7 +389,7 @@ estimates.plot +
 ```{r}
 estimates.plot +
     strong.interval + 
-    geom_histogram(aes(x=rate, y=3*after_stat(density)), alpha=.21, data=bootstrap.reps, binwidth=.2) +
+    geom_histogram(aes(x=rate, y=3*after_stat(density)), alpha=.2, data=bootstrap.reps, binwidth=.2) +
     geom_point(aes(x=rate, y=y), data=bootstrap.reps, color='purple', alpha=.2) + 
     scales
 ```
@@ -392,7 +398,7 @@ estimates.plot +
 ```{r}
 estimates.plot +
     strong.interval + 
-    geom_histogram(aes(x=rate, y=3*after_stat(density)), alpha=.22, data=bootstrap.reps, binwidth=.2) +
+    geom_histogram(aes(x=rate, y=3*after_stat(density)), alpha=.2, data=bootstrap.reps, binwidth=.2) +
     geom_point(aes(x=rate, y=y), data=bootstrap.reps, color='purple', alpha=.2) + 
     scales
 ```
@@ -564,7 +570,7 @@ annotated.social.pressure.plot
 - Making statements about our estimand using our sample is called *inference*.
   - Typically, we do that with an *interval estimate*. 
   - That's a claim that our estimand is in some range of values.
-  - Usually a range centered on a *point estimate* like our [green dot]{.groupa}.
+  - Usually a range centered on a *point estimate* like our [green dot]{.groupb}.
 - What's complicated here is that the population we're thinking of is *counterfactual*.
   - It doesn't exist because we didn't mail the letter to everyone in Michigan.
   - Talking about *counterfactual populations* is a big part of the way we think about *Causality*.
