@@ -281,7 +281,7 @@ sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
 ### Again and Again
 
 ```{webr-r}
-with.replacement = function(pop) {
+with.replacement = function(pop, sampling.rate=sampling.rate) {
   N = round(m * sampling.rate) 
   J = sample(1:m, N, replace=TRUE)
   sam = pop[J,]
@@ -336,7 +336,7 @@ sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
 
 ```{webr-r}
 # editor-code-line-numbers: 2
-without.replacement = function(pop) {
+without.replacement = function(pop, sampling.rate=sampling.rate) {
   N = round(m * sampling.rate) 
   J = sample(1:m, N, replace=FALSE)
   sam = pop[J,]
@@ -381,7 +381,7 @@ sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
 
 ```{webr-r}
 # editor-code-line-numbers: 2-3
-by.randomization = function(pop) {
+by.randomization = function(pop, sampling.rate=sampling.rate) {
   flips = rbinom(m, 1, sampling.rate)
   sam = pop[flips==1,]
   estimator(sam)
@@ -470,7 +470,7 @@ sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
 
 ```{webr-r}
 # editor-code-line-numbers: 2
-by.shuffling = function(pop) {
+by.shuffling = function(pop, sampling.rate=sampling.rate) {
   N = round(m * sampling.rate) 
   shuffled = sample(1:m, replace=FALSE) 
   sam = pop[shuffled[1:N],]
@@ -518,7 +518,7 @@ sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
 
 ```{webr-r}
 # editor-code-line-numbers: 2
-randomization.then.sampling = function(pop) {
+randomization.then.sampling = function(pop, sampling.rate=sampling.rate) {
   flips = rbinom(m, 1, sampling.rate)
   heads.pop = pop[flips==1,]
   
@@ -549,11 +549,11 @@ ggplot(data.frame(sample=estimator.samples, rep=(1:R)/R)) +
 
 ```{webr-r}
 all.samples = pops |> map(function(...) {
-  data.frame(with.replacement=with.replacement(pop),
-             without.replacement=without.replacement(pop),
-             by.randomization=by.randomization(pop),
-             by.shuffling=by.shuffling(pop),
-             randomization.then.sample=randomization.then.sampling(pop))
+  data.frame(with.replacement=with.replacement(pop, sampling.rate),
+             without.replacement=without.replacement(pop, sampling.rate),
+             by.randomization=by.randomization(pop, sampling.rate),
+             by.shuffling=by.shuffling(pop, sampling.rate),
+             randomization.then.sample=randomization.then.sampling(pop, sampling.rate))
 }) |> bind_rows() |> 
       pivot_longer(cols=everything(), 
       names_to='sampling', values_to='estimate') 
