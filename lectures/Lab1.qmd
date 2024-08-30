@@ -73,10 +73,10 @@ pop = data.frame(j=1:m,
                  y=rep(c(0,1), m/2))
                  
 scales = list(scale_x_continuous(breaks = 1:m),
-              scale_y_continuous(breaks = c(0,1/2,1))) 
+              scale_y_continuous(breaks = (0:3/3), labels=sprintf("%d/3", 0:3))) 
 
 pop.plot = ggplot(pop, aes(x = j, y = y)) + 
-           geom_point(shape='circle') + 
+           geom_point(shape='circle', alpha=.1, size=5) + 
            scales               
 pop.plot
 ```
@@ -147,14 +147,17 @@ $$
 Y_1 \ldots Y_N \qqtext{ is the standard notation.}
 $$
 
-- This one. 
+- This one. I've taken my plot of the population and *colored in* the dots I talked to.
 
 ```{webr-r}
 sampling.rate = 1/2
 
 N = round(m * sampling.rate)
 sam = pop[1:N, ]
-sam.plot = ggplot(sam, aes(x=j,y=y)) + geom_point()
+
+sam.plot = pop.plot + geom_point(aes(x=j, y=y), data=sam, 
+                                 size=5, color='blue', alpha=.5) 
+sam.plot 
 ```
 
 ::: {.panel-tabset}
@@ -179,6 +182,9 @@ estimator(sam)
 ```{webr-r}
 sam.plot + geom_hline(yintercept=estimator(sam))
 ```
+
+- The horizontal line shows the mean of my sample $Y_1 \ldots Y_n$. 
+- That is, the fraction of times I head 'I prefer B' when I ask someone's preference.
 
 ### Terminology
 
@@ -228,6 +234,7 @@ To do that, I'm going to use the function *map_vec* from the package **purr**.
 ```{webr-r}
 plus.one = function(x) { x + 1 }
 one.to.ten = 0:9 |> map_vec(plus.one)
+one.to.ten
 ```
 
 ::: {.panel-tabset}
@@ -241,6 +248,7 @@ one.to.ten = 0:9 |> map_vec(plus.one)
 
 ```{webr-r}
 one.to.ten.again = 0:9 |> map_vec(\(x) x+1)
+one.to.ten.again
 ```  
 
 ### Functional Programming Convention (very optional)
@@ -271,17 +279,30 @@ pops = rep(list(pop), R)
 - But you have to *replace* the ball you picked before you pick again.
 
 ::: {.panel-tabset}
-### Doing it ... 
+### Do it 
 
 ```{webr-r}
-estimate = NaN                                         # NaN stands for Not a Number.
-sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
+estimate = NaN                                       
+sam.plot = pop.plot + geom_hline(yintercept=estimate)    
+sam.plot          
 ```
 
-### Again and Again
+- Color in the dots you talked to. 
+  - If talked to the same one multiple times, draw in another dot.
+- Then draw a horizontal line indicating your estimate: the mean of your sample  $Y_1 \ldots Y_n$.
+- I've made the variable *estimate* NaN. That stands for Not a Number. Change it to a number.
+  - ggplot will just ignore it until you do, but it'll draw it in once you have. 
+  - That'll give you a sense of how precisely you've drawn your line.
+- You can **use the built-in whiteboard tool** to do draw with your stylus, mouse, trackpad, etc.
+  - You should be able to just draw with a stylus. If you want to scroll and change tabs instead, use a finger.
+  - With a mouse or trackpad, double-click to open it the tool.
+  - While in whiteboard mode, you can't scroll, type, etc. Click the 'x' on the bottom panel to get out.
+
+
+### ... Again and Again
 
 ```{webr-r}
-with.replacement = function(pop, sampling.rate=sampling.rate) {
+with.replacement = function(pop, sampling.rate=1/2) { 
   N = round(m * sampling.rate) 
   J = sample(1:m, N, replace=TRUE)
   sam = pop[J,]
@@ -295,6 +316,8 @@ ggplot(data.frame(sample=estimator.samples, rep=(1:R)/R)) +
   geom_point(aes(x=sample, y=rep), position=position_jitter(w=.01,h=0), color='purple', alpha=.3) + 
   geom_vline(xintercept=estimate) 
 ```
+
+
 
 **Q.** Why are there four bars?
 
@@ -325,18 +348,19 @@ ggplot(data.frame(sample=estimator.samples, rep=(1:R)/R)) +
 
 
 ::: {.panel-tabset}
-### Doing it ... 
+### Do it 
 
 ```{webr-r}
-estimate = NaN                                         # NaN stands for Not a Number.
-sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
+estimate = NaN                                       
+sam.plot = pop.plot + geom_hline(yintercept=estimate)    
+sam.plot          
 ```
 
-### Again and Again
+### ... Again and Again
 
 ```{webr-r}
 # editor-code-line-numbers: 2
-without.replacement = function(pop, sampling.rate=sampling.rate) {
+without.replacement = function(pop, sampling.rate=1/2) {
   N = round(m * sampling.rate) 
   J = sample(1:m, N, replace=FALSE)
   sam = pop[J,]
@@ -370,18 +394,19 @@ In **R**, this a one line change to the sampling code.
 - Our sample is everyone who flips heads. 
 
 ::: {.panel-tabset}
-### Doing it ... 
+### Do it  
 
 ```{webr-r}
-estimate = NaN                                         # NaN stands for Not a Number.
-sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
+estimate = NaN                                       
+sam.plot = pop.plot + geom_hline(yintercept=estimate)    
+sam.plot          
 ```
 
-### Again and Again
+### ... Again and Again
 
 ```{webr-r}
 # editor-code-line-numbers: 2-3
-by.randomization = function(pop, sampling.rate=sampling.rate) {
+by.randomization = function(pop, sampling.rate=1/2) {
   flips = rbinom(m, 1, sampling.rate)
   sam = pop[flips==1,]
   estimator(sam)
@@ -425,14 +450,15 @@ ggplot(data.frame(sample=estimator.samples, rep=(1:R)/R)) +
 - Pick any 3 people you want. Minimize effort.
 
 ::: {.panel-tabset}
-### Doing it ... 
+### Do it  
 
 ```{webr-r}
-estimate = NaN                                         # NaN stands for Not a Number.
-sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
+estimate = NaN                                       
+sam.plot = pop.plot + geom_hline(yintercept=estimate)    
+sam.plot          
 ```
 
-### Again and Again
+### ... Again and Again
 
 ```{webr-r}
 
@@ -453,11 +479,12 @@ sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
 
 
 ::: {.panel-tabset}
-### Doing it ... 
+### Do it 
 
 ```{webr-r}
-estimate = NaN                                         # NaN stands for Not a Number.
-sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
+estimate = NaN                                       
+sam.plot = pop.plot + geom_hline(yintercept=estimate)    
+sam.plot          
 ```
 
 - It's hard to shuffle six cards by hand, so I'm going to give you 24. 
@@ -465,12 +492,12 @@ sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
 -  Shuffle all of them, then take out the diamonds without changing their order.
 -  That's 1-6 shuffled. The other cards were just filler to help you shuffle. 
 
-### Again and Again
+### ... Again and Again
 
 
 ```{webr-r}
 # editor-code-line-numbers: 2
-by.shuffling = function(pop, sampling.rate=sampling.rate) {
+by.shuffling = function(pop, sampling.rate=1/2) {
   N = round(m * sampling.rate) 
   shuffled = sample(1:m, replace=FALSE) 
   sam = pop[shuffled[1:N],]
@@ -500,11 +527,12 @@ ggplot(data.frame(sample=estimator.samples, rep=(1:R)/R)) +
 - ... we roll an appropriately-sized die to make calls. As many calls as we want in our sample.
 
 ::: {.panel-tabset}
-### Doing it ... 
+### Do it 
 
 ```{webr-r}
-estimate = NaN                                         # NaN stands for Not a Number.
-sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
+estimate = NaN                                       
+sam.plot = pop.plot + geom_hline(yintercept=estimate)    
+sam.plot          
 ```
 
 - You probably don't have the right die for this. Here's a trick. 
@@ -513,12 +541,12 @@ sam.plot + geom_hline(yintercept=estimate)             # Change it to a number.
 - The result of your last roll is as if you'd rolled the right die.
 - This is called *rejection sampling*. 
 
-### Again and Again
+### ... Again and Again
 
 
 ```{webr-r}
 # editor-code-line-numbers: 2
-randomization.then.sampling = function(pop, sampling.rate=sampling.rate) {
+randomization.then.sampling = function(pop, sampling.rate=1/2) {
   flips = rbinom(m, 1, sampling.rate)
   heads.pop = pop[flips==1,]
   
@@ -548,6 +576,7 @@ ggplot(data.frame(sample=estimator.samples, rep=(1:R)/R)) +
 
 
 ```{webr-r}
+sampling.rate = 1/2
 all.samples = pops |> map(function(...) {
   data.frame(with.replacement=with.replacement(pop, sampling.rate),
              without.replacement=without.replacement(pop, sampling.rate),
