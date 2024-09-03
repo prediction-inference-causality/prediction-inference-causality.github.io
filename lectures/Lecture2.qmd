@@ -4,128 +4,329 @@ subtitle: "Point and Interval Estimates"
 ---
 
 
-# Review and Warm-Up
+# Review
 
-## How Many Odd Numbers Are There Between 1 and 6?
+## Friday's Lab
 
 {{< include shared-code.qmd >}}
 
 ```{r}
+#| label: define-population
 m = 6
-number = 1:6
-y = number %% 2
+pop = data.frame(j=1:6, 
+                 y=c(0,1,1,1,0,1))
+                 
+scales = list(scale_x_continuous(breaks = 1:m),
+              scale_y_continuous(breaks = (0:3/3), labels=sprintf("%d/3", 0:3))) 
 
-set.seed(1)
-n = 5
-J = sample(number, 5, replace=TRUE)
-Y = y[J]
-
-scale_dice=scale_x_continuous(breaks=(0:5)/5, labels=sprintf('%d/5', 0:5), limits=c(0,1))
+pop.plot = ggplot(pop, aes(x = j, y = y)) + 
+           geom_point(shape='circle', alpha=.1, size=5) + 
+           scales               
 ```
 
-- You could count them all, but that's tedious. 
-
-$$
-\begin{array}{r|rrrrrr|r}
-j & 1 & 2 & 3 & 4 &  \dots &   `r m` & \bar{y}  \\
-y_{j} & `r y[1]` & `r y[2]` & `r y[3]` & `r y[4]` & \dots & `r y[m]`   & \textcolor{blue}{`r approx(mean(y))`}  \\
-\end{array}
-$$
-
-- Instead, you do a little experiment.
-  - You roll a die 5 times.
-  - You record the proportion of odds you get.
-
-$$
-\begin{array}{r|rrrrr|r}
-i & 1 & 2 & 3 & 4 & 5 & \bar{Y}  \\
-J_i & `r J[1]` & `r J[2]` & `r J[3]` & `r J[4]` & `r J[5]` & \\
-Y_i & `r Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \inpollb{`r approx(mean(Y))`} \\
-\end{array}
-$$
-
-- Much faster. And if you do bother to count them all... 
-- You'll find [our estimate]{.fg text="style:red"} is pretty close to [the actual proportion]{.pollb}
-- But is this approach trustworthy? After all, the answer we got *is* random.
-- To talk about this, we'll think about the *sampling distribution* of our estimate.
-
-## The Sampling Distribution is ...
+:::: columns
+::: column
 
 ```{r}
-#| out-height: 500px
-
-dice.samples = function(reps=10000) { 
-  Js = t(replicate(10000, sample(number, n, replace=TRUE)))
-  Ys = array(dim=dim(Js))
-  for (i in 1:10000) {
-    Ys[i,] = y[Js[i,]]
-  }
-  list(Js=Js,Ys=Ys)
-}
-
-dice.bar = function(Ys) { 
-  dice.summaries = data.frame(p=rowMeans(Ys), y=runif(nrow(Ys)))
-  dice.roll.1 = data.frame(x=mean(Ys[1,]), y=.1)
-  dice.roll.2 = data.frame(x=mean(Ys[2,]), y=.2)
-  ggplot() + geom_bar(aes(x=p, y=after_stat(prop)), alpha=.3, data=dice.summaries) + 
-    geom_point(aes(x=x,y=y), color=pollb,   size=5,  data=dice.roll.1) +
-    geom_point(aes(x=x,y=y), color=pollc, size=5,  data=dice.roll.2) + scale_dice 
-}
-s = dice.samples()
-Js = s$Js 
-Ys = s$Ys
-dice.summaries = data.frame(p=rowMeans(Ys), y=runif(nrow(Ys)))
-dice.bar(Ys)
+#| fig-width: 7
+y= pop$y
+pop.plot + geom_point(aes(x=j, y=y), size=5, data=pop[c(3,5,6),], color=polla)
 ```
 
-:::: {.columns}
-::: {.column width="60%"}
-- the distribution of estimates we'd get if we **replicated** our experiment over and over.
-- Think of lots of different people rolling the dice and reporting what they got.
-- We'll think about this by imagining that our friends did the same experiment. 
-  - We'll give each friend a row in a table.
-  - And we'll give their estimates a color so we can tell them apart.
 :::
-::: {.column width="40%"}
+::: column
+
 $$
-\begin{array}{r|rrrrr|r}
-i & 1 & 2 & 3 & 4 & 5 & \bar{Y}  \\
-\hline
-J_i & `r J=Js[1,]; J[1]` & `r J[2]` & `r J[3]` & `r J[4]` & `r J[5]` & \\
-Y_i & `r Y=y[J];   Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \inpollb{`r approx(mean(Y))`} \\
-\hline
-J_i & `r J=Js[2,]; J[1]` & `r J[2]` & `r J[3]` & `r J[4]` & `r J[5]` & \\
-Y_i & `r Y=y[J];   Y[1]` & `r Y[2]` & `r Y[3]` & `r Y[4]` & `r Y[5]` & \inpollc{`r approx(mean(Y))`} \\
-\hline
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\color{gray}
+\begin{array}{r|rrrrrr|r}
+j & 1 & 2 & 3 & 4 & 5 & 6 & 
+\bar{y}  \\
+y_{j} & `r y[1]` & `r y[2]` & \inpolla{`r y[3]`} & `r y[4]` & \inpolla{`r y[5]`} & \inpolla{`r y[6]`} 
+& \textcolor{black}{`r sum(y)`/`r length(y)`}  \\
 \end{array}
 $$
+
+:::
+::::
+
+- On Friday, we talked about how to use sampling to summarize a population without surveying everyone in it.  
+  - We estimated the proportion of people in a population of six who prefer chocolate to sour candy. 
+  - In the fake population shown above, `r sum(pop$y)`/`r m` people prefer chocolate.
+  - Those who prefer chocolate are in the top row, at y=1. Those who prefer sour candy are below at y=0.
+- We tried a few different sampling schemes. 
+  - sampling with replacement, sampling without replacement, coin-flip randomization, convenience sampling
+- Ultimately we chose coin-flip randomization. 
+  - We flipped a coin for each person in our population to decide whether they would be sampled.
+  - Of the [3 people who flipped heads]{.polla}, 2 prefer chocolate to sour candy. 
+  - So our estimate of the proportion of the population who preferred chocolate was 2/3.
+
+## Fake Data Simulation 
+
+:::: columns
+::: column
+
+```{r}
+#| fig-width: 7
+#| layout-nrow: 3
+y= pop$y
+sam1 = pop[c(3,5,6),]
+sam2 = pop[c(4,6),]
+sam3 = pop[c(1,3,4,6),]
+pop.plot + geom_point(aes(x=j, y=y), size=5, data=sam1, color=polla) + 
+           geom_point(aes(x=j, y=y-.05),     size=5, data=sam2, color=pollb) + 
+           geom_point(aes(x=j, y=y-.1), size=5,  data=sam3, color=pollc)
+```
+
+:::
+::: column
+
+$$
+\color{gray}
+\begin{array}{r|rrrrrr|r}
+j & 1 & 2 & 3 & 4 & 5 & 6 & 
+\bar{Y}  \\
+y_{j} & `r y[1]` & `r y[2]` & \inpolla{`r y[3]`} & `r y[4]` & \inpolla{`r y[5]`} & \inpolla{`r y[6]`} 
+& \inpolla{`r sum(sam1$y)`/`r length(sam1$y)`}  \\
+y_{j} & `r y[1]` & `r y[2]` & `r y[3]` & \inpollb{`r y[4]`} & `r y[5]` & \inpollb{`r y[6]`} 
+& \inpollb{`r sum(sam2$y)`/`r length(sam2$y)`}  \\
+y_{j} & \inpollc{`r y[1]`} & `r y[2]` & \inpollc{`r y[3]`} & \inpollc{`r y[4]`} & `r y[5]` & \inpollc{`r y[6]`} 
+& \inpollc{`r sum(sam3$y)`/`r length(sam3$y)`}  \\
+\end{array}
+$$
+
 :::
 ::::
 
 
-## What Do We Do With This
+- This was a huge time-saver.  But is our estimate trustworthy? 
+- How close was our estimate to the actual proportion in the population of 6?
+- We looked into it ahead of time by running a **simulation** of our survey on a fake population.
+  - We did exactly what we did in our actual survey, but we did it over and over.
+  - This let us look at what our estimator does, knowing what we want it to do: be $\textcolor{gray}{ \approx 4/6}$.
+  - Above, we've shown the results of three of these simulations.  
+- We call the distribution of estimates we get like this our estimator's **sampling distribution**.
+  - These three estimates are three *draws* from the sampling distribution. 
+  - That's three equally-likely outcomes of our survey. And we do ok in these three.
+  - But that's just three. To get a better sense of what's likely, we should look at a lot more.
+
+## Visualizing the Sampling Distribution
+
 ```{r}
-#| out-height: 500px
-#| layout-ncol: 2
-#| 
-dice.bar(Ys)
-s.rep = dice.samples() ## change sampling distn
-dice.bar(s.rep$Ys)
+#| label: sampling-mechanisms
+estimator = function(sam) { mean(sam$y) }
+with.replacement = function(pop, sampling.rate=1/2) { 
+  N = round(m * sampling.rate) 
+  J = sample(1:m, N, replace=TRUE)
+  sam = pop[J,]
+  estimator(sam)
+}
+without.replacement = function(pop, sampling.rate=1/2) {
+  N = round(m * sampling.rate) 
+  J = sample(1:m, N, replace=FALSE)
+  sam = pop[J,]
+  estimator(sam)
+}
+coinflip.randomization = function(pop, sampling.rate=1/2) {
+  flips = rbinom(m, 1, sampling.rate)
+  sam = pop[flips==1,]
+  estimator(sam)
+}
+convenience = function(pop, sampling.rate=1/2) {
+  N = round(m * sampling.rate) 
+  J = 1:N 
+  sam = pop[J,]
+  estimator(sam)
+}
 ```
 
+```{r}
+#| label: candy-sampling-distributions
 
-- This is a little counterintuitive as a summary of the proportion of odds between 1 and 6.
-  - But it does tell us something. 
-  - It's pretty different from what we'd get if there were only one odd number.
-- We can make this sound more like the proportion we want by saying how close we tend to be and how often we're that close.
-- We'll be exactly right in `r percent(mean(dice.summaries$p==1/2))` of replications. That's not all that useful to report.
-  - It's just not possible to be exactly right when we count the number of odds in 5 rolls.
-  - Our estimate will be some number of fifths (0/5,1/5,2/5 ...). The true proportion 1/2 isn't.
-- But we'll be off by no more than 1/10 in `r percent(mean(abs(dice.summaries$p-1/2) <= 1/10))` of replications---ones where we roll odd 2/5 or 3/5 times.
-- Using this last result, we can report two things.
-  1. An **interval** you can expect the actual proportion of odds is in---the interval $\text{proportion in experiment} \pm 1/10$.
-  2. The degree of **confidence** you have that it's actually in it. The true proportion is in it `r percent(mean(abs(dice.summaries$p-1/2) <= 1/10))` of the time.
+set.seed(1) 
+sampling.rate = 1/2
+all.samples = rep(list(pop), 1000) |> map(function(pop) {
+  data.frame(with.replacement=with.replacement(pop, sampling.rate),
+             without.replacement=without.replacement(pop, sampling.rate),
+             coinflip.randomization=coinflip.randomization(pop, sampling.rate),
+             convenience=convenience(pop, sampling.rate))
+}) |> bind_rows() |> 
+      pivot_longer(cols=everything(), 
+      names_to='sampling', values_to='estimate') 
+all.samples$y = runif(nrow(all.samples))
+```
+
+::: {.panel-tabset group="candy-sampling"}
+
+### Using Dots
+```{r}
+coinflip.samples = all.samples |> filter(sampling == 'coinflip.randomization')
+scale_x = scale_x_continuous(breaks = (0:3)/3, labels=sprintf("%d/3", 0:3), limits=c(-.2, 1.2))
+scale_y = scale_y_continuous(breaks = seq(0, 1, by=.25), limits=c(0,1))
+
+sampling.dist.plot = ggplot(coinflip.samples) +
+  geom_vline(xintercept=mean(y), color='green', linewidth=2, alpha=.5) + 
+  geom_point(aes(x=estimate, y=y), color='purple', alpha=.2, size=.5) 
+sampling.dist.plot + scale_x + scale_y
+```
+
+### Using Bars 
+```{r}
+sampling.dist.plot + 
+  geom_bar(aes(x=estimate, y=after_stat(prop)), alpha=.2) + scale_x + scale_y
+```
+
+### Using Histograms
+```{r}
+histogram_overlay = geom_histogram(aes(x=estimate, y=after_stat(density)/3), breaks=(-1:3)/3 + 1/6, alpha=.2) 
+sampling.dist.plot + histogram_overlay + scale_x + scale_y
+```
+
+:::
+
+::: {.panel-tabset group="candy-sampling"}
+### Using Dots
+- Above, we plot 1000 draws from the sampling distribution as 1000 [`r circle`]{.purple}s.
+- To highlight what we want, we've drawn the population proportion as a green line. 
+- Eyeballing it, we can see that estimates are usually pretty close, but not always.
+
+### Using Bars
+
+- To be more precise, we could count the dots in each column. But it's easier to ask our computer to do it for us.
+  - We can draw in the proportion of dots in each column as a bar graph. [Do it!]{.button .navigate-next}
+  - But this can be a bit hard to read because of the uneven spacing of the columns.
+  - Most of the dots are in the middle, but there are a lot of columns there. A lot of slightly different estimates.
+  - As a result, no bar there is particularly high. The highest bar is out at $x=1$.
+
+### Using Histograms
+
+- To fix this, we can group together nearby columns into *bins* and count the dots in each bin.
+  - This gives a sense of the *density* of estimates near each value of $x$. [Switch!]{.button .navigate-next} [Switch back.]{.button .navigate-prev}
+  - It works! The highest bar is in the middle. We call this kind of plot *a histogram*. 
+  - These can be a bit fussy to get right because where the bin-edges are matters. 
+    - Here the estimates of 1/2 contribute to the bar centered at 1/3 instead of the one centered at 2/3.
+    - That's pretty arbitrary given 1/2 is equally close to both centers.
+  - But---especially if you keep that issue in mind---it's a good visualization. We'll use them a lot.
+
+:::
+
+## Sampling Distributions in Real Studies
+
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7 
+#| fig-cap:
+#|  - Your Estimator in a Simulated Study
+#|  - Your Estimator in a Real Study 
+
+sampling.dist.plot + histogram_overlay + scale_x + scale_y
+ggplot(coinflip.samples[1,]) + geom_point(aes(x=estimate, y=1/2)) + scale_x + scale_y
+```
+
+- It's easy to think about sampling distributions when we're running a **simulation** of our study.
+  - We can run our simulation as many times as we want and plot the sampling distribution.
+  - And we can use our knowledge of the population to see if we're happy with it.
+- In a real study, we don't have any of this. All we get is one estimate.
+- But that doesn't stop us from filling in the rest of the picture by ...
+  
+   1. thinking of it as one draw from our estimator's sampling distribution.
+   2. working out where that sampling distribution is in relation to the estimation target.
+   3. using the data we have to estimate the sampling distribution.
+
+
+
+## What Do We Do with a Sampling Distribution?
+```{r}
+scale_x = scale_x_continuous(breaks = (0:3)/3, labels=sprintf("%d/3", 0:3), limits=c(-.2, 1.2))
+sampling.dist.plot = ggplot(all.samples |> filter(sampling == 'coinflip.randomization')) +
+  geom_vline(xintercept=mean(y), color='green', linewidth=2, alpha=.5) + 
+  geom_point(aes(x=estimate, y=y), color='purple', alpha=.2, size=.5) +  
+  geom_histogram(aes(x=estimate, y=after_stat(density)/3), breaks=(-1:3)/3 + 1/6, alpha=.2)
+sampling.dist.plot + scale_x + scale_y
+```
+
+```{r}
+estimates = all.samples |> filter(sampling == 'coinflip.randomization') |> pull(estimate)
+```
+
+- A sampling distribution is an odd summary of the proportion of people who prefer chocolate.
+  - It's not what you asked for. You asked for a single number describing a population.
+  - What you got was 1000 numbers describing 1000 samples.
+- But it does tell you something if you look at it right. 
+  - How often is the estimate exactly equal to the population proportion? `r percent(mean(estimates == mean(y), na.rm=TRUE))` of the time.
+  - How often is it off by [1/3]{.teal} or less?   `r percent(mean(abs(estimates - mean(y)) <= 1/3+.01, na.rm=TRUE))` of the time.
+- To make this sound like a statement about the population, we report two things.
+  1. An **interval** you can expect the population proportion to be in. 
+    - e.g., we think it's in the interval $\inpink{1/3} \pm \inteal{1/3}$ because [1/3]{.pink} is our sample proportion.
+  2. The degree of **confidence** you have that it's actually in it. 
+    - e.g., it's in *an interval calculated exactly like this* in
+  `r percent(mean(abs(estimates - mean(y)) <= 1/3+.01, na.rm=TRUE))` of surveys *run exactly like this*.
+
+## Check Your Understanding
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+#| fig-cap: 
+#|  - Sampling with Replacement
+#|  - Sampling without Replacement 
+ggplot(all.samples |> filter(sampling == 'with.replacement')) +
+  geom_vline(xintercept=mean(y), color='green', linewidth=2, alpha=.5) + 
+  geom_point(aes(x=estimate, y=y), color='purple', alpha=.2, size=.5)  +
+  geom_histogram(aes(x=estimate, y=after_stat(density)/3), breaks=(-1:3)/3 + 1/6, alpha=.2) + scale_x + scale_y
+```
+
+The plots above show the sampling distributions we get when we use sampling with replacement.
+
+1. In each case, how often is the estimate within 1/3 of the population proportion? 
+2. And roughly how often is the estimate exactly equal to the population proportion?  
+3. Would you be more or less likely to get it exactly if you used a sample of size 4?
+ 
+
+# Other Sampling Schemes
+
+## One Sampling Distribution per Sampling Scheme
+```{r}
+four.sampling.dist.plot = ggplot(all.samples) +
+  geom_vline(xintercept=mean(y), color='green', linewidth=2, alpha=.5) + 
+  geom_point(aes(x=estimate, y=y), color='purple', alpha=.2, size=.5) +
+  geom_histogram(aes(x=estimate, y=after_stat(density)/3, fill=sampling), breaks=(-1:3)/3 + 1/6, alpha=.2)  
+four.sampling.dist.plot + scale_x + scale_y + facet_grid(cols=vars(sampling)) + guides(fill=FALSE) 
+```
+
+- Let's take a moment to get a sense of how different sampling schemes affect our estimate.
+  - To do this, we'll look at 1000 draws from the sampling distribution we get using each.
+  - To help  it a bit easier, we'll display a histogram of each too.
+- 3/4 of the mechanisms we've plotted give us fairly similar sampling distributions.
+  - They all have a peak around 2/3, which is the population proportion. 
+  - That's where most of our estimates wind up being---where we want them.
+- The one that's different is convenience sampling. 
+  - It was most convenient for me to sample the first three people in our population. 
+  - That doesn't change, so neither does our estimate. In this case, it's a good one. That happens sometimes. 
+  - But you can't count on it. Without a random mechanism, it's hard to *know* your estimate will be good.
+  - Using multiple, meaningfully different fake populations can help you catch stuff that works by luck in one.
+
+## We'll Focus on One
+```{r}
+ggplot(all.samples |> filter(sampling=='with.replacement')) +
+  geom_vline(xintercept=mean(y), color='green', linewidth=2, alpha=.5) + 
+  geom_point(aes(x=estimate, y=y), color='purple', alpha=.2, size=.5) +
+  geom_histogram(aes(x=estimate, y=after_stat(density)/3), breaks=(-1:3)/3 + 1/6, alpha=.2)  +
+  scale_x + scale_y + guides(fill=FALSE)
+```
+
+-  Today, we'll focus on *sampling with replacement*.
+  - That's just to keep things simple and concrete.
+  - Most of what we'll say is completely general. 
+  - It'll apply to any sampling scheme.
+- We'll really be talking about the relationship between three things.
+
+  1. Our estimator
+  2. Its sampling distribution
+  3. Our estimation target
+
+- As the semester continues, we'll look into this more generally. We'll talk about ...
+  - how we want these three things to be related.
+  - when we know they're related that way.
+
 
 # Polling
 
@@ -154,6 +355,7 @@ bar.plot = ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), alpha=.
   - Pick up the phone will called
   - Respond honestly to your questions
   - Not change their minds about voting
+- That is, suppose they tell us whether they do ultimately vote on election day.
 
 ## Polling Results
 
@@ -171,7 +373,7 @@ Y_i  &  `r Y[1]` & `r Y[2]` & \dots & `r Y[n]` & `r approx(mean(Y))` \\
 $$ 
 
 - You summarize the results with an extra column: the mean of the responses.
-  - Remember that the mean of a binary variable is a proportion. 
+  - Remember that the mean of a binary variable is a frequency. Or a proportion.^[This is one of those instances where language is complicated. We say the 'frequency a person said yes' or the 'proportion of people who said yes'. If we're leaving the people out of the sentence, we say either: 'the sample frequency' or 'the sample proportion'. Using only one or the other really limits how you phrase things.]
   - You found that `r percent(mean(Y))` of the people polled said they would vote.
 
 ## Sample Versus Population
@@ -212,27 +414,69 @@ $$
 Outcomes for the population of registered voters. \
 To enumerate our population, we ... 
 
-- give each registered voter a # $j \in 1 \ldots `r approx(m)`$.
+- give each registered voter a number $j \in 1 \ldots `r approx(m)`$.
 - write $y_j$ for the turnout of the person with ID $j$.
 :::
 ::::
 
-## Two Questions
+## Success!
 
 Our sample proportion $`r sum(Y)` / `r n` \approx `r approx(mean(Y))`$ 
 is close to the population proportion $`r approx(sum(y))` / `r approx(m)` \approx `r approx(mean(y))`$
 
-1. Did we get lucky?
-2. Could we have predicted how close we'd get before the election happened?
+
+:::: columns
+::: column
+### Before the Election 
+
+$$
+\begin{array}{r|rrrr|r}
+i    &   1 & 2 & \dots & `r n` & \bar{Y}_{`r n`}  \\
+Y_i  &  `r Y[1]` & `r Y[2]` & \dots & `r Y[n]` & `r approx(mean(Y))` \\
+\end{array}
+$$
+
+:::
+::: column
+### After the Election
+
+$$
+\begin{array}{r|rrrrrr|r}
+j & 1 & 2 & 3 & 4 & \dots &   `r approx(m)` & \bar{y}_{`r approx(m)`}  \\
+y_{j} & `r y[1]` & `r y[2]` & `r y[3]` & `r y[4]` & \dots & `r y[m]`   & `r approx(mean(y))`  \\
+\end{array}
+$$
+:::
+::::
 
 
-::: fragment
+- That's pretty accurate. Our reputation as a turnout pollster is intact for now.
+- But unless we're looking to retire, one success isn't enough. We're going to poll again. 
+- If our methods aren't reliable, we've got work to do fixing them.
+- Even if they are, if we overstate our accuracy, we're going to have to answer for it.
+  - e.g. we could say we'll be off by at most 2%, since that's what happened this time.
+  - But if it's 4% next time, that's not going to look good.
 
-- Answers: No and Yes.
-- To get these answers, we'll think about what'd happen if our friends had run identical polls.
-  - Each friend will choose have a different random sample.
-  - And estimate the population proportion by a different sample proportion.
-- We'll see how close these estimates tend to be.
+::: {.panel-tabset} 
+### Important Questions
+
+1. Was it luck that we got as close as we did?  
+2. Could we have predicted how close we'd get *before* the election happened?
+
+### A Plan
+
+- To find answers, we'll think about what'd happen if our friends had run identical polls.
+  - Each friend will choose have a different random sample $Y_1 \ldots Y_{`r n`}$.
+  - And estimate the population proportion using the proportion in their sample.
+- We'll see how accurate these estimates tend to be.
+  
+### On Terminology
+
+- This 'friends' stuff is just an informal way of talking about the *sampling distribution* of our estimator.
+  - The sampling distribution is the *probability distribution* of our estimator.
+  - i.e., distribution of the turnout frequency in a sample of size $n=`r n`$ ...
+  - ... drawn with replacement from the population $y_1 \ldots y_m$. 
+- Each friend's estimate is, like ours, a *random variable* with this probability distribution.
 
 :::
 
@@ -255,7 +499,6 @@ state.plot + geom_text(aes(x = long, y = lat, label=label), color=polla, alpha=.
 
 :::
 ::: {.fragment .current-visible data-fragment-index="0"}
-
 ```{r}
 #| out-height: 300px
 state.plot + geom_text(aes(x = long, y = lat, label=label), color=polla, alpha=.7, size=3, data=sam)
@@ -272,7 +515,7 @@ state.plot + geom_point(aes(x = long, y = lat), color=polla, alpha=.7, size=3, d
 $$
 \begin{array}{r|rr|rr|r|rr|r}
 \text{call} &  1 & & 2 & & \dots & `r n` & &  \\
-\text{thing}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
+\text{variable}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
 \text{value}    & `r J[1]` & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
                   & `r J[2]` & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`} 
                   & \dots 
@@ -287,7 +530,6 @@ These locations are fake. This is just to illustrate the sampling scheme.
 
 ## Our Poll
 
-
 ```{r}
 J = J1
 sam = pop[J,]
@@ -301,7 +543,7 @@ state.plot + geom_point(aes(x = long, y = lat), color=polla, alpha=.7, size=3, d
 $$
 \begin{array}{r|rr|rr|r|rr|r}
 \text{call} &  1 & & 2 & & \dots & `r n` & &  \\
-\text{thing}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
+\text{variable}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
 \text{value}    & `r J[1]` & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
                   & `r J[2]` & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`} 
                   & \dots 
@@ -324,8 +566,8 @@ state.plot + geom_point(aes(x = long, y = lat), color=pollb, alpha=.7, size=3, d
 $$
 \begin{array}{r|rr|rr|r|rr|r}
 \text{call} &  1 & & 2 & & \dots & `r n` & &  \\
-\text{thing}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
-\text{value}    & `r J[1]` & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
+\text{variable}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
+\text{value}     & `r J[1]` & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
                   & `r J[2]` & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`} 
                   & \dots 
                   & `r J[n]` & \underset{\textcolor{gray}{y_{`r J[n]`}}}{`r Y[n]`} 
@@ -347,8 +589,8 @@ state.plot + geom_point(aes(x = long, y = lat), color=pollc, alpha=.7, size=3, d
 $$
 \begin{array}{r|rr|rr|r|rr|r}
 \text{call} &  1 & & 2 & & \dots & `r n` & &  \\
-\text{thing}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
-\text{value}    & `r J[1]` & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
+\text{variable}  & J_1 & Y_1 & J_2 & Y_2 & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
+\text{value}     & `r J[1]` & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
                   & `r J[2]` & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`} 
                   & \dots 
                   & `r J[n]` & \underset{\textcolor{gray}{y_{`r J[n]`}}}{`r Y[n]`} 
@@ -358,6 +600,7 @@ $$
 
 ## The Sampling Distribution of our Estimate
 
+$$
 \begin{array}{r|rr|rr|r|rr|r}
 \text{call} &  1 & & 2 & & \dots & `r n` & &  \\
 \text{pollster} & J_1 & Y_1 & J_2 & Y_2   & \dots & J_{`r n`} & Y_{`r n`}  & \overline{Y}_{`r n`}  \\
@@ -381,7 +624,7 @@ $$
     & \polld    `r J[n]`   & \polld    `r Y[n]`           & \polld    `r approx(mean(Y))` \\
  {\vdots} & {\vdots} & {\vdots} & {\vdots} & {\vdots}  & {\vdots} & {\vdots} & {\vdots}  & {\vdots} \\ 
 \end{array}
-
+$$
 
 ## The Sampling Distribution in **R**
 
@@ -406,13 +649,36 @@ We calculate the sample proportion for each poll.
 #| echo: true
 meanY.samples = rowMeans(Ys)
 ```
+And we histogram the result.
 
-Histogram the result
 ```{r}
 #| echo: true
-#| out-height: 400px
+#| eval: false
 ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), alpha=.2)  
 ```
+
+::: {.panel-tabset }
+### A Sketch
+
+```{r} 
+ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), fill=NA, color=NA)
+```
+ 
+Before we look at the real thing, let's sketch the histogram we expect to see. \
+
+**Checklist**
+
+- Is the histogram you drew in the *location* you think it should be?
+- What about the *shape*?  Is its *spread* what you think it should be?
+
+### The Real Thing
+
+```{r}
+ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), alpha=.2)  
+```
+
+:::
+
 
 ## Annotating the Sampling Distribution Histogram 
 
@@ -441,12 +707,12 @@ turnout.bar +
   - The *mean of the sampling distribution* is the solid blue line.
   - The middle 2/3 of the sampling distribution lies between the dashed blue lines.
   - The middle 95\% of the sampling distribution lies between the dotted blue lines. 
-- I've also drawn the *population proportion* as a wide green line.
-  - We see that it appears as a kind of highlight on the solid blue line. 
-  - It's in exactly the same place. What does this mean? 
+- Our estimation target --- the turnout frequency in the population --- is drawn as a wide green line.
+  - It's in exactly the same place as the solid blue line.^[That's why it looks like the solid blue light is 'highlighted' in green.]
+  - What does this tell us about our estimator?
 
 
-##  Revisiting our First Question
+##  Revisiting our Questions
 
 ```{r}
 #| out-height: 500px
@@ -459,36 +725,29 @@ turnout.bar +
 ```
 
 
-**Observation**. Our sample proportion --- the black dot --- is close to our population proportion.
-
+**Observation**. Our estimate --- the black dot --- is close to our estimation target. It's within `r percent(abs(mean(Y)-mean(y)))`.
 
 **Q**. Did we get lucky? 
 
 ::: fragment
-Not that lucky.
 
-  - In 68% of polls, the sample proportion is within `r percent(w66/2)` of the population proportion. 
-  - That's as close or closer than we came in our poll.
-  - In 95% of polls, the sample proportions are within  `r percent(w95/2)` of the population proportion.
+Not really.
+
+  - In 68% of polls, the estimator is within `r percent(w66/2)` of the target. 
+  - In 95% of polls, the estimator is within  `r percent(w95/2)` of the target.
   
 :::
 
-##  Revisiting our Second Question
-
-```{r}
-#| out-height: 500px
-turnout.bar + 
-  with_annotations(samples, estimand=estimand, dots=1, dot.size=dot.size, height=dot.height)
-```
 
 **Q**. Could we have predicted how close we'd get before the election happened?
 
 ::: fragment
 Yes, in sense.
 
-  - We will use an interval estimate---a *range of values* the population proportion is likely to be in.
+  - We will use an interval estimate---a *range of values* the estimation target is likely to be in.
   - The *width* of this interval speaks to the 'how close' question. 
   - The *coverage probability* --- the probability our estimate is actually that close --- qualifies this answer.
+
 :::
 
 ## Interval Estimation
@@ -502,10 +761,14 @@ turnout.bar +
                    dot.size=dot.size, height=dot.height)
 ```
 
-- Our *point estimate* of the population proportion is the sample proportion $\overline{Y}_{`r n`}$.
+- Our *point estimate* of the turnout frequency in our population is the turnout frequency in our sample: $\overline{Y}_{`r n`}$.
 - So let's try an interval of width `r w` centered on it: $\ \ \overline{Y}_{`r n`} \pm `r w/2`$.
-- Ours covers --- includes --- the population proportion.
-- Is that just chance? Let's check out our friends' intervals.
+    - This is just a width we chose arbitarily.
+    - Maybe it's wishful thinking. Being off by at most 1\% sounds good.
+- What we want is for our interval to **cover** our estimation target.
+  - i.e. for the population frequency to be in our interval.
+- This one doesn't. Is that just bad luck? Or is it typical of $\pm `r w/2`$ intervals? 
+- Let's see what happens when our friends try intervals like this.
 
 ## Interval Estimation: Our Friends' Polls
 
@@ -516,25 +779,26 @@ turnout.bar +
                    dot.size=dot.size, height=dot.height)
 ```
 
-- Lets's look at the interval estimates our first two friends.
-- That is, the estimates based on the [pink]{.pollb} and [teal]{.pollc} rows in our sampling distribution table.
-- One of these interval covers the population proportion.
-- To get a better sense of how often this happens, let's do this for a hundred more polls.
+- Here are the interval estimates our first two friends.
+- That is, the interval estimates based on the [pink]{.pollb} and [teal]{.pollc} rows in our sampling distribution table.
+- One of these intervals covers the estimation target. The [teal]{.pollc} one.
+- So between ours and our two friends, we're covering 1/3 of the time. Not great.
+- But that's just three polls. To get a better sense of how often this happens, let's do it for a hundred.
 
 ## Interval Estimation: 100 Polls
 
 ```{r}
 #| out-height: 500px
-turnout.bar + 
+imaginary.polls =  turnout.bar + 
   with_annotations(samples, estimand=estimand, dots=100, interval.width=w, 
                    dot.size=dot.size, height=dot.height)
+imaginary.polls
 ```
 
-- $`r sum(meanY.samples[1:100]-w/2 <= mean(y) & mean(y) <= meanY.samples[1:100]+w/2)`/100$ cover the population proportion.
-- This gives us a sense of the *probability* that our interval covers the population proportion.
-- If we want to be more precise, we could do the same for millions.
-- Let's not. Instead, let's work out a trick for counting intervals that cover.
-
+- $`r sum(meanY.samples[1:100]-w/2 <= mean(y) & mean(y) <= meanY.samples[1:100]+w/2)`/100$ cover the estimation target.
+- This gives us a sense of the *probability* that our interval covers the target.
+- If we want to be more precise, we could do the same for millions of different polls.
+- Let's not. Instead, let's find a more direct way to calculate the **coverage probability**.
 
 ##  Coverage Probability and Sampling Distributions
 ```{r}
@@ -545,20 +809,38 @@ turnout.bar +
                    highlighted.dot.alpha=.15, unhighlighted.dot.alpha=.15)
 ```
 
- **Activity**. Calculate this *coverage probability* using the *sampling distribution* of our point estimate $\bar Y_{`r n`}$.\
+ **Activity**. Explain how to calculate this *coverage probability* using the *sampling distribution* of your point estimate $\bar Y_{`r n`}$.\
  \ \
  
- Here's a hint.
+::: {.panel-tabset}
+### Step 1. Counting
 
-  - Suppose we want to use a diagram like this to count the number of intervals that cover.
-  - But we don't want to draw in the horizontal segments for each poll.
-  - We just want to draw dots representing each poll's point estimate $\bar Y_{`r n`}$.
-  - Can we draw in a few lines that'll help us count?
+- Suppose you want to use a diagram like this to count how many of our 100 intervals cover the estimation target.
+- But you don't want to look at the horizontal segments for each poll. They're small and hard too see.
+- You just want to use the dots representing each poll's point estimate $\bar Y_{`r n`}$.
+- **Sketch** something on top of our diagram to help you count.
+
+### A Hint
+
+  - An interval estimate is a point --- a 'body' --- with 'arms' of a certain length.  Not so different from you. 
+  - Suppose you had identical twin. And you're not sure whether you're standing close enough to touch them.
+  - But you don't want to put your arms out. They're tired from all that polling. Could they help you check?
+
+### Step 2. From Counting to Probability
+
+- Now you've worked out how to count how many of 100 intervals cover the estimation target. 
+- What would you do if you had a million? Or a billion? That'd be good enough. 
+  - If x% of a billion intervals cover, you're pretty safe saying that x% is the *coverage probability*.
+- You can't look at a billion dots one by one, but you can look *a histogram* of a billion dots. 
+- **Explain** how to use that histogram to calculate the coverage probability. Use your sketch from Step 1.
+
+:::
 
 
-## Using Our Hint
+## Calculating Coverage
 ```{r}
 #| out-height: 500px
+coverage = mean(mean(y)- w/2 <= meanY.samples & meanY.samples <= mean(y) + w/2)
 coverage.hint.plot = turnout.bar + 
   with_annotations(samples, estimand=estimand, dots=100, interval.width=w, 
                    dot.size=dot.size, height=dot.height, 
@@ -567,7 +849,7 @@ coverage.hint.plot = turnout.bar +
 coverage.hint.plot
 ```
 
-- Let's shade in an interval of width .02 centered on the population proportion.
+- Let's shade in an interval of width .02 centered on the estimation target.
   - This gives it 'arms' the same length as our interval estimates have.
   - And its arms touch a point estimate *if and only if* the point estimates' arms touch it.
 - That means we can count the intervals that cover by counting the point estimates between the dotted lines.
@@ -579,15 +861,19 @@ coverage.hint.plot
 coverage.hint.plot
 ``` 
 
-It's the probability that a random draw from the sampling distribution lies between the dotted lines.
+It's the probability that a random draw from the sampling distribution lies in the [green]{.green} shaded area.
 $$
 \text{coverage probability} = P\qty(\overline{Y}_{`r n`} \in \overline{y}_{`r approx(m)`} \pm .01) 
 $$
-And it's about 40\%.
+
+And it's about `r percent(coverage)`. We can get that by counting dots.
+
 ```{r}
 #| echo: true
-mean(mean(y) - w/2 <= meanY.samples & meanY.samples <= mean(y) + w/2)
+mean(mean(y) - .01 <= meanY.samples & meanY.samples <= mean(y) + .01)
 ```
+
+Or, more efficiently, by looking at the [green]{.green} shaded area of the histogram.
 
 ## Ad-hoc Interval Estimates
 ```{r}
@@ -597,7 +883,7 @@ coverage.hint.plot
 
 What we just did was choose a width and calculate a coverage probability.
 
-  - The coverage probability we found --- 40% --- probably wasn't what we wanted.
+  - The coverage probability we found --- `r percent(coverage)` --- probably wasn't what we wanted.
   - Think of how you'd advertise your polling services.
   - 'I'm right about half the time. Actually, a bit less than that'.
   - 95% sounds a lot better. For that, we'll have to use a wider interval.
@@ -608,9 +894,11 @@ What we just did was choose a width and calculate a coverage probability.
 coverage.hint.plot 
 ```
 
-What we want to do is choose a coverage probability and calculate the right width.
 
-  - An interval estimate calibrated like this---to have a given coverage---is called a *confidence interval*.
+- Instead of choosing a width and calculating the coverage probability, let's go backward.
+  - We'll choose a coverage probability --- 95% is conventional. 
+  - And we'll calculate the width we need to get it.
+- An interval estimate calibrated like this---to have a given coverage---is called a *confidence interval*.
   - Let's think about how to do that. Again, we'll use the sampling distribution of our point estimate.
   - Let's take a look at our annotated histogram of point estimates again.
 
@@ -622,24 +910,18 @@ What we want to do is choose a coverage probability and calculate the right widt
 coverage.hint.plot 
 ```
 
-Remember what we've drawn in.
+**Activity**. 
 
-  - The *mean of the sampling distribution* is the solid blue line---and is the same as the population proportion.
+  - Suppose you and your friends want to draw 95% confidence intervals around your point estimates.
+  - **Q.** How wide do you have to make them to actually get 95% coverage?
+
+### Review---Our Annotations
+  - The *mean of the sampling distribution* is the solid blue line---and is the same as the estimation target.
   - The middle 2/3 of the sampling distribution lies between the dashed blue lines.
   - The middle 95\% of the sampling distribution lies between the dotted blue lines. 
 
-## Using the Sampling Distribution for Calibration
 
-```{r}
-#| out-height: 500px
-coverage.hint.plot 
-```
 
-**Activity**. 
-
-  - Suppose you and your friends want to draw in intervals around your point estimates.
-  - How wide should they be if you want 95\% of them to cover the population proportion?
-  - Think about 'arms'. 
 
 ## Using the Sampling Distribution for Calibration
 
@@ -669,26 +951,14 @@ coverage = mean(mean(y)- dotted.width/2 <= meanY.samples & meanY.samples <= mean
 coverage
 ```
 
-
-## Summary
-
-```{r}
-#| out-height: 500px
-
-coverage.good.plot
-```
-
-- Our sample proportion `r approx(mean(Y))` is close to the population proportion `r approx(mean(y))`. Did we get lucky? 
-  - Not that lucky. In `r percent(p.as.close)` of polls, we come as close as our estimate.
-- Could we have predicted how close we would get before seeing the `r approx(mean(y))`? 
-  - Yes! We can use a calibrated interval estimate---a Confidence Interval.
-- Except that so far, we've cheated. We've used the sampling distribution of our point estimate.
-
 ## A Problem 
 ```{r}
 #| out-height: 500px
 
-coverage.good.plot
+imaginary.polls.calibrated =  turnout.bar + 
+  with_annotations(samples, estimand=estimand, dots=100, interval.width=w, 
+                   dot.size=dot.size, height=dot.height)
+imaginary.polls.calibrated
 ```
 
 - We can't calibrate intervals like this in real life.
@@ -697,4 +967,56 @@ coverage.good.plot
 - But what we actually do is *almost* the same. 
   - We *do* the same thing.
   - But we use an *estimate* of the sampling distribution in place of the thing itself.
-- That's what we'll talk about next time.
+- That's what we'll talk about next class.
+
+# Communication
+
+## Why Confidence Intervals?
+
+```{r}
+#| out-height: 500px
+
+imaginary.polls.calibrated
+```
+
+
+- Talking about calibrated interval estimates, a.k.a. confidence intervals, has some advantages.
+  
+  1. It focuses on what we actually want to know: where the estimation target is.
+  2. It reminds us that we're not (usually) going to be able to know it exactly.
+  3. It gives us a sense of how close we can expect that we've gotten.
+
+- But there's something about them that is a bit infuriating when you're not used to them.
+  - Fundamentally, you're talking about what would happen in surveys you aren't doing.
+  - You can imagine someone saying 'I don't have time for imaginary surveys. What did this one tell you?'
+  - And being pretty unhappy when the answer is 'If that's how you want to think about it, almost nothing.'
+
+- This isn't a problem with intervals. This is something that's fundamentally uncomfortable about sampling.
+  - It might feel like a miracle that you can say anything about `r approx(length(y))` people after 625 phone calls.
+  - But once someone thinks you can, it can be hard for them to accept that you also kind of can't.
+  - We really are just saying 'I think it's between `r percent(mean(Y)-w/2)` and `r percent(mean(Y)+w/2)`, but I'm wrong sometimes.'  
+    - We are being clear about what 'sometimes' means. 
+    - But that feels like it's about you more than it is about what they want to know.
+  
+
+## Don't Make this Mistake
+
+```{r}
+#| out-height: 500px
+ 
+imaginary.polls.calibrated 
+```
+
+
+- Talking about surveys you aren't doing is pretty awkward. So awkward that you'll want to try to avoid it.
+- It's tempting to say something nonsensical.
+  - e.g. "the turnout frequency in the election is in the interval `r round(mean(Y)-w/2,2)`-`r round(mean(Y)+w/2,2)` 95% of the time." 
+  - This a really weird thing to say. It's like saying 2 is between 1 and 3 95% of the time. It either is or it isn't.
+  - The only way it could make sense is if the turnout frequency were random. Because `r round(mean(Y)-w/2,2)` and `r round(mean(Y)+w/2,2)` aren't.
+  - People do that. Don't. And please don't encourage it by saying stuff like this.
+- This doesn't come up that often because you can just say 'confidence interval' most of the time.
+- So you really only have to deal with all of this awkwardness in two situations. 
+  1. When you say 'confidence interval' and someone asks what that means.
+  2. When someone else says 'confidence interval' but clearly doesn't know what it means.
+
+- I'll give you an opportunity to practice this a bit. Homework, quizzes, maybe exams.
