@@ -155,7 +155,7 @@ all.samples = rep(list(pop), 1000) |> map(function(pop) {
 all.samples$y = runif(nrow(all.samples))
 ```
 
-::: {.panel-tabset group="candy-sampling"}
+::: {.panel-tabset group="candy"}
 
 ### Using Dots
 ```{r}
@@ -169,43 +169,36 @@ sampling.dist.plot = ggplot(coinflip.samples) +
 sampling.dist.plot + scale_x + scale_y
 ```
 
+- Above, we plot 1000 draws from the sampling distribution as 1000 [`r circle`]{.purple}s.
+- To highlight what we want, we've drawn the population proportion as a green line. 
+- Eyeballing it, we can see that estimates are usually pretty close, but not always.
+- To be more precise, we could count the dots in each column. But it's easier to ask our computer to do it for us.
+
 ### Using Bars 
 ```{r}
 sampling.dist.plot + 
   geom_bar(aes(x=estimate, y=after_stat(prop)), alpha=.2) + scale_x + scale_y
 ```
 
+- We can draw in the proportion of dots in each column as a bar graph.
+- If you really want to count dots in columns, this is the way to do it. 
+- But they can be a bit counterintuitive visually because of the uneven spacing of the columns.
+  - Most of the dots are in the middle, but there are a lot of columns there. A lot of slightly different estimates.
+  - As a result, no bar there is particularly high. The highest bar is out at $x=1$.
+- How do we visualize the distribution of dots without this problem?
+
 ### Using Histograms
 ```{r}
-histogram_overlay = geom_histogram(aes(x=estimate, y=after_stat(density)/3), breaks=(-1:3)/3 + 1/6, alpha=.2) 
+histogram_overlay = geom_histogram(aes(x=estimate, y=after_stat(density)/3), breaks=(-1:6)/6 + 1/12, closed='right', alpha=.2) 
 sampling.dist.plot + histogram_overlay + scale_x + scale_y
 ```
 
-:::
-
-::: {.panel-tabset group="candy-sampling"}
-### Using Dots
-- Above, we plot 1000 draws from the sampling distribution as 1000 [`r circle`]{.purple}s.
-- To highlight what we want, we've drawn the population proportion as a green line. 
-- Eyeballing it, we can see that estimates are usually pretty close, but not always.
-
-### Using Bars
-
-- To be more precise, we could count the dots in each column. But it's easier to ask our computer to do it for us.
-  - We can draw in the proportion of dots in each column as a bar graph. [Do it!]{.button .navigate-next}
-  - But this can be a bit hard to read because of the uneven spacing of the columns.
-  - Most of the dots are in the middle, but there are a lot of columns there. A lot of slightly different estimates.
-  - As a result, no bar there is particularly high. The highest bar is out at $x=1$.
-
-### Using Histograms
-
-- To fix this, we can group together nearby columns into *bins* and count the dots in each bin.
-  - This gives a sense of the *density* of estimates near each value of $x$. [Switch!]{.button .navigate-next} [Switch back.]{.button .navigate-prev}
-  - It works! The highest bar is in the middle. We call this kind of plot *a histogram*. 
-  - These can be a bit fussy to get right because where the bin-edges are matters. 
-    - Here the estimates of 1/2 contribute to the bar centered at 1/3 instead of the one centered at 2/3.
-    - That's pretty arbitrary given 1/2 is equally close to both centers.
-  - But---especially if you keep that issue in mind---it's a good visualization. We'll use them a lot.
+- We can group together nearby columns into *equal-width bins* and count the dots in each bin.
+- This gives you a sense of the *density* of estimates near each value of $x$. 
+- We call this kind of plot a *histogram*. 
+- If you want to know the fraction of dots in some interval, this makes it easy.
+  - As long as it's the interval between two bin edges.
+  - It's the fraction of the histogram's *area* that's between them.
 
 :::
 
@@ -236,12 +229,7 @@ ggplot(coinflip.samples[1,]) + geom_point(aes(x=estimate, y=1/2)) + scale_x + sc
 
 ## What Do We Do with a Sampling Distribution?
 ```{r}
-scale_x = scale_x_continuous(breaks = (0:3)/3, labels=sprintf("%d/3", 0:3), limits=c(-.2, 1.2))
-sampling.dist.plot = ggplot(all.samples |> filter(sampling == 'coinflip.randomization')) +
-  geom_vline(xintercept=mean(y), color='green', linewidth=2, alpha=.5) + 
-  geom_point(aes(x=estimate, y=y), color='purple', alpha=.2, size=.5) +  
-  geom_histogram(aes(x=estimate, y=after_stat(density)/3), breaks=(-1:3)/3 + 1/6, alpha=.2)
-sampling.dist.plot + scale_x + scale_y
+sampling.dist.plot + histogram_overlay + scale_x + scale_y
 ```
 
 ```{r}
@@ -260,26 +248,6 @@ estimates = all.samples |> filter(sampling == 'coinflip.randomization') |> pull(
   2. The degree of **confidence** you have that it's actually in it. 
     - e.g., it's in *an interval calculated exactly like this* in
   `r percent(mean(abs(estimates - mean(y)) <= 1/3+.01, na.rm=TRUE))` of surveys *run exactly like this*.
-
-## Check Your Understanding
-```{r}
-#| layout-ncol: 2
-#| fig-width: 7
-#| fig-cap: 
-#|  - Sampling with Replacement
-#|  - Sampling without Replacement 
-ggplot(all.samples |> filter(sampling == 'with.replacement')) +
-  geom_vline(xintercept=mean(y), color='green', linewidth=2, alpha=.5) + 
-  geom_point(aes(x=estimate, y=y), color='purple', alpha=.2, size=.5)  +
-  geom_histogram(aes(x=estimate, y=after_stat(density)/3), breaks=(-1:3)/3 + 1/6, alpha=.2) + scale_x + scale_y
-```
-
-The plots above show the sampling distributions we get when we use sampling with replacement.
-
-1. In each case, how often is the estimate within 1/3 of the population proportion? 
-2. And roughly how often is the estimate exactly equal to the population proportion?  
-3. Would you be more or less likely to get it exactly if you used a sample of size 4?
- 
 
 # Other Sampling Schemes
 
@@ -313,10 +281,9 @@ ggplot(all.samples |> filter(sampling=='with.replacement')) +
   scale_x + scale_y + guides(fill=FALSE)
 ```
 
--  Today, we'll focus on *sampling with replacement*.
+- Today, we'll focus on *sampling with replacement*. 
   - That's just to keep things simple and concrete.
-  - Most of what we'll say is completely general. 
-  - It'll apply to any sampling scheme.
+  - Most of what we'll say will apply to any sampling scheme.
 - We'll really be talking about the relationship between three things.
 
   1. Our estimator
@@ -475,7 +442,7 @@ $$
 - This 'friends' stuff is just an informal way of talking about the *sampling distribution* of our estimator.
   - The sampling distribution is the *probability distribution* of our estimator.
   - i.e., distribution of the turnout frequency in a sample of size $n=`r n`$ ...
-  - ... drawn with replacement from the population $y_1 \ldots y_m$. 
+  - ... drawn with replacement from the population $y_1 \ldots y_{`r approx(m)`}$. 
 - Each friend's estimate is, like ours, a *random variable* with this probability distribution.
 
 :::
@@ -824,7 +791,7 @@ turnout.bar +
 
   - An interval estimate is a point --- a 'body' --- with 'arms' of a certain length.  Not so different from you. 
   - Suppose you had identical twin. And you're not sure whether you're standing close enough to touch them.
-  - But you don't want to put your arms out. They're tired from all that polling. Could they help you check?
+  - But you don't want to put your arms out. You're tired from all that polling. Could your twin check for you?
 
 ### Step 2. From Counting to Probability
 
@@ -873,7 +840,7 @@ And it's about `r percent(coverage)`. We can get that by counting dots.
 mean(mean(y) - .01 <= meanY.samples & meanY.samples <= mean(y) + .01)
 ```
 
-Or, more efficiently, by looking at the [green]{.green} shaded area of the histogram.
+Or by finding the area of the histogram that's shaded [green]{.green}.
 
 ## Ad-hoc Interval Estimates
 ```{r}
@@ -910,10 +877,10 @@ coverage.hint.plot
 coverage.hint.plot 
 ```
 
-**Activity**. 
+**Question**. 
 
   - Suppose you and your friends want to draw 95% confidence intervals around your point estimates.
-  - **Q.** How wide do you have to make them to actually get 95% coverage?
+  - How wide do you have to make them to actually get 95% coverage?
 
 ### Review---Our Annotations
   - The *mean of the sampling distribution* is the solid blue line---and is the same as the estimation target.
@@ -1010,8 +977,8 @@ imaginary.polls.calibrated
 
 - Talking about surveys you aren't doing is pretty awkward. So awkward that you'll want to try to avoid it.
 - It's tempting to say something nonsensical.
-  - e.g. "the turnout frequency in the election is in the interval `r round(mean(Y)-w/2,2)`-`r round(mean(Y)+w/2,2)` 95% of the time." 
-  - This a really weird thing to say. It's like saying 2 is between 1 and 3 95% of the time. It either is or it isn't.
+  - e.g. "the turnout frequency in the election is in my confidence interval, `r round(mean(Y)-w/2,2)`-`r round(mean(Y)+w/2,2)`, 95% of the time." 
+  - This a really weird thing to say. It's like saying that 95% of the time 2 is between 1 and 3. It either is or it isn't.
   - The only way it could make sense is if the turnout frequency were random. Because `r round(mean(Y)-w/2,2)` and `r round(mean(Y)+w/2,2)` aren't.
   - People do that. Don't. And please don't encourage it by saying stuff like this.
 - This doesn't come up that often because you can just say 'confidence interval' most of the time.
@@ -1019,4 +986,4 @@ imaginary.polls.calibrated
   1. When you say 'confidence interval' and someone asks what that means.
   2. When someone else says 'confidence interval' but clearly doesn't know what it means.
 
-- I'll give you an opportunity to practice this a bit. Homework, quizzes, maybe exams.
+- You'll get to practice this a bit. Homework, quizzes, maybe exams.
