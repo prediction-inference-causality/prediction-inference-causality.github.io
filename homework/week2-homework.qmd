@@ -6,22 +6,21 @@ format: html
 ```{r}
 #| echo: false
 library(ggplot2)
+library(purrr)
 theme_set(theme_minimal())
 ```
 
-# NBA Players
+# NBA Data
 
-You and a friend each assemble some data describing the performance of NBA players in the 2023 season. 
-From the population of all players that played in the league that year, you each draw a sample of 100 players
-with replacement. Then you record some information about each player in your sample. 
+A mutual friends gives us some data describing the performance of NBA players in the 2023 season. Actually, they give us different data---they give me 'Sample 1' and you 'Sample 2'. They say these are samples of size 100 drawn with replacement from the population of all players that played in the league that year.  
 
 ```{r}
 #| echo: true
-sample.1 = read.csv("nba_sample_1.csv") 
-sample.2 = read.csv("nba_sample_2.csv") 
+my.sample <- read.csv("nba_sample_1.csv")
+your.sample <- read.csv("nba_sample_2.csv")
 ```
 
-Here's a list of variables.
+Theres a fair amount of information about the players in our samples.Here's a list of the variables we have.
 
 - Player - The player's name.
 - Team: The team whose this player is playing for this season in abbreviated term.
@@ -32,90 +31,120 @@ Here's a list of variables.
 - Min: The minutes the player has played for this season.
 - PTS: The number of points made by the player.
 
-## Working with the Sample
+## An Estimation Problem
 
-::: {#exr-nba-histogram-pts .callout-exercise}
+What we want to know is how many points, on average, a player in the league scored over the course of the season. That is, if we call the number of points these players scored $y_1 \ldots y_m$, we want this.
+$$
+\underset{\text{estimation target}}{\theta} = \frac{1}{m}\sum_{j=1}^m y_j.
+$$
 
-Let's look the variable 'PTS'---the number of points players scored over the course of the season. For sample 1, calculate the mean and standard deviation. Then, draw a histogram with the mean and mean plus or minus two standard deviations indicated by vertical lines. Repeat this for sample 2.
+We're going to estimate it exactly the same way, but using our sample $Y_1 \ldots Y_n$ of size $n=100$.
 
-:::
+$$
+\underset{\text{estimate}{\hat\theta} = \frac{1}{n}\sum_{i=1}^n Y_i
+$$
 
-::: {#exr-nba-histogram-pts-compare .callout-exercise}
-Using sample 1, calculate a 95% confidence interval for the population mean. To calibrate it, use the bootstrap.
-Then draw the interval on top of your histogram from Exercise 1. And draw it on top of a similarly annotated histogram of the sample mean's bootstrap sampling distribution, too---one with lines indicating its mean plus or minus one and two standard deviations. 
-:::
+Here we're following a convention in which we write our targets as some greek letter. Often $\theta$. And add a 'hat', the thing above the letter theta in $\hat\theta$, to indicate an estimator of that thing.   
 
- If you've got a ggplot called 'histogram' and have calculated the center ('center') and width ('w') of your interval, you can add the interval like this.
+My estimate, for what it's worth, is `r mean(my.sample$PTS)`.
+```{r}
+#| echo: true
+Y <- my.sample$PTS
+my.estimate <- mean(Y)
+my.estimate
+```
+
+To put it in context, I plot my points around my estimate.
 
 ```{r}
 #| echo: true
-#| eval: false
-
-histogram + geom_pointrange(y=0, x=center, xmin=center-w/2, xmax=center+w/2)
+#|
+n <- length(Y)
+points.plot <- ggplot(data.frame(i = 1:n, y = Y)) +
+    geom_point(aes(x = i, y = y)) +
+    geom_hline(aes(yintercept = my.estimate))
+points.plot
 ```
 
-
-To get you started, I'll give you a function that'll calculate your interval's width. What you'll need to do is draw samples from the bootstrap sampling distribution and pass them in.
-
-```{r width-code}
-width = function(samples, center=mean(samples), alpha=.05) {
-  covg.dif = function(w) { 
-    actual = mean( center - w/2 <= samples & samples <= center + w/2)
-    nominal = 1-alpha 
-    actual - nominal  
-  }
-  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-center))))$root
-}
-```
-
-Do this using at least 10,000 bootstrap samples. 
-
-::: {#exr-nba-histogram-pts-compare-repeat .callout-exercise}
-Repeat this exercise using sample 2.
-:::
-
-::: {.callout-tip}
-### About the code
-In essence, it tries different widths $w$ until it finds one for which 95% of the samples fall in the interval $\text{center} \pm \text{w}/2$. It's easy to find one because the number of samples included is *increasing* with the width of the interval. You know to increase it if you're below 95% and decrease it if you're above. That's what the `R` built-in function `uniroot` does---it searches for $w$ for which the difference between the actual proportion of samples included and 95% is zero. I'll explain how this works a little more precisely later on in class. Note that it's the argument `alpha` that specifies that we want a 95% interval---`alpha` is the proportion of samples we want to *exclude* from the interval. If the proportion of samples we want to include is $.95$, the proportion we want to exclude is $1-.95=.05$. 
-:::
-
-::: {#exr-nba-histogram-pts-compare-calibrate .callout-exercise}
-Let's compare our 95% interval to differently-calibrated intervals. We'll use sample 1 for this exercise.
-Calculate, then draw into your plot of the bootstrap sampling distribution from the previous exercise, 90% and 99% intervals in addition to the 95% interval you already have. How do your three intervals compare? It'll help to read the 'about the code' paragraph above if you haven't already. 
-:::
-
-::: {#tip-y-spacing}
-You'll want to specify different 'y' values in `geom_pointrange` so your intervals aren't drawn on top of each other. 
-Choose whatever makes sense to you visually. 
-:::
-
-## Comparing Sample and Population
-
-Noting your interest in NBA stats, a benevolent data analyst sends you data for the full population. That is, they send you a table like the one you've been working with, but with a row for every player in the league the 2023 season. 
+ Here the x-coordinate is irrelevant---they just reflect the
+STUFF. Stuff leading to having a histogram.
 
 ```{r}
-population = read.csv("nba_population.csv")
+#| echo: true
+points.histogram <- ggplot(data.frame(y = Y)) +
+    geom_histogram(aes(x = Y))
+points.histogram
 ```
 
-We're going to use this to check our work. We can draw samples of size `r n`, 
-just like the two we actually have, from this population.
-And we can use them to calculate the actual sampling distribution of the mean number of points players scored. This is just like what we did for our turnout poll using our post-election knowledge of turnout.
 
 
-::: {#exr-nba-population-covers .callout-exercise}
-What is the mean number of points scored for players in our population? How does it compare to our two sample means? Is it in our 95% confidence intervals? What about our 90% and 99% intervals?
-:::
+To make this look really nice, we rotate our histogram and lay our two plots out side by side so that the bins of the histogram align with the individual players' points. 
+```{r}
+points.histogram + coord_flip()
+points.plot
+```
 
-::: {#exr-nba-population-sampling-distribution .callout-exercise}
+::: {#exr-your-estimate}
 
-By drawing samples of size $n=`r nrow(sample.1)`$ with replacement from the population, 
-you can simulate the surveys you and your friend ran earlier. Do this 10,000 times, calculating the sample mean each time, and use the results to draw a histogram showing the sampling distribution of your sample mean.
-Then add the following to your plot.
+Replicate my analyis using your sample. Report your estimate as well as your two plots.
 
-- The sampling distribution's mean and mean plus or minus one and two standard deviations, just like you did for the bootstrap sampling distribution. 
-- The population mean as a vertical line. Make it green like I have in lecture. 
-- Your two 95\% confidence intervals based on samples 1 and 2. Use different 'y' values so they don't overlap. 
-
-If either interval doesn't include the population mean, explain what's gone wrong. Is it an unusually bad point estimate? A too-narrow interval? Or both? Refer to the plot.
+*Hint*. You should be able to do this with a one-line change to my code.
 
 :::
+
+You notice that my estimate and yours are fairly different. To try to understand what's going on, you want to run a simulation study. You call up our mutual friend and request he give you the data for the whole league. And you get it. Here it is.
+
+```{r}
+#| echo: true
+
+our.pop = my.sample # there's some file we want. Call read.csv()
+```
+
+::: {#exr-sampling-distribution}
+To get a sense of the sampling distribution of the estimator you and I are using, draw 10,000 samples of size $n=100$ with replacement from
+this population. Plot it, histogram it, whatever. Then answer this: how weird is your estimate? Do you think it's likely that your sample was really drawn with replacement from this population?
+:::
+
+
+Text about calibrating interval estimate.
+
+::: {#exr-interval-estimate}
+To get interval estimates based on our two point estimates,
+calculate the width of the middle 95% of our sampling distribution.
+Report these two interval estimates and draw them on your plot from 
+@exr-sampling-distribution.
+:::
+
+Here's some code that'll be useful. What it does is...
+```{r}
+#| label: width-code
+#| echo: true
+
+```
+
+Hopefully this week's lecture has convinced you that this interval will have 95% coverage. But let's check. This'll be useful in the future when what we're doing is a little more complicated and error-prone.
+
+::: {#exr-calculate-coverage}
+
+
+:::
+
+
+```{r}
+#| echo: true
+pops = rep(list(our.pop), 1000)
+covers = pops |> map_vec(function(pop) {
+  m = nrow(pop)
+  n = 100
+  
+  J = sample(1:m, n, replace=TRUE )
+  sam = pop[J,]
+
+  interval.estimate = c(NA, NA)  #<1>
+  this.one.covers = NA           #<2>
+  this.one.covers
+})
+coverage.frequency = mean(covers)
+```
+1. You should have code from @exr-interval-estimate to calculate an interval estimate given a sample.
+2. All you need to do here is check whether the estimation target, i.e. the population mean from ..., is between the lower and upper bound of your interval. If you want to check that `t` is between `a` and `b` in **R**, you can say `a <= t & t <= b`.
