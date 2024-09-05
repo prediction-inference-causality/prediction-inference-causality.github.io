@@ -3,382 +3,584 @@ title: "Lecture 1"
 subtitle: "Introduction"
 ---
 
+## Plan for Today
 
-# What Regression Analysis Is 
+- Introduce the main ideas we'll cover in the context of a real study.
+  - We'll elide a lot of detail. 
+  - We'll spend about half of the semester filling in the details.
+    - Just trying to get a sense of the big picture.
+    - And identify the place we're going to start digging in to that.
 
-## 
+- A quick look at the syllabus. 
+  - It's at [qtm285-1.github.io](https://qtm285-1.github.io). These slides are too.
+  - We'll talk about the schedule, assignments, assessment, etc.  
+    
+## Style
+
+- When we work though our example, it's not going to be smooth.
+  - There are going to be some wrong turns that we have to back out of.
+  - And a bunch of jumps that aren't 100% justified.
+- That's not what it'll be like in this class most days. 
+  - I'm going to guide you through the material as smoothly as I can.
+  - And I've chosen that material to (as well as being useful) fit together nicely.
+  - That's why, e.g., we're doing Trees and Forests at the end instead of Neural Nets.
+- But I want to start by giving you a sense of what it's like to do this kind of work on your own.
+  - It's not about following a recipe. You can learn one, but ...
+    - Sometimes a recipe doesn't work. Good bakers adjust for altitude, humidity, etc.
+    - Other people aren't necessarily going to follow a recipe you know.
+  - You won't get consistent results or be able to diagnose problems with what others are doing.
+- Learning is about trying things, seeing how it goes, and understanding why things work (or don't).
+  - In the end, you can refine the process and write a nice smooth explanation of why it works. 
+  - But that's not how you get there. And the illusion that it is can be a barrier to learning.
+  - The getting there and writing that explanation are important skills.
+  - This class is meant to help you develop those skills. Even with guidance, it takes practice. 
+
+# What This Class Is About
+
+:::{ .center }
+Prediction, Inference, and Causality. And how they fit together.
+:::
+
+## The Social Pressure Experiment
 
 {{< include shared-code.qmd >}}
-{{< include ca-income.qmd >}}
 
 ```{r}
-#| out-height: 600px
-
-theme_set(blank.theme)
 set.seed(0)
-n = 100
-X = round(runif(n), 1)
-Y = sin(pi*X/1.7) + rnorm(n, sd=.1)
-fake.data = data.frame(X=X, Y=Y)
+social.pressure = read.csv('data/social-pressure-data.csv') 
+social.pressure$age = 2006-social.pressure$yob
 
-ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
-                    geom_smooth(aes(x=X, y=Y), method='lm', se=FALSE, size=1, alpha=.3) + 
-                    coord_cartesian(ylim=c(-.5,1.5)) 
-```                
+pop = social.pressure[social.pressure$treatment %in% c(' Control', ' Neighbors'), ] 
 
-- You may have the impression that regression is about fitting lines to data.
-- That's what some regression analysis books focus on. And we'll talk about it.
-- But it's not what regression analysis is really about. And it's not what this class will focus on.
-
-## 
+J = sample(1:nrow(pop), , replace=TRUE)
+sam = pop[J,]
+```
 
 ```{r}
-#| out-height: 600px
-#| layout-ncol: 2
-summaries = fake.data %>% group_by(X) %>% summarize(mu=mean(Y))
-ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
-                    geom_smooth(aes(x=X, y=Y), method='lm', se=FALSE, size=1, alpha=.3) +
-                    coord_cartesian(ylim=c(-.5,1.5)) 
-ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
-                    geom_point(aes(x=X, y=mu), data=summaries, size=4, alpha=.2, color='blue') +
-                    coord_cartesian(ylim=c(-.5,1.5))
-```  
+display.frac = 1/10
+n.display = round(display.frac * nrow(pop))
+j.plot = sample(1:nrow(pop))[1:n.display]
 
-- Regression analysis is about breaking one thing, $y$, into two parts.
-  - One part we can predict using another thing, $x$, and one part we can't.
-  - e.g. breaking income into a part we can predict using education and a part we can't. 
-- We can try to make those predictions by drawing a line, but it's usually not a good idea.
-  - There's a difference between what we can predict and what we can predict by drawing a line.
-  - And it's easy to do better. We can make predictions by averaging---averaging the $y$s at each $x$.
+xco = function(w,x,scale=.3) { x + (scale/2)*(2*as.numeric(w) - 1) }
 
-## 
+social.pressure.plot = ggplot(pop[j.plot,], aes(x=xco(treatment==' Neighbors', age), y=as.numeric(voted=='Yes'), color=treatment, shape=p2002)) +
+  geom_point(alpha=.2, size=1, position=position_jitter(h=.1, w=.05, seed=0)) +
+  guides(color='none', shape='none') + 
+  scale_y_continuous(breaks=c(0,.5, 1), labels=c('No','','Yes')) + 
+  scale_x_continuous(breaks=seq(20,105,5)) 
+
+annotated.social.pressure.plot = social.pressure.plot + 
+  stat_summary(geom='point', fun=mean, data=pop)
+
+```
 
 ```{r}
-#| out-height: 600px
-ggplot(fake.data) + geom_point(aes(x=X, y=Y), alpha=.3, size=2) + 
-                    geom_point(aes(x=X, y=mu), data=summaries, size=4, alpha=.2, color='blue') + 
-                    coord_cartesian(ylim=c(-.5,1.5))
-```  
+#| label: fig-social-pressure
+social.pressure.plot
+```
 
-- So, to be reductive, this is a class about looking at and comparing averages.
-- That works very well if you have a bunch of observations at each $x$.
-  - e.g., if you're using years of schooling to predict income.
-  - We'll focus on cases like this for the first half of the class.
-- It works less well if you don't.
-  - That's when things get a bit more complicated. 
-  - We'll get there later on in the class and talk about how to deal with it.
-  - Lines are an option, but there are usually better ones. 
+::: {.panel-tabset}
+
+### The Idea 
+
+- In 2006, Gerber, Green, and Larimer ran an experiment in Michigan.
+- They wanted to see what kinds of messages would get people to vote in the primary.
+- So they wrote five letters exercising increasing levels of social pressure.
+  1. No letter. This one was easier to write and cheaper to mail. Let's still count it as 'a letter'.
+  2. A letter saying it was your civic duty to vote. @fig-civic-duty-letter
+  3. A letter saying that your vote is public record. @fig-public-record-letter
+  4. A letter saying that they'd be watching to see if you voted. @fig-watched-letter
+  5. A letter saying that they'd tell your neighbors whether you voted. @fig-neighbors-letter
+    - This one was pretty intense. It included a list of your neighbors.
+    - And it told you whether they'd voted in the last couple elections.
   
-##
-```{r}
-#| out-height: 600px
-ggplot(fake.data) + geom_point(aes(x=X, y=Y, alpha=X==.5), size=2) + 
-                    geom_point(aes(x=X, y=mu, alpha=X==.5), data=summaries, size=4, color='blue') + 
-                    coord_cartesian(ylim=c(-.5,1.5)) +
-                    scale_alpha_discrete(range=c(.03,.4)) + guides(alpha=FALSE)
-```  
+     
+### The Experiment
 
-- For a few weeks, as a sort of warm-up, we'll focus on explaining what we see at a single $x$.
-- We can think of this as zooming in on part of the problem.
-- Or as the sort of regression analysis we do when we have no explanatory variable---no $x$. 
+ Starting with the complete list of registered voters in Michigan ...
 
-## Today
+1. They randomly selected 180,000 households to include in their experiment.
+2. They randomly assigned each of these households one of five letters.
+3. They mailed the letters 11 days before the primary.
+4. Then they checked to see who voted.
 
-- Let's put aside all that prefatory stuff about what regression analysis is.
-- We'll look at how to describe and summarize two datasets we'll work with a lot in this class.
-  - Data on wages from the 2022 Current Population Survey (CPS)
-  - Data from turnout polls in advance of the 2020 Presidential Election
-- We'll look at a few summaries of each. 
-  - location
-  - spread 
-  - distribution 
-- We'll close with a few dice-rolling activities.
-  - These'll help us think about what summaries tell us about data we don't have.
-  - That's about how the observations we have are *sampled* from a larger population of possible observations.
-  - This is called *statistical inference*. It's the main topic of this class. 
-  - We'll really get into it next week.
+ - We have that data. We're looking at some of it. 
+ - We're looking at the people in the households sent either [no letter]{.groupa} or the [*neighbors* letter] letter]{.groupb}.
+ - We've got a dot for each one--- `r nrow(pop)` dots in all. 
 
-# Example 1: 2022 CPS Wage Data
+### The Data
 
-## The Data 
-- The Current Population Survey is a survey run by Census Bureau and Bureau of Labor Statistics
-    - Each year, about 1/2500 US residents is surveyed.
-    - It's approximately correct to think of these residents as being chosen randomly 
-    from the set of all residents with equal probability.
-    - This approximation gets better if you focus on a single state.
-- We'll look at surveyed California residents 
-    - between the ages of 25 and 35
-    - with at least an 8th-grade education
-- This sample includes `r nrow(earnings)` people. Here's a partial view of their responses.
+Each person is a dot.
 
- \ \
+- Their current age determines where it is on the x-axis.
+- It's a `r triangle` if they voted in the 2002 primary and a `r circle` if they didn't.
+- It's [green]{.groupb} if they got the [neighbors letter]{.groupb} and [red]{.groupa} if they got [no letter]{.groupa}.
+- Its location on the y-axis indicates whether they voted in the 2006 primary.  
+  - Yeses in the top row; nos on the bottom.
+
+:::
+
+::: aside
+We're not really showing a dot for each person. It's hard for your browser to display that many, so we're choosing  `r percent(display.frac)` of them randomly and showing those.
+:::
+
+## A Missed Opportunity?
 
 ```{r}
-cols = c('income', 'age', 'education')
-earnings[,cols] %>% ellipsis(nhead=4, ntail=2) %>% kable() 
+social.pressure.plot
 ```
 
-## Here is a Complete View of Their Incomes
+- Let's say you work on some candidate's campaign and they lost by a small margin.
+- You heard about this experiment and you want to know whether you might have won  ...
+- ... if you'd sent out a high-pressure letter, e.g. the neighbors letter.
+- Obviously you would ...
+    - only send it to people you're confident would vote for your candidate.
+    - do it anonymously, so it wouldn't influence *how* people voted. Hopefully.
+- You want to work out many additional votes you'd have gotten if you'd done it.
+
+## Your Imaginary Mailer Campaign
 
 ```{r}
-#| out-height: 400px
-lims = c(-.5e5, 5e5)
-scatter = ggplot(earnings) + 
-            geom_point(aes(x=person, y=income), alpha=.05) +
-            scale_y_continuous(limits=lims, labels=label_dollar())
-scatter
+social.pressure.plot
 ```
 
-- Each person gets a dot.
-- The y-coordinate of the dot shows their income.
-- The x-coordinate of the dot is arbitrary.
-    - It's their row in the table.
-- The plot, in effect, shows our people 
-    - lined up in some arbitrary order
-    - standing as tall as their income.
-- The problem with this is that it's hard to make sense of by looking at it.
-- It often helps to look at *data summaries*, a.k.a. *descriptive statistics*.
+- Let's suppose people aged 25-35 are extremely likely to vote for your candidate. 
+  - Let's say every one of them votes for your candidate every time they vote.
+  - The problem is that many of them don't vote in mid-term primaries.
+- You know how many of them actually voted. It's public record.
+- What you want to know is how many of them would have voted if they'd gotten the [neighbors letter]{.groupb}.
+- That difference is the number of votes you'd have gotten from your imaginary mailer campaign.
 
-## Location
+
+## Step 1a. Individual-Level Prediction
+
+:::: {.free-zoom}
+::: {.panel-tabset }
+
+###
+```{r}
+social.pressure.plot
+```
+
+###
+```{r}
+social.pressure.plot
+```
+
+:::
+::::
+
+- Let's start small. Let's try to predict turnout for one person at a time.
+- We get out our list of voters aged 25-35 and look at the first two.
+
+
+ Name | Age | Voted 2002 | Voted 2006 | if sent letter 
+------|-----|------------|------------|------------------------ 
+ Rush Hoogendyk | 27  | `r triangle` Yes | No  | ?
+ Mitt DeVos     | 31  | `r circle`   No   | No  | ?
+
 
 ```{r}
-#| out-height: 400px
-x.med  = 1300
-x.mean = 1400
-size.mean = 3
-size.med = 3
+mitt.votes = pop$voted[pop$treatment==' Neighbors' & pop$age==31 & pop$p2002=='no'] == 'Yes'
+rush.votes = pop$voted[pop$treatment==' Neighbors' & pop$age==27 & pop$p2002=='yes'] == 'Yes'
+al.votes = pop$voted[pop$treatment==' Neighbors' & pop$age==34 & pop$p2002=='yes'] == 'Yes'
 
-summaries = earnings %>% 
-    summarize(mean=mean(income), 
-              median=median(income), 
-              sd=sd(income), 
-              mad=mad(income, constant=1))
-scatter + geom_point(aes(x=x.mean, y=mean), size=size.mean, color='red', data=summaries) + 
-          geom_hline(aes(yintercept=mean), color='red', data=summaries) +
-          geom_point(aes(x=x.med, y=median), size=size.med, color='orange', data=summaries) +
-          geom_hline(aes(yintercept=median), color='orange', data=summaries)
+dpop = pop[j.plot,]
+dmitt.votes = dpop$voted[dpop$treatment==' Neighbors' & dpop$age==31 & dpop$p2002=='no'] == 'Yes'
+drush.votes = dpop$voted[dpop$treatment==' Neighbors' & dpop$age==27 & dpop$p2002=='yes'] == 'Yes'
 ```
 
-- The **location** of the data is where it is.
-- It's about approximating the data by a *constant*.
-$$ Y_i \approx \mu \qfor i=1,\dots,n $$
+::: {.panel-tabset}
+### A Question
 
-- People use a few different summaries of location.
-    - e.g. the [Median]{.fg style="--col: orange"}
-    - e.g. the [Mean]{.fg style="--col: red"}
+- How do you think Rush and Mitt would have voted if they'd gotten the [neighbors letter]{.groupb}? Use the plot. 
+- *Hint*. What information do you have to help you guess?
 
-## Spread
+### An Answer Or Two
+
+- My guess is that neither would have voted. Letter or no, very few people did. 
+- To be more precise, let's take a look the [people who got the letter]{.groupb} features matching Rush and Mitt.
+  - Rush-types are [`r triangle`s]{.groupb} in the x=27 column. 
+   `r sum(rush.votes)`/`r length(rush.votes)` voted. `r percent(mean(rush.votes))`.
+  - Mitt-types are [`r circle`s]{.groupb} in the x=31 column. 
+    `r sum(mitt.votes)`/`r length(mitt.votes)` voted. `r percent(mean(mitt.votes))`.
+- Looking at rates within-group, which seems better, doesn't change our conclusion: They probably didn't. 
+- Note the percentages above are based all data from the experiment, not just the dots shown. Using only those ...
+  - `r sum(drush.votes)`/`r length(drush.votes)` (`r percent(mean(drush.votes))`) *displayed* Rush-types voted.
+  - `r sum(dmitt.votes)`/`r length(dmitt.votes)` (`r percent(mean(dmitt.votes))`), *displayed* Mitt-types voted.
+:::
+
+
+## Step 1b. Summarizing Our Predictions
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
 
 ```{r}
-#| out-height: 400px
-scatter + geom_pointrange(aes(x=x.mean, y=mean, ymin=mean-sd, ymax=mean+sd), color='red', data=summaries)  +
-          geom_hline(aes(yintercept=mean), color='red', data=summaries) +
-          geom_pointrange(aes(x=x.med, y=median, ymin=median-mad, ymax=median+mad), color='orange', data=summaries) +
-          geom_hline(aes(yintercept=median), color='orange', data=summaries)
+social.pressure.plot
 ```
 
-- The **spread** of the data is how far it tends to be from its location.
-- Different measures of spread tend to be used with different measures of location.
-    - the [Median Absolute Deviation]{.fg style="--col: orange"} is used with the Median.
-    - the [Standard Deviation]{.fg style="--col: red"} is used with the Mean.
-
-## Spread and Residuals
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
 
 ```{r}
-#| out-width: 400px
-#| fig-asp: .6 
-#| layout-ncol: 2
-#| layout-nrow: 2
-
-scatter + geom_hline(aes(yintercept=median(income)), color='orange') +
-          geom_segment(aes(x=person, xend=person, y=income, yend=median(income)), color='gray', alpha=.1)
-scatter + geom_hline(aes(yintercept=mean(income)), color='red') + 
-          geom_segment(aes(x=person, xend=person, y=income, yend=mean(income)), color='gray', alpha=.1)
-
-res.lims = c(-2.5e5, 2.5e5)
-ggplot(earnings) + geom_point(aes(x=person, y=income-median(income)), color='orange', alpha=.3) +
-    scale_y_continuous(labels=label_dollar(), limits=res.lims) 
-ggplot(earnings) + geom_point(aes(x=person, y=income-mean(income), size=abs(income-mean(income))), color='red', alpha=.3) +
-    scale_y_continuous(labels=label_dollar(), limits=res.lims) + scale_size_area() + guides(size=FALSE) 
+annotated.social.pressure.plot
 ```
 
-- Spread summarizes the size of the *residuals* $\hat\varepsilon_i = Y_i - \hat\mu$ left over after constant approximation.
-- The median absolute deviation is the median size of the residuals.
-- The standard deviation is the square root of the mean squared size of the residuals.
-  - This is a sort of average in which big residuals count more than small ones.
-  - To give you a sense of what this means visually, I've scaled the red dots.
-  - I've made them bigger when they're further away from zero.
+:::
+::::
 
-## Distribution
+- Now that we've worked out how to make predictions for Rush and Mitt, we can do it for everyone in our list.
+- That is, we can fill in all the **?**s in our table below.
+ made a prediction for each person. I did one more.
+
+ Name | Age | Voted 2002 | Voted 2006 | if sent letter 
+------|-----|------------|------------|------------------------ 
+ Rush | 27 | `r triangle` Yes | No  | No (`r percent(mean(rush.votes))` of [Rush-types]{.groupb} voted) 
+ Mitt     | 31 | `r circle` No   | No  | No (`r percent(mean(mitt.votes))` of [Mitt-types]{.groupb} voted)
+ Al   | 34 | `r circle` No   | No  | No (`r percent(mean(al.votes))`   of [Al-types]{.groupb} voted)
+ ...            | ...|...  |...  | ?
+
+
+::: {.panel-tabset}
+### Question
+- This doesn't quite answer our question. 
+- We want to know how many votes we'd have gotten if we mailed everyone in this table the [letter]{.groupb}.
+- How can we use the table to find out?
+
+
+### Something That Doesn't Work
 
 ```{r}
-#| layout-ncol: 2
-h=ggplot(earnings) + geom_histogram(aes(x=income, y=after_stat(density)), 
-                                  colour="black", fill="blue") + coord_flip() + xlim(0,5e5)
-h 
-scatter + ylim(0,5e5)
+summary = social.pressure |>
+    filter(age >= 25 & age <= 35 & treatment==' Neighbors') |>
+    group_by(age, p2002) |> 
+    summarize(mean.voted=mean(voted=='Yes'))  
+
+
+voting_rate = function(letter, data=social.pressure) {
+  summary = data |>
+    filter(age >= 25 & age <= 35 & treatment==letter) |>
+    group_by(age, p2002) |> 
+    summarize(mean.voted=mean(voted=='Yes'))  
+
+  proportions = data |>
+   filter(age >= 25 & age <= 35) |>
+    group_by(age, p2002) |>
+    summarize(count=n())
+
+  joined = left_join(summary, proportions, by=c('age', 'p2002'))
+  letter.rate = sum(joined$mean.voted * joined$count) / sum(joined$count)
+  letter.rate
+}
 ```
 
-- This is called a histogram. It's a way of summarizing the distribution of the data.
-- It tells us more than location and spread, but less than the dot plot.
-- It tells you how many people have roughly a given income, without telling you who those people are.
-- You see the same thing by looking at the darkness of the scatter plot at each height, but it's easier to use the histogram.
-- It's easier to use the histogram when calculating location and spread, too. We'll see that in lab this Friday.
+ - The obvious thing is to just count up the number of Yeses in the last column. 
+ - It turns out that doesn't work. We were choosing Yes/No by majority rule.
+ - But the majority within almost every group is No. 
+  - To illustrate this, let's draw in the fraction of Yeses within each group as a bigger dot. [Do it!]{.button .navigate-next} 
+  - Think of 'Yes' as 1 and 'No' as 0, so majority rule says 'No' if that dot is below the midline.
+- For people in our list---the 25-35s---the majority says 'No' in almost every group: `r sum(summary$mean.voted <= 1/2)`/`r nrow(summary)`.
+  
+### Something That Does Work
 
-# Example 2: 2020 Election Turnout Polls
+- We're still going to count. But this time, we're not going to think of Rush, Mitt, and Al as 3 Nos.
+- We're going to think of Rush as `r percent(mean(rush.votes))` of a Yes; Mitt as `r percent(mean(mitt.votes))` of a Yes; and Al as `r percent(mean(al.votes))` of a Yes.
+  - Even though the thing we're predicting is binary, our prediction is a fraction.
+  - This sounds a bit odd but the math tends to work out.
+- That way, when we count up our predictions for 100 people like Rush, we get `r round(100*mean(rush.votes),2)` Yeses. Not zero.
+  - And when we do it for `r length(rush.votes)` people like Rush, we get `r sum(rush.votes)`. 
+  - `r length(rush.votes)` is the number of [green dots]{.groupb} like Rush in the experiment and `r sum(rush.votes)` is the number of Yeses among them.
+- Some people call this kind of fractional answer to a Yes/No question *probabilitic classification*.
 
-```{r population}
-our.seed = 0
-set.seed(our.seed)
-N=7233584
-p=4999960/N
-y= c(rep(1,p*N), rep(0, (1-p)*N))
-y=sample(y) # shuffle the order 
-population.proportion = p
-```
+### Doing It
 
-```{r sample}
-set.seed(our.seed)
-
-n = 625
-J = sample(N, n, replace=TRUE)
-Y = y[J]
-sample.proportion = mean(Y)
-poll = data.frame(J=J, Y=Y)
-```
-
-## The Data
-
-- Suppose you want to predict how many Georgia residents will turn out to vote in the 2020 presidential election.
-- To do that, you'll do some polling.
-  - You use a list of the $N \approx `r approx(N)`$ people registered to vote in Georgia.
-  - And you make $n=`r n`$ phone calls.
-  - And then you ask the potential voter whether they plan to vote.
-- What you're hoping is that the proportion of people you call who say they plan to vote is a useful prediction of the proportion of registered voters who do actually vote.
-- Here's a partial view of the data you collect.
-
-```{r}
-poll %>% ellipsis(nhead=4, ntail=2) %>% kable() 
-```
-
-## Dot Plot
-
-```{r}
-#| out-height: 400px
-poll$call = 1:nrow(poll) 
-scatter = ggplot(poll) + geom_point(aes(x=call, y=Y), alpha=.1)
-scatter
-```
-
-- This is the same sort of plot we saw before, but it's harder to look at.
-- Because there are only two possible values of $Y$, everyone is on two lines.
-- It's not as easy to eyeball location or spread, but we can still calculate them and draw them in.
-
-## Location
-
-```{r}
-#| out-height: 400px
-x.med  = 300
-x.mean = 400
-size.mean = 3
-size.med = 3
-
-summaries = poll %>% 
-    summarize(mean=mean(Y), 
-              median=median(Y),  
-              sd=sd(Y), 
-              mad=mad(Y, constant=1))
-scatter + geom_point(aes(x=x.mean, y=mean), size=size.mean, color='red', data=summaries) + 
-          geom_hline(aes(yintercept=mean), color='red', data=summaries) +
-          geom_point(aes(x=x.med, y=median), size=size.med, color='orange', data=summaries) +
-          geom_hline(aes(yintercept=median), color='orange', data=summaries)
-```
-
-- The **location** of the data is still --- sort of --- where it is.
-- It's about approximating the data by a *constant*.
-$$ Y_i \approx \mu \qfor i=1,\dots,n $$
-- But when the data is binary, it has no 'middle', so that approximation looks odd.
-- However, the usual summaries of location have different---and natural---interpretations.
-    - e.g. the [Median]{.fg style="--col: orange"}. In binary data, it's whichever outcome is most common.
-    - e.g. the [Mean]{.fg style="--col: red"}. In binary data, it's the proportion of ones: $`r sum(poll$Y)`/`r n` \approx `r round(sample.proportion, 2)`$.
-
-## Distribution
-
-```{r}
-#| out-height: 400px
-#| layout-ncol: 2
-h=ggplot(poll) + geom_histogram(aes(x=Y, y=after_stat(density)), 
-                                  colour="black", fill="blue", bins=2) + coord_flip() 
-h 
-scatter + ylim(0,1)
-```
-
-- Distribution offers no more information than the mean $\hat\mu$ itself.
-- To report the distribution, we report the proportion of ones ($\hat\mu$) and zeros ($1-\hat\mu$).
-
-## Spread
-
-```{r}
-#| out-height: 400px
-scatter + geom_pointrange(aes(x=x.mean, y=mean, ymin=mean-sd, ymax=mean+sd), color='red', data=summaries)  +
-          geom_hline(aes(yintercept=mean), color='red', data=summaries) +
-          geom_pointrange(aes(x=x.med, y=median, ymin=median-mad, ymax=median+mad), color='orange', data=summaries) +
-          geom_hline(aes(yintercept=median), color='orange', data=summaries)
-```
-
-- The **spread** of the data is still how far it tends to be from its location. Sort of.
-- Let's look at our usual measures of spread.
-    - the [Median Absolute Deviation]{.fg style="--col: orange"}, the median distance from the median, is zero. Why?
-    - the [Standard Deviation]{.fg style="--col: red"} is the square root of the mean squared distance from the mean. It's a function of the mean: $\sqrt{\hat\mu(1-\hat\mu)}$.
-
-
-## From Location to Spread
-
-When $\hat\mu$ is the mean, the standard deviation is $\sqrt{\hat\mu(1-\hat\mu)}$. Let's prove it.
+- I don't actually have the list of all voters registered in Michigan in 2006. 
+  - Rush, Mitt, and Al are all made up names with 2006 primary theme.
+  - So I can't sum up the number of Yeses in the last column.
+  - I could make the last column if I had the others, but I don't.
+- This is theoretically something that's available, but it's probably hard to get.
+- In any case, what I can do is act as if the participants in my experiment were the list of all voters in Michigan.
+  - They are, after all, randomly selected from that list. 
+  - Then both our predictions and the people whose votes were counting ...
+  - ... depend on the random selection of people to participate in our experiment.
+  - This adds a bit of randomness to our summary, but it's not a big deal.
 
 $$
+\color{gray}
 \begin{aligned}
-\text{standard deviation}^2 
-&= \frac{1}{n}\sum_{i=1}^n (Y_i - \hat\mu)^2 \\
-&= \frac{1}{n}\sum_{y \in \{0,1\}} \sum_{i : Y_i=y} (Y_i - \hat\mu)^2 \\ 
-&= \frac{1}{n}\qty{ N_1 (1 - \hat\mu)^2  + (n-N_1) (0 - \hat\mu)^2 } \\
-&= \frac{1}{n}\qty{ N_1 (1 - 2\hat\mu + \hat\mu^2)  + (n-N_1) (0 - \hat\mu)^2 } \\
-&= \frac{1}{n}\qty{ N_1 - 2N_1 \hat\mu + n \hat\mu^2} \\
-&= \frac{1}{n}\qty{ n\hat\mu - 2n\hat\mu\times \hat \mu + n \hat \mu^2} \\
-&= \frac{1}{n}\qty{ n\hat\mu - n\hat\mu^2 } = \hat\mu - \hat\mu^2 = \hat\mu(1-\hat\mu)
+\text{predicted turnout among 25-35s}  
+=& \ \ingroupb{`r 100*round(voting_rate(' Neighbors'),3)`\%} 
+&& \text{ with the \ingroupb{neighbors letter}} \\
+vs. =& \ \ingroupa{`r 100*round(voting_rate(' Control'),3)`\%}
+&& \text{ with \ingroupa{no letter}}
 \end{aligned}
 $$
 
-## Summary
+```{r}
+n.age = sum(social.pressure$age <= 35 & social.pressure$age >= 25)
+```
 
-- We've seen two ways to look at data.
-  - Tables.
-  - Dot plots.
-- And three ways to summarize it.
-    - location
-    - spread
-    - distribution
-- When outcomes are binary, things are a bit harder visually.
-- But summaries are simpler---they all boil down to the same thing.
-- For that reason, we'll focus on binary data for a couple weeks.
+- Even just counting the 25-35s in the experiment, that's $`r n.age` \times  `r round(voting_rate(' Neighbors') - voting_rate(' Control'), 3)` \approx `r round(n.age * (voting_rate(' Neighbors') - voting_rate(' Control')))`$ more votes.
 
-# Summaries of Random Data
+- What do you make of this?
+:::
 
-## The Idea
 
-- When our data is random, so is a summary of that data.
-- That's because our summary is a function of our data. A function of something random is itself random.
-- To understand what our summary are telling us about the random mechanism our data comes from ...
-  - We'll often talk about *our summary's distribution*
-  - In particular, the distribution of summaries we'd get if we got data from our random mechanism many times.
-  - We call this the *sampling distribution* of our summary.
-- This is more useful than it sounds. 
-- We can use it, for example, to learn about large groups of people using small surveys.
-- To get a sense of how all this works, let's do a few simple examples.
-- As our source of randomness, we'll roll dice.
 
-## Sum of Two Dice
+## Step 2. Inference
 
-## Proportion of Odds in 5 Rolls
+```{r}
+#| cache: true
+#| label: bootstrap-neighbors-rate 
+bootstrap.rate = replicate(400, voting_rate(' Neighbors', social.pressure[sample(1:nrow(social.pressure), replace=TRUE), ]))
+```
 
-## Candy Preferences
+```{r}
+neighbors.rate = voting_rate(' Neighbors')
+control.rate = voting_rate(' Control')
+
+estimates = data.frame(treatment=c(' Neighbors', ' Control'), 
+                       mean=c(voting_rate(' Neighbors'), voting_rate(' Control')),
+                       se = c(sd(bootstrap.rate), sd(bootstrap.rate)),
+                       y=c(1,1))
+vlines = data.frame(x=c(24.7, 100*bootstrap.rate[1]), treatment=c(' Control',' Neighbors'))
+
+scales = list(scale_x_continuous(breaks=c(24:33), labels=sprintf('%d%%', 24:33)),
+              scale_y_continuous(breaks=c(), labels=c()),
+              coord_cartesian(xlim=c(24,33), ylim=c(0,2)))
+faint.intervals = geom_pointrange(aes(x=100*mean, y=y, xmin=100*(mean-2*se), xmax=100*(mean+2*se), color=treatment), alpha=.05, data=estimates)
+strong.interval = geom_pointrange(aes(x=100*mean, y=y, xmin=100*(mean-2*se), xmax=100*(mean+2*se), color=treatment), alpha=.7, data=estimates[1,])
+
+estimates.plot = ggplot() + 
+  geom_point(aes(x=100*mean, y=y, color=treatment), data=estimates) +  
+  geom_vline(aes(xintercept=x, color=treatment), data=vlines) +
+  guides(color='none', linetype='none') 
+```
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+```{r}
+estimates.plot + scales
+```
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+```{r}
+estimates.plot +  strong.interval + scales
+```
+:::
+::: {.fragment .current-visible data-fragment-index="1"}
+```{r}
+estimates.plot + strong.interval + scales
+```
+:::
+::: {.fragment .current-visible data-fragment-index="2"}
+```{r}
+B = length(bootstrap.rate)
+bootstrap.reps = data.frame(rate=100*bootstrap.rate, y=2*(1:B)/B)
+estimates.plot + strong.interval + geom_point(aes(x=rate, y=y), data=bootstrap.reps, color='purple', alpha=.2) + scales
+```
+:::
+::: {.fragment .current-visible data-fragment-index="3"}
+```{r}
+estimates.plot +
+    strong.interval + 
+    geom_histogram(aes(x=rate, y=3*after_stat(density)), alpha=.2, data=bootstrap.reps, binwidth=.2) +
+    geom_point(aes(x=rate, y=y), data=bootstrap.reps, color='purple', alpha=.2) + 
+    scales
+```
+:::
+::: {.fragment .current-visible data-fragment-index="4"}
+```{r}
+estimates.plot +
+    strong.interval + 
+    geom_histogram(aes(x=rate, y=3*after_stat(density)), alpha=.2, data=bootstrap.reps, binwidth=.2) +
+    geom_point(aes(x=rate, y=y), data=bootstrap.reps, color='purple', alpha=.2) + 
+    scales
+```
+:::
+::: {.fragment .current-visible data-fragment-index="5"}
+```{r}
+estimates.plot +
+    strong.interval + 
+    geom_histogram(aes(x=rate, y=3*after_stat(density)), alpha=.2, data=bootstrap.reps, binwidth=.2) +
+    geom_point(aes(x=rate, y=y), data=bootstrap.reps, color='purple', alpha=.2) + 
+    scales
+```
+:::
+::::
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+
+- This summary of our predictions suggests that the letter makes a big difference. That, itself, is not interesting. 
+  - We can call it as an estimate of what we want to know. 
+  - But I can make up any number and call it an estimate. 
+- What would be interesting is to know that estimate is accurate.
+  - i.e. if the letter actually improved that age-group's turnout from about [`r percent(control.rate)`]{.groupa} to about [`r percent(neighbors.rate)`]{.groupb}.
+  - e.g. if we knew that the actual with-letter turnout was the [green line]{.groupb}, not the [red one]{.groupa}
+  - perhaps we could say that it's within some range. [Draw it!]{.button .navigate-next}
+- What's real here is complicated. 
+  - We're asking about what would have happened if we'd done something we didn't do. 
+  - Let's put that aside for a moment. We'll come back to it.
+- We've danced around a lot of terminology here. See @sec-terminology for that. 
+
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+
+- This summary of our predictions suggests that the letter makes a big difference. That, itself, is not interesting. 
+  - We can call it as an estimate of what we want to know. 
+  - But I can make up any number and call it an estimate. 
+- What would be interesting is to know that estimate is accurate.
+  - i.e. if the letter actually improved that age-group's turnout from about [`r percent(control.rate)`]{.groupa} to about [`r percent(neighbors.rate)`]{.groupb}.
+  - e.g. if we knew that the actual with-letter turnout was the [green line]{.groupb}, not the [red one]{.groupa}
+  - perhaps we could say that it's within some range. [Draw it!]{.button .navigate-next}
+- What's real here is complicated. 
+  - We're asking about what would have happened if we'd done something we didn't do. 
+  - Let's put that aside for a moment. We'll come back to it.
+- We'll be dancing around a lot of terminology here. See @sec-terminology for that. 
+
+:::
+
+::: {.fragment .current-visible data-fragment-index="1"}
+
+- Let's imagine that we really did mail the letter to every voter in Michigan.
+  - And the data we've used for our predictions, the [green dots]{.groupb} in @fig-social-pressure, is just a random sample of voters. 
+  - Like if we'd chosen them by rolling a really big die, with a side for each voter, `r sum(social.pressure$treatment==' Neighbors')` times.
+ - If that were the case, we'd be dealing with a statistical inference problem.
+ - We'd want to know how the turnout rate we've *estimated* using our sample compares to the rate in the population.
+ - If we've drawn a range --- *an interval estimate* --- we'd want to know whether the population rate is in there.
+  - There is, of course, an element of chance. Our sample is random.
+  - But we might ask how often we'd get an interval that contains the population rate if ...
+    - ... we drew samples of `r sum(social.pressure$treatment==' Neighbors')` voters the same way, over and over, 
+    - ... each time rolling our die `r sum(social.pressure$treatment==' Neighbors')` times to select `r sum(social.pressure$treatment==' Neighbors')` people 
+    - ... from our list of all Michigan voters, each of whom --- in our imagination --- got the letter.
+    
+:::
+::: {.fragment .current-visible data-fragment-index="2"}
+
+ - What we'd be doing is thinking of our estimate as the result of a procedure we could apply to any sample.
+  - Our estimate is a *function* of the sample we have. Apply the procedure, get a number.
+  - If we applied that procedure to 100 different samples, we'd get [100 different numbers]{.purple}. Like our [purple dots]{.purple} ([`r circle`]{.purple}s).
+- We don't have a bunch of samples like the ones we'd want. We'd have to time-travel to 2006 and mail letters.
+- But it turns out we can fake it well enough to get by. That's how we got the [`r circle`]{.purple}s.
+  - How do we do it? We'll see in a couple weeks.
+- This gives you a sense of how much of your error is a matter of chance. 
+  - What it says is that, sampling then applying your procedure, you'd have been just as likely ...
+  - ... to have gotten any of those [`r circle`]{.purple}s as the [`r circle`]{.groupb} that you did.
+- If your conclusions depend on *which* dot you got, you probably shouldn't trust them.
+
+:::
+::: {.fragment .current-visible data-fragment-index="3"}
+
+ 
+- If you want to have a better sense of all the possibilities, you could draw more purple dots.
+  - A billion, even. But your picture would be pretty cluttered. It'd be hard to see much of anything.
+- What I've done instead is draw something that tells us how many of these billion dots fall into any given range.
+  - We call this the *distribution* of the purple dots. 
+  - The fraction of its *shaded area* that falls between $x=a$ and $x=b$ is the fraction of *dots* that do.
+  - Or, if we prefer, the *probability* that a randomly chosen dot falls between $x=a$ and $x=b$.
+- This tells us where our estimates tend to be, but not how far they are from what we're trying to estimate.
+  - To read that off the plot, we'd need to draw in the rate in the population. 
+  - And we don't know that. If we did, we wouldn't be doing this.
+- This is where math comes in. What we'll do is *prove* this distribution is exactly where we want it.
+  - Not the 'fake' one we're drawing. The actual one.
+  - The distribution of dots we'd get if we'd mailed `r sum(social.pressure$treatment==' Neighbors')` letters in Michigan a billion times.
+  - This isn't true of all estimators, but it is of the one we're using here. We call these ones *unbiased*.
+
+:::
+::: {.fragment .current-visible data-fragment-index="4"}
+
+- What should we make of this visualization---the 'fake' distribution?
+- It turns out that it has about the same shape as the real one. You'll have to take my word for it, at least for now.
+- As a result, even though we won't know *where* the real one is, we know that ...
+  - wherever it is, it's where we want it to be. It's centered on the population rate we want to know.
+  - it's about as narrow as the one we've drawn.
+- If you twist that just right, we can make a meaningful claim about where that center is.
+  - What we do is take advantage of the fact that we have [one sample (`r circle`)]{.groupb} from the real thing.
+  - And if more or less all samples from the real thing are close to its center, i.e., the distribution is narrow ...
+  - ... then, turning that around, that center has to be pretty close to [the sample]{.groupb} we do have.
+:::
+::: {.fragment .current-visible data-fragment-index="5"}
+
+
+- The [interval estimate]{.groupb} I've drawn is actually *calibrated* using this idea.
+- Its width is chosen so that, unless the [`r circle`]{.groupb} is an unusually off-center draw from the real distribution ...
+  - The interval itself contains the distribution's center. 
+  - And therefore the rate in the population we were trying to estimate.
+- In particular, if I were to make a billion interval estimates using the same approach ...
+- ... 95% of them would contain what I intended to estimate. 
+- This doesn't tell you what's true in any one instance. 
+  - If you're not actually going to look at the whole population, you have to accept some uncertainty.
+- What it does is tell you about me and the methods I'm using.
+  - It tells you that, if I do a lot of work for you ...
+  - .. you can trust the intervals I give you to be right 95% of the time.
+
+### Practice working with Distribution Plots
+ How many of the [`r circle`]{.purple}s are estimates of at least 30%? What about 29%?
+ 
+  - You could count the slow way---dot by dot.
+  - Can you think of a faster way?
+
+:::
+::::
+
+## Step 3. Causality
+
+
+```{r}
+annotated.social.pressure.plot
+```
+
+- Now let's come back to the issue we put aside. 
+- We've been talking as if we'd mailed the letter to every voter in Michigan.
+- And we were using a [random sample]{.groupb} of them to make our predictions.
+- That's not what happened. GGL didn't even mail the letter to every voter selected for their experiment.
+- What they did was ...
+  
+  1. They randomly selected 180,000 households to include in their experiment.
+  2. They randomly assigned each of these households one of five letters.
+
+- Does the sample of [`r circle`]{.groupb}s we got *look like* one we'd get if we'd mailed the letter to everyone?
+- Is it similar enough that we can get away with *pretending that it is*? Let's talk about it.
+- On Friday, we're going to start using some math to think about sampling. We'll get some answers then.
+
+# The Syllabus
+
+[qtm285-1.github.io](https://qtm285-1.github.io)
+
+# Letters
+
+##
+
+![](figs/gerber-green-larimer-civic-duty.png){#fig-civic-duty-letter}
+
+##
+
+![](figs/gerber-green-larimer-public-record.png){#fig-public-record-letter}
+
+## 
+
+![](figs/gerber-green-larimer-watched.png){#fig-watched-letter}
+
+## 
+
+![](figs/gerber-green-larimer-neighbors.png){#fig-neighbors-letter}
+
+# Terminology {#sec-terminology}
+
+- We call whatever we actually want to estimate our *estimand*. 
+- That's usually a summary of a *population*. 
+  - That's a group of people (or whatever) that exists. 
+  - But which we haven't collected data on in entirety.
+- That's why we have to use our *sample* to *estimate* it.
+- Making statements about our estimand using our sample is called *inference*.
+  - Typically, we do that with an *interval estimate*. 
+  - That's a claim that our estimand is in some range of values.
+  - Usually a range centered on a *point estimate* like our [green dot]{.groupb}.
+- What's complicated here is that the population we're thinking of is *counterfactual*.
+  - It doesn't exist because we didn't mail the letter to everyone in Michigan.
+  - Talking about *counterfactual populations* is a big part of the way we think about *Causality*.
+  - If mailing the letter to everyone in Michigan would have increased turnout, we'd say things like ...
+    - mailing the letter *caused* the increase.
+    - the increase was the *effect* of mailing the letter.

@@ -11,6 +11,8 @@ subtitle: "Multivariate Analysis and Adjustment"
 ```{r}
 pop = pop.earnings 
 sam = earnings 
+pop$group = pop$sex == 'female'
+sam$group = sam$sex == 'female'
 
 xco = function(w,x) {
   w=as.numeric(w)
@@ -62,7 +64,6 @@ money = function(x) { sprintf('%2.1fk', round(x/1000, digits=1)) }
 ## Multivariate Analysis
 
 ```{r}
-sam$group = sam$sex == 'female'
 scatter.by.group(sam)
 ```
 
@@ -81,6 +82,26 @@ muhat.female = mean(sam$income[sam$sex=='female'])
     - $\ingroupa{W_i=0}$ indicates male, $\ingroupb{W_i=1}$ indicates female.
 - As usual, we've drawn in each group's income mean and standard deviation too.
 - We'll write $\ingroupa{\hat\mu(0,x)}$ and $\ingroupb{\hat\mu(1,x)}$ for the mean income of male and female respondents with $x$ years of education. 
+
+## Plan for Today. This is rough.
+
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+scatter.by.group(sam)
+scatter.by.group(pop, dot=pop.dot)
+```
+
+- From a calculational and inferential perspective, this is nothing new.
+  - We're going to be looking at ways to summarize a sample (e.g. female CPS respondents in California)
+  - And we can use what we get to estimate the corresponding summary of the population it's drawn from (e.g. female residents of California).
+- The part that is new will be interpretation and communication.
+  - We'll see that there are a variety of ways to look at differences in a multivariate setting.
+  - And that, if we're not careful, we can find ourselves talking about different summaries as if they were the same.
+- That'll be our focus today.
+  - Thinking and communicating precisely about what we're talking about.
+  - Understanding how we get different answers to 'the same question' if we're imprecise.
+  - Thinking about the implications of what we choose to report.
 
 
 ## A Few Summaries 
@@ -305,6 +326,14 @@ $$
 :::
 ::::
 :::
+
+## Two or Three Ways to Write an Average
+
+Move the calculation stuff up here ...
+
+## Statistical Inference
+
+Move the interval stuff up here...
 
 ## Variations
 
@@ -547,6 +576,23 @@ ggplot(sam) + bars + facet.by.group
   2. *An Upward Trend*.   Income tends be higher at higher levels of education.
 - The relationship between the raw and adjusted difference depends on both. 
 
+## It's Not Just A Sample Thing.
+```{r}
+#| layout-ncol: 3
+#| fig-width: 5
+#| fig-cap:
+#| - Sample
+#| - Population
+#| - Interval Estimate and Bootstrap Sampling Distribution 
+scatter.by.group(sam) + scaled.interleaved.bars
+scatter.by.group(pop, dot=pop.dot) + scaled.interleaved.bars
+ggplot()
+```
+
+
+
+# More Income Examples 
+
 ## Covariate Shift *increases* this other Disparity
 ```{r}
 adj.mf.ca = mean(Y[W==1] - muhat(0,X[W==1]))
@@ -561,7 +607,9 @@ ga.sam = income(georgia.state.code)$sample
 
 ```{r}
 #| out-width: 100%
-this.sam = ga.sam |> mutate(group = race == 'Black only') |> filter(race %in% c('Black only', 'White only'))
+this.sam = ga.sam |> 
+  mutate(group = race == 'Black only') |> 
+  filter(race %in% c('Black only', 'White only'))
 
 W = this.sam$group
 X = this.sam$education
@@ -628,8 +676,9 @@ ggplot(this.sam) + bars + facet.by.group
 
 ## Sometimes Covariate Shift is Complicated
 ```{r}
-this.sam = sam |> filter(race %in% c('Black only', 'White only')) |> 
-                  mutate(group = race == 'Black only') 
+this.sam = sam |> 
+  filter(race %in% c('Black only', 'White only')) |> 
+  mutate(group = race == 'Black only') 
 
 W = this.sam$group
 X = this.sam$education
@@ -660,7 +709,9 @@ ggplot(this.sam) + bars + facet.by.group
 ## What Would You Report?
 
 ```{r}
-this.sam = ga.sam |> mutate(group = race == 'Black only') |> filter(race %in% c('Black only', 'White only'))
+this.sam = ga.sam |> 
+  mutate(group = race == 'Black only') |>
+  filter(race %in% c('Black only', 'White only'))
 
 W = this.sam$group
 X = this.sam$education
@@ -714,22 +765,6 @@ scatter.by.group(this.sam) + scaled.interleaved.bars
 - fsdf
 
 
-## Plan for the rest of class
-
-1. How extreme the impact of covariate shift can be.
-2. Statistical Inference.
-  - We've focused on an income disparity among *CPS respondents* living in California. 
-    - That's a sample.
-    - We're probably not particularly interested in that.
-  - What we really want to know about is the disparity among *all residents* of California.
-    - That's the population we've sampled from.
-    - And we can use our sample to learn about it.
-  - This'll be quick because it's *exactly* the same as what we've been doing.
-3. Practice with Visualization and Explanation
-4. What to Adjust For.
-  - More than One Thing?
-  - Matching 
-  - Audit Studies 
 
 
 # Testing the Limits
@@ -844,8 +879,23 @@ solution.grid(data)
 :::
 ::::
 
-## Simpson's Paradox
 
+## Simpson's Paradox Warm-Up 
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+solution.grid(data[1:6,])
+ggplot(data[1:6,]) + geom_bar(aes(x=x, y=after_stat(prop), fill=factor(w), color=factor(w)), 
+                     position='identity', alpha=.05, linewidth=.4) +
+              guides(color='none', fill='none') +
+              facet_grid(rows=vars(factor(w))) +
+              theme(strip.background=element_blank(), strip.text=element_blank())
+```
+
+- What we see in our warm-up is that, even when there is no disparity within groups (e.g. applications to departments) ...
+- ... covariate shift can create a disparity when we look at the population as a whole (e.g. applicants to the university).
+
+## Simpson's Paradox
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
@@ -859,12 +909,18 @@ ggplot(data) + geom_bar(aes(x=x, y=after_stat(prop), fill=factor(w), color=facto
 ```
 
 
-- What we're seeing here is covariate shift so extreme that it flips the disparity from positive to negative.
-- In fact, whats's going on is even more extreme --- it 
+- What we see in our follow up is a bit more dramatic.
+- Even when there is disparity in one direction within groups ...
+  - e.g. female applicants are admitted at a higher rate within each department 
+- ... covariate shift can result in a disparity *in the opposite direction* when we look at the population as a whole.
+  - e.g. female applicants are admitted at a lower rate to the university as a whole.
+- This isn't a qualitatively different phenomenon. It's just a more extreme version of the same thing.
 
-# Stuff
+# What to Adjust For
 
-## Yup
+
+
+# Old Stuff 
 
 ```{r}
 filtered = \(rows) rows[rows$income < 5e5 & rows$race %in% c('White only', 'Black only'),]
