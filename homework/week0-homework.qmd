@@ -1,0 +1,340 @@
+---
+title: "Week 1 Homework"
+subtitle: "QTM 220"
+---
+
+```{r}
+#| echo: false
+library(ggplot2)
+theme_set(theme_minimal())
+```
+
+# Mean and Standard Deviation Review
+
+## Calculations
+
+::: {#exr-calculations-1 .callout-exercise}
+Each of the following lists has a mean of 50. For which is the standard deviation biggest? Smallest? 
+
+  1. 0, 20, 40, 50, 60, 80, 1002.
+  2. 0, 48, 49, 50, 51, 52, 100 
+  3. 0, 1, 2, 50, 98, 99, 100  
+
+:::
+
+::: {#exr-calculations-2 .callout-exercise}
+For the two lists below, calculate the mean and standard deviation of the numbers. Then compare the your answers for the two lists. Think about this comparison. How is the first list related to the second? How does this relationship carry over to the mean? The standard deviation? 
+
+ 
+  1. 1, 3, 4, 5, 7 
+  2. 6, 8, 9, 10, 12 
+
+:::
+
+::: {#exr-calculations-3 .callout-exercise}
+Repeat this exercise for a new pair of lists. 
+
+  1. 1, 3, 4, 5, 7 
+  2. 3, 9, 12, 15, 21
+
+:::
+
+::: {#exr-calculations-4 .callout-exercise}
+Repeat it again. 
+
+  1. 5, -4, 3, -1, 7
+  2. -5, 4, -3, 1, -7 
+
+:::
+
+
+## Properties
+
+::: {#exr-properties-1 .callout-exercise}
+Can a standard deviation ever be negative? Explain.
+:::
+
+::: {#exr-properties-2 .callout-exercise}
+For set of positive numbers, can the standard deviation ever be larger than the average? Explain. 
+:::
+
+
+## Visualization
+
+```{r}
+#| echo: false
+set.seed(220220)
+sample.1 = rbeta(10000, 5, 2)
+sample.2 = rbeta(10000, 2, 5)
+sample.3 = rbeta(10000, 5, 5)
+```
+
+Consider the three histograms below.
+
+::: {#exr-visual-1 .callout-exercise}
+The means of the samples we've histogrammed are approximately `r round(mean(sample.2),1)`,
+`r round(mean(sample.1),1)`, `r round(mean(sample.3),1)`. Which histogram corresponds to which mean?
+:::
+
+::: {#exr-visual-2 .callout-exercise}
+True or false: the standard deviation of the sample summarized by Histogram 1 is a lot smaller than the one summarized by Histogram 2. Explain. 
+:::
+
+```{r}
+#| echo: false
+#| warning: false 
+#| layout-ncol: 3
+#| fig-cap:
+#|  - "Histogram 1"
+#|  - "Histogram 2"
+#|  - "Histogram 3" 
+
+ggplot() + geom_histogram(aes(x=sample.1, y=after_stat(density)), bins=100, alpha=.3, color='black') + xlim(0,1) 
+ggplot() + geom_histogram(aes(x=sample.2, y=after_stat(density)), bins=100, alpha=.3, color='black') + xlim(0,1)
+ggplot() + geom_histogram(aes(x=sample.3, y=after_stat(density)), bins=100, alpha=.3, color='black') + xlim(0,1)
+```
+
+# Supreme Court Justices
+
+## The Data
+Load the provided dataset "EMdata.csv". To do this, start an R session in the same folder as the csv file, then say 
+
+```{r}
+#| echo: true
+EMdata = read.csv("EMdata.csv")
+```
+
+- This data is on 27 justices from the Warren ('53 - '69), Burger ('69 - '86), and Rehnquist ('86 - '05) courts
+- The data can be interpreted as a census of justices for the 1953 - 2005 era.  Each row is a justice and each column is a variable. The column 'justice' is the name of the justice. We'll be looking at a few other variables.
+   - CLlib: The percentage of votes in liberal direction for each justice in civil liberties cases
+   - party: the political party that nominated the justice (Republican =0, Democrat=1)
+   - ur:   the justice is a member of an under-represented group, such as a racial or gender minority (under-represented group=1, not in under-represented group=0)
+- To get you started, I'm going to plot a histogram of the percentage of liberal votes, identifying the mean with a vertical line. You may want to edit this code to answer future questions.
+
+```{r}
+#| echo: true
+
+CL.histogram = ggplot(EMdata) + 
+           geom_histogram(aes(x=CLlib, y=after_stat(density)), 
+                          bins=10, alpha=.3, color='black') +  
+           geom_vline(aes(xintercept=mean(CLlib)), 
+                          color="blue") +
+           xlab("% Support for Liberal Position on Civil Liberties Cases (CLlib)")
+
+CL.histogram
+```
+
+::: { #exr-justices-calc .callout-exercise}
+
+Write your own function to calculate the standard deviation of CLlib (i.e. not using "sd") and report it. Use 'sd' to check your answer.^[You may be slightly off. In particular, you may be off by a factor of `r n=nrow(EMdata); n-1`/`r n`. That's
+ok. There are two conventions for calculating the sample standard deviation---one involves division by $n$ and the other $n-1$.]
+Add, to the plot above, vertical lines indicating the mean plus and minus 1 and 2 standard deviations. 
+identification of a standard deviation on each side of the mean. What is the substantive interpretation of this mean?
+
+:::
+
+
+::: {#exr-justices-histogram-ur .callout-exercise}
+Replicate the plot above, i.e. a histogram with lines for the mean plus or minus two standard deviations, for the variable 'ur'. What is this mean? And what is its substantive interpretation?
+:::
+
+::: {#exr-justices-histogram-clib-party .callout-exercise}
+Draw two histograms of CLlib, one for Republican-nominated justices and one for Democratic-nominated justices. Calculate the mean of CLlib in each group. Which is larger, the mean among Republican justices or Democratic justices? Give a substantive interpretation of this difference.
+:::
+
+::: {#exr-justices-scatter .callout-exercise}
+
+Below, I've drawn a scatter plot of CLlib with the nominating party as the x-axis. I've used `stat_summary` to draw in the mean plus and minus two standard deviations for each group. Calculate these means and standard deviations and report the mean and endpoints of the intervals that have been drawn in. Check your answer by visually for agreement with the plot. Can you give a substantive interpretation of these intervals?
+:::
+
+```{r}
+#| echo: true
+
+civil.liberties.plot = ggplot(EMdata) +  
+  geom_point(aes(x=party, y=CLlib), 
+             position=position_jitter(w=.1, h=0), alpha=.4) + 
+  stat_summary(aes(x=party, y=CLlib), 
+              fun=mean, 
+              fun.min = function(x) mean(x) - 2*sd(x), 
+              fun.max = function(x) mean(x) + 2*sd(x), 
+              geom="pointrange") + 
+  xlab("Party of Appointing President") + 
+  ylab("%Support for Liberal Position on CL Cases")
+
+civil.liberties.plot
+```
+
+
+::: {#exr-justices-scatter-ur .callout-exercise}
+Repeat the exercise above, using the variable 'ur' instead of 'CLlib'. Draw your own plot.
+:::
+
+# Frequencies, Indicators and Means
+
+Look the list of numbers
+$$ 
+1, 2, 3, 4, 5
+$$
+
+How many of those numbers are greater than or equal to 3? 3/5 of them are. We pronounce this '3 out of 5', but if we take the division sign in there seriously, we get $3/5 = .6$.  $.6$---often we say, equivalently, 60%---is the *frequency* that one of those five numbers is greater than or equal to 3. 
+
+We've been talking a lot about means so far and there is a connection. Frequencies are means. Let's think of the list above as a sample of 5 numbers: $Y_1=1, Y_2=2, \ldots$.  And let's define, in terms of these, a corresponding sample of zeros and ones, $O_1 \ldots O_5$. 
+
+$$
+O_i = \begin{cases}
+1 & \text{ if } Y_i \ge 3 \\
+0 & \text{ otherwise }
+\end{cases}
+$$
+
+We call these **indicators**: $O_i$ *indicates* whether $Y_i$ is greater than or equal to $3$ by being one if it is and zero if it isn't. And for our list specifically, the indicator list can be written as
+
+$$
+O_1 = 0, O_2 = 0, O_3 = 1, O_4 = 1, O_5 = 1
+$$
+
+What's the mean of our indicators $O_1 \ldots O_5$?  $.6$, right?  That's not a coincidence. The frequency that something happens is the mean of *indicators that it does happen*. Thinking this way will come in handy because we'll talk about means a lot in this class and this lets us use all the same ideas to think about frequencies. We do this so often that we have a special notation for indicators. Instead of $O_i$, we'd usually write $1_{\ge 3}$ so we don't have to remember the meaning of a new letter---it's all there. Indicators aren't just for something being greater than equal to something else. We could, for example, talk about the indicators $1_{=3}$ or $1_{<0}$. I'll leave it to you to work out what those mean.
+
+We can also write any indicators as in function notations, namely **indicator function**, where $O_i$ is a function of $Y_i$:
+$$
+O_i = 1_{\ge 3}(Y_i) = \begin{cases}
+1 & \text{ if } Y_i \ge 3 \\
+0 & \text{ otherwise }
+\end{cases}
+$$
+
+Similarly, we could write indicators like $1_{=3}$ or $1_{<0}$, for example, into indicator functions, making it very useful in our future discussions.
+
+"Plotting" the indicator to visually see what it means. In the graph below, the points represent our original values $1, 2, 3, 4, 5$, and the blue shaded rectangle represents the region where $Y_i \ge 3$. Notice that the points inside the blue rectangle $(1,3),(1,4),(1,5)$ correspond to where our indicator function $1_{\ge 3}(Y_i) = 1$.
+Points outside the rectangle $(1,1),(1,2)$ correspond to where $1_{\ge 3}(Y_i) = 0$. The frequency, or the mean of our indicator, we calculated earlier, $.6$, can also be visually represented by the proportion of points, $3/5$, that are covered by the blue rectangle.
+
+```{r}
+#| echo: true
+freq.data = data.frame(Y = c(1,2,3,4,5), X = c(1,1,1,1,1))
+# a random X is included as r likes it in scatter plots
+ggplot(freq.data)+
+  geom_point(aes(x=X, y = Y))+
+  annotate("rect", xmin = -Inf, xmax = Inf, ymax = Inf, ymin = 3, alpha = .1,fill = "blue")
+
+```
+
+Being able to do these calculations in R is a bit more salient when we have a larger list, but let's check that we've got all of this down by starting with some very simple exercises. 
+
+::: {#exr-indicators-def .callout-exercise}
+Here's a new list of five numbers.
+$$
+3, 0, 1, 2, -1 
+$$
+
+Define an **indicator function** $1_{\le 0}(X)$ that equals 1 when X is **less than or equal to 0**, and 0 otherwise
+:::
+
+::: {#exr-indicators-calc .callout-exercise}
+Calculate the frequency of numbers **less than or equal to 0** and the mean of the 5 indicators we get from the 5 numbers above. Are they the same?
+:::
+
+::: {#exr-indicators-viz .callout-exercise}
+Write the R code to create a visualization using `ggplot` like the one above and color the region corresponding the indicator function. (Hint: try to adjust the `annotate()` function to highlight the correct region). Interpret the visualization (how would the plot represent the indicator function)
+:::
+
+Now that we've got all this down, let's think about the frequency with which a few things happen in the supreme court. We can still define indicator functions in this scenario with any conditions like what we did above. Suppose I want the indicator to indicate whether the percent of support for liberal position on CL cases among both parties is greater than or equal to 25. Denoting percent of support as $Y_i$, the indicator function can be written as
+$$
+1_{\ge 25}(Y_i) = \begin{cases}
+1 & \text{ if } Y_i \ge 25 \\
+0 & \text{ otherwise }
+\end{cases}
+$$
+
+Using R could help us calculate the frequency and means in this larger dataset. In this case, we can compare the frequency of items satisfying the condition and mean of the indicators by using the following code
+```{r}
+#| echo: true
+# Getting the indicators
+library(dplyr) 
+# using the library for manipulation
+
+EMdata.indicator25 = EMdata%>%
+  mutate(indicator = ifelse(CLlib >= 25, 1, 0))
+# `ifelse` sentence that would return 1 when the condition, CLlib >= 25, is true and 0 when CLlib < 25
+# `mutate` creates a individual column of the indicators
+
+mean(EMdata.indicator25$indicator)
+```
+
+```{r}
+#| echo: true
+# Getting the frequency of items satisfying conditions
+EMdata.freq25 = EMdata%>%
+  summarise(freq = mean(CLlib >= 25))
+# this returns a data frame containing only the frequency 
+
+EMdata.freq25$freq
+```
+
+Notice that the frequency and the mean of indicators are exactly the same! Besides that, we can draw a similar plot to visually interpret the indicators.
+
+```{r}
+#| echo: true
+
+CLindicator25.plot = ggplot(EMdata) +  
+  geom_point(aes(x=party, y=CLlib), 
+             position=position_jitter(w=.1, h=0), alpha=.4) + 
+  stat_summary(aes(x=party, y=CLlib), 
+              fun=mean, 
+              fun.min = function(x) mean(x) - 2*sd(x), 
+              fun.max = function(x) mean(x) + 2*sd(x), 
+              geom="pointrange") + 
+  annotate("rect", xmin = -Inf, xmax = Inf, ymax = Inf, ymin = 25, alpha = .1,fill = "blue")+
+  xlab("Party of Appointing President") + 
+  ylab("%Support for Liberal Position on CL Cases")
+
+CLindicator25.plot
+```
+
+Only 1 point is not convered by the blue rectangle, and 26 of them are within it (you can count if you want to check). This means we would see only 1 zero but 26 ones as the result of indicator funciton. So the frequency and the mean of the indicators are both equal to $26/27 = 0.962963$ like we've calculated above.
+
+Another example: what if we want the indicator to be whether the percent of support is greater than or equal to 50 only for republicans (`party` = 0)? Now we denote the percent of support of all the republicans as $R_i$, then the indicator function can be written as
+$$
+1_{\ge 50}(R_i) = \begin{cases}
+1 & \text{ if } R_i \ge 50 \\
+0 & \text{ otherwise }
+\end{cases}
+$$
+
+We can again calculate the frequency of items that satisfy the condition (the percent of support is greater than or equal to 50), compare it with the mean of the indicators, and plot the rectangular shade to visualize the indicator function.
+```{r}
+#| echo: true
+EMdata.repub = EMdata%>%
+  filter(party == 0)
+
+# Indicator
+EMdata.indicator50.repub = EMdata.repub%>%
+  mutate(indicator = ifelse(CLlib >= 50, 1, 0))
+
+# Frequency
+EMdata.freq50.repub = EMdata.repub%>%
+  summarise(freq = mean(CLlib >= 50))
+
+print(paste("The mean of indicators is", mean(EMdata.indicator50.repub$indicator)))
+print(paste("The frequency is", EMdata.freq50.repub$freq))
+```
+
+```{r}
+# Visualize Indicator Function
+CLindicator50.repub.plot = ggplot(EMdata.repub) +  
+  geom_point(aes(x=party, y=CLlib), 
+             position=position_jitter(w=.1, h=0), alpha=.4) + 
+  stat_summary(aes(x=party, y=CLlib), 
+              fun=mean, 
+              fun.min = function(x) mean(x) - 2*sd(x), 
+              fun.max = function(x) mean(x) + 2*sd(x), 
+              geom="pointrange") + 
+  annotate("rect", xmin = -Inf, xmax = Inf, ymax = Inf, ymin = 50, alpha = .1,fill = "blue")+
+  xlab("Party of Appointing President") + 
+  ylab("%Support for Liberal Position on CL Cases")
+
+CLindicator50.repub.plot
+```
+
+::: {#exr-indicators-CLlib-viz .callout-exercise}
+Define an indicator function to indicate whether the percent of support is **greater than or equal to 50** only for democrats. Write the R code to create a similar visualization for this function and color the region corresponding the indicator function. Provide some brief interpretations of the plot.
+:::
