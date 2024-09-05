@@ -5,6 +5,12 @@ subtitle: "Sampling"
 
 ## Today, We Make An Important Decision
 
+```{=html}
+<style>
+.reveal { background: #ffffff; }
+</style>
+```
+
 ```{webr-r}
 #| label: ggplot-theme
 #| context: setup
@@ -31,6 +37,8 @@ lab.theme = theme(
 
 theme_set(lab.theme)
 ```
+
+
 
 ![](figs/big-hairy-question.jpg)
 
@@ -229,7 +237,7 @@ We're going to repeat the process this many times.
 R = 1000
 ```
 
-To do that, I'm going to use the function *map_vec* from the package **purr**.
+To do that, I'm going to use the function *map_vec* from the package **purrr**.
 
 ```{webr-r}
 plus.one = function(x) { x + 1 }
@@ -251,20 +259,57 @@ one.to.ten.again = 0:9 |> map_vec(\(x) x+1)
 one.to.ten.again
 ```  
 
-### Functional Programming Convention (very optional)
+### Mapping and How We're Using It
 
 - This is a built-in function most modern lanuages. Python, Julia, Scheme, Haskell, ML, etc. 
   - And it's always called 'map'. Except in **R**. It's built in, but it's called 'sapply'.
-  - I tend to use the **purr** version just because the name is better.
-  - People tend to speak the code above this way: 'map [the function] plus.one over the vector zero through nine'
+  - I tend to use the **purrr** version just because the name is better.
+  - People speak the code above this way: 'map [the function] plus.one over the vector zero through nine'
 - We're using it for a reason that's common but not the 'usual reason' people do.
   - We don't actually care about getting passed every element of the list.
   - We just want to *repeat* something --- something random --- a bunch of times. 
-  - So we'll pass it a lsit with the same thing repeated a bunch of times.
+  - So we'll pass it a list with the same thing repeated a bunch of times.
+- We'll write a function that ...
+    - takes as input a population
+    - samples the population
+    - returns a sample mean---an estimate of the population mean.
+- We'll run it `R` times on our population by *mapping* our function over a list containing `R` copies the population.
 
 ```{webr-r}
 pops = rep(list(pop), R)
 ```
+
+
+### Pipe Syntax
+
+- You may have noticed that I said `map_vec` is function of two arguments.
+  - A list. Above, that's `0:9`.
+  - A function. Above, that's `plus.one`.
+- You'd think I'd call it like this.
+
+```{webr-r}
+map_vec(0:9, plus.one)
+```
+
+- Instead, I called it like this.
+```{webr-r}
+0:9 |> map_vec(plus.one)
+```
+
+- This is called 'piping'. We say the list `0:9` is 'piped in'.
+  - `a |> f(...)` is the same as `f(a,...)` for any function `f` and list of arguments `...`.
+- We use piping for the same reason we might say ...
+  - 'take the list zero to nine and map plus.one over it' ...
+  - vs. 'map plus.one over the list zero to nine'. 
+- It's especially natural when you want to do a sequence of things to a list.
+  - e.g., if we want to take the list zero to nine, add one to each element, then square each result.
+
+```{webr-r}
+square = function(x) { x^2 }
+0:9 |> map_vec(plus.one) |> map_vec(square) # in piped form
+map_vec(map_vec(0:9, plus.one), square)     # in unpiped form
+```
+
 
 :::
 
