@@ -1,36 +1,10 @@
 ---
-title: "Week 2 Homework"
+title: "Untitled"
 format: html
 ---
 
-```{r}
-#| echo: false
-library(ggplot2)
-theme_set(theme_minimal())
-```
 
-# NBA Players
 
-You and a friend each assemble some data describing the performance of NBA players in the 2023 season. 
-From the population of all players that played in the league that year, you each draw a sample of 100 players
-with replacement. Then you record some information about each player in your sample. 
-
-```{r}
-#| echo: true
-sample.1 = read.csv("nba_sample_1.csv") 
-sample.2 = read.csv("nba_sample_2.csv") 
-```
-
-Here's a list of variables.
-
-- Player - The player's name.
-- Team: The team whose this player is playing for this season in abbreviated term.
-- Age:  The Age of the player.
-- GP: The number of games that the player has played in this season.
-- W: The number of games won in which the player has played.
-- L: The numer of games lost in which the player has played.
-- Min: The minutes the player has played for this season.
-- PTS: The number of points made by the player.
 
 ## Working with the Sample
 
@@ -51,20 +25,21 @@ Then draw the interval on top of your histogram from Exercise 1. And draw it on 
 #| echo: true
 #| eval: false
 
-histogram + geom_pointrange(y=0, x=center, xmin=center-w/2, xmax=center+w/2)
+histogram + geom_pointrange(y = 0, x = center, xmin = center - w / 2, xmax = center + w / 2)
 ```
 
 
 To get you started, I'll give you a function that'll calculate your interval's width. What you'll need to do is draw samples from the bootstrap sampling distribution and pass them in.
 
 ```{r width-code}
-width = function(samples, center=mean(samples), alpha=.05) {
-  covg.dif = function(w) { 
-    actual = mean( center - w/2 <= samples & samples <= center + w/2)
-    nominal = 1-alpha 
-    actual - nominal  
-  }
-  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-center))))$root
+#| echo: True
+width <- function(samples, center = mean(samples), alpha = .05) {
+    covg.dif <- function(w) {
+        actual <- mean(center - w / 2 <= samples & samples <= center + w / 2)
+        nominal <- 1 - alpha
+        actual - nominal
+    }
+    uniroot(covg.dif, interval = c(0, 2 * max(abs(samples - center))))$root
 }
 ```
 
@@ -94,10 +69,10 @@ Choose whatever makes sense to you visually.
 Noting your interest in NBA stats, a benevolent data analyst sends you data for the full population. That is, they send you a table like the one you've been working with, but with a row for every player in the league the 2023 season. 
 
 ```{r}
-population = read.csv("nba_population.csv")
+population <- read.csv("nba_population.csv")
 ```
 
-We're going to use this to check our work. We can draw samples of size `r n`, 
+We're going to use this to check our work. We can draw samples of size 100, 
 just like the two we actually have, from this population.
 And we can use them to calculate the actual sampling distribution of the mean number of points players scored. This is just like what we did for our turnout poll using our post-election knowledge of turnout.
 
@@ -119,3 +94,20 @@ Then add the following to your plot.
 If either interval doesn't include the population mean, explain what's gone wrong. Is it an unusually bad point estimate? A too-narrow interval? Or both? Refer to the plot.
 
 :::
+## Coverage
+
+::: {#exr-coverage-calculation .callout-exercise}
+
+We can also calculate the **coverage** of the bootstrapped samples. Coverage is the proportion of confidence intervals that contain the true value of the parameter we would like to estimate. Using the `width()` function to calculate the each interval width of the bootstrapped sample, and then calculate their coverage of our true parameter in the population, the mean of `PTS`.
+
+:::
+
+## Bonus Question
+
+::: {#exr-bonus-width-plot .callout-exercise}
+
+We have function `width()`, calculate different widths of 95% confidence interval in each bootstrap sample and plot the width.
+
+:::
+
+
