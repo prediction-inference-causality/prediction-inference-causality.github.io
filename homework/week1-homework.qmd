@@ -1,0 +1,207 @@
+---
+title: "Week 1 Homework"
+format: html
+---
+
+```{r}
+#| echo: false
+library(ggplot2)
+library(purrr)
+theme_set(theme_minimal())
+```
+
+# NBA Data
+
+A mutual friends gives us some data describing the performance of NBA players in the 2023 season. Actually, they give us different data---they give me 'sample 1' and you 'sample 2'. They say these are samples of size 100 drawn with replacement from the population of all players that played in the league that year.  
+
+```{r}
+#| echo: true
+my.sample = read.csv("https://qtm285-1.github.io/assets/data/nba_sample_1.csv")
+your.sample = read.csv("https://qtm285-1.github.io/assets/data/nba_sample_2.csv")
+```
+
+Theres a fair amount of information about the players in our samples. Here's a list of the variables we have.
+
+- Player - The player's name.
+- Team: The team whose this player is playing for this season in abbreviated term.
+- Age:  The Age of the player.
+- GP: The number of games that the player has played in this season.
+- W: The number of games won in which the player has played.
+- L: The numer of games lost in which the player has played.
+- Min: The minutes the player has played for this season.
+- PTS: The number of points made by the player.
+
+## An Estimation Problem
+
+What we want to know is how many points, on average, a player in the league scored over the course of the season. That is, if we call the number of points these players scored $y_1 \ldots y_m$, we want this.
+$$
+\underset{\text{estimation target}}{\theta} = \frac{1}{m}\sum_{j=1}^m y_j.
+$$
+
+We're going to estimate it exactly the same way, but using our sample $Y_1 \ldots Y_n$ of size $n=100$.
+
+$$
+\underset{\text{estimate}}{\hat\theta} = \frac{1}{n}\sum_{i=1}^n Y_i
+$$
+
+Here we're following a convention in which we write our targets as some greek letter. Often $\theta$. And add a 'hat', the thing above the letter theta in $\hat\theta$, to indicate an estimator of that thing.   
+
+My estimate, for what it's worth, is `r mean(my.sample$PTS)`.
+```{r}
+#| echo: true
+Y = my.sample$PTS
+n = length(Y)
+
+theta.hat = mean(Y)
+theta.hat
+```
+
+To put it in context, I plot my points around my estimate.
+
+```{r}
+#| echo: true
+library(ggplot2)
+
+scale_y = scale_y_continuous(breaks=seq(0,2000,by=500), limits=c(0,2300))
+scale_x = scale_x_continuous(breaks=seq(0,2000,by=500), limits=c(0,2300))
+no_labs = labs(x='', y='')
+
+points.plot = ggplot(data.frame(i = 1:n, y = Y)) +
+    geom_point(aes(x = i, y = y), alpha = .4) +
+    geom_hline(aes(yintercept = theta.hat), color = "red") +
+    scale_y + no_labs 
+points.plot
+```
+
+Here the x-coordinate is irrelevant. I've plotted pairs $(i,Y_i)$ where $i=1 \ldots n$ counts out the observations in our sample and $Y_i$ is the number of points the $i$th player in my sample scored. The red horizontal line is my estimate $\hat\theta$ of the mean point total in the league.
+
+To make it a little easier to see the distribution of season point totals in my sample, I plot a histogram and annotate it with my estimate $\hat\theta$---still a red line, but now vertical to fit into the layout of the histogram.
+
+```{r}
+#| echo: true
+points.histogram = ggplot(data.frame(y = Y)) +
+    geom_histogram(aes(x = Y, y=after_stat(density)), bins=20, alpha = .2) +
+    geom_vline(aes(xintercept = theta.hat), color = "red") + 
+    scale_x + no_labs
+points.histogram
+```
+
+To make these fit together nicely, I rotate my histogram and lay my two plots out side by side so that the bins of the histogram align with the individual players' points.^[When you do this, it's important to make sure the grid lines in your two plots line up. To do that, be sure to set the same limits on the x-axis in both plots and make sure axis labels aren't shifting things up or down. You can do the former by setting `breaks` and `limits` in `scale_*_continuous` and the latter by saying `labs(x='', y='')` to turn axis-labels off.] 
+
+
+```{r}
+#| echo: true
+#| layout-ncol: 2
+#| fig-width: 5 
+
+points.histogram + coord_flip()                     #<1> 
+points.plot + theme(axis.text.y = element_blank())  #<2>
+```
+1. This `coord_flip()` call rotates the histogram plot so the bins are horizontal.
+2. The `theme(...)` call turns off the vertical 'tick labels' 0, 500, ... in the plot on the right. They're redundant because our grids are aligned and we've already got the on the left.
+
+::: {#exr-your-estimate .callout-exercise}
+
+Replicate my analyis using your sample. Report your estimate as well as your two plots.
+
+*Hint*. You should be able to do this with a one-line change to my code. 
+:::
+
+You notice that my estimate and yours are fairly different. To try to understand what's going on, you want to run a simulation study. You call up our mutual friend and request they give you the data for every player in the league. And you get it. Here it is.
+
+```{r}
+#| echo: true
+
+our.pop = read.csv("https://qtm285-1.github.io/assets/data/nba_population.csv") 
+```
+
+::: {#exr-sampling-distribution .callout-exercise}
+To get a sense of the sampling distribution of the estimator you and I are using, draw 10,000 samples of size $n=100$ with replacement from this population, and get an average of points all sampled players scored of each sample to approximate our sampling distribution. Plot the averages you get in histogram to get a visual sense and then answer this: how weird is your estimate? Do you think it's likely that your sample was really drawn with replacement from this population?
+:::
+
+
+::: {.callout-tip collapse="true"}
+### A Starting Point
+Here's some code to get you started. All you've got to do is fill in the two lines I've marked---the lines where you sample from the population in the data frame `pop` and calculate an estimate based on that sample. What's already there will do the work of making whatever code you write run 10,000 times and storing the results in a vector called `estimates`.  Mouse over the marks on the right side of the code for more guidance.
+
+```{r}
+#| echo: true
+
+library(purrr)
+pops = rep(list(our.pop), 10000)
+estimates = pops |> map_vec(function(pop) {
+  m = nrow(pop)
+  n = 100
+  
+  sam       = NA                 #<1> 
+  theta.hat = NA                 #<2>
+  theta.hat
+})
+```
+1. Here is where you do your sampling. You'll find some useful code and an explanation of how it works in [Lab 2](qtm285-1.github.io/assets/lectures/Lab2.html). 
+2. You should have code from @exr-your-estimate to calculate an estimate given a sample.
+
+:::
+
+People do prefer an interval estimate to a point estimate. Let's report some. Rather than calibrate our estimates using our samples, as we usually have to do in real life^[That's next week stuff.], we'll take advantage of our knowledge of the actual sampling distribution as we did in this week's lecture. The one from @exr-sampling-distribution.
+
+::: {#exr-interval-estimate .callout-exercise}
+Calculate two 95% confidence intervals for the population mean: one based on my point estimate
+and one based on yours. Report these two interval estimates and draw them on your plot from 
+@exr-sampling-distribution. 
+
+*Hint*. To draw an interval centered at the point `x`,`y` with width `w` on top of a plot `p`, you can say `p + geom_pointrange(x=x, xmin=theta.hat - w/2, xmax=theta.hat + w/2, y=y)`. Your x-coordinate should be your estimate and your y-coordinate doesn't really mean anything, so use whatever you think makes it look good, like I did in [Lecture 2](https://qtm285-1.github.io/assets/lectures/Lecture2.html#/interval-estimation).
+:::
+
+::: {.callout-tip collapse="true"}
+### Code You'll Want
+Here's some code that'll be useful.^[If you're interested in how the code works, give it a read and see if you can work it out. Or come to office hours and ask me. If not, that's fine---just use it.] It takes a list of numbers---e.g. draws from our sampling distribution---and gives you a width. It finds the width you need for an interval centered at the list's mean to cover all but $100\alpha\%$ of its elements. Like the green shaded region we found in [Lecture 2](https://qtm285-1.github.io/assets/lectures/Lecture2.html#/using-the-sampling-distribution-for-calibration-1). 
+If you have a list `draws` of draws from your estimator's sampling distribution, you can 
+say `width(draws)` to get the right width for a 95% confidence interval.
+
+```{r}
+#| label: width-code
+#| echo: true
+width = function(draws, center = mean(draws), alpha = .05) {
+    covg.dif = function(w) {
+        actual = mean(center - w / 2 <= draws & draws <= center + w / 2)
+        nominal = 1 - alpha
+        actual - nominal
+    }
+    uniroot(covg.dif, interval = c(0, 2 * max(abs(draws - center))))$root
+}
+```
+:::
+
+Hopefully this week's lecture has convinced you that this interval will have 95% coverage. But let's check by calculating the **coverage**, the proportion of confidence intervals that contain our estimation target. This'll be useful in the future when what we're doing is a little more complicated and error-prone. 
+
+::: {#exr-calculate-coverage .callout-exercise}
+Calculate our interval estimator's coverage frequency. Is it 95%?
+:::
+
+::: {.callout-tip collapse="true"}
+### A Starting Point
+To get you started, I'll give you some code a lot like what I gave you for @exr-sampling-distribution. What you've got to do is fill in the two lines I've marked---the lines where you calculate an interval estimate based on a sample and check whether the population mean is in that interval.  What's already there will do the work of making this happen 10,000 times on samples of size 100 drawn, with replacement, from the population. And averaging your 10,000 checks to get a coverage frequency.
+
+```{r}
+#| echo: true
+
+library(purrr)
+pops = rep(list(our.pop), 10000)
+covers = pops |> map_vec(function(pop) {
+  m = nrow(pop)
+  n = 100
+  
+  J = sample(1:m, n, replace=TRUE)
+  sam = pop[J,]
+
+  interval.estimate = c(NA, NA)  #<1>
+  this.one.covers = NA           #<2>
+  this.one.covers
+})
+coverage.frequency = mean(covers)
+```
+1. You should have code from @exr-interval-estimate to calculate an interval estimate given a sample.
+2. All you need to do here is to check whether the estimation target and fill the `this.one.covers` with the logical condition, i.e. the population mean from  `our.pop` is between the lower and upper bound of your interval. If you want to check that `t` is between `a` and `b` in **R**, you can say `a <= t & t <= b`.
+
+:::
