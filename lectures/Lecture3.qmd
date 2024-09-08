@@ -4,48 +4,13 @@ subtitle: "Calibrating Interval Estimates with Binary Observations"
 ---
 
 
-# Review
-## Polling
+# Sampling and Calibration Review
+A Polling Nightmare
+
+## Before the Election
 
 {{< include shared-code.qmd >}}
 {{< include ga-turnout.qmd >}}
-
-
-:::
-
-- We want to estimate the proportion of *all registered voters* --- our population --- who will vote.
-- To do this, we use the proportion of *polled voters* --- our sample --- who said they would.
-- When the election occurs, we get to see who turns out to vote.
-  - `r approx(sum(y))` people, or roughly `r percent(mean(y))` of registered voters, actually vote.
- 
-\ \
-
-:::: columns
-::: column
-### Before the Election 
-
-$$
-\begin{array}{r|rrrr|r}
-i    &   1 & 2 & \dots & `r n` & \bar{Y}_{`r n`}  \\
-Y_i  &  `r Y[1]` & `r Y[2]` & \dots & `r Y[n]` & `r approx(mean(Y))` \\
-\end{array}
-$$
-
-:::
-::: column
-### After the Election
-
-$$
-\begin{array}{r|rrrrrr|r}
-j & 1 & 2 & 3 & 4 & \dots &   `r approx(m)` & \bar{y}_{`r approx(m)`}  \\
-y_{j} & `r y[1]` & `r y[2]` & `r y[3]` & `r y[4]` & \dots & `r y[m]`   & `r approx(mean(y))`  \\
-\end{array}
-$$
-:::
-::::
-
-
-## The Sampling Distribution of our Estimate
 
 ```{r}
 #| out-height: 400px
@@ -66,11 +31,123 @@ scale_y = scale_y_continuous(breaks=seq(0, pmf.height,by=.01))
 coord = coord_cartesian(xlim=c(.6,.8), ylim=c(0, pmf.height))
 
 bar.plot = ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), alpha=.3) +
-                      geom_vline(aes(xintercept=mean(y)), color='green', size=2, alpha=.7) + 
+                      geom_vline(aes(xintercept=mean(y)), color='green', linewidth=2, alpha=.7) + 
                       scale_x + scale_y
                       
-bar.plot + with_annotations(meanY.samples, height=pmf.height, highlight.dots=4) + coord
 ```
+
+```{r}
+#| label: choosing-an-appropriately-mediocre-estimate
+JM = Js[504,]
+Y = y[JM]
+```
+
+```{r}
+binom.width = function(p,n,...) { width_cdf(\(x)pbinom(n*x, n, p), p, limits=c(0,1), ...) }
+
+your.widths = c(.02, binom.width(mean(Y), n, alpha=.1), binom.width(mean(Y), n, alpha=.05))
+opacities = c(1,.25,.25)
+interval.data = data.frame(x=mean(Y), w=your.widths,
+                          y=pmf.height*c(.57,.6, .63), alpha=opacities)
+your.interval = 
+    geom_pointrange(aes(x=x, xmin=x-w/2, xmax=x+w/2, y=y, alpha=I(alpha)), 
+                    data=interval.data[1,], color=polld)
+your.intervals = 
+    geom_pointrange(aes(x=x, xmin=x-w/2, xmax=x+w/2, y=y, alpha=I(alpha)), 
+                    data=interval.data, color=polld)
+
+ggplot() + 
+    your.interval + 
+    scale_x + scale_y + coord
+```
+
+
+
+:::: columns
+::: column
+### Your Sample 
+
+$$
+\begin{array}{r|rrrr|r}
+i    &   1 & 2 & \dots & `r n` & \bar{Y}_{`r n`}  \\
+Y_i  &  `r Y[1]` & `r Y[2]` & \dots & `r Y[n]` & `r approx(mean(Y))` \\
+\end{array}
+$$
+
+:::
+::: column
+### The Population
+
+$$
+\color{lightgray}
+\begin{array}{r|rrrrrr|r}
+j & 1 & 2 & 3 & 4 & \dots &   `r approx(m)` & \bar{y}_{`r approx(m)`}  \\
+y_{j} & `r y[1]` & `r y[2]` & `r y[3]` & `r y[4]` & \dots & `r y[m]`   & `r approx(mean(y))`  \\
+\end{array}
+$$
+:::
+::::
+
+- You want to estimate the proportion of *all registered voters* --- the population --- who will vote.
+- To do this, you use the proportion of *polled voters* --- your sample --- who said they would.
+    - You're probably not going to match the population proportion exactly ... 
+    - ... so you report an *interval estimate*---a range of values we claim the population proportion is in.
+    - You're know you're not going to be right 100% of the time you make with claims like this ...
+    - ... so you state a *nominal coverage probability*---how often you're right about claims like this.^[You say that's how often, anyway. Hence 'nominal'.]
+    
+ - Without thinking too hard about it, you ...
+    - ... report, as your interval, [your sample proportion (`r percent(mean(Y))`) &plusmn; `r percent(your.widths[1]/2)`]{.polld}. Because it sounds good.
+    - ... and say your coverage probability is 95%. Because that's what everybody else says.
+
+## After the Election
+
+```{r}
+ggplot() + 
+    geom_vline(xintercept=mean(y), color='green', size=2, alpha=.7) + 
+    your.intervals + 
+    scale_x + scale_y + coord
+```
+
+
+
+:::: columns
+::: column
+### Your Sample
+
+$$
+\begin{array}{r|rrrr|r}
+i    &   1 & 2 & \dots & `r n` & \bar{Y}_{`r n`}  \\
+Y_i  &  `r Y[1]` & `r Y[2]` & \dots & `r Y[n]` & `r approx(mean(Y))` \\
+\end{array}
+$$
+
+:::
+::: column
+
+### The Population
+
+$$
+\begin{array}{r|rrrrrr|r}
+j & 1 & 2 & 3 & 4 & \dots &   `r approx(m)` & \bar{y}_{`r approx(m)`}  \\
+y_{j} & `r y[1]` & `r y[2]` & `r y[3]` & `r y[4]` & \dots & `r y[m]`   & `r approx(mean(y))`  \\
+\end{array}
+$$
+:::
+::::
+
+- When the election occurs, we get to see who turns out to vote.
+  - `r approx(sum(y))` people, or roughly `r percent(mean(y))` of registered voters, actually vote.
+  - You --- and future employers --- can see how well you did. And how well everybody else did.
+- [Your interval]{.polld} missed the target. It doesn't contain [the turnout proportion]{.target}.
+  - Your point estimate is only off by `r percent(abs(mean(y) - mean(Y)))`. But you overstated your precision. 
+  - Now you're kicking yourself. You'd briefly considered saying &plusmn; `r percent(your.widths[2]/2)` or &plusmn; `r percent(your.widths[3]/2)`. 
+  - That would've done it. But that didn't sound as good, so you went for &plusmn; `r percent(your.widths[1]/2)`.
+- You hope you're not the only one who missed. So you check out the competition.
+
+## The Competition 
+
+::: {.panel-tabset}
+### Your Competitors' Polls
 
 $$
 \begin{array}{r|rr|rr|r|rr|r}
@@ -98,484 +175,495 @@ $$
 \end{array}
 $$
 
-
-## Interval Estimation
-
+### Visualizing the Competition
 ```{r}
-#| out-height: 400px
-#| fig-asp: .3 
+all.competitors.widths = meanY.samples |> map_vec(\(p)binom.width(p, n, alpha=.05))
+competitors.widths = all.competitors.widths[1:100]
 
-w = .02
-bar.plot + with_annotations(meanY.samples, interval.width=w, height=pmf.height, highlight.dots=4) + coord 
+ggplot() + 
+    with_annotations(meanY.samples, estimand=mean(y), 
+                     height=pmf.height, highlight.dots=3, interval.width=competitors.widths, vline.alpha=NA) +
+    your.interval + 
+    scale_x + scale_y + coord 
 ```
 
-- To give a sense of what this tells us about the population proportion, we can report an interval estimate.
-    - i.e., we can draw 'arms' on our point estimate $\bar Y_{`r n`}$. 
-    - Here, we've used arms of width .02. i.e., we've drawn in the interval $\bar Y_{`r n`} \pm `{r} w/2`$.
-- But this is only useful if we have a sense of how likely this interval is to be 'right.'
-- That is, how often, when we report and interval, it contains [the population proportion]{.fg style="color:limegreen"}.
-- We call this a *coverage probability*. In this case, it's bad. It's about **`r percent(mean(abs(meanY.samples - mean(y)) <= w/2))`**.
-- If you run polls and report intervals like this, you'll make misleading claims about turnout **`r percent(1-mean(abs(meanY.samples - mean(y)) <= w/2))`** of the time. 
-- That's not a good look. To fix this, we need to **calibrate** our interval estimates.
-
-## A Useful Counting Trick
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .3 
-
-bar.plot + with_annotations(meanY.samples, interval.width=w, shade.width=w, height=pmf.height, highlight.dots=4) + coord 
-```
-
-- We don't really need to look at every interval---and its arms---to calculate coverage.
-- Instead, we can draw arms of the same width around the population proportion.
-- An interval estimate covers the [population proportion]{.fg style="color:limegreen"} if and only if ...
-- the corresponding point estimate is between the population proportion's arms.
-
-## A Useful Counting Trick
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .3 
-
-bar.plot + with_annotations(meanY.samples, interval.width=w, shade.width=w, height=pmf.height, highlight.dots=4) + coord 
-```
-
-- So all we need to do is count how many of our point estimates are between the population proportion's arms.
-- Or, equivalently, calculate the **mass of our histogram** between the population proportion's arms.
-- That is, we calculate the area of the verticals bars in the [shaded region]{.fg style="color:limegreen"}.
-- You can see it's roughly half the area of the histogram itself. Hence, roughly 50% coverage.
-
-## Calibrating Interval Estimates
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .3 
-
-oldw = w
-w=width(meanY.samples, alpha=.05)
-bar.plot + with_annotations(meanY.samples, interval.width=oldw, shade.width=w, height=pmf.height, highlight.dots=4) + coord 
-```
-
-- To increase the coverage of our intervals estimates, we need to make the arms wider.
-- To **calibrate** this width to give us 95% coverage---which is the convention---we can use our counting trick.
-- We expand our [shaded region]{.fg style="color:limegreen"} until it covers 95% of the histogram's mass, i.e., 95% of our point estimates.
-- If we use intervals of this width around our point estimates, we'll get 95% coverage.
-
-## Calibrating Interval Estimates
-```{r}
-#| out-height: 400px
-#| fig-asp: .3 
-
-bar.plot + with_annotations(meanY.samples, interval.width=w, shade.width=w, height=pmf.height, highlight.dots=4) + coord 
-```
-
-- To increase the coverage of our intervals estimates, we need to make the arms wider.
-- To **calibrate** this width to give us 95% coverage---which is the convention---we can use our counting trick.
-- We expand our [shaded region]{.fg style="color:limegreen"} until it covers 95% of the histogram's mass, i.e., 95% of our point estimates.
-- If we use intervals of this width around our point estimates, we'll get 95% coverage.
-
-## The Problem
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .3 
-
-bar.plot + with_annotations(meanY.samples, interval.width=w, shade.width=w, height=pmf.height, highlight.dots=4) + coord 
-```
-
-- Unless we've seen the population, i.e. unless it's after the election, we can't run simulated polls.
-- That means we can't calibrate our interval using the sampling distribution of our point estimate. 
-- That's something we don't know. The good news is that it's something we can estimate.
-- So we'll actually do calibration using **an estimate of the sampling distribution**.
-
-# Real-Life Calibration
-
-## Calibration using a Sampling Distribution Estimate
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .3 
-
-set.seed(default.seed)
-estimated.dist.samples = rbinom(10000, n, mean(Y)) / n 
-w.est=width(estimated.dist.samples, alpha=.05)
-
-bar.plot.estimated = ggplot() + 
-    geom_bar(aes(x=estimated.dist.samples, y=after_stat(prop)), alpha=.3) +
-    geom_vline(aes(xintercept=mean(y)), color='green', size=2, alpha=.7) + 
-    scale_x + scale_y
-bar.plot.estimated + with_annotations(estimated.dist.samples, interval.width=w.est, highlight.dots = 0,  
-                                      shade.width=w.est, shade.color='red', height=pmf.height) + coord
-```
-
-- Here we've estimated the sampling distribution --- we'll get to how --- and used it to find an interval width.
-- In particular, we've used a width which ...
-    - if we draw arms around the mean of our estimated sampling distribution
-    - will cover 95% of draws from our estimated sampling distribution.
-- The one apparent sticking point is that our estimated sampling distribution is a bit off-center.
-- Its mean is a bit lower than [the population proportion]{.fg style="color:limegreen"}. It's actually our sample proportion $\bar Y$.
-- It turns out that this doesn't matter much. Why?
-
-## Calibration Comparison
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .3 
-
-
-K = 100
-heights = annotation_dot_heights(K, 3, pmf.height)
-calibration.comparison.histogram = bar.plot +
-    geom_rect(aes(xmin=mean(y)-w/2, xmax=mean(y)+w/2, ymin=0, ymax=1.25*heights[1]), alpha=.15, fill='green') +
-    geom_rect(aes(xmin=mean(y)-w.est/2, xmax=mean(y)+w.est/2, ymin=1.25*heights[1], ymax=Inf), alpha=.15, fill='red')
-
-
-calibration.comparison.histogram +  
-    geom_pointrange(aes(y=heights[1]*1.5, x=meanY.samples[1], 
-                        xmin = meanY.samples[1]-w.est/2, xmax = meanY.samples[1]+w.est/2), alpha=1, color='black')  +
-    geom_pointrange(aes(y=heights[1], x=meanY.samples[1], 
-                        xmin = meanY.samples[1]-w/2, xmax = meanY.samples[1]+w/2), alpha=.4, color='black')   
-```
-
-- It doesn't matter because we're not putting arms on draws from the estimated sampling distribution.
-- We're putting arms on our point estimate, which is a draw from the **actual sampling distribution**.
-- To do this, we're using the width---but not the center---of the estimated sampling distribution.
-- And it works because that's very close to the width we'd get from the actual sampling distribution.
-- Above, I've drawn in shaded regions corresponding to two versions of the the [population proportion's]{.fg style="color:limegreen"} arms.
-    - The [green region]{.fg style="color:limegreen"} is the one we get from the actual sampling distribution. We can't use this.
-    - The [red region]{.fg style="color:red"} is the one we get from the estimated sampling distribution. We can --- and do --- use this.
-- And I've drawn in interval estimates based on our poll using both widths. They're almost the same.
-
-
-## Our Samping Distribution is Binomial
-
-```{r}
-#| out-height: 300px
-#| fig-asp: .25 
-p = mean(y)
-x= seq(0,n)
-
-bar.plot + with_annotations(meanY.samples, shade.width=w, highlight.dots=0) + 
-            geom_line(aes(x=x/n, y=dbinom(x, n, mean(y))), color='black') + coord
-```
-
-- To estimate the sampling distribution, it helps to know something about the actual sampling distribution.
-    - It's the distribution of the proportion heads in `r n` flips of a coin with probability $p\approx `r approx(p)`$ of heads.
-    - where $p \approx `r approx(p)`$ is the proportion of registered voters who will vote.
-- There's a name for that: it's the binomial distribution. 
-    - To be more precise, the binomial distribution is for the number of heads.
-    - And we scale that by $1/`r n`$ to get a distribution for the proportion.
-
-$$
-`r n` \times \bar{Y}_{`r n`} = \sum_{i=1}^{`r n`} Y_i \sim \text{Binomial}(`r n`, p) \qfor p = \bar y_{`r approx(m)`} = \frac{1}{`r approx(m)`}\sum_{j=1}^{`r approx(m)`} y_j 
-$$
-
-- There's a formula for this probability, so we don't have to draw samples and histogram if we don't want to.
-- In `R`, it's `dbinom(x, n, p)`, where `x` is the number of heads, `n` is the number of flips, and `p` is the probability of heads.
-
-## Estimating the Sampling Distribution
-
-```{r}
-#| out-height: 300px
-#| layout-ncol: 2 
-#| fig-asp: .4 
-#| fig-cap:
-#|   - "Actual Sampling Distribution"
-#|   - "Estimated Sampling Distribution"
-
-
-bar.plot + with_annotations(meanY.samples, shade.width=w, highlight.dots=0) + 
-            geom_line(aes(x=x/n, y=dbinom(x, n, mean(y))), color='gray') + coord
-bar.plot.estimated + with_annotations(estimated.dist.samples, shade.width=w.est, shade.color='red', highlight.dots=0) + 
-            geom_line(aes(x=x/n, y=dbinom(x, n, mean(Y))), color='black') + coord
-```
-
-$$
-`r n` \times \bar{Y}_{`r n`} = \sum_{i=1}^{`r n`} Y_i \sim \text{Binomial}(`r n`, p) \qfor p = \bar y_{`r approx(m)`} = \frac{1}{`r approx(m)`}\sum_{j=1}^{`r approx(m)`} y_j 
-$$
-
-
-- What we don't know is $p=\bar y$, the proportion of registered voters who turn out.
-- But that's what we're using our sample proportion $\bar Y$ to estimate. 
-- And we can just plug that in to get an estimate of the sampling distribution.
-- To draw samples from this estimated sampling distribution, we use `rbinom`.
-
-```{r}
-#| echo: true
-#| eval: false
-samples = rbinom(10000, 625, mean(Y)) / 625
-``` 
-
-- That is exactly how I got the estimated sampling distribution histogram I was using for calibration. 
-    - If we prefer, we can calibrate using the actual estimated binomial distribution, i.e., using `dbinom`.
-    - We'll explore this a bit at some point in the future, but it doesn't make much difference.
-
-## Each of Our Friends Gets Their Own Estimate
-
-```{r}
-#| cache: true 
-#| out-height: 300px
-#| layout-ncol: 2 
-#| fig-asp: .4 
-#| fig-cap:
-#|   - "Actual Sampling Distribution"
-#|   - "Estimated Sampling Distribution (Poll 1)"
-#|   - "Estimated Sampling Distribution (Poll 2)"
-#|   - "Estimated Sampling Distribution (Poll 3)"
-
-plot.interval = function(Y, height, color) {
-    set.seed(default.seed)
-    samples = rbinom(10000, n, mean(Y)) / n 
-    w=width(samples, alpha=.05)
-    geom_pointrange(aes(x=mean(Y), y=height, xmin=mean(Y)-w/2, xmax=mean(Y)+w/2), color=color)
-}
-
-dh = .2*heights[1]
-bar.plot + with_annotations(meanY.samples, shade.width=w, highlight.dots=3, highlighted.dot.alpha=.4) +
-               geom_line(aes(x=x/n, y=dbinom(x, n, mean(y))), color='gray') +
-               plot.interval(y[J1], dh+heights[1], color=polla) +
-               plot.interval(y[J2], dh+heights[2], color=pollb) +
-               plot.interval(y[J3], dh+heights[3], color=pollc) + coord
-
-calibration.diagram = function(Y, color, height) {
-    set.seed(default.seed)
-    samples = rbinom(10000, n, mean(Y)) / n 
-    w=width(samples, alpha=.05)
-    histplot = ggplot() + geom_bar(aes(x=samples, y=after_stat(prop)), alpha=.3) +
-                          geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7) + 
-                          with_annotations(samples, shade.width=w, shade.color='red', height=pmf.height, highlight.dots=0) +
-    geom_line(aes(x=x/n, y=dbinom(x, n, mean(Y))), color=color) +
-    geom_pointrange(aes(x=mean(Y), xmin=mean(Y)-w/2, xmax=mean(Y)+w/2, y=height), color=color)
-}
-
-calibration.diagram(Y,     polla, heights[1]) + coord
-calibration.diagram(y[J2], pollb, heights[2]) + coord
-calibration.diagram(y[J3], pollc, heights[3]) + coord
-```
-
-- This means each of our friends estimates a different width for their interval.
-- But they're all close to the width we get using the actual sampling distribution. You can see it above.
-    - I've plotted the intervals they'd use --- based on their sampling distribution estimates --- in bold colors.
-    - And the intervals they wish they could --- based on the actual sampling distribution --- more faintly. 
-
-## Evidence That It Works 
-
-```{r}
-#| out-height: 400px
-K = 100
-ps = meanY.samples[1:K]
-
-ggplot() + geom_line(aes(x=x/n-p, y=n*dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n)) +
-           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n-mean(y)), linetype='dotted') +
-           geom_line(aes(x=x/n-p, y=n*dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.2) +
-           geom_pointrange(aes(x=0, xmin=qbinom(.025,n,p)/n-p, xmax=qbinom(.975,n,p)/n-p, y=20*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
-           xlim(-.1,.1) + guides(color=FALSE)
-```
-
-- We see the same thing when we look at 100 polls.
-- Our friends' sampling distribution estimates are all close to the actual sampling distribution.
-- The resulting interval-widths are near-indistinguishable from the width we got using the sampling distribution.
-  - The estimated widths are shown as points with arms.
-  - That sampling distribution's actual width is the space between the dotted lines.
-- You can see estimating the width like this works reliably.
-
-## Why Does it Work?
-
-```{r}
-#| out-height: 300px
-#| fig-asp: .6 
-#| layout-ncol: 2
-height = pmf.height 
-K = 3
-ps = quantile(meanY.samples, c(.025, .5, .975))
-
-density.stability.plot = ggplot() + 
-           geom_line(aes(x=x/n, y=dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n), alpha=.5) +
-           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n), linetype='dotted') +
-           geom_line(aes(x=x/n, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
-           geom_pointrange(aes(x=p, xmin=qbinom(.025,n,p)/n, xmax=qbinom(.975,n,p)/n, y=.6*height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
-           xlim(.6,.8) + guides(color=FALSE) + geom_vline(xintercept=mean(y), color='green', size=1, alpha=.5)
-centered.density.stability.plot = ggplot() + 
-           geom_line(aes(x=x/n-p, y=dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n), alpha=.5) +
-           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n-mean(y)), linetype='dotted') +
-           geom_line(aes(x=x/n-p, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
-           geom_pointrange(aes(x=0, xmin=qbinom(.025,n,p)/n-p, xmax=qbinom(.975,n,p)/n-p, y=.6*height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
-           xlim(-.1,.1) + guides(color=FALSE)
-
-density.stability.plot
-centered.density.stability.plot
-```
-
-- Why are we getting a good estimate of the sampling distribution?
-- The Binomial distribution is *continuous* as a function of $p$---when $p$ changes little, the distribution changes little.
-- This means that, if we're not far off in the proportion, the estimated and actual sampling distributions are similar.
-- The relevant difference (after centering) is even smaller because *the way* the binomial changes is mostly location.
-- Here I'm showing three estimates of the sampling distribution based on three polls.
-    - with centering (right) and without (left). 
-- In particular, polls giving estimates at the 2.5th, 50th, and 97.5th percentiles of the actual sampling distribution. 
-
-## The Estimate Works. Why Does it Work?
-```{r}
-#| out-height: 300px
-#| fig-asp: .6 
-#| layout-ncol: 2
-
-density.stability.plot
-centered.density.stability.plot
-```
-
-- You can think of this as a sort of 'confidence interval' for our estimate of the sampling distribution.
-    - 95% of the time, you'll get an estimate somewhere between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} ones.
-    - And, as a result, a width for your interval estimate somewhere between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} widths.
-- As you can see, the widths we get barely change. What changes is the location.
-- But because we're using calibrated 95% intervals, we still cover the population proportion 95% of the time.
-    - i.e., we cover it when our sample proportion is between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} ones.
-- Or, accounting for [slight underestimates]{.fg style="color:blue"} of the sampling distribution's width, almost cover it. 
-
-## I'm Repeating the Last Slide To Demonstrate How to 'Unlink' Zoom on Multiple Plots When the Default is to Link Them
-::: {.free-zoom}
-```{r}
-#| out-height: 300px
-#| fig-asp: .6 
-#| layout-ncol: 2
-
-density.stability.plot
-centered.density.stability.plot
-```
 :::
 
-- You can think of this as a sort of 'confidence interval' for our estimate of the sampling distribution.
-    - 95% of the time, you'll get an estimate somewhere between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} ones.
-    - And, as a result, a width for your interval estimate somewhere between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} widths.
-- As you can see, the widths we get barely change. What changes is the location.
-- But because we're using calibrated 95% intervals, we still cover the population proportion 95% of the time.
-    - i.e., we cover it when our sample proportion is between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} ones.
-- Or, accounting for [slight underestimates]{.fg style="color:blue"} of the sampling distribution's width, almost cover it.
+- It turns out that everyone got their point estimate exactly like you did.
+    - Each of them rolled their `r approx(m)`-sided die `r n` times.
+    - And after making their `r n` calls, they reported their sample proportion.
+- You're not the only one who missed, but you're part of a pretty small club.
+    - 5% of the other polls got it wrong.
+- But you are the only one who claimed they'd get within 1%.
+    - Everyone else said claimed they'd get within roughly `r percent(your.widths[3]/2)`. 
+    - Most were right. About 95%. And a lot of them had worse point estimates than you.
+- What you have is a *calibration* problem. 
+
+
+## Calibration using the Sampling Distribution
+
+```{r}
+#| out-height: 400px
+#| fig-asp: .3 
+
+bar.plot = ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), alpha=.3) 
+calibration.plot = bar.plot + 
+    with_annotations(meanY.samples, estimand=mean(y), interval.width=competitors.widths,
+                     height=pmf.height, highlight.dots=3) +
+    your.interval + 
+    scale_x + scale_y + coord
+
+calibration.plot
+```
+
+
+- You'd have seen that your interval was miscalibrated if you knew what you do now.
+    1. Your competitors' point estimates, which they got exactly like you got yours.
+    2. Who actually turned out, so you could simulate even more polls if you wanted to.
+- You'd have drawn &plusmn; `r percent(your.widths[1]/2)` intervals around all these point estimates.^[In technical terms, these estimates are draws from your estimator's *sampling distribution*.]
+    - And noticed that many of these intervals cover [the target]{.target}. About `r percent(mean(abs(meanY.samples - mean(y)) <= your.widths[1]/2))` do.
+    - Or, if leaving the target out of it, that only `r percent(mean(abs(meanY.samples - mean(meanY.samples)) <= your.widths[1]/2))` of them cover [the mean]{.blue} of all these estimates.
+    - Same thing. The mean and target are right on top of one another. Like this: [|]{.blue .target}.
+- And you'd have known how to choose the right interval width. One that makes 95% of these intervals cover. Right? 
+
+## Quiz
+
+```{r}
+quiz.widths = c(binom.width(mean(y), 2*n, alpha=.5), 
+                binom.width(mean(y), 2*n, alpha=.05), 
+                binom.width(mean(y), 2*n, alpha=.003))
+quiz.data = data.frame(x=mean(Y), w=quiz.widths,
+                       y=pmf.height*c(.5,.4,.3), 
+                       color=c(polla, pollb, pollc), 
+                       alpha=c(1,1,1))
+quiz.samples = rbinom(10000, 2*n, mean(y))/(2*n)
+pmf.height = max(dbinom(0:(2*n), 2*n, mean(y)))
+
+quiz.plot = ggplot() + geom_bar(aes(x=quiz.samples, y=after_stat(prop)), alpha=.3) +   
+    with_annotations(quiz.samples, estimand=mean(y), highlight.dots=0, height=pmf.height) +
+    geom_pointrange(aes(x=x, xmin=x-w/2, xmax=x+w/2, y=y, alpha=I(alpha), color=I(color)), 
+                    data=quiz.data)
+quiz.plot
+```
+
+- I've drawn the sampling distribution of an estimator, 100 draws from it as [`r circle`]{.purple}s, and 3 interval estimates.
+- One of these interval estimates is calibrated to have exactly 95% coverage. Which is it?
+  - A. The one around the [`r circle`]{.polla} on top. 
+  - B. The one around the [`r circle`]{.pollb} in the middle. 
+  - C. The one around the [`r circle`]{.pollc} on the bottom.
+- *Submit* your answer [here](`r pollurl`).
+- *Hint*. You can reach your twin with your arms if your twin can reach you with theirs. 
+- *Hint*. Maybe you look like this [`r circle`]{.purple} and your twin like this [|]{.blue .target}.
+
+
+## Calibration in Reality
+
+```{r}
+#| fig-width: 7
+#| 
+#| layout-ncol: 2
+#| fig-cap: 
+#| - "What You Know Now"
+#| - "What You Knew Then" 
+w95 = binom.width(mean(y), n, alpha=.05)
+calibration.plot.shaded = bar.plot + 
+    with_annotations(meanY.samples, estimand=mean(y), shade.width=w95, shade.color='green', 
+                     interval.width=competitors.widths,
+                     height=pmf.height, highlight.dots=3) +
+    your.interval +
+    scale_x + scale_y + coord
+
+calibration.plot.shaded
+ggplot() + your.interval + scale_x + scale_y + coord
+```
+
+- But you didn't know any of this. You just knew [your own point estimate]{.polld}.
+- Without all that post-election information, you didn't know how to calibrate an interval estimate. 
+- But everyone else did. Their widths were almost the same as the width you'd choose now. 
+
+:::: columns 
+::: column
+```{r}
+#| fig-width: 7
+#| fig-cap: 
+#| - Your competitors' intervals, recentered for easy comparison of width to the sampling distribution's.
+ggplot() + 
+    geom_rect(aes(xmin=mean(y)-w95/2, xmax=mean(y) + w95/2, ymin=-Inf, ymax=Inf), alpha=.15, fill='green') +
+    geom_vline(xintercept=mean(y), color='green', size=2, alpha=.7) +
+    geom_linerange(aes(y=pmf.height*seq(0,1,length.out=100), 
+                        xmin=mean(y)-competitors.widths/2, xmax=mean(y)+competitors.widths/2), 
+                        color='purple', alpha=.6) + scale_x + scale_y + coord 
+```
+
+:::
+::: column
+
+- It's as if they knew how to approximate their estimators' sampling distribution. They did.
+- Today, we're going to work out how.
+- We'll need to know a bit about sums of \
+  independent binary random variables.
+
+:::
+::::
+
+# Probability Review 
+Sums of Independent Binary Random Variables
+
+## From Sampling to Coin Flips
+
+:::: columns
+::: {.column width="30%"}
+### The Population
+
+$j$ | $y_j$
+--|---
+$1$ | `r y[1]`
+$2$ | `r y[2]`
+$3$ | `r y[3]`
+$4$ | `r y[4]`
+&vellip; | &vellip;
+$m$ | `r y[m]`
+
+:::
+::: {.column width="30%"}
+### The Joint
+
+$p$ | $J_1$ | $Y_1$
+--|---|---
+$1/m$ | $1$ |  $`r y[1]`$
+$1/m$ | $2$ |  $`r y[2]`$
+$1/m$ | $3$ |  $`r y[3]`$
+$1/m$ | $4$ |  $`r y[4]`$
+&vellip; | &vellip; | &vellip;
+$1/m$ | $m$ |  $`r y[m]`$
+
+:::
+::: {.column width="40%"}
+### The Marginal
+
+$p$ | $Y_1$
+--|---
+$\underset{\color{gray}\approx `r approx(mean(y==0))`}{\sum\limits_{j:y_j=0} \frac{1}{m}}$ | $0$
+$\underset{\color{gray}\approx `r approx(mean(y==1))`}{\sum\limits_{j:y_j=1}  \frac{1}{m}}$ | $1$
+
+:::
+::::
+
+- To find the distribution of one response $Y_1$, we start with the probability distribution of our dice rolls.
+  - The person we call, $J_1$, is equally likely to be anyone in the population of $m \approx `r approx(m)`$ people.
+  - It takes on each value $1 \ldots m$ with probability $1/m$. 
+- Once we know who we're calling, we know their response, $Y_1$. 
+    - If we call person $j$, their response is $y_j$. So we can add that column to our table 'for free'. 
+    - The probability that we roll $j$ and hear the response $y_j$ is still $1/m$.
+- And we can *marginalize* to find the distribution of $Y_1$.
+    - We sum the probabilities in rows where $Y_1=0$ and $Y_1=1$. And the result is intuitive.
+    - The *probability* of hearing a response $y \in \{0,1\}$ is the *frequency* of that response in the population. 
+    - We'll call these frequencies $\theta_0$ and $\theta_1$. This is a little redundant because $\theta_0 = 1 - \theta_1$.
+    - Our estimation target is just the 'Yes' frequency $\theta_1$. Some people call it the *success rate*. 
+
+## From Sampling to Coin Flip Sums: Two Responses
+
+:::: columns
+::: {.column width="30%"}
+### The Joint
+
+$p$ | $J_1$ | $J_2$ | $Y_1$ | $Y_2$ | $Y_1 + Y_2$
+--|---|---|---|---
+$\frac{1}{m^2}$ |  $1$ | $1$ | $y_1$ | $y_1$ | $y_1+y_1$
+$\frac{1}{m^2}$ |  $1$ | $2$ | $y_1$ | $y_2$ | $y_1+y_2$
+&vellip; | &vellip; | &vellip; | &vellip; | &vellip;
+$\frac{1}{m^2}$ |  $1$ | $m$ | $y_1$ | $y_m$ | $y_1+y_m$ 
+$\frac{1}{m^2}$ |  $2$ | $1$ | $y_2$ | $y_1$ | $y_2+y_1$
+$\frac{1}{m^2}$ |  $2$ | $2$ | $y_2$ | $y_2$ | $y_2+y_2$
+&vellip; | &vellip; | &vellip; | &vellip; | &vellip;
+$\frac{1}{m^2}$ |  $m$ | $m$ | $y_m$ | $y_m$ | $y_m+y_m$
+:::
+::: {.column width="42%"}
+### Partially Marginalized
+
+$p$ | $Y_1$ | $Y_2$ | $Y_1 + Y_2$
+--|---|---|---
+$\inpollb{\sum\limits_{j_1,j_2 : y_{j_1},y_{j_2} = 0,0} \frac{1}{m^2}}$ | $0$ | $0$ | $\inpollb{0}$
+$\inpollc{\sum\limits_{j_1,j_2 : y_{j_1},y_{j_2} = 0,1} \frac{1}{m^2}}$ | $0$ | $1$ | $\inpollc{1}$
+$\inpollc{\sum\limits_{j_1,j_2 : y_{j_1},y_{j_2} = 1,0} \frac{1}{m^2}}$ | $1$ | $0$ | $\inpollc{1}$
+$\inpolld{\sum\limits_{j_1,j_2 : y_{j_1},y_{j_2} = 1,1} \frac{1}{m^2}}$ | $1$ | $1$ | $\inpolld{1}$
+
+:::
+::: {.column width="28%"}
+### Fully Marginalized
+$p$ | $Y_1 + Y_2$
+--|---
+$\inpollb{\sum\limits_{j_1,j_2: y_{j_1}+y_{j_2} = 0} \frac{1}{m^2}}$ | $\inpollb{0}$
+$\inpollc{\sum\limits_{j_1,j_2: y_{j_1}+y_{j_2} = 1} \frac{1}{m^2}}$ | $\inpollc{1}$
+$\inpolld{\sum\limits_{j_1,j_2: y_{j_1}+y_{j_2} = 2} \frac{1}{m^2}}$ | $\inpolld{2}$
+:::
+::::
+
+::: {.panel-tabset}
+### Two-Step Approach
+- To find the distribution of a sum of two responses, $Y_1+Y_2$, we do the same thing.
+- We start with the joint distribution of two dice rolls.
+    - Our rolls are equally likely to be any pair of numbers in $1\ldots m$.
+    - And there are $m^2$ pairs, so the probability is $1/m^2$ for each pair.
+- Then we add columns that are functions of the rolls. 
+    - This is 'for free'. The rolls are the rolls, so the probabilities don't change.
+    - If we know who we're calling, we know their responses. So we can add columns for $Y_1$,$Y_2$, and $Y_1+Y_2$.
+- Then we *marginalize* to find the distribution of the sum. We'll do this in two steps.
+    
+    1. We *partially marginalize* over $J_1,J_2$, to find the joint distribution of $Y_1, Y_2$. 
+    2. We *fully marginalize* the result to find the distribution of $Y_1+Y_2$.
+
+### Step 1. Partial Marginalization
+
+- To sum over pairs of responses, we sum over one response then the other.
+    - This exactly like what we did for one response. Except twice.
+    - And what we get is pretty similar too.
+- The probability of observing the pair of responses is determined by their frequencies in the population.
+    - It's the *product* of the frequences of those responses.
+    - For 'Yes,Yes' it's $\theta_1^2$. For 'No,No' it's $\theta_0^2$. 
+    - And for 'Yes,No' and 'No,Yes' it's $\theta_1\theta_0$.
+- This is, for what it's worth, the *product* of the marginal probabilities of those responses. 
+    - When this happens for any pair of random variables, we say they are *independent*. More on that soon.
+- And the probability of any response pair $a,b$ depends only on its sum $a+b$.
+      
+$$ 
+\begin{aligned}
+\sum\limits_{j_1,j_2: y_{j_1},y_{j_2} = a,b} \frac{1}{m^2} \\
+&= \sum\limits_{j_1 : y_{j_1}=1} \qty{ \sum\limits_{j_2 : y_j_2=b} \frac{\1}{m^2} } \\ 
+&= \sum\limits_{j_1 : y_{j_1}=1} \times \qty{ m_b \times \frac{1}{m^2} } \qfor m_y = \sum\limits_{j:y_j=y} 1
+&= m_a \times m_b \times \frac{1}{m} = \underset{\color{gray}\theta_a}{\frac{m_a}{m}}\underset{\color{gray}\theta_b}{\frac{m_b}{m}} = \theta_0^{s} \theta_1^{1-s} \qfor s = a+b
+\end{aligned}
+$$
+
+### Step 2. Full Marginalization 
+
+- To calculate the marginal probability that $Y_1+Y_2=s$, we sum the probabilities of all pairs with that sum.
+    - This is pretty easy because there aren't too many pairs. 
+    - And I've color coded the pairs to make it even easier.
+
+:::
+
+## Exercise: Two Calls to A Small Population 
+```{r}
+yex = c(0,0,1)
+```
+
+:::: columns 
+::: {.column width="40%"}
+
+$j$ | $y_j$
+--|---
+$1$ | $`r yex[1]`$
+$2$ | $`r yex[2]`$
+$3$ | $`r yex[3]`$
+
+:::
+::: {.column width="60%"}
+```{r}
+#| fig-height: 2.7
+#| fig-width:  7
+ggplot(data.frame(j=1:length(yex), y=yex[1:3])) + 
+    geom_point(aes(x=j, y=y), size=5, alpha=.3) + 
+    scale_y_continuous(breaks=c(0,1)) + 
+    scale_x_continuous(breaks=1:length(yex))  
+```
+
+:::
+::::
+
+::: {.panel-tabset}
+### Instructions
+
+1. Make a table for the joint distribution of three rolls of a 3-sided die.  Add columns for the responses.
+2. Partially marginalize to get the joint distribution of the responses. Add a column for their sum.
+3. Marginalize to get the distribution of the sum.
+
+
+::: {.footnotestyle} 
+Aren't you happy that, even though you can't make a 3-sided die, I didn't ask you to use 4-sided one? 
+:::
+
+### Blank Space
+
+
+### Solution
+
+:::: columns
+
+::: {.column width="40%"}
+
+$p$ | $J_1$ | $J_2$ | $Y_1$ | $Y_2$ 
+---|---|---|---|---
+$\pollb 1/9$ |  $1$ | $1$ | $`r yex[1]`$ | $`r yex[1]`$
+$\pollb 1/9$ |  $1$ | $2$ | $`r yex[1]`$ | $`r yex[2]`$
+$\pollc 1/9$ |  $1$ | $3$ | $`r yex[1]`$ | $`r yex[3]`$
+$\pollb 1/9$ |  $2$ | $1$ | $`r yex[2]`$ | $`r yex[1]`$
+$\pollb 1/9$ |  $2$ | $2$ | $`r yex[2]`$ | $`r yex[2]`$
+$\pollc 1/9$ |  $2$ | $3$ | $`r yex[2]`$ | $`r yex[3]`$
+$\pollc 1/9$ |  $3$ | $1$ | $`r yex[3]`$ | $`r yex[1]`$
+$\pollc 1/9$ |  $3$ | $2$ | $`r yex[3]`$ | $`r yex[2]`$
+$\polld 1/9$ |  $3$ | $3$ | $`r yex[3]`$ | $`r yex[3]`$
+:::
+
+::: {.column width="30%"}
+
+$p$ | $Y_1$ | $Y_2$ | $Y_1 + Y_2$
+---|---|---|---
+$\pollb \frac{4}{9}$ | $0$ | $0$ | $0$
+$\pollc \frac{2}{9}$ | $0$ | $1$ | $1$
+$\pollc \frac{2}{9}$ | $1$ | $0$ | $1$
+$\polld \frac{1}{9}$ | $1$ | $1$ | $2$
+
+:::
+::: {.column width="30%"}
+
+$p$ | $Y_1 + Y_2$
+---|---
+$\pollb \frac{4}{9}$ | $0$
+$\pollc \frac{4}{9}$ | $1$
+$\polld \frac{1}{9}$ | $2$
+
+:::
+::::
+:::
+
+## From Sampling to Coin Flip Sums: $n$ Responses
+
+::: {.panel-tabset}
+### Two-Step Approach
+- To find the distribution of a sum $Y_1 + \ldots + Y_n$, we do the same thing.
+- We start by writing out the joint distribution of $n$ dice rolls.
+    - We're equally likely to roll any sequence of $n$ numbers in $1\ldots m$.
+    - And there are $m^n$ sequences, so the probability is $1/m^n$ for each sequence.
+    - Then we add columns for the corresponding responses 'for free'. And the sums.
+- Then we marginalize in two steps.
+    
+    1. Sum over roll sequences leading to the same response sequence $a_1 \ldots a_n$.
+    2. Sum over response sequences leading to the same sum $s=a_1+\ldots+a_n$.
+    
+### Step 1. Partial Marginalization
+
+- To sum over sequences of responses, we sum over one response then the other.
+    - This exactly like what we did for one response. Except over and over.
+    - And what we get is pretty similar to the two-response case.
+- The probability of observing the sequence is determined by the frequency of Yeses and Nos in the population.
+    - It's the *product* of the frequences of those responses.
+    - For 'Yes,Yes,...,Yes' it's $\theta_1^n$. For 'No,No,...,No' it's $\theta_0^n$. 
+    - And if we have $s$ Yeses and therefore $n-s$ Nos, it's $\theta_1^s\theta_0^{n-s}$.
+- This is, again, the *product* of the marginal probabilities of those $n$ responses.
+
+$$
+\begin{aligned}
+\sum\limits_{\substack{j_1 \ldots j_n : \\ y_{j_1} \ldots y_{j_n} = a_1 \ldots a_n}} \frac{1}{m^n} 
+&= \sum\limits_{\substack{j_1 : \\ y_{j_1}=a_1}} \qty[ \ldots \qty { \sum\limits_{\substack{j_{n-1} : \\ y_{j_{n-1}}=a_{n-1}}}  \qty( \sum\limits_{\substack{j_n : \\y_{j_n}=a_n}} \frac{1}{m^n} )}] \\
+&= \sum\limits_{\substack{j_1 : \\ y_{j_1}=a_1}} \qty[ \ldots \qty{\sum\limits_{\substack{j_{n-1} : \\ y_{j_{n-1}}=a_{n-1}}}  \qty( m_{a_n} \times \frac{1}{m^n}) } ]\\
+&= \sum\limits_{\substack{j_1 : \\ y_{j_1}=a_1}} \qty[ \ldots \qty{ m_{a_{n-1}} m_{a_n} \times \frac{1}{m^n} }] \\
+&= m_{a_1} \ldots m_{a_n} \times \frac{1}{m^n}  = \theta_{a_i} \ldots \theta_{a_n} \\
+&= \prod_{i:a_i=1} \theta_1 \prod_{i:a_i=0} \theta_0 = \theta_1^{s} \theta_0^{n-s} \qfor s = a_1 + \ldots + a_n
+\end{aligned}
+$$
+
+### Step 2. Full Marginalization
+
+- The full marginalization step is a bit trickier. But we can take advantage of our partial marginalization.
+- To calculate the probability that the sum takes on the value $s$, we order our sum of probabilities thoughtfully.
+    - We sum the over response sequences $a_1 \ldots a_n$ with the same number of Yeses and Nos.
+    - And within that, sum over calls where we'd hear those responses.
+- The inner sum we've done. That was our partial marginalization.
+- And the outer sum boils down to counting the number of sequences with $s$ Yeses.
+    - The probability of all these sequences is the same: $\theta_1^s\theta_0^{n-s}$. So summing is counting and multiplying.
+    - You may have done the counting part in high school in a unit on 'permutations and combinations'.
+    - In any case, that count has a name. It's spoken '$n$ choose $s$' and written $\binom{n}{s}$.
+
+$$
+\begin{aligned}
+\sum_\limits_{\substack{j_1 \ldots j_n : \\ y_{j_1} + \ldots + y_{j_n} = s}} \frac{1}{m^n} 
+&= \sum\limits_{\substack{a_1 \dots a_n : \\ a_1 + \ldots + a_n = s}} \sum_{y_1=a_1 \ldots y_n=a_n} \frac{1}{m^n} \\
+& =\sum\limits_{a_1 \dots a_n : a_1 + \ldots + a_n = s} \theta_1^{s}\theta_0^{n-s} \\
+&= \binom{s}{n} \theta_1^{s} \theta_0^{n-s} \qqtext{ where } \binom{s}{n} = \sum\limits_{a_1 \dots a_n : a_1 + \ldots + a_n = s} 1
+\end{aligned} 
+$$
+
+### Using **R**
+
+$$
+\begin{aligned}
+P(\sum_{i=1}^n Y_i = s) &=  \binom{s}{n} \theta_a^{m_a}\theta_b^{m_b} 
+&\qqtext{ where } \binom{s}{n} \theta_1^{s}\theta_0^{n-s} &= \qqtext{ is the number of binary sequences $a_1 \ldots a_n$ summing to $s$.}
+\end{aligned}
+$$
+
+- STUFF
+- You probably did all this rearrangement-counting in high school at some point.
+    - But it's not something we tend to do ourselves all that much.
+    - **R** will do it for us.
+- We can get the rearrangement count using the `choose` function: $\binom{s}{n}$ is `choose(s,n)`.
+- We can get the whole probability using the `dbinom` function: $\binom{s}{n}\theta_1^s\theta_0^{n-s}$ is  
+`dbinom(s, n, theta_1)`.
+- And we can draw samples from this distribution using the `rbinom` function: `rbinom(1000, n, theta_1)` gives us a vector of 1000 samples.
   
-
-## I'm Repeating it Again To Demonstrate How to 'Link' Zoom on Multiple Plots When the Default is not to Link Them 
-::: {.linked-zoom}
-```{r}
-#| out-height: 300px
-#| fig-asp: .6 
-#| layout-ncol: 2
-
-density.stability.plot
-centered.density.stability.plot
-```
 :::
 
-- You can think of this as a sort of 'confidence interval' for our estimate of the sampling distribution.
-    - 95% of the time, you'll get an estimate somewhere between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} ones.
-    - And, as a result, a width for your interval estimate somewhere between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} widths.
-- As you can see, the widths we get barely change. What changes is the location.
-- But because we're using calibrated 95% intervals, we still cover the population proportion 95% of the time.
-    - i.e., we cover it when our sample proportion is between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} ones.
-- Or, accounting for [slight underestimates]{.fg style="color:blue"} of the sampling distribution's width, almost cover it.
-
-
-## The Bootstrap Interpretation
-
+## The Binomial Distribution
 ```{r}
-boot.ind = sample(1:n, n, replace=TRUE)
 
-displaypop = pop[1:50000,]
-pop$sam.replicated   = as.numeric(table(c(1:m, Js[1,])) - 1)
-pop$boot.replicated  = as.numeric(table(c(1:m, Js[1, boot.ind])) - 1)
-
-pop.map  = state.plot + geom_point(aes(x = long, y = lat), 
-                                   alpha=.05, data=displaypop, size=.025, color=polla) + 
-                        scale_size_area() + guides(size='none')
-sam.map  = state.plot + geom_point(aes(x = long, y = lat, size=sam.replicated),   
-                                   alpha=.2, data=pop[pop$sam.replicated > 0, ], color=polla) + 
-                        scale_size_area(max_size=3) + guides(size='none')
-boot.map = state.plot + geom_point(aes(x = long, y = lat, size=boot.replicated),   
-                                   alpha=.2, data=pop[pop$boot.replicated > 0, ], color=polla)   +
-                        scale_size_area(max_size=6) + guides(size='none')
-```
-
-```{r}
-#| out-height: 300px
-#| fig-asp: 1 
-#| layout-ncol: 3
-pop.map
-sam.map
-boot.map
 ```
 
 
-- There's another way to think about this.
-- The estimated sampling distribution is $\text{Binomial}(n,p)/n$ for $n=`r n`$ and $p=\bar Y=`{r} sum(Y)`/`{r} n` \approx `r approx(mean(Y))`$.
-- That is, it's the distribution of the proportion of heads in ...
-    - `r n` flips of a coin 
-    - that has probability $\bar Y=`{r} sum(Y)`/`{r} n`$ of being heads.
-- What's the distribution of the proportion of yeses if we poll a population of `r n` people ...
-- ... among whom the proportion of yeses is exactly $\bar Y = `{r} sum(Y)` / `{r} n`$?
+$$
+P(\sum_{i=1}^n Y_i = s) &=  \binom{s}{n} \theta_a^{m_a}\theta_b^{m_b} 
+$$
+
+- These functions have 'binom' in their name because we call this distribution the *Binomial distribution*. 
+    - The Binomial distribution on $n$ *trials* with *success probability* $\theta$ is our name for ...
+    - the distribution of the sum of $n$ independent binary random variables with probability $\theta$ of being 1.
+    - e.g., the distribution of the number of heads in $n$ coin flips is Binomial with $n$ trials and success probability $1/2$.
+- And it's the sampling distribution of the *sum of responses*, $Y_1 + \ldots + Y_n$, when we sample with replacement ...
+- ... from a population of binary responses $y_1 \ldots y_m$ in which $\theta$ is the frequency of ones.
+- It's convenient that ...
+    1. It depends only on one thing we don't know --- $\theta$ 
+    2. And that's exactly the thing we're trying to estimate.
+
+- This'll make it pretty easy to use for calibration. That's why it's what we're talking about first.
+
+## Other Targets and Sampling Schemes
 
 
-## The Bootstrap Interpretation
+## Do I Need To Do All This?
 
-```{r}
-#| out-height: 300px
-#| fig-asp: 1 
-#| layout-ncol: 3
+- No.
+- If you can work out what properties of the pop are relevant, you use simulation to estimate the sampling distn.
+- And there are other methods for estimating the sampling distn that don't require you to know
 
-pop.map
-sam.map
-boot.map
-```
-
-- It's the same distribution. It's $\text{Binomial}(n,p)/n$.
-- That means we can get a draw from our estimated sampling distribution by
-- running a 'poll' of the people in our sample, i.e.
-    - rolling a 625-sided die 625 times
-    - 'calling' the corresponding person in our sample
-    - and counting up the yeses we hear
-- We call the sample we get from this new 'poll' a **bootstrap sample**.
-
-## The Bootstrap Interpretation
-
-```{r}
-#| out-height: 300px
-#| fig-asp: 1 
-#| layout-ncol: 3
-
-pop.map
-sam.map
-boot.map
-```
-
-- If we plot our voters on a map, you can see the idea in visual terms.
-    - On the left, we have the population. 
-    - In the middle, we have our sample. It's drawn, with replacement, from the population.
-    - On the right, we have something else. A new sample drawn, with replacement, *from the sample*.
-- Each 'call' that a person receives increases the size of their dot: $\text{circle area} \propto \text{number of calls}$.
-- In the sample, even though it's drawn with replacement, all dots are the same size.
-  - Because we draw from such a large population, nobody gets called twice.
-- In the bootstrap sample, dots vary in size.
-  - Because we draw $n$ people from a sample of size $n$, it's almost impossible not to call somebody twice..
-
-## Bootstrapping Our Turnout Estimate
-
-```{r}
-set.seed(default.seed)
-```
-
-```{r}
-#| echo: true
-#| out-height: 400px 
-#| fig-asp: .3 
-
-meanY.boot = array(dim=10000)
-for(rr in 1:10000) {
-    I = sample(1:n, n, replace=TRUE)
-    meanY.boot[rr] = sum(Y[I])/n
-}
-
-ggplot() + geom_bar(aes(x=meanY.boot, y=after_stat(prop)), alpha=.3) + 
-           geom_line(aes(x=(0:n)/n, y=dbinom(0:n, n, mean(Y))), color='black') + 
-           xlim(.6,.8)
-```
+# Calibration with the Binomial Distribution 
 
 
+# Appendix
+
+## The Binomial Distribution for 3 Flips {#three-flips}
+
+::::
+::: {.column width="60%"}
+$p$ | $Y_1$ | $Y_2$ | $Y_3$ | $Y_1 + Y_2 + Y_3$
+---|---|---|---|---
+$\inpollb{\theta_0^3}$ | 0 | 0 | 0 | [0]{.pollb}
+$\inpollc{\theta_1 \theta_0^2}$          | 0 | 0 | 1 | [1]{.pollc}
+$\inpollc{\theta_1 \theta_0^2}$          | 0 | 1 | 0 | [1]{.pollc}
+$\inpollc{\theta_1 \theta_0^2}$          | 1 | 0 | 0 | [1]{.pollc}
+$\inpolld{\theta_1^2 \theta_0}$          | 0 | 1 | 1 | [2]{.polld}
+$\inpolld{\theta_1^2 \theta_0}$          | 1 | 1 | 0 | [2]{.polld}
+$\inpolld{\theta_1^2 \theta_0}$          | 1 | 0 | 1 | [2]{.polld}
+$\inpolle{\theta_1^3 }$                  | 1 | 1 | 1 | [3]{.polle}
+
+:::
+::: {.column width="40%"}
+
+$p$  | $Y_1 + Y_2 + Y_3$
+---|---
+$\inpollb{\theta_0^3}$              | [0]{.pollb}
+$\inpollc{3\theta_1 \theta_0^2}$    | [1]{.pollc}
+$\inpolld{3\theta_1^2 \theta_0}$    | [2]{.polld}
+$\inpolle{\theta_1^3 }$             | [3]{.polle} 
+
+:::
+::::
