@@ -309,6 +309,10 @@ ggplot() +
 # Probability Review 
 Sums of Independent Binary Random Variables
 
+::: {.footnotestyle}
+This'll be a slog. I'll explain why we've bothered when we get to the end.
+:::
+
 ## From Sampling to Coin Flips
 
 :::: columns
@@ -554,10 +558,10 @@ $\polld \frac{1}{9}$ | $2$
 
 $$
 \begin{aligned}
-\sum\limits_{\substack{j_1 \ldots j_n : \\ y_{j_1} \ldots y_{j_n} = a_1 \ldots a_n}} \frac{1}{m^n} 
-&= \sum\limits_{\substack{j_1 : \\ y_{j_1}=a_1}} \qty[ \ldots \qty { \sum\limits_{\substack{j_{n-1} : \\ y_{j_{n-1}}=a_{n-1}}}  \qty( \sum\limits_{\substack{j_n : \\y_{j_n}=a_n}} \frac{1}{m^n} )}] \\
-&= \sum\limits_{\substack{j_1 : \\ y_{j_1}=a_1}} \qty[ \ldots \qty{\sum\limits_{\substack{j_{n-1} : \\ y_{j_{n-1}}=a_{n-1}}}  \qty( m_{a_n} \times \frac{1}{m^n}) } ]\\
-&= \sum\limits_{\substack{j_1 : \\ y_{j_1}=a_1}} \qty[ \ldots \qty{ m_{a_{n-1}} m_{a_n} \times \frac{1}{m^n} }] \\
+\sum\limits_{\substack{j_1 \ldots j_n  \\ y_{j_1} \ldots y_{j_n} = a_1 \ldots a_n}} \frac{1}{m^n} 
+&= \sum\limits_{\substack{j_1 \\ y_{j_1}=a_1}}  \ \ldots \  \sum\limits_{\substack{j_{n-1} \\ y_{j_{n-1}}=a_{n-1}}} \ \sum\limits_{\substack{j_n \\y_{j_n}=a_n}} \frac{1}{m^n}  \\
+&= \sum\limits_{\substack{j_1 \\ y_{j_1}=a_1}} \  \ldots \ \sum\limits_{\substack{j_{n-1} \\ y_{j_{n-1}}=a_{n-1}}}  m_{a_n} \times \frac{1}{m^n} \\
+&= \sum\limits_{\substack{j_1 \\ y_{j_1}=a_1}} m_{a_2} \ldots m_{a_{n-1}} m_{a_n} \times \frac{1}{m^n}  \\
 &= m_{a_1} \ldots m_{a_n} \times \frac{1}{m^n}  = \theta_{a_i} \ldots \theta_{a_n} \\
 &= \prod_{i:a_i=1} \theta_1 \prod_{i:a_i=0} \theta_0 = \theta_1^{s} \theta_0^{n-s} \qfor s = a_1 + \ldots + a_n
 \end{aligned}
@@ -577,63 +581,90 @@ $$
 
 $$
 \begin{aligned}
-\sum_\limits_{\substack{j_1 \ldots j_n : \\ y_{j_1} + \ldots + y_{j_n} = s}} \frac{1}{m^n} 
-&= \sum\limits_{\substack{a_1 \dots a_n : \\ a_1 + \ldots + a_n = s}} \sum_{y_1=a_1 \ldots y_n=a_n} \frac{1}{m^n} \\
-& =\sum\limits_{a_1 \dots a_n : a_1 + \ldots + a_n = s} \theta_1^{s}\theta_0^{n-s} \\
-&= \binom{s}{n} \theta_1^{s} \theta_0^{n-s} \qqtext{ where } \binom{s}{n} = \sum\limits_{a_1 \dots a_n : a_1 + \ldots + a_n = s} 1
+\sum\limits_{\substack{j_1 \ldots j_n \\ y_{j_1} + \ldots + y_{j_n} = s}} \frac{1}{m^n} 
+&= \sum\limits_{\substack{a_1 \dots a_n \\ a_1 + \ldots + a_n = s}} \ \ \sum_{\substack{j_1 \ldots j_n \\ y_{j_1} \ldots y_{j_n} = a_1 \ldots a_n}} \frac{1}{m^n} \\
+& =\sum\limits_{\substack{a_1 \dots a_n \\ a_1 + \ldots + a_n = s}} \theta_1^{s}\theta_0^{n-s} \\
+&= \binom{s}{n} \theta_1^{s} \theta_0^{n-s} \qqtext{ where } \binom{s}{n} = \sum\limits_{\substack{a_1 \dots a_n \\ a_1 + \ldots + a_n = s}} 1
 \end{aligned} 
 $$
 
 ### Using **R**
 
 $$
-\begin{aligned}
-P(\sum_{i=1}^n Y_i = s) &=  \binom{s}{n} \theta_a^{m_a}\theta_b^{m_b} 
-&\qqtext{ where } \binom{s}{n} \theta_1^{s}\theta_0^{n-s} &= \qqtext{ is the number of binary sequences $a_1 \ldots a_n$ summing to $s$.}
-\end{aligned}
+P\qty(\sum_{i=1}^n Y_i = s) =  \binom{s}{n} \theta_1^{s}\theta_0^{n-s} 
+\ \ \text{ where } \ \ \binom{s}{n} \text{ is the number of binary sequences $a_1 \ldots a_n$ summing to $s$.}
 $$
 
-- STUFF
-- You probably did all this rearrangement-counting in high school at some point.
-    - But it's not something we tend to do ourselves all that much.
-    - **R** will do it for us.
-- We can get the rearrangement count using the `choose` function: $\binom{s}{n}$ is `choose(s,n)`.
-- We can get the whole probability using the `dbinom` function: $\binom{s}{n}\theta_1^s\theta_0^{n-s}$ is  
-`dbinom(s, n, theta_1)`.
-- And we can draw samples from this distribution using the `rbinom` function: `rbinom(1000, n, theta_1)` gives us a vector of 1000 samples.
-  
+- We don't actually have to do all this sequence-summing-to-$s$ counting ourselves.
+- The `choose` function in **R** will do it for us: $\binom{s}{n}$ is `choose(n,s)`.
+- The `dbinom` function will give us the whole probability: $\binom{s}{n}\theta_1^s\theta_0^{n-s}$ is `dbinom(s, n, theta_1)`.
+- The `rbinom` function will draw samples from this distribution: `rbinom(100, n, theta_1)` gives us 100. 
+
+```{r}
+#| echo: true
+theta_1 = .7
+n = 625
+p = dbinom(0:n, n, theta_1)
+S = rbinom(100, n, theta_1)
+
+ggplot() + geom_col(aes(x=0:n,   y=p), alpha=.3) + 
+           geom_point(aes(x=S,   y=max(p)*seq(0,1,length.out=100)), 
+                      color='purple', alpha=.2)
+```
+
 :::
 
 ## The Binomial Distribution
+:::: columns
+::: {.column width="50%"}
 ```{r}
+#| fig-width: 7
+ 
+n = 625
+thetas = c(.68, .70, .72)
+p1 = dbinom(0:n, n, thetas[1])
+p2 = dbinom(0:n, n, thetas[2])
+p3 = dbinom(0:n, n, thetas[3])
 
+ggplot() + geom_area(aes(x=0:n, y=p1), fill=pollb,    color=pollb,    alpha=.3) + 
+           geom_area(aes(x=0:n, y=p2), fill=pollc,    color=pollc,    alpha=.3) + 
+           geom_area(aes(x=0:n, y=p3), fill=polld,    color=polld,    alpha=.3) +
+           scale_x_continuous(breaks=seq(0,1,by=.1)*n, labels=sprintf('%1.1fn', seq(0,1,by=.1)), limits=c(.5,.9)*n)
 ```
 
+:::
+::: {.column width="50%"}
+$$
+\begin{aligned}
+&P\qty(\sum_{i=1}^n Y_i = s) =  \binom{s}{n} \theta_1^{s}\theta_0^{n-s} \\
+&\qfor n =`r n` \\ 
+&\qand \theta \in \{\inpollb{`r thetas[1]`}, \inpollc{`r thetas[2]`}, \inpolld{`r thetas[3]`} \} 
+\end{aligned}
+$$
 
-$$
-P(\sum_{i=1}^n Y_i = s) &=  \binom{s}{n} \theta_a^{m_a}\theta_b^{m_b} 
-$$
+:::
+::::
 
 - These functions have 'binom' in their name because we call this distribution the *Binomial distribution*. 
     - The Binomial distribution on $n$ *trials* with *success probability* $\theta$ is our name for ...
-    - the distribution of the sum of $n$ independent binary random variables with probability $\theta$ of being 1.
-    - e.g., the distribution of the number of heads in $n$ coin flips is Binomial with $n$ trials and success probability $1/2$.
-- And it's the sampling distribution of the *sum of responses*, $Y_1 + \ldots + Y_n$, when we sample with replacement ...
-- ... from a population of binary responses $y_1 \ldots y_m$ in which $\theta$ is the frequency of ones.
-- It's convenient that ...
-    1. It depends only on one thing we don't know --- $\theta$ 
-    2. And that's exactly the thing we're trying to estimate.
-
-- This'll make it pretty easy to use for calibration. That's why it's what we're talking about first.
-
-## Other Targets and Sampling Schemes
+    - the distribution of the sum of $n$ independent binary random variables with probability $\theta$ of being $1$.
+    - E.g. the number of heads in $n$ coin flips is Binomial with $n$ trials and success probability $1/2$.
+- We've shown that's the sampling distribution of the *sum of responses*, $Y_1 + \ldots + Y_n$, when we sample ...
+- ... with replacement from a population of binary responses $y_1 \ldots y_m$ in which $\theta$ is the frequency of ones.
+- That's what we're talking about first because it's easy to estimate --- and talk about estimating --- this sampling distribution.
+    - It depends only on one thing we don't know --- $\theta$.
+    - And that's exactly the thing we're trying to estimate anyway.
 
 
-## Do I Need To Do All This?
+## Why Did We Do This?
+
+
+
 
 - No.
 - If you can work out what properties of the pop are relevant, you use simulation to estimate the sampling distn.
 - And there are other methods for estimating the sampling distn that don't require you to know
+
 
 # Calibration with the Binomial Distribution 
 
