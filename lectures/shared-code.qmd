@@ -1,4 +1,8 @@
 ```{r}
+pollurl = "https://pollev.com/davidahirshberg"
+```
+
+```{r}
 #| label: load-libraries
 #| include: false
 library(tidyverse)
@@ -9,6 +13,7 @@ library(knitr)
 
 default.seed = 0
 percent = label_percent(accuracy=1)
+percentpoint = label_percent(accuracy=.1)
 approx  = function(x,accuracy=.01) { 
     label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) 
 }
@@ -74,6 +79,7 @@ polla  = midnight
 pollb  = pink
 pollc  = teal
 polld  = green
+polle  = mustard
 # THESE COLORS ARE DEFINED IN class.scss, TOO. IF YOU CHANGE THEM HERE, CHANGE THEM THERE.
 ```
 
@@ -93,6 +99,7 @@ $$
 \newcommand{\pollb}{\color[RGB]{239,71,111}}
 \newcommand{\pollc}{\color[RGB]{17,138,178}}
 \newcommand{\polld}{\color[RGB]{6,214,160}}
+\newcommand{\polle}{\color[RGB]{255,209,102}}
 \newcommand{\groupa}{\color[RGB]{248,118,109}}
 \newcommand{\groupb}{\color[RGB]{0,191,196}}
 
@@ -101,6 +108,7 @@ $$
 \newcommand{\inpollb}[1]{\textcolor[RGB]{239,71,111}{#1}}
 \newcommand{\inpollc}[1]{\textcolor[RGB]{17,138,178}{#1}}
 \newcommand{\inpolld}[1]{\textcolor[RGB]{6,214,160}{#1}}
+\newcommand{\inpolle}[1]{\textcolor[RGB]{255,209,102}{#1}}
 \newcommand{\ingroupa}[1]{\textcolor[RGB]{248,118,109}{#1}}
 \newcommand{\ingroupb}[1]{\textcolor[RGB]{0,191,196}{#1}}
 
@@ -223,19 +231,21 @@ annotation_dot_heights = function(dots, highlight.dots, height, seed=default.see
     heights
 }
 
+
 with_annotations = function(samples,
                             estimand = NA,
+                            shade.center = mean(samples),
                             shade.width = NA, shade.color='green', shade.alpha=.15,
                             dots=100, interval.width=NA, 
                                       dot.size = default.dot.size,
                                       highlight.dots=3, 
                                       highlighted.dot.alpha=1, 
                                       unhighlighted.dot.alpha=.15,
-                                      height=default_height(samples), 
+                                      height=default_height(samples), vline.alpha=.8, 
                             seed=default.seed) { 
     highlight.colors = if(highlight.dots) default.highlight.colors[1:min(dots,highlight.dots)] else c()
     summary.data = data.frame(
-        mu=mean(samples), 
+        mu=shade.center, 
         w66 = width(samples, alpha=1/3),
         w95 = width(samples, alpha=.05),
         shade.width=shade.width,
@@ -243,7 +253,7 @@ with_annotations = function(samples,
 
     estimand.geom = if(is.na(summary.data$estimand)) geom_blank() else 
         geom_vline(aes(xintercept=estimand), 
-                   color='green', size=3, alpha=.8, 
+                   color='green', linewidth=3, alpha=.8, 
                    data=summary.data)
     shade.geom = if(is.na(summary.data$shade.width)) geom_blank() else 
         geom_rect(aes(xmin=mu-shade.width/2, 
@@ -260,7 +270,7 @@ with_annotations = function(samples,
                     rep('purple', dots-length(highlight.colors))),
             alpha=c(rep(highlighted.dot.alpha,   length(highlight.colors)), 
                     rep(unhighlighted.dot.alpha, dots-length(highlight.colors))))       
-        if(is.na(interval.width))
+        if(any(is.na(interval.width)))
                 geom_point(aes(y=y, x=x, color=I(color), alpha=I(alpha)), 
                            size=dot.size, data=dot.data)
         else 
@@ -268,12 +278,14 @@ with_annotations = function(samples,
                             size=dot.size/4, linewidth=dot.size/4, data=dot.data)
     }
     
-    geoms = list(estimand.geom, shade.geom, dot.geom,
-         geom_vline(aes(xintercept=mu), color="blue", data=summary.data),
-         geom_vline(aes(xintercept=mu-w66/2), color="blue", linetype='dashed', data=summary.data),
-         geom_vline(aes(xintercept=mu+w66/2), color="blue", linetype='dashed', data=summary.data), 
-         geom_vline(aes(xintercept=mu-w95/2), color="blue", linetype='dotted', data=summary.data),
-         geom_vline(aes(xintercept=mu+w95/2), color="blue", linetype='dotted', data=summary.data))
+    vlines = if(is.na(vline.alpha)) geom_blank() else { 
+        list(geom_vline(aes(xintercept=mu), color="blue", data=summary.data, alpha=vline.alpha),
+             geom_vline(aes(xintercept=mu-w66/2), color="blue", linetype='dashed', data=summary.data, alpha=vline.alpha),
+             geom_vline(aes(xintercept=mu+w66/2), color="blue", linetype='dashed', data=summary.data, alpha=vline.alpha), 
+             geom_vline(aes(xintercept=mu-w95/2), color="blue", linetype='dotted', data=summary.data, alpha=vline.alpha),
+             geom_vline(aes(xintercept=mu+w95/2), color="blue", linetype='dotted', data=summary.data, alpha=vline.alpha))
+    }
+    geoms = list(estimand.geom, shade.geom, dot.geom, vlines)
     geoms
 }
 ```
