@@ -298,22 +298,164 @@ ggplot() +
 :::
 ::: column
 
-- It's as if they knew how to approximate their estimators' sampling distribution. They did.
-- Today, we're going to work out how.
-- We'll need to know a bit about sums of \
-  independent binary random variables.
-
+- They didn't know the point estimator's actual sampling distribution...
+- ... but they knew enough *about it* to choose the right interval width.
+- That's what we're going to look into now. Over the course of this lecture 
+and the next, we'll work out what the sampling distributon of our estimator
+*can* look like and how what it *does* look like depends on the population.
+- And we'll see how to use that information to calibrate our intervals.
 :::
 ::::
 
-# Probability Review 
-Sums of Independent Binary Random Variables
+# Probability Review
+Sampling Distributions of Sums of Binary Random Variables 
 
 ::: {.footnotestyle}
 This'll be a slog. I'll explain why we've bothered when we get to the end.
 :::
 
-## From Sampling to Coin Flips
+## Starting Simple
+
+```{r}
+yex = c(0,0,1)
+```
+
+:::: columns 
+::: {.column width="40%"}
+$j$ | name |  $y_j$
+--|---
+$1$ | Rush |  $`r yex[1]`$
+$2$ | Mitt |  $`r yex[2]`$
+$3$ | Al   |  $`r yex[3]`$
+
+:::
+::: {.column width="60%"}
+```{r}
+#| fig-height: 2.7
+#| fig-width:  7
+ggplot(data.frame(j=1:length(yex), y=yex[1:3])) + 
+    geom_point(aes(x=j, y=y), size=5, alpha=.3) + 
+    scale_y_continuous(breaks=c(0,1)) + 
+    scale_x_continuous(breaks=1:length(yex))  
+```
+
+:::
+::::
+
+- Let's start with the distribution of $Y_1$, the response to *one call*, when we sample with replacement.
+- And to keep things concrete, let's suppose we're polling a population of size $m=3$. We're rolling a 3-sided die.^[Impossible. I know.]
+    - You can see the population's responses in above in two formats: a table and a plot.
+    - We have two Nos (0s) and one Yes (1). 
+    - You could say the 'Yes' frequency in the population $\theta_1 = 1/3$. 
+- We'll walk through the process of finding the distribution of $Y_1$.
+
+## Finding the Distribution of $Y_1$ in a Small Population
+
+:::: columns
+::: {.column width="15%"}
+
+$j$ | name |  $y_j$
+--|--|-
+$1$ | Rush |  $`r yex[1]`$
+$2$ | Mitt |  $`r yex[2]`$
+$3$ | Al   |  $`r yex[3]`$
+
+:::
+::: {.column width="30%"}
+:::: r-stack
+
+::: {.fragment .fade-in-then-out data-fragment-index="1"}
+$p$ | $J_1$ | [$Y_1$]{.bgcolor}
+--|---|---
+$\frac13$ | $1$ |  [$`r yex[1]`$]{.bgcolor}
+$\frac13$ | $2$ |  [$`r yex[2]`$]{.bgcolor}
+$\frac13$ | $3$ |  [$`r yex[3]`$]{.bgcolor}
+:::
+::: {.fragment .current-visible data-fragment-index="2"}
+$p$ | $J_1$ | $Y_1$
+---|---|--
+$\frac13$ | $\faded 1$ | $`r yex[1]`$
+$\frac13$ | $\faded 2$ | $`r yex[2]`$
+$\frac13$ | $\faded 3$ | $`r yex[3]`$
+:::
+::: {.fragment .fade-in data-fragment-index="3"}
+$p$ | $\faded J_1$ | $Y_1$
+---|---|--
+$\pollb \frac13$ | $\faded 1$ | $\pollb `r yex[1]`$
+$\pollb \frac13$ | $\faded 2$ | $\pollb `r yex[2]`$
+$\pollc \frac13$ | $\faded 3$ | $\pollc `r yex[3]`$
+:::
+::::
+:::
+::: {.column width="15%"}
+:::: r-stack
+
+::: {.fragment .fade-in-then-out data-fragment-index="3"}
+$p$ | $Y_1$
+--|---
+[$\frac23$]{.bgcolor} | $\pollb 0$
+[$\frac13$]{.bgcolor} | $\pollc 1$
+:::
+ 
+::: {.fragment .fade-in data-fragment-index="4"}
+$p$ | $Y_1$
+--|---
+$\pollb \frac23$ | $\pollb 0$
+$\pollc \frac13$ | $\pollc 1$
+:::
+::::
+:::
+
+::: {.column width="40%"}
+:::
+
+::::
+
+
+1. We write the probability distribution of our die roll in a table.
+   
+::: {.fragment .fade-in data-fragment-index="1"}
+   
+- It has two columns: one for the roll $J_1$ and another for its probability $p$ 
+- It has $m=3$ rows, one for each possible outcome of the roll.
+- Each roll is equally likely, so the probability in each from is $1/3$
+
+:::
+
+2. We add a column for the response to our call, $Y_1$.    
+
+::: {.fragment .fade-in data-fragment-index="2"}
+   
+- Adding this row is 'free'---it doesn't change the row's propability---because what we hear is determined by the roll. 
+    - E.g. if we roll a 1, we're going to hear Mitt say 'Yes'.  
+    - So the probability we roll a 1 *and* hear a 'Yes' is the same as the probability we roll a 1. 
+
+:::
+
+3. We *marginalize* over rolls to find the distribution of our call's outcome.
+   
+::: {.fragment .fade-in data-fragment-index="3"}
+
+- We can color each row according to the call's outcome $Y_1$, then sum the probabilities in each color.
+
+::: {.fragment .fade-in data-fragment-index="4"}
+    
+- The probability of hearing 'Yes' is the probability that we roll a 1 or 2: $1/3+1/3 = 2/3$.
+- The probability of hearing 'No' is the probability that we roll a 3: $1/3$.
+- These probabilities match the frequencies of 'Yes' and 'No' in our population. 
+
+:::
+
+### Generalizing to Larger Populations
+
+- Is this probabilities-match-frequencies phenomenon a fluke? Or is it a general rule?
+- To find out, we'll work through the same steps in abstract, i.e. for a binary population $y_1 \ldots y_m$ of arbitrary size $m$.
+    - To ground us while we do it, we'll think about our population of $m=`r approx(m)`$ registered voters in Georgia.
+    - But we'll handle the general case. Plugging in `r approx(m)` ones and zeros wouldn't exactly make things easier.
+
+:::
+
+##  Finding the Distribution of $Y_1$ in a Large Population
 
 :::: columns
 ::: {.column width="30%"}
@@ -353,100 +495,29 @@ $\underset{\color{gray}\approx `r approx(mean(y==1))`}{\sum\limits_{j:y_j=1}  \f
 :::
 ::::
 
-- To find the distribution of one response $Y_1$, we start with the probability distribution of our dice rolls.
+
+### Generalizing to Larger Populations
+
+
+
+1. We start by writing the probability distribution of our dice rolls.
   - The person we call, $J_1$, is equally likely to be anyone in the population of $m \approx `r approx(m)`$ people.
   - It takes on each value $1 \ldots m$ with probability $1/m$. 
-- Once we know who we're calling, we know their response, $Y_1$. 
-    - If we call person $j$, their response is $y_j$. So we can add that column to our table 'for free'. 
-    - The probability that we roll $j$ and hear the response $y_j$ is still $1/m$.
-- And we can *marginalize* to find the distribution of $Y_1$.
-    - We sum the probabilities in rows where $Y_1=0$ and $Y_1=1$. And the result is intuitive.
+  
+2. We add a column for the response to our call, $Y_1$.
+  - This is 'for free'. The roll determines what we hear, so the probabilities don't change. Still $1/m$.
+ 
+3. And we *marginalize* to find the distribution of $Y_1$.
+    - We sum the probabilities in rows where $Y_1=0$ and $Y_1=1$. 
+    - What we saw in our small population does generalize.
     - The *probability* of hearing a response $y \in \{0,1\}$ is the *frequency* of that response in the population. 
     - We'll call these frequencies $\theta_0$ and $\theta_1$. This is a little redundant because $\theta_0 = 1 - \theta_1$.
     - Our estimation target is just the 'Yes' frequency $\theta_1$. Some people call it the *success rate*. 
-
-## From Sampling to Coin Flip Sums: Two Responses {#sec-sampling-to-sums-two}
-
-:::: columns
-::: {.column width="35%"}
-### The Joint
-
-$p$ | $J_1$ | $J_2$ | $Y_1$ | $Y_2$ | $Y_1 + Y_2$
---|---|---|---|---|-
-$\frac{1}{m^2}$ |  $1$ | $1$ | $y_1$ | $y_1$ | $y_1+y_1$
-$\frac{1}{m^2}$ |  $1$ | $2$ | $y_1$ | $y_2$ | $y_1+y_2$
-&vellip; | &vellip; | &vellip; | &vellip; | &vellip;
-$\frac{1}{m^2}$ |  $1$ | $m$ | $y_1$ | $y_m$ | $y_1+y_m$ 
-$\frac{1}{m^2}$ |  $2$ | $1$ | $y_2$ | $y_1$ | $y_2+y_1$
-$\frac{1}{m^2}$ |  $2$ | $2$ | $y_2$ | $y_2$ | $y_2+y_2$
-&vellip; | &vellip; | &vellip; | &vellip; | &vellip;
-$\frac{1}{m^2}$ |  $m$ | $m$ | $y_m$ | $y_m$ | $y_m+y_m$
-:::
-::: {.column width="40%"}
-### Partially Marginalized
-
-$p$ | $Y_1$ | $Y_2$ | $Y_1 + Y_2$
---|---|---|---
-$\inpollb{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1},y_{j_2} = 0,0}} \frac{1}{m^2}}$ | $0$ | $0$ | $\inpollb{0}$
-$\inpollc{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1},y_{j_2} = 0,1}} \frac{1}{m^2}}$ | $0$ | $1$ | $\inpollc{1}$
-$\inpollc{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1},y_{j_2} = 1,0}} \frac{1}{m^2}}$ | $1$ | $0$ | $\inpollc{1}$
-$\inpolld{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1},y_{j_2} = 1,1}} \frac{1}{m^2}}$ | $1$ | $1$ | $\inpolld{1}$
-
-:::
-::: {.column width="25%"}
-### Fully Marginalized
-$p$ | $Y_1 + Y_2$
---|---
-$\inpollb{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1}+y_{j_2} = 0}} \frac{1}{m^2}}$ | $\inpollb{0}$
-$\inpollc{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1}+y_{j_2} = 1}} \frac{1}{m^2}}$ | $\inpollc{1}$
-$\inpolld{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1}+y_{j_2} = 2}} \frac{1}{m^2}}$ | $\inpolld{2}$
-:::
-::::
-
-::: {.panel-tabset}
-### Two-Step Approach
-- To find the distribution of a sum of two responses, $Y_1+Y_2$, we do the same thing.
-- We start with the joint distribution of two dice rolls.
-    - Our rolls are equally likely to be any pair of numbers in $1\ldots m$.
-    - And there are $m^2$ pairs, so the probability is $1/m^2$ for each pair.
-- Then we add columns that are functions of the rolls. 
-    - This is 'for free'. The rolls are the rolls, so the probabilities don't change.
-    - If we know who we're calling, we know their responses. So we can add columns for $Y_1$,$Y_2$, and $Y_1+Y_2$.
-- Then we *marginalize* to find the distribution of the sum. We'll do this in two steps.
-    
-    1. We *partially marginalize* over $J_1,J_2$, to find the joint distribution of $Y_1, Y_2$. 
-    2. We *fully marginalize* the result to find the distribution of $Y_1+Y_2$.
-
-### Step 1. Partial Marginalization
-
-- To sum over pairs of responses, we sum over one response then the other.
-    - This exactly like what we did for one response. Except twice.
-    - And what we get is pretty similar too.
-- The probability of observing the pair of responses is determined by their frequencies in the population.
-    - It's the *product* of the frequences of those responses.
-    - For 'Yes,Yes' it's $\theta_1^2$. For 'No,No' it's $\theta_0^2$. 
-    - And for 'Yes,No' and 'No,Yes' it's $\theta_1\theta_0$.
-- This is, for what it's worth, the *product* of the marginal probabilities of those responses. 
-    - When this happens for any pair of random variables, we say they are *independent*. More on that soon.
-- And the probability of any response pair $a,b$ depends only on its sum $a+b$.
       
-$$ 
-\begin{aligned}
-\sum\limits_{\substack{j_1,j_2\\ y_{j_1},y_{j_2} = a,b}} \frac{1}{m^2} 
-&= \sum\limits_{\substack{j_1 \\ y_{j_1}=a}} \qty{ \sum\limits_{\substack{j_2 \\ y_{j_2}=b}} \frac{1}{m^2} } \\ 
-&= \sum\limits_{\substack{j_1 \\ y_{j_1}=a}} \qty{ m_b \times \frac{1}{m^2} } \qfor m_y = \sum\limits_{j:y_j=y} 1 \\
-&= m_a \times m_b \times \frac{1}{m^2} = \theta_a \times \theta_b \qfor \theta_y = \frac{m_y}{m} \\
-&= \theta_1^{s} \theta_0^{1-s} \qfor s = a+b
-\end{aligned}
-$$
 
-### Step 2. Full Marginalization 
+- To find the distribtion of a sum of $Y_1+Y_2$, we can follow the same steps. 
+- There's a bit more too it, so we'll break down the marginalization step to make it a little more tractable.
 
-- To calculate the marginal probability that $Y_1+Y_2=s$, we sum the probabilities of all pairs with that sum.
-    - This is pretty easy because there aren't too many pairs. 
-    - And I've color coded the pairs to make it even easier.
-
-:::
 
 ## Exercise: Two Calls to A Small Population {#sec-two-calls-to-small}
 ```{r}
@@ -456,11 +527,11 @@ yex = c(0,0,1)
 :::: columns 
 ::: {.column width="40%"}
 
-$j$ | $y_j$
---|---
-$1$ | $`r yex[1]`$
-$2$ | $`r yex[2]`$
-$3$ | $`r yex[3]`$
+$j$ | name | $y_j$
+--|--|-
+$1$ | Rush | $`r yex[1]`$
+$2$ | Mitt | $`r yex[2]`$
+$3$ | Al | $`r yex[3]`$
 
 :::
 ::: {.column width="60%"}
@@ -532,8 +603,91 @@ $\polld \frac{1}{9}$ | $2$
 ::::
 :::
 
-## From Sampling to Coin Flip Sums: $n$ Responses
+## From Sampling to Coin Flip Sums: Two Responses {#sec-sampling-to-sums-two}
 
+:::: columns
+::: {.column width="35%"}
+### The Joint
+
+$p$ | $J_1$ | $J_2$ | $Y_1$ | $Y_2$ | $Y_1 + Y_2$
+--|---|---|---|---|-
+$\frac{1}{m^2}$ |  $1$ | $1$ | $y_1$ | $y_1$ | $y_1+y_1$
+$\frac{1}{m^2}$ |  $1$ | $2$ | $y_1$ | $y_2$ | $y_1+y_2$
+&vellip; | &vellip; | &vellip; | &vellip; | &vellip;
+$\frac{1}{m^2}$ |  $1$ | $m$ | $y_1$ | $y_m$ | $y_1+y_m$ 
+$\frac{1}{m^2}$ |  $2$ | $1$ | $y_2$ | $y_1$ | $y_2+y_1$
+$\frac{1}{m^2}$ |  $2$ | $2$ | $y_2$ | $y_2$ | $y_2+y_2$
+&vellip; | &vellip; | &vellip; | &vellip; | &vellip;
+$\frac{1}{m^2}$ |  $m$ | $m$ | $y_m$ | $y_m$ | $y_m+y_m$
+:::
+::: {.column width="40%"}
+### Partially Marginalized
+
+$p$ | $Y_1$ | $Y_2$ | $Y_1 + Y_2$
+--|---|---|---
+$\inpollb{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1},y_{j_2} = 0,0}} \frac{1}{m^2}}$ | $0$ | $0$ | $\inpollb{0}$
+$\inpollc{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1},y_{j_2} = 0,1}} \frac{1}{m^2}}$ | $0$ | $1$ | $\inpollc{1}$
+$\inpollc{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1},y_{j_2} = 1,0}} \frac{1}{m^2}}$ | $1$ | $0$ | $\inpollc{1}$
+$\inpolld{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1},y_{j_2} = 1,1}} \frac{1}{m^2}}$ | $1$ | $1$ | $\inpolld{2}$
+
+:::
+::: {.column width="25%"}
+### Fully Marginalized
+$p$ | $Y_1 + Y_2$
+--|---
+$\inpollb{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1}+y_{j_2} = 0}} \frac{1}{m^2}}$ | $\inpollb{0}$
+$\inpollc{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1}+y_{j_2} = 1}} \frac{1}{m^2}}$ | $\inpollc{1}$
+$\inpolld{\sum\limits_{\substack{j_1,j_2 \\ y_{j_1}+y_{j_2} = 2}} \frac{1}{m^2}}$ | $\inpolld{2}$
+:::
+::::
+
+::: {.panel-tabset}
+### Two-Step Approach
+- To find the distribution of a sum of two responses, $Y_1+Y_2$, we do the same thing.
+- We start with the joint distribution of two dice rolls.
+    - Our rolls are equally likely to be any pair of numbers in $1\ldots m$.
+    - And there are $m^2$ pairs, so the probability is $1/m^2$ for each pair.
+- Then we add columns that are functions of the rolls: $Y_1$, $Y_2$, and $Y_1+Y_2$. 
+    - This is 'for free' as before.
+    - If we know who we're calling, we know the responses we'll hear and their sum.
+      
+- Then we *marginalize* to find the distribution of the sum. We'll do this in two steps.
+    
+    1. We *partially marginalize* over $J_1,J_2$, to find the joint distribution of the response sequence $Y_1, Y_2$. 
+    2. We *fully marginalize* the result to find the distribution of $Y_1+Y_2$.
+
+### Step 1. Partial Marginalization
+
+- To sum over pairs of responses, we sum over one response then the other.
+    - This exactly like what we did for one response. Except twice.
+    - And what we get is pretty similar too.
+- The probability of observing the pair of responses is determined by their frequencies in the population.
+    - It's the *product* of the frequences of those responses.
+    - For 'Yes,Yes' it's $\theta_1^2$. For 'No,No' it's $\theta_0^2$. 
+    - And for 'Yes,No' and 'No,Yes' it's $\theta_1\theta_0$.
+- This is, for what it's worth, the *product* of the marginal probabilities of those responses. 
+    - When this happens for any pair of random variables, we say they are *independent*. More on that soon.
+- And the probability of any response pair $a,b$ depends only on its sum $a+b$.
+      
+$$ 
+\begin{aligned}
+\sum\limits_{\substack{j_1,j_2\\ y_{j_1},y_{j_2} = a,b}} \frac{1}{m^2} 
+&= \sum\limits_{\substack{j_1 \\ y_{j_1}=a}} \qty{ \sum\limits_{\substack{j_2 \\ y_{j_2}=b}} \frac{1}{m^2} } \\ 
+&= \sum\limits_{\substack{j_1 \\ y_{j_1}=a}} \qty{ m_b \times \frac{1}{m^2} } \qfor m_y = \sum\limits_{j:y_j=y} 1 \\
+&= m_a \times m_b \times \frac{1}{m^2} = \theta_a \times \theta_b \qfor \theta_y = \frac{m_y}{m} \\
+&= \theta_1^{s} \theta_0^{1-s} \qfor s = a+b
+\end{aligned}
+$$
+
+### Step 2. Full Marginalization 
+
+- To calculate the marginal probability that $Y_1+Y_2=s$, we sum the probabilities of all pairs with that sum.
+    - This is pretty easy because there aren't too many pairs. 
+    - And I've color coded the pairs to make it even easier.
+
+:::
+
+## From Sampling to Coin Flip Sums: $n$ Responses.
 
 :::: columns
 ::: {.column width="45%"}
@@ -591,11 +745,20 @@ $\polle \sum\limits_{\substack{j_1 \ldots j_n \\ y_{j_1}, y_{j_2} \ldots y_{j_n}
     1. Sum over roll sequences leading to the same response sequence $a_1 \ldots a_n$.
     2. Sum over response sequences leading to the same sum $s=a_1+\ldots+a_n$.
     
+- This isn't a class about counting, so this stuff won't be on the exam.
+
 ### Step 1. Partial Marginalization
 
-- To sum over sequences of responses, we sum over one response then the other.
+- To sum over roll sequences, we sum over one roll after another.
     - This exactly like what we did for one response. Except over and over.
-    - And what we get is pretty similar to the two-response case.
+    - You can think of this sum 'inside out.
+- Suppose we're calculating the probability of the response sequence $a_1 \ldots a_n = 0,0,...,0,0$.
+    1. We consider any 'head' $j_1\ldots j_{n-1}$ where $y_{j_1} \ldots y_{j_{n-1}}=0,0,...0$ and think about choosing the last element.
+    No matter what the head is, there are $m_0$ ways to complete with by choosing $j_{n}$ with $y_{j_n}=0$.
+    2. We repeat with shortened 'head' $j_1 \ldots j_{n-2}$ to consider the choice of $j_{n-1}$. We have $m_0$ choices and our last step tells us 
+    that each choice results in $m_0$ call sequences, so there are $m_0^2$ sequences with head $j_1 \ldots j_{n-2}$ ending in $0,0$. 
+    3. Repeat $n-2$ more times.
+- What we get is pretty similar to the two-response case.
 - The probability of observing the sequence is determined by the frequency of Yeses and Nos in the population.
     - It's the *product* of the frequences of those responses.
     - For 'Yes,Yes,...,Yes' it's $\theta_1^n$. For 'No,No,...,No' it's $\theta_0^n$. 
@@ -604,11 +767,13 @@ $\polle \sum\limits_{\substack{j_1 \ldots j_n \\ y_{j_1}, y_{j_2} \ldots y_{j_n}
 
 $$
 \begin{aligned}
-\sum\limits_{\substack{j_1 \ldots j_n  \\ y_{j_1} \ldots y_{j_n} = a_1 \ldots a_n}} \frac{1}{m^n} 
-&= \sum\limits_{\substack{j_1 \\ y_{j_1}=a_1}}  \ \ldots \  \sum\limits_{\substack{j_{n-1} \\ y_{j_{n-1}}=a_{n-1}}} \ \sum\limits_{\substack{j_n \\y_{j_n}=a_n}} \frac{1}{m^n}  \\
-&= \sum\limits_{\substack{j_1 \\ y_{j_1}=a_1}} \  \ldots \ \sum\limits_{\substack{j_{n-1} \\ y_{j_{n-1}}=a_{n-1}}}  m_{a_n} \times \frac{1}{m^n} \\
-&= \sum\limits_{\substack{j_1 \\ y_{j_1}=a_1}} m_{a_2} \ldots m_{a_{n-1}} m_{a_n} \times \frac{1}{m^n}  \\
-&= m_{a_1} \ldots m_{a_n} \times \frac{1}{m^n}  = \theta_{a_i} \ldots \theta_{a_n} \\
+\sum_{\substack{j_1 \ldots j_n  \\ y_{j_1} \ldots y_{j_n} = a_1 \ldots a_n}} \frac{1}{m^n} 
+&= \sum_{\substack{j_1 \ldots j_{n-1} \\ y_{j_1} \ldots y_{j_{n-1}} = a_1 \ldots a_{n-1}}} \sum_{\substack{j_n \\ y_n=a_n}} \frac{1}{m^n} \\
+&= \sum_{\substack{j_1 \ldots j_{n-1} \\ y_{j_1} \ldots y_{j_{n-1}} = a_1 \ldots a_{n-1}}} \sum_{\substack{j_n \\ y_n=a_n}} m_{a_n} \times \frac{1}{m^n} \\
+&= \sum_{\substack{j_1 \ldots j_{n-2} \\ y_{j_1} \ldots y_{j_{n-2}} = a_1 \ldots a_{n-2}}} \sum_{\substack{j_{n-1} \\ y_n=a_{n-1}}} m_{a_n} \times \frac{1}{m^n} \\
+&= \sum_{\substack{j_1 \ldots j_{n-2} \\ y_{j_1} \ldots y_{j_{n-2}} = a_1 \ldots a_{n-2}}} \sum_{\substack{j_{n-1} \\ y_n=a_{n-1}}} m_{a_{n-1}} m_{a_n} \times \frac{1}{m^n} \\
+&= m_{a_1} \ldots m_{a_{n}} \times \frac{1}{m^n} \qqtext{after repeating $n-2$ more times} \\
+&= \theta_{a_i} \ldots \theta_{a_n} \\
 &= \prod_{i:a_i=1} \theta_1 \prod_{i:a_i=0} \theta_0 = \theta_1^{s} \theta_0^{n-s} \qfor s = a_1 + \ldots + a_n
 \end{aligned}
 $$
@@ -617,7 +782,7 @@ $$
 
 - The full marginalization step is a bit trickier. But we can take advantage of our partial marginalization.
 - To calculate the probability that the sum takes on the value $s$, we order our sum of probabilities thoughtfully.
-    - We sum the over response sequences $a_1 \ldots a_n$ with the same number of Yeses and Nos.
+    - We sum the over response sequences $a_1 \ldots a_n$ with $s$ Yeses and $n-s$ Nos.
     - And within that, sum over calls where we'd hear those responses.
 - The inner sum we've done. That was our partial marginalization.
 - And the outer sum boils down to counting the number of sequences with $s$ Yeses.
@@ -794,110 +959,215 @@ ggplot() +
 :::
 ::::
 
-# Did We Have To Do All This?
+# Sampling without Replacement 
 
-## This Was A Lot of Work
+Another Example. This won't be on the Exam.
+
+## Marginalization
 
 :::: columns
+::: {.column width="45%"}
+:::: {.panel-tabset}
+### The Joint
 
-::: {.column width="40%"}
+$p$ | $J_1$ | &hellip; | $J_n$ | $Y_1$ | &hellip; | $Y_n$ | $Y_1 + \ldots + Y_n$
+--|---|---|---|--|-|-
+$\frac{m-n!}{m!}$ |  $1$ | &hellip; | $1$ | $y_1$ | &hellip; | $y_1$ | $y_1+\ldots+y_1$
+$\frac{m-n!}{m!}$ |  $1$ | &hellip; | $2$ | $y_1$ | &hellip; |$y_2$ |  $y_1+\ldots+y_2$
+&vellip; | &vellip; | &dtdot; | &vellip; | &vellip; | &dtdot; | &vellip; | &vellip;
+$\frac{m-n!}{m!}$ |  $1$ | &hellip; | $m$ | $y_1$ | &hellip; | $y_m$ | $y_1+\ldots+y_m$ 
+$\frac{m-n!}{m!}$ |  $2$ | &hellip; |$1$ | $y_2$ | &hellip; |$y_1$ | $y_2+\ldots +y_1$
+$\frac{m-n!}{m!}$ |  $2$ | &hellip; |$2$ | $y_2$ | &hellip; |$y_2$ | $y_2+\ldots +y_2$
+&vellip; | &vellip; | &dtdot; |&vellip; | &vellip; | &dtdot; | &vellip; | &vellip;
+$\frac{m-n!}{m!}$ |  $m$ | &hellip; |$m$ | $y_m$ | &hellip; |$y_m$ | $y_m+\ldots+y_m$
 
-$p$ | $J_1$ | $J_2$ | $Y_1$ | $Y_2$ 
----|---|---|---|---
-$\pollb 1/9$ |  $1$ | $1$ | $`r yex[1]`$ | $`r yex[1]`$
-$\pollb 1/9$ |  $1$ | $2$ | $`r yex[1]`$ | $`r yex[2]`$
-$\pollc 1/9$ |  $1$ | $3$ | $`r yex[1]`$ | $`r yex[3]`$
-$\pollb 1/9$ |  $2$ | $1$ | $`r yex[2]`$ | $`r yex[1]`$
-$\pollb 1/9$ |  $2$ | $2$ | $`r yex[2]`$ | $`r yex[2]`$
-$\pollc 1/9$ |  $2$ | $3$ | $`r yex[2]`$ | $`r yex[3]`$
-$\pollc 1/9$ |  $3$ | $1$ | $`r yex[3]`$ | $`r yex[1]`$
-$\pollc 1/9$ |  $3$ | $2$ | $`r yex[3]`$ | $`r yex[2]`$
-$\polld 1/9$ |  $3$ | $3$ | $`r yex[3]`$ | $`r yex[3]`$
+### Fully Marginalized
+$p$ | $Y_1 + \ldots + Y_n$
+--|---
+$\pollb \sum\limits_{\substack{a_1 \ldots a_n \\ a_1 + \ldots + a_n = 0}} \sum\limits_{\substack{j_1 \neq \ldots \neq j_n \\ y_{j_1} \ldots y_{j_n} = a_1 \ldots a_n}} \frac{m-n!}{m!}$ | $\pollb 0$
+$\pollc \sum\limits_{\substack{a_1 \ldots a_n \\ a_1 + \ldots + a_n = 0}} \sum\limits_{\substack{j_1 \neq \ldots \neq j_n \\ y_{j_1} \ldots y_{j_n} = a_1 \ldots a_n}} \frac{m-n!}{m!}$ | $\pollc 1$
+&vellip; | &vellip; 
+$\polld \sum\limits_{\substack{a_1 \ldots a_n \\ a_1 + \ldots + a_n = n-1}} \sum\limits_{\substack{j_1 \neq \ldots \neq j_n \\ y_{j_1} \ldots y_{j_n} = a_1 \ldots a_n}} \frac{m-n!}{m!}$ | $\polld n-1$
+$\polle \sum\limits_{\substack{a_1 \ldots a_n \\ a_1 + \ldots + a_n = n}} \sum\limits_{\substack{j_1 \neq \ldots \neq j_n \\ y_{j_1} \ldots y_{j_n} = a_1 \ldots a_n}} \frac{m-n!}{m!}$ | $\polle n$
+
+::::
 :::
 
-::: {.column width="30%"}
+::: {.column width="55%"}
+### Partially Marginalized
 
-$p$ | $Y_1$ | $Y_2$ | $Y_1 + Y_2$
----|---|---|---
-$\pollb \frac{4}{9}$ | $0$ | $0$ | $0$
-$\pollc \frac{2}{9}$ | $0$ | $1$ | $1$
-$\pollc \frac{2}{9}$ | $1$ | $0$ | $1$
-$\polld \frac{1}{9}$ | $1$ | $1$ | $2$
-
-:::
-::: {.column width="30%"}
-
-$p$ | $Y_1 + Y_2$
----|---
-$\pollb \frac{4}{9}$ | $0$
-$\pollc \frac{4}{9}$ | $1$
-$\polld \frac{1}{9}$ | $2$
+$p$ | $Y_1$ |  $Y_2$ |  &hellip; | $Y_n$ | $Y_1 + \ldots + Y_n$
+--|---|---|---|---|-
+$\pollb \sum\limits_{\substack{j_1 \neq \ldots \neq j_n \\ y_{j_1}, y_{j_2} \ldots y_{j_n} = 0, 0 \ldots 0}} \frac{m-n!}{m!}$ | 0 | 0 | &hellip; | $0$ |  $\pollb 0$ 
+$\pollc \sum\limits_{\substack{j_1 \neq \ldots \neq j_n \\ y_{j_1}, y_{j_2} \ldots y_{j_n} = 0, 0 \ldots 1}} \frac{m-n!}{m!}$ | 0 | 0 | &hellip; | $1$ |  $\pollc 1$
+&vellip; | &vellip; | &dtdot; | &vellip; | &vellip; | &dtdot; | &vellip; | &vellip;
+$\pollc \sum\limits_{\substack{j_1 \neq \ldots \neq j_n \\ y_{j_1}, y_{j_2} \ldots y_{j_n} = 0, 1 \ldots 0}} \frac{m-n!}{m!}$ | 0 | 1 | &hellip; | $0$ |  $\pollc 1$
+&vellip; | &vellip; | &dtdot; | &vellip; | &vellip; | &dtdot; | &vellip; | &vellip;
+$\polld \sum\limits_{\substack{j_1 \neq \ldots \neq j_n \\ y_{j_1}, y_{j_2} \ldots y_{j_n} = 0, 1 \ldots 1}} \frac{m-n!}{m!}$ | 0 | 1 | &hellip; | $1$ |  $\polld n-1$
+$\polle \sum\limits_{\substack{j_1 \neq \ldots \neq j_n \\ y_{j_1}, y_{j_2} \ldots y_{j_n} = 1, 1 \ldots 1}} \frac{m-n!}{m!}$ | 1 | 1 | &hellip; | $1$ |  $\polle n$
 
 :::
 ::::
 
-- You might be wondering if we really had to do all this.
-- In some other classes on these topics, e.g. QTM220, you'd just be told a couple things we worked out.
+::: {.panel-tabset}
+### Two-Step Approach
+- To find the distribution of a sum $Y_1 + \ldots + Y_n$ when we sample *without replacement* we do the same thing.
+- We start by writing out the joint distribution of $n$ dice rolls.
+    - We're equally likely to pull any sequence of $n$ *distinct* numbers in $1\ldots m$. 
+    - There are $m \times (m-1) \times \ldots \times  (m-n+1)=m!/(m-n)!$ sequences...
+    - ... so the probability is $(m-n)!/m!$ for each sequence.
+    - Then we add the responses and sums as columns. That doesn't change.
 
-1. When you sample with replacement from a binary population $y_1 \ldots y_m$ ...
-    - your observations $Y_1 \ldots Y_n$ are independent and have the same distribution.^[We say *independent and identically distributed* or *iid* for short.]
-    - each one is like the result of a coin flip that comes up heads with probability $\theta=\frac{1}{m}\sum_{i=j}^m y_j$,\
-      the frequency of ones in the population.^[We call these *Bernoulli($\theta$)* random variables.]
-2. The sum of $n$ independent flips like this is the *Binomial($n,\theta$)* distribution.
+- Then we marginalize in two steps.
+    
+    1. Sum over roll sequences leading to the same response sequence $a_1 \ldots a_n$.
+    2. Sum over response sequences leading to the same sum $s=a_1+\ldots+a_n$.
+    
+### Step 1. Partial Marginalization
 
-- But this doesn't apply to you unless you're ...
-  - looking at the sample mean
-  - after sampling with replacement 
-  - from a binary population 
+- To sum over roll sequences, we sum over one roll after another.
+- Suppose we're calculating the probability of the response sequence $a_1 \ldot a_n = 0,0,...,0,0$.
+    1. We consider any 'head' $j_1\ldots j_{n-1}$ where $y_{j_1} \ldots y_{j_{n-1}}=0,0,...0$ and think about choosing the last element.
+    No matter what the head is, we've 'used up' $n-1$ people with response $y_j=0$. So there are $m_0-(n-1)=m_0-n+1$ ways to complete the sequence by choosing *an as-yet unused* $j_{n}$ with $y_{j_n}=0$.
+    2. We repeat with shortened 'head' $j_1 \ldots j_{n-2}$ to consider the choice of $j_{n-1}$. We have $m_0-n+2$ as-yet unused choices and our last step tells us that each choice results in $m_0-(n-1)$ call sequences, so there are $(m_0 - n + 1)(m_0 - n + 2)$ sequences with head $j_1 \ldots j_{n-2}$ ending in $0,0$. 
+    3. Repeat $n-2$ more times. We get $(m_0 - n + 1) \times \ldots \times m_0 = m_0!/(m_0-n)!$ rows.
+- When we work through the same argument for sequences with a mix of 0s and 1s,
+we see that a call in the head forecloses possibilities for later calls *with the same response only*. Thus, when
+we have $s_1$ ones and $s_0$ zeros, we can think of ourselves as choosing calls resulting with response zero and response one separately. We have $m_0!/(m_0-s_0)! \times m_1! / (m_1-s_1)!$ rows.
 
-## What It Bought Us
 
-:::: columns
-::: {.column width="50%"}
-```{r}
-#| fig-width: 7
- 
-binomial.dist.plot
-```
 
-:::
-::: {.column width="50%"}
 $$
 \begin{aligned}
-&\overset{\color{gray}=P\qty(\frac{1}{n}\sum_{i=1}^n Y_i = \frac{s}{n})}{P\qty(\sum_{i=1}^n Y_i = s)} =  \binom{s}{n} \theta_1^{s}\theta_0^{n-s} \\
-&\qfor n =`r n` \\ 
-&\qand \theta_1 \in \{\inpollb{`r thetas[1]`}, \inpollc{`r thetas[2]`}, \inpolld{`r thetas[3]`} \}
+\sum_{\substack{j_1 \neq \ldots \neq j_n  \\ y_{j_1} \ldots y_{j_n} = 0 \ldots 0}} \frac{m-n!}{m!} 
+&= \sum_{\substack{j_1 \neq \ldots \neq j_{n-1} \\ y_{j_1} \ldots y_{j_{n-1}} = 0 \ldots 0}} \sum_{\substack{j_n \not\in j_1 \ldots j_{n-1} \\ y_n=0}} \frac{(m-n)!}{m!} \\
+&= \sum_{\substack{j_1 \ldots j_{n-1} \\ y_{j_1} \ldots y_{j_{n-1}} = a_1 \ldots a_{n-1}}} \sum_{\substack{j_n \not\in j_1 \ldots j_{n-1} \\ y_n=0}} (m_{0} - n + 1) \times \frac{(m-n)!}{m!} \\
+&= \sum_{\substack{j_1 \neq \ldots \neq j_{n-2} \\ y_{j_1} \ldots y_{j_{n-2}} = 0 \ldots 0}} \sum_{\substack{j_{n-1}\not\in j_1 \ldots j_{n-2} \\ y_n=0}}  (m_0 - n + 2) (m_{0} - n + 1) \times \frac{(m-n)!}{m!} \\
+&= m_0 \times \ldots \times (m_0 - n + 1) \times (m-n)!/m! = \frac{m_0!}{(m_0-n)!} \times \frac{(m-n)!}{m!} \qqtext{after repeating $n-2$ more times} \\
+&= \frac{m_0!}{(m_0-s_0)!} \times \frac{m_1!}{(m_1-s)!} \times \frac{(m-n)!}{m!}  \qqtext{ generally. }
 \end{aligned}
 $$
 
-:::
-::::
+### Step 2. Full Marginalization
 
-- What we did 'always works'.
-- To find the sampling distribution of any estimator after any kind of random sampling, you can ...
-  1. start with the joint distribution describing your sampling mechanism, e.g. our sequence of $n$ calls $J_1 \ldots J_n$
-  2. add a column for your estimator. That's 'for free' because if you know your sample, you know your estimate.
-  3. marginalize over all the other columns.
-- If you do this symbolically, with placeholders $y_1 \ldots y_m$ instead of actual numbers
-  - e.g. as in @sec-sampling-to-sums-two vs @sec-two-calls-to-small
-  - then you'll find your estimator's sampling distribution as a function of your population.
-- What you'd hope for is this.
-  1. You can actually do it. You can organize the sums so you get a useful description of a distribution.
-  2. It depends on your population in a relatively simple way, e.g. through the 'Yes frequency' $\theta$.
-- When it works out, we get a *formula* for our sampling distribution in terms of *parameters* summarizing our population. 
-  - We don't know what the sampling distribution looks like exactly because we don't know those parameters. 
-  - But our formula tells us what it can look like and how that that depends on the population. 
-- We call this formula the distribution's *parametric form*. Knowing this is a start. 
-  - We can estimate the parameters and plug them in, as you saw a moment ago. 	
-  - We call estimators that rely on this kind of knowledge *parametric*. 
+- The full marginalization step is exactly the same as it was for sampling with replacement.
+    - Again, our response sequence probabilities depend only on the sequence's sum.
+    - So summing amounts to multiplying that probability by the number of sequences with a given sum.
+    - And we counted those when we sampled with replacement. There are $\binom{n}{s}$. 
+    
+$$
+\begin{aligned}
+\sum\limits_{\substack{j_1 \ldots j_n \\ y_{j_1} + \ldots + y_{j_n} = s}} (m-n)!/m!
+&= \sum\limits_{\substack{a_1 \dots a_n \\ a_1 + \ldots + a_n = s}} \ \ \sum_{\substack{j_1 \ldots j_n \\ y_{j_1} \ldots y_{j_n} = a_1 \ldots a_n}} (m-n)!/m! \\
+& =\sum\limits_{\substack{a_1 \dots a_n \\ a_1 + \ldots + a_n = s}} \frac{m_0!}{(m_0-s_0)!} \times \frac{m_1!}{(m_1-s_1)!} \times \frac{(m-n)!}{m!}  \\
+&= \binom{s}{n} \frac{m_0!}{(m_0-s_0)!} \times \frac{m_1!}{(m_1-s)!} \times \frac{(m-n)!}{m!}
+\end{aligned} 
+$$
 
-## Why 'Always' and not Always?
+### Using **R**
+
+$$
+P\qty(\sum_{i=1}^n Y_i = s) =  \binom{s}{n} \frac{m_0!}{(m_0-\{n+s\})!} \times \frac{m_1!}{(m_1-s)!} \times \frac{(m-n)!}{m!} 
+$$
+
+- This is called the *hypergeometric distribution*. **R** has what we need for this one too.
+- The `dhyper` function will give us the probability of a sum $s$. That's `dhyper(s,m_0,m_1,n)`.
+- The `rhyper` function will draw samples: `rhyper(10000, m_0, m_1, n)` gives us 10,000. 
 
 ```{r}
-binomial.dist.plot
+#| echo: true
+n = 625
+p = dhyper(0:n, sum(y==1), sum(y==0), n)
+S = rhyper(10000, sum(y==1), sum(y==0), n)
+
+ggplot() + geom_area(aes(x=0:n,   y=p), color=pollc, alpha=.2) +
+           geom_bar(aes(x=S, y=after_stat(prop)), alpha=.3) +
+           geom_point(aes(x=S[1:100],   y=max(p)*seq(0,1,length.out=100)), 
+                      color='purple', alpha=.2)
 ```
 
-- The bad news is that it doesn't work out like this all that often. 
+:::
+
+## With or Without Replacement: What's The Difference?
+
+```{r}
+m = 7.2e6
+with.vs.without = function(m,theta,n) {
+    theta = round(theta*m)/m
+    probs = data.frame(
+      x=0:m,
+      hyper=dhyper(0:m, theta*m, (1-theta)*m, n),
+      binom=dbinom(0:m, n, theta),
+      norm=dnorm(0:m, theta*n, sqrt(n*theta*(1-theta))))
+    
+    relevant = probs$hyper > 1e-6
+    
+    width_cdf = function(cdf, center, limits, alpha=.05) {
+      covg_dif = function(w) { 
+        actual = cdf(center + w/2) - cdf(center - w/2) 
+        nominal = 1-alpha 
+        actual - nominal  
+      }
+      uniroot(covg_dif, interval=limits)$root
+    }
+    
+    whyper = width_cdf(\(x)phyper(x*n, theta*m, (1-theta)*m, n), center=theta, limits=c(0, 1), alpha=.05)
+    wbinom = width_cdf(\(x)pbinom(x*n, n, theta), center=theta, limits=c(0, 1), alpha=.05)
+    wnorm  = width_cdf(\(x)pnorm(x*n, theta*n, sqrt(n*theta*(1-theta))), center=theta, limits=c(0, 1), alpha=.05)
+    
+    sample.data = data.frame(x = rhyper(10000, theta*m, (1-theta)*m, n)/n,
+                             y = seq(0, 1, length.out=10000)*max(probs$hyper))
+    dy = .005*max(probs$hyper)
+    
+    plot.sample.data = sample.data[seq(1,10000,by=100), ]
+    
+    plot = ggplot(probs[relevant, ]) + 
+      geom_area(aes(x=x/n, y=hyper), color='blue', alpha=.2) +
+      geom_area(aes(x=x/n, y=binom), color='red', alpha=.2) + 
+      geom_pointrange(aes(x=x,y=y,    xmin=x-whyper/2, xmax=x+whyper/2), data=plot.sample.data, color='blue', alpha=.2) +
+      geom_pointrange(aes(x=x,y=y+dy,xmin=x-wbinom/2, xmax=x+wbinom/2),  data=plot.sample.data, color='red', alpha=.2)
+    
+    coverage.norm = mean( theta-wnorm/2 <= sample.data$x & sample.data$x <= theta+wnorm/2)
+    coverage.binom = mean( theta-wbinom/2 <= sample.data$x & sample.data$x <= theta+wbinom/2 )
+    coverage.hyper = mean( theta-whyper/2 <= sample.data$x & sample.data$x <= theta+whyper/2 )
+    list(plot=plot, coverage.binom=coverage.binom, coverage.hyper=coverage.hyper)
+}
+```
+
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+#| fig-cap:
+#|   - n=625 
+#|   - n=m/2
+
+theta = mean(y)
+same       = with.vs.without(m, theta, n)
+different  = with.vs.without(m, theta, round(m/2))
+
+same$plot
+different$plot
+```
+
+- When we're sampling a small fraction of our population, e.g. `r n`/`r approx(m)`, not much.
+    - In this case, acting as if you'd sampled with replacement --- which is easier mathematically  --- is benign.
+- When we're sampling a large fraction, e.g. half, we get a narrower sampling distribution \
+with [sampling without replacement]{.fg style="color:blue"} than [sampling with replacement]{.fg style="color:red"}
+    - In this case, acting as if you'd sampled with replacement would give you wider-than-necessary intervals.
+    - You get 95% coverage either way. [`r percent(different$coverage.binom)`]{.fg style="color:red"} vs. [`r percent(different$coverage.hyper)`]{.fg style="color:blue"}.
+    - But you're underselling your precision by inaccuratelely characterizing your sampling distribution.
+
+## These Worked Out
+
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+
+same$plot
+different$plot
+```
+
+- We got nice formulas and everything. The bad news is that it doesn't work out like this all that often. 
 - Often doing all this marginalization symbolically is too hard or doesn't leave you with an interpretable formula.
 - The good news is that there are a variety of ways to work around this.
 - If it 'works out halfway', meaning you know the parameter(s) it depends on but not the formula ... 
@@ -909,8 +1179,11 @@ binomial.dist.plot
 - That's what people usually do. Including us later this semester.
 - This usually works and often, though not always, we have mathematical proof.
 
-### Why This Still Matters 
+## Why It's Important to Think About This
 
+- You can often get by acting as if what you actually did was whatever is most convenient mathematically.
+    - But we did just see a case in which this isn't ideal: when we sample a large fraction of our population without replacement.
+    - And this was a relatively benign failure. We understated our precision but we still got the coverage we claimed. We 'overcovered'.
 - There are, however, important instances in which the usual approximations can fail pretty badly.
   1. When we're running an *adaptive randomized trial*. These let us experiment with new treatments with minimal risk of a negatively impacting patients who'd have done better on the old one.
   2. When we're estimating *effect variability*. These help understand whether a treatment that doesn't work on average might still be good for some people.
@@ -921,7 +1194,6 @@ binomial.dist.plot
     - Or maybe  knowing what to look for or ask about when the usual stuff isn't working.
 - If you want to know more about any of the three estimation problems above, let me know.
     - I can give you reading or maybe even a project idea.
-
 
 # Calibration using the Binomial Distribution 
 

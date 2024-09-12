@@ -1,0 +1,404 @@
+---
+title: "Week 2 Homework"
+format: html
+---
+
+{{< include shared-code.qmd >}}
+
+```{r}
+#| echo: false
+library(ggplot2)
+library(purrr)
+theme_set(theme_minimal())
+```
+
+This week, we're going to get into the details of calibration. We'll work out the exact coverage probabilities of real confidence intervals---ones where our widths come from estimates of our sampling distribution. We'll be using the NBA data from last week's homework. But to stay in familiar territory, we'll need a binary outcome, so we'll use a *frequency*. In particular, we'll look at the frequency that a player's team wins in over half of the games they play in.   
+
+You may have caught on that 'your sample' from last week's homework probably isn't sampled with replacement from the population after all. So we'll work with 'my sample'.
+Here's some code you can run to get the data set up. Just like in class, we'll use (little) `y` for the population and (big) `Y` for the sample.
+
+```{r}
+#| echo: true
+sam = read.csv("https://qtm285-1.github.io/assets/data/nba_sample_1.csv")
+pop = read.csv("https://qtm285-1.github.io/assets/data/nba_population.csv") 
+
+indicator = function(W,L,...) { W / (W+L) > 1/2 }
+
+library(purrr)
+Y = sam |> pmap_vec(indicator)
+y = pop |> pmap_vec(indicator)
+
+n = length(Y)
+m = length(y)
+```
+
+## Warm Up
+
+To get started, we'll redo a few exercises from last week with a few modifications. First, we'll use this new binary outcome instead of points. 
+And second, we'll calibrate our intervals using *estimates* of our sampling distribution rather than the actual sampling distribution. 
+
+To remind you of the notation, here's how we write out our estimation target and estimator again.
+$$
+\begin{aligned}
+\underset{\text{estimation target}}{\theta} &= \frac{1}{m}\sum_{j=1}^m y_j \\
+\underset{\text{estimate}}{\hat\theta} &= \frac{1}{n}\sum_{i=1}^n Y_i
+\end{aligned}
+$$
+
+The first one is a version of last week's [Exercise 3](https://qtm285-1.github.io/assets/homework/week1-homework.qmd/#exr-interval-estimate).
+
+::: {#exr-your-interval-estimate .callout-exercise}
+Using only your sample, calculate a 95% confidence interval for $\theta$, the proportion of players in our population whose team won more than half of the games they played in. Assume that the sample is drawn with replacement from the population.
+:::
+
+::: {.callout-tip collapse="true"}
+### Hint.
+Your confidence interval should be $\hat\theta \pm \hat{w}/2$ where $\hat{w}$ 
+is the width of the middle 95% of your estimate of the sampling distribution. You can use the function `width` from last week's homework, but you'll need draws from your estimate of the sampling distribution to pass to it.
+[This lecture slide](https://qtm285-1.github.io/assets/lectures/Lecture3.html#/payoff) should help.
+
+### That function `width` from last week's homework
+
+```{r}
+#| label: width-code
+#| echo: true
+width = function(draws, center = mean(draws), alpha = .05) {
+    covg.dif = function(w) {
+        actual = mean(center - w / 2 <= draws & draws <= center + w / 2)
+        nominal = 1 - alpha
+        actual - nominal
+    }
+    uniroot(covg.dif, interval = c(0, 2 * max(abs(draws - center))))$root
+}
+```
+
+:::
+
+The second one is a version of last week's [Exercise 4](https://qtm285-1.github.io/assets/homework/week1-homework.qmd/#exr-your-coverage).
+
+::: {#exr-your-coverage .callout-exercise}
+Report the coverage probability of your interval estimator. To do this, draw 10,000 samples of size $n=100$ with replacement from the population,
+calculate an interval estimate based on each of these samples just like you did in @exr-your-interval-estimate, and report the fraction of these intervals that contain the population mean. 
+:::
+
+## Improving Speed and Precision at The Same Time {#sec-improving-speed-and-precision}
+
+So far, to calculate our interval widths, we've used a 'dot counting' method. We've sampled 10,000 times from our (estimated) sampling distribution,
+then tried drawing arms of different lengths around the sampling distribution's mean until we go one that included 9500 (95%) of those dots. You
+can think of it as an iterative process like this.
+
+```{r}
+set.seed(1)
+```
+
+::: {#fig-dot-counting}
+```{r}
+#| fig-width: 3
+#| layout-ncol: 4
+#| fig-cap:
+#|   - "Too narrow. Only 8000 dots are covered."
+#|   - "Too wide.   99900 dots are covered."
+#|   - "Getting there. 99250 dots."
+#|   - "Just right. 99500 dots."
+
+theta.hat = mean(Y)
+draws =  rbinom(10000, n, theta.hat)/n
+pmf = dbinom(0:n, n, theta.hat)
+w1 = width(draws, alpha=.2)
+w2 = width(draws, alpha=.001)
+w3 = width(draws, alpha=.025)
+w4 = width(draws, alpha=.05)
+
+
+scatter = ggplot(data.frame(x=draws, y=max(pmf)*(1:length(draws))/length(draws))) + 
+  geom_point(aes(x=x, y=y), alpha=.05, size=.025, color='red') + labs(x='', y='') 
+
+yinterval = max(pmf)*.5
+interval.data = data.frame(theta.hat=theta.hat, w1=w1, w2=w2, w3=w3, w4=w4, y=yinterval)
+scatter + geom_pointrange(aes(x=theta.hat, xmin=theta.hat-w1/2, xmax=theta.hat+w1/2, y=y), color=polld, data=interval.data) 
+scatter + geom_pointrange(aes(x=theta.hat, xmin=theta.hat-w2/2, xmax=theta.hat+w2/2, y=y), color=polld, data=interval.data) 
+scatter + geom_pointrange(aes(x=theta.hat, xmin=theta.hat-w3/2, xmax=theta.hat+w3/2, y=y), color=polld, data=interval.data) 
+scatter + geom_pointrange(aes(x=theta.hat, xmin=theta.hat-w4/2, xmax=theta.hat+w4/2, y=y), color=polld, data=interval.data) 
+```
+:::
+
+That's really what the code is doing. What I'm leaving out is a clever way of choosing the next width to try given what's happened so far.
+That's baked into **R**'s built-in function `uniroot`, which is being used in `width` to find the solution to this equation.
+
+$$
+\hat f(x) = 0   \qqtext{ where }   \hat f(x) = \text{the fraction of dots covered at width } x - .95 
+$$
+
+What's imprecise about this is that we're using 10,000 dots instead of infinitely many. We don't really want to know the fraction of 
+10,000 dots that we're going to cover---we want to know the fraction of the sampling distribution that we're going to cover. To do this,
+we can make a slight modification to our code. We'll swap our dot counting function $\hat f(x)$, which was called `covg.dif` in the code,
+with a version $f(x)$ that actually calculates probability. Here's the code. It's a bit faster than the dot-counting version too.
+
+
+```{r}
+#| echo: true
+width.binom = function(theta, n, alpha=.05) {
+  if(theta == 0 || theta == 1) { return(0) }
+  covg.dif = function(w) {
+    actual = pbinom(n*(theta+w/2),   n, theta) -  #<1>
+             pbinom(n*(theta-w/2)-1, n, theta)    #<1>
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  limits = c(0, 1)
+  uniroot(covg.dif, interval=limits)$root
+}
+```
+1. This uses the built-in function `pbinom`, which calculates the probability that a binomial random variable is less than or equal to $x$. To calculate the probability that it's between two values $a<b$, we take the probability it's less than or equal to $b$ and subtract the probability it's less than $a$: $P(a \le X \le b) = P(X \le b) - P(X < a)$. And the probability that this average---which is some fraction of $n$---is *less than* $a$ is, of course, the probability that it's *less than or equal* to $a-1/n$.
+
+You can interpret the 'dot counting' method as doing is exactly this, except using a histogram of 10,000 draws from the sampling distribution in place of the sampling distribution itself. Remember [the exercise](https://qtm285-1.github.io/assets/lectures/Lecture2.html#/coverage-probability-and-sampling-distributions) from class last week where we thought about twins in neon-green shirts?  That's what `width` is doing. It's using the [histogram I've shaded pink]{.pink} instead of the [sampling distribution I've outlined on top of it in teal]{.teal}.
+
+```{r}
+scatter + 
+  geom_bar(aes(x=x, y=after_stat(prop)), alpha=.5, fill=pink) +
+  geom_col(aes(x=(0:n)/n, y=pmf), alpha=.2, fill=NA, color=teal, data=data.frame(x=(0:n)/n, y=pmf))       
+```
+
+In this exercise, you're going to compare the two approaches. You're going to work with your estimate of the sampling distribution from @exr-your-interval-estimate 
+and plot two functions of interval width $x$: the fraction of the sampling distribution that's covered by the interval $\hat\theta \pm x/2$ and the fraction of your 10,000 draws that is. 
+
+::: {#exr-exact-vs-approx-width .callout-exercise}
+Plot these two functions on the same axes. Add the horizontal lines $y=.8$ and $y=.95$.
+Then explain how, using this plot, you can find the widths of the 95% confidence intervals 
+calculated by `width` and `width.binom`. And report an 80% confidence interval centered 
+on your estimate $\hat\theta$. You should be able to read the width for that off the plot.
+:::
+
+To reduce the amount of code you'll have to write, I'll give you most of what you need. All you'll need to do is
+replace the `NaN` in `probability.covered` with the fraction of the sampling distribution that's covered by the interval $\hat\theta \pm x/2$. If you want a hint, mouse over the (1) and (2) below.
+
+```{r}
+set.seed(1)
+```
+
+```{r}
+#| echo: true
+
+center = mean(Y)
+draws =  rbinom(10000, n, theta.hat)/n
+dots.covered = function(x) { 
+  mean(center - x / 2 <= draws & draws <= center + x / 2) #<1>
+}
+probability.covered = function(x) {
+  NaN   #<2>
+}
+
+x = (0:n)/n
+ggplot() +
+  geom_line(aes(x=x, y = x |> map_vec(dots.covered)), color='pink') +
+  geom_line(aes(x=x, y = x |> map_vec(probability.covered)), color='teal') +
+  scale_y_continuous(breaks = c(0,.8,.95,1), minor_breaks = NULL) + 
+  scale_x_continuous(breaks = seq(0,1,by=.125), limits=c(0,.5)) + 
+  labs(x='', y='') 
+```
+1. I've borrowed this code from the function `width`.
+2. Is there something analogous you should be borrowing from `width.binom`?
+
+## Visualizing Calibration
+
+In this problem, we're going to try to understand how calibration works by visualizing it. 
+This turns out to be pretty straightforward when we're talking about estimating a frequency
+after sampling with replacement. That's because we know exactly what the sampling distribution of
+the sample frequency looks like except for one thing: we don't know the population frequency $\theta$.
+Here's what they look like for population frequencies $\theta$ from 10% to 90% in 10% increments at our sample size of n=`r n`.
+```{r}
+thetas = seq(.1, .9, by=.1)
+pmfs = expand_grid(theta = thetas, x = (0:n)/n) |>
+  mutate(p = dbinom(x*n, n, theta), y=0, width=0)
+
+for(theta in thetas) {
+  w = width.binom(theta, n, alpha=.05)
+  thispmf = pmfs[pmfs$theta==theta,] 
+  belt.y = thispmf$p[which.min(abs(thispmf$x - (theta-.5*w)))] 
+  pmfs$y[pmfs$theta==theta] = belt.y
+  pmfs$width[pmfs$theta==theta] = w
+}
+
+ggplot(pmfs) +
+    geom_area(aes(x=x, y=p, fill=factor(theta), color=factor(theta)), position='identity', alpha=.1) +
+    geom_linerange(aes(xmin=theta-.5*width, xmax=theta+.5*width, y=y, color=factor(theta))) +
+    scale_x_continuous(breaks=seq(0,1,by=.1), limits=c(0,1)) +
+    scale_fill_discrete(name="theta") + guides(color='none') 
+```
+
+It follows that the width we should be using to calibrate our interval estimates---the width of the middle 95% of a distribution like this---is also determined by the population frequency $\theta$. I've drawn it on as a 'belt' on the each distribution above. And we already have a function to calculate it: `width.binom`. And if we want to understand how these widths depend on $\theta$, we can do the obvious thing: plot the width as a function of $\theta$.
+
+::: {#fig-calibration-width}
+```{r}
+#| echo: true
+#| layout-ncol: 2
+#| fig-width: 5.5
+#| fig-cap: 
+#|   - "The width of a calibrated 95% confidence interval as a function of the population frequency $\theta$ when $n=100$."
+#|   - "The width of a calibrated 95% confidence interval as a function of the population frequency $\theta$ when $n=625$."
+thetas = seq(0,1,by=.01)
+widths.100 = thetas |> map_vec(function(theta) { width.binom(theta, n=n, alpha=.05) })
+widths.625 = thetas |> map_vec(function(theta) { width.binom(theta, n=625, alpha=.05) })
+
+ggplot() + 
+  geom_line(aes(x=thetas, y=widths.100)) +
+  labs(x='theta', y='width')
+
+ggplot() + 
+  geom_line(aes(x=thetas, y=widths.625)) +
+  labs(x='theta', y='width')
+```
+:::
+
+We can even plot the interval itself as a function of $\theta$. Here's two slightly different ways of doing it. On the left, we have a visualization that focuses on the interval's [upper]{.fg style="color:blue"} and [lower bounds]{.fg style="color:red"} as functions of $\theta$. The [blue line]{.fg style="color:blue"} shows the upper bound and the [red line]{.fg style="color:red"} shows the lower bound. On the right, we have a visualization that focuses on what the intervals themselves look like. We're plotting the intervals themselves, laid out vertically, as a function of $\theta$. 
+
+These are really just different ways of styling the same plot. On the left, the upper and lower bounds are styled as two lines. On the right, maybe a bit more evocatively, they're styled as the edges of actual intervals.
+
+::: {#fig-calibration-width-intervals}
+```{r}
+#| layout-ncol: 2
+#| fig-width: 5.5
+
+widths = widths.100
+ggplot() + geom_line(aes(x=thetas, y=thetas-widths/2), color='red') + 
+           geom_line(aes(x=thetas, y=thetas+widths/2), color='blue') + 
+           guides(color='none') + labs(x='theta', y='')
+
+ggplot() + geom_pointrange(aes(x=thetas, y=thetas, ymin=thetas-widths/2, 
+                               ymax=thetas+widths/2, color=factor(thetas)),
+                               size=.1) + 
+           guides(color='none') + labs(x='theta', y='')
+```
+:::
+
+Here's a few quick exercises to solidify your understanding of what these plots are saying.
+
+::: {#exr-calibration-width .callout-exercise}
+
+Let's use the notation $w(\theta)$ to refer to the function from @fig-calibration-width, the width of a calibrated 95% confidence interval when the population frequency is $\theta$. And let's call the lower and upper bounds of the corresponding interval,
+which we see in @fig-calibration-width-intervals, $\ell(\theta)$ and $u(\theta)$ respectively. Write out formulas for $\ell(\theta)$ and $u(\theta)$ in terms of $\theta$ and $w(\theta)$.
+
+:::
+
+::: {#exr-calibration-width-turnout .callout-exercise}
+Let's think about the 'confidence interval for our estimate of the sampling distribution' we 
+talked about at the end of class this Wednesday. The one from [the last slide](https://qtm285-1.github.io/assets/lectures/Lecture3.html#/the-estimate-works.-why-does-it-work). In this plot, I showed interval estimates centered on the two ends of the sampling distribution's middle 95%: a red one centered at $\theta-w(\theta)/2$ and a blue one centered at $\theta+w(\theta)/2$ where $\theta$ is the turnout frequency in the population. These intervals had different widths because they were calibrated using different estimates of the sampling distribution. Write out formulas these two intervals in terms of the functions $\ell$ and $u$ you defined in @exr-calibration-width.
+
+:::
+
+
+::: {#exr-calibration-width-turnout-2 .callout-exercise}
+
+Using @fig-calibration-width, think about why the red interval, centered on an underestimate of the population frequency, covers the population frequency but the blue interval, centered on an overestimate, does not. No need to turn anything in as evidence that you've done the thinking. 
+
+Now suppose that, instead of being roughly 70%, turnout was roughly 30%. Maybe we're thinking about a midterm primary like we talked about in [our first class of the semester](https://qtm285-1.github.io/assets/lectures/Lecture1.html). Suppose we've calibrated interval estimates exactly the same way, using widths calibrated using estimates of the sampling distribution. And we're thinking about two particular point estimates that could happen: a new version of the red one, at the lower end of the actual sampling distribution's middle 95%, and a new version of the blue one, at the upper end of the actual sampling distribution's middle 95%. Which of the two---if any---would cover the population frequency of 30%?  What about in the case that the population frequency is 50%?
+:::
+
+
+Now here's where we start to put it all together. Let's write out *an indicator* that tells us whether, when our point estimate is $x$, our interval estimate covers the population frequency $\theta$.^[You'll have to forgive the notation here. Sometimes when we want to write out a function, but don't want to gives its argument a name, we'll use the symbol $\cdot$ instead of a real argument name like $x$. What this notation is saying is that, when you pass the function an argument $x$, you should substitute it for the $\cdot$. Perhaps it makes more sense when you see it compared to the alternative in action. Which looks more like an indicator variable for the interval estimate around $\hat\theta$ covering the population frequency $\theta$: $1_{\ell(\cdot) \le \theta \le u(\cdot)}(\hat\theta)$ or $1_{\ell(x) \le \theta \le u(x)}(\hat\theta)$?]
+
+
+$$
+1_{\ell(\cdot) \le \theta \le u(\cdot)}(x) = 
+\begin{cases} 1 & \text{if } \ell(x) \le \theta \le u(x) \\ 0 & \text{otherwise} \end{cases}
+$$
+
+
+::: {#exr-coverage-plot .callout-exercise}
+Draw this indicator function, like you did in the [Week 0 Homework](https://qtm285-1.github.io/assets/homework/week0-homework.html#introduction), on top of the plot of your estimator's actual sampling distribution below. Describe how, assuming you were willing to get out a ruler and spend a lot of time measuring plots, you could calculate the coverage of the $\hat\theta \pm w(\hat\theta)/2$ interval estimates we've been talking about this week without writing any code.
+:::
+
+```{r}
+#| echo: true
+
+theta = mean(y)
+draws =  rbinom(1000, n, theta)/n
+prob = dbinom(0:n, n, theta)
+
+ggplot() +
+  geom_col(aes(x=(0:n)/n, y=prob), alpha=.2) +
+  geom_point(aes(x=draws, y=max(prob)*(1:1000)/1000), alpha=.1, size=.5, color='purple') +
+  geom_vline(xintercept=theta, color='green', alpha=.7, linewidth=1.5) + 
+  scale_x_continuous(breaks=seq(0,1,by=.1), limits=c(.25,.75)) +
+  labs(x='', y='')
+```
+
+
+Our final question is a little more open-ended in how you do it. 
+You could, for example, generalize your solution to @exr-your-coverage or 
+translate your solution to @exr-coverage-plot into code. What we're going to
+do is think of the coverage probability of these interval estimates as a 
+function---a function of the actual population frequency $\theta$---and plot it.
+
+::: {#exr-coverage-calc}
+Suppose we're estimating $\theta$, the frequency of ones in some population $y_1 \ldots y_m$,
+based on a sample of size n=`r n` drawn with replacement. Plot, as a function of $\theta$,
+the coverage probability of the interval estimate $\hat\theta \pm w(\hat\theta)/2$. Repeat
+for a sample of size n=625.
+:::
+
+## Extra Credit: Sampling without Replacement
+
+Remember [from class](https://qtm285-1.github.io/assets/lectures/Lecture3.html#/sampling-without-replacement) that if we sample *without replacement*, the sample frequency has a hypergeometric distribution, not a binomial distribution? That means that if we want to calibrate interval estimates for sampling without replacement, we need to make a very small change to the function `width.binom` to switch out the binomial distribution for the hypergeometric distribution. You are, of course, welcome to look up the documentation on the **R** function `phyper` and code that up yourself, but I've done it for you and provided the code below in case you'd rather not.
+
+::: {.callout-tip collapse="true"}
+### Calibration based on the Hypergeometric Distribution: Code
+
+```{r}
+#| echo: true
+width.hyper = function(theta, n, m, alpha=.05) { 
+  if(theta == 0 || theta == 1) { return(0) }
+  covg.dif = function(w) {
+    actual = phyper(n*(theta+w/2),   m*theta, m*(1-theta), n) - 
+             phyper(n*(theta-w/2)-1, m*theta, m*(1-theta), n)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  limits = c(0, 1)
+  uniroot(covg.dif, interval=limits)$root
+}
+```
+:::
+
+
+What we're going to do here are versions of @exr-coverage-plot and @exr-coverage-calc 
+for a version of our NBA survey where we've collected a sample of size n=`r n`
+from our population of size m=`r m` players, but this time sampling without replacement.
+Here's a plot of our sample frequency's sampling distribution when we do this.
+
+```{r}
+#| echo: true
+
+theta = mean(y)
+draws =  rhyper(1000, m*theta, m*(1-theta), n)/n
+prob = dhyper(0:n, m*theta, m*(1-theta), n)
+
+ggplot() +
+  geom_col(aes(x=(0:n)/n, y=prob), alpha=.2) +
+  geom_point(aes(x=draws, y=max(prob)*(1:1000)/1000), alpha=.1, size=.5,color='purple') +
+  geom_vline(xintercept=theta, color='green', alpha=.7, linewidth=1.5) +  
+  scale_x_continuous(breaks=seq(0,1,by=.1), limits=c(.25,.75)) +
+  labs(x='', y='')
+```
+
+::: {#exr-coverage-plot-hyper .callout-exercise}
+Draw the indicator for coverage of a 95% interval, $1_{\ell(\cdot) \le \theta \le u(\cdot)}$, on the plot above. Remember to use the width of the hypergeometric distribution rather than the binomial when calculating  $\ell$ and $u$.  
+:::
+
+::: {#exr-coverage-calc-hyper .callout-exercise}
+Suppose we're estimating $\theta$, the frequency of ones in some population $y_1 \ldots y_m$,
+based on a sample of size n=`r n` drawn *without replacement* from a population of size `r m`.
+Plot, as a function of $\theta$, the coverage probability of the interval estimate $\hat\theta \pm w(\hat\theta)/2$. 
+:::
+
+Finally, let's look into what would happen if we mistakenly analyzed our actual data --- which was sampled with replacement --- as if it were sampled without replacement.
+
+::: {#exr-coverage-calc-hyper-but-with-replacement .callout-exercise}
+Draw your indicator from @exr-coverage-plot-hyper on top of your plot of the sampling
+distribution from @exr-coverage-plot. Then calculate and plot, as a function of the population
+frequency $\theta$, the coverage probability it illustrates. That is, the coverage probability of the 
+interval estimator $\hat\theta \pm w(\hat\theta)/2$ calibrated as if you'd drawn
+a sample of size `r n` without replacement from a population of `r m`, when you've actually
+drawn that sample with replacement.
+:::
+
