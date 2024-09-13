@@ -5,7 +5,7 @@ subtitle: "QTM 220"
 
 ```{r}
 #| echo: false
-library(ggplot2)
+library(tidyverse)
 theme_set(theme_minimal())
 ```
 
@@ -58,6 +58,30 @@ Each of the following lists has a mean of 50. For which is the standard deviatio
 
 :::
 
+::: {.callout-solution}
+It's biggest for list 3 and smallest for list 2. This is easy to see if you
+plot the lists.
+```{r}
+#| echo: false
+list.1 = c(0, 20, 40, 50, 60, 80, 100)
+list.2 = c(0, 48, 49, 50, 51, 52, 100)
+list.3 = c(0, 1, 2, 50, 98, 99, 100)
+
+ggplot() + geom_point(aes(x=list.1, y=1)) +
+           geom_point(aes(x=list.2, y=2)) +
+           geom_point(aes(x=list.3, y=3)) + 
+           geom_vline(aes(xintercept=50), alpha=.3) +
+           scale_y_continuous(breaks=c(1,2,3), 
+                              labels=c("List 1", "List 2", "List 3")) +
+           labs(x='', y='')
+```
+As you count inward from the left or right, there are 3 points before you get to the mean.
+For all 3---the first (furthest), second (middle), and third (closest)---the distance to the mean is at least as large in list 3 as it is in list 1 which is at least at large as it is in list 2. 
+
+You can do this without plotting by just looking at the lists of numbers and counting inward from the left and right. That's what I'd do if I were just answering the question for myself. The plot just makes it a little easier to talk about.
+:::
+
+
 ::: {#exr-calculations-2 .callout-exercise}
 For the two lists below, calculate the mean and standard deviation of the numbers. Then compare the your answers for the two lists. Think about this comparison. How is the first list related to the second? How does this relationship carry over to the mean? The standard deviation? 
 
@@ -65,6 +89,12 @@ For the two lists below, calculate the mean and standard deviation of the number
   1. 1, 3, 4, 5, 7 
   2. 6, 8, 9, 10, 12 
 
+:::
+
+::: {.callout-solution}
+The mean of the first is 4 and the second is 9. If we list the deviations from the mean, $Y_i-\bar Y$, we get the same thing in either case: -3, -1, 0, 1, 3. And the standard deviation for both lists, the root mean square of that list of deviations, $\sqrt{\{ (-3)^2 + (-1)^2 + 0^2 + 1^2 + 3^2\}/5} = \sqrt{20/5} = \sqrt{4} = 2$.
+
+Observing the second list is just the first one shifted up by 5, we know that the mean will be shifted up by 5 as well. We wouldn't really have to calculate it if we noticed that and knew the mean of the first. And we know the standard deviation will be the same because deviations $Y_i-\bar Y$ and any summaries of them, e.g. their root mean square or mean absolute value, are shift-invariant.
 :::
 
 ::: {#exr-calculations-3 .callout-exercise}
@@ -75,12 +105,20 @@ Repeat this exercise for a new pair of lists.
 
 :::
 
+::: {.callout-solution}
+This time the second list is the first one multiplied by 3. That means both its mean and
+standard deviation are multiplied by 3. List one, which we saw in the last problem, has mean 4 and standard deviation 2, so List 2 has mean 12 and standard deviation 6.
+:::
+
 ::: {#exr-calculations-4 .callout-exercise}
 Repeat it again. 
 
   1. 5, -4, 3, -1, 7
   2. -5, 4, -3, 1, -7 
 
+:::
+::: {.callout-solution}
+This time the second list is the first one multiplied by -1. That means its mean is multiplied by -1 and its standard deviation is multiplied by $|-1|=1$. For list one, the mean is $10/5=2$ and the standard deviation is $\sqrt{\{ (3)^2 + (-6)^2 + (1)^2 + (-3)^2 + (5)^2\}/5} = \sqrt{80/5} = \sqrt{16}=4$. For list two, the mean is $-2$ and the standard deviation is also $4$.
 :::
 
 
@@ -90,8 +128,21 @@ Repeat it again.
 Can a standard deviation ever be negative? Explain.
 :::
 
+::: {.callout-solution}
+No. It's the square root of an average of squares. Squares are nonnegative, averages of nonnegative numbers are nonnegative, and square roots of nonnegative numbers are nonnegative.
+:::
+
 ::: {#exr-properties-2 .callout-exercise}
 For set of positive numbers, can the standard deviation ever be larger than the average? Explain. 
+:::
+::: {.callout-solution}
+
+Yup. Consider the list $0,0,3$. The mean is $3/3=1$ and the deviations
+are from this mean are $-1, -1, 2$. Each is at least as big as the mean
+and the root mean square of them is $\sqrt{6/3} = \sqrt{2}$. You can
+make this example more extreme by using a list of $n-1$ zeros and one $n$. You still get mean $1$, but the standard deviation $\sqrt{\{n \times (-1)^2 + n^2\}/n} = \sqrt{1+n}$ can be made arbitrarily large by increasing $n$.
+
+The essential phenomenon this shows is that the standard deviation is sensitive to extremes in a way that the mean is not. By increasing $n$ in the 'more extreme', example we're increasing the standard deviation without changing the mean by making the extremes bigger.
 :::
 
 
@@ -112,8 +163,19 @@ The means of the samples we've histogrammed are approximately `r round(mean(samp
 `r round(mean(sample.1),1)`, `r round(mean(sample.3),1)`. Which histogram corresponds to which mean?
 :::
 
+::: {.callout-solution}
+Histogram 1 corresponds to the mean `r round(mean(sample.1),1)`,
+Histogram 2 corresponds to the mean `r round(mean(sample.2),1)`,
+Histogram 3 corresponds to the mean `r round(mean(sample.3),1)`.
+:::
+
+
 ::: {#exr-visual-2 .callout-exercise}
 True or false: the standard deviation of the sample summarized by Histogram 1 is a lot smaller than the one summarized by Histogram 2. Explain. 
+:::
+
+::: {.callout-solution}
+False. The spread of those two distributions is pretty similar.
 :::
 
 ```{r}
@@ -169,18 +231,95 @@ What is the substantive interpretation of this mean?
 **Tip**. To make the plot easier to read and talk about, style these lines differently. I tend to use dashed lines for one standard deviation and dotted lines for two. To do that, pass `linetype="dashed"` or `linetype="dotted"` after the `color` argument for `geom_vline`.
 :::
 
+::: {.callout-solution}
+```{r}
+#| echo: true
+my.sd = function(x) { 
+  deviations = x-mean(x)
+  sqrt(mean(deviations^2))
+}
+
+CL.histogram + 
+  geom_vline(aes(xintercept=mean(CLlib)-my.sd(CLlib)), linetype="dashed", color="blue") +
+  geom_vline(aes(xintercept=mean(CLlib)+my.sd(CLlib)), linetype="dashed", color="blue") +
+  geom_vline(aes(xintercept=mean(CLlib)-2*my.sd(CLlib)), linetype="dotted", color="blue") +
+  geom_vline(aes(xintercept=mean(CLlib)+2*my.sd(CLlib)), linetype="dotted", color="blue")
+```
+
+The substantive interpretation of this mean is that `r round(mean(EMdata$CLlib))`% of justices vote in a liberal direction on civil liberties cases.
+:::
 
 ::: {#exr-justices-histogram-ur .callout-exercise}
 Replicate the plot above, i.e. a histogram with lines for the mean plus or minus two standard deviations, for the variable 'ur'. What is this mean? And what is its substantive interpretation?
 :::
 
-::: {#exr-justices-histogram-clib-party .callout-exercise}
-Draw two histograms of CLlib, one for Republican-nominated justices and one for Democratic-nominated justices. Calculate the mean of CLlib in each group. Which is larger, the mean among Republican justices or Democratic justices? Give a substantive interpretation of this difference.
+::: {.callout-solution}
+```{r}
+#| echo: true 
+ 
+ur.histogram = ggplot(EMdata) + 
+           geom_bar(aes(x=ur, y=after_stat(prop)), 
+                        alpha=.3, color='black') +  
+           geom_vline(aes(xintercept=mean(ur)), 
+                          color="blue") +
+           xlab("Distribution of Justices who are in Under-Represented Groups")
+
+ur.histogram + 
+  geom_vline(aes(xintercept=mean(ur)-my.sd(ur)), linetype="dashed", color="blue") +
+  geom_vline(aes(xintercept=mean(ur)+my.sd(ur)), linetype="dashed", color="blue") + 
+  geom_vline(aes(xintercept=mean(ur)-2*my.sd(ur)), linetype="dotted", color="blue") +
+  geom_vline(aes(xintercept=mean(ur)+2*my.sd(ur)), linetype="dotted", color="blue") + 
+  scale_y_continuous(breaks=seq(0,1,by=.2))
+```
+
+The mean of this distribution is roughly `r round(mean(EMdata$ur),2)`. This means that roughly `r round(100*mean(EMdata$ur),2)`% of justices who served in the Warren, Burgen, and Rehquist courts are from under-represented groups. 
+
+It wasn't really necessary to plot the mean here, as for a binary variable the mean corresponds to the frequency of ones, which is already shown in the plot.
 :::
+
+::: {#exr-justices-histogram-clib-party .callout-exercise}
+Draw two histograms of CLlib, one for Republican-nominated justices and one for Democrat-nominated justices. Calculate the mean of CLlib in each group. Which is larger, the mean among Republican-nominated justices or Democrat-nominated justices? Give a substantive interpretation of this difference.
+:::
+
+::: {.callout-solution}
+```{r}
+#| echo: true
+#| layout-nrow: 2 
+
+plot.party = function(thisparty) {
+  ggplot(EMdata[EMdata$party == thisparty, ]) + 
+    geom_histogram(aes(x=CLlib, y=after_stat(density)), 
+                   bins=10, alpha=.3, color='black') +  
+    geom_vline(aes(xintercept=mean(CLlib)), 
+               color=ifelse(thisparty == 0, "red", "blue")) +
+      xlab(sprintf("%% Support for Liberal Position on Civil Liberties Cases (CLlib) for %s-nominated Justices", ifelse(thisparty == 0, "Republican", "Democrat")))
+}
+
+plot.party(0)
+plot.party(1)
+```
+The mean among Democrat-nominated justices, `r round(mean(EMdata$CLlib[EMdata$party == 1]))`%, is larger than the mean among Republican justices, `r round(mean(EMdata$CLlib[EMdata$party == 0]))`%. This means that Democrat-nominated justices vote in the liberal direction on civil liberties cases `r round(mean(EMdata$CLlib[EMdata$party == 1])-mean(EMdata$CLlib[EMdata$party == 0]),2)`% more frequently, on average, than Republican justices do.
+:::
+
 
 ::: {#exr-justices-scatter .callout-exercise}
 
 Below, I've drawn a scatter plot of CLlib with the nominating party as the x-axis. I've used `stat_summary` to draw in the mean plus and minus two standard deviations for each group. Calculate these means and standard deviations and report the mean and endpoints of the intervals that have been drawn in. Check your answer by visually for agreement with the plot. Can you give a substantive interpretation of these intervals?
+:::
+
+::: {.callout-solution}
+```{r}
+summaries = EMdata |> group_by(party) |> 
+  summarize(mean = mean(CLlib), sd = sd(CLlib)) |>
+  mutate(lb = mean - 2*sd, ub = mean + 2*sd)
+summaries
+```
+
+The resulting intervals are `r round(summaries |> filter(party == 1) |> pull(lb),2)`%-`r round(summaries |> filter(party == 1) |> pull(ub),2)`% for Democrats and `r round(summaries |> filter(party == 0) |> pull(lb),2)`%-`r round(summaries |> filter(party == 0) |> pull(ub),2)`% for Republicans. Substantively, this tells us that justices outside these ranges behave pretty atypically for a justice nominated by the party that nominated them. 
+
+Looking at the scatter plot, you can see that, in fact, no justices are outside these ranges. Given that, it'd probably be better to just report the range of values for each group instead of these $\pm 2\text{sd}$ intervals.
+
+There is not a probabilistic interpretation to be had here. There's nothing random about this sample.
 :::
 
 ```{r}
@@ -197,7 +336,7 @@ civil.liberties.plot = ggplot(EMdata) +
              position=position_jitter(w=.1, h=0), alpha=.4) + 
   stat_summary(aes(x=party, y=CLlib), geom="pointrange", 
                fun.data=mean_sd, fun.args = list(mult=2)) +
-  xlab("Party of Appointing President") + 
+  xlab("Nominating Party") + 
   ylab("%Support for Liberal Position on CL Cases")
 
 civil.liberties.plot
@@ -207,6 +346,36 @@ civil.liberties.plot
 ::: {#exr-justices-scatter-ur .callout-exercise}
 Repeat the exercise above, using the variable 'ur' instead of 'CLlib'. Draw your own plot.
 :::
+
+::: {.callout-solution}
+```{r}
+#| echo: true
+
+ur.plot = ggplot(EMdata) +  
+  geom_point(aes(x=party, y=ur), 
+             position=position_jitter(w=.1, h=0), alpha=.4) + 
+  stat_summary(aes(x=party, y=ur), geom="pointrange", 
+               fun.data=mean_sd, fun.args = list(mult=2)) +
+  xlab("Nominating Party") + 
+  ylab("Underrepresented Group Status")
+
+ur.plot
+
+summaries = EMdata |> group_by(party) |> 
+  summarize(mean = mean(ur), sd = sd(ur)) |>
+  mutate(lb = mean - 2*sd, ub = mean + 2*sd)
+summaries
+```
+
+
+The resulting intervals are `r round(summaries |> filter(party == 1) |> pull(lb),2)`-`r round(summaries |> filter(party == 1) |> pull(ub),2)` for Democrats and `r round(summaries |> filter(party == 0) |> pull(lb),2)`-`r round(summaries |> filter(party == 0) |> pull(ub),2)` for Republicans. 
+
+I don't think there's a great substantive interpretation to be had for these intervals. If we borrow our interpretation from the previous questions, and say that it's atypical for a justice to be outside these ranges, we'd effectively be saying that because both intervals contain 0 and don't contain 1, it's atypical for justices nominated by either party to be in under-represented groups. That's already conveyed much more simply by looking at the frequencies themselves: only `r 100*round(summaries |> filter(party == 1) |> pull(mean),2)`% of justices nominated by Democrats are in under-represented groups and only `r 100*round(summaries |> filter(party == 0) |> pull(mean),2)`% of justices nominated by Republicans are in under-represented groups. It's probably better to report these 
+as `r sum(EMdata$ur[EMdata$party == 1])` of `r sum(EMdata$party==1)` 
+and `r sum(EMdata$ur[EMdata$party == 0])` of `r sum(EMdata$party==0)`, 
+too, since comparing a percentage amounting to one person to another amounting to two people probably isn't all that meaningful.
+:::
+
 
 # Frequencies, Indicators and Means
 
@@ -394,12 +563,23 @@ $$
 If we call these $Y_1 \ldots Y_5$, what are the values of the indicator variables $1_{\le 0}(Y_1) \ldots 1_{\le 0}(Y_5)$?
 :::
 
+::: {.callout-solution}
+$$
+0,1,0,0,1
+$$
+:::
+
 ::: {#exr-indicators-calc .callout-exercise}
 Calculate the frequency of numbers *less than or equal to 0* three ways:
 by counting, by writing out indicators and taking the mean, and by writing **R** code.
 Are they all the same?  I'm looking for a yes/no answer to this question. I'm hoping for a yes.
 If it's a no and you're not sure why, ask me about it. 
 :::
+
+::: {.callout-solution}
+Yes.
+:::
+
 
 ::: {#exr-indicators-viz .callout-exercise}
 Adapt the **R** code above to visualize this new list of numbers and our new indicator function $1_{\le 0}$.
@@ -408,7 +588,26 @@ check that the plot is, in fact, what you wanted to draw. Sometimes we mistransl
 
 What I'm asking for here is the plot.  
 
-*Hint*. Assuming you've re-defined `Y` in the last exercise, all you've got to do is adjust the call to `annotate` to highlight the correct region.
+*Hint*. Assuming you've re-defined `freq.data` so that `Y` is the new list of numbers,
+all you've got to do is adjust the call to `annotate` to highlight the correct region.
+:::
+
+
+::: {.callout-solution}
+```{r}
+#| echo: true 
+
+freq.data = data.frame(Y = c(3,0,1,2,-1),         #<1> 
+                       X = c(1,1,1,1,1))                                                     
+
+ggplot(freq.data) +
+  geom_point(aes(x=X, y=Y)) +
+  annotate("rect", xmin = -Inf, xmax = Inf, ymax = 0, ymin = -Inf,                            #<2>
+           alpha = .1,fill = "blue")                                                         
+
+```
+1. Here's the re-defined `freq.data`.
+2. This is what changed after that.
 :::
 
 Now that we've got all this down, let's think about the frequency a few things happen in the supreme court. Suppose I want indicators that support for liberal position on civil liberties cases among both parties is greater than or equal to 25%. Denoting percent of support as $Y_i$, these can be written as
@@ -421,8 +620,17 @@ $$
 $$
 
 
-::: {#freq-CLlib .callout-exercise}
+::: {#exr-freq-CLlib .callout-exercise}
 Calculate the frequency that support for the liberal position is greater than or equal to 25%.  What is it?
+:::
+
+::: {.callout-solution}
+It's all but one justice: `r nrow(EMdata) - 1`/`r nrow(EMdata)`=`r mean(EMdata$CLlib >= 25)`.
+If you want code, this'll do it.
+```{r}
+#|echo: true
+mean(EMdata$CLlib >= 25)
+```
 :::
 
 If you want to avoid writing a very small amount of code, go ahead and do it using this plot.
@@ -436,7 +644,7 @@ CLindicator25.plot = ggplot(EMdata) +
   stat_summary(aes(x=party, y=CLlib), geom="pointrange",
               fun.data=mean_sd, fun.args = list(mult=2)) + 
   annotate("rect", xmin = -Inf, xmax = Inf, ymax = Inf, ymin = 25, alpha = .1,fill = "blue") +
-  xlab("Party of Appointing President") + 
+  xlab("Nominating Party") + 
   ylab("%Support for Liberal Position on CL Cases")
 
 CLindicator25.plot
@@ -458,24 +666,63 @@ mean(Y[X==0] >= 50)
 And this code draws a plot to help us interpret it.
 
 ```{r}
-# Visualize Indicator Function
+#| echo: true
 CLindicator50.repub.plot = ggplot(EMdata) +  
   geom_point(aes(x=party, y=CLlib), 
              position=position_jitter(w=.1, h=0), alpha=.4) + 
   stat_summary(aes(x=party, y=CLlib), geom="pointrange", 
                fun.data=mean_sd, fun.args = list(mult=2)) +  
   annotate("rect", xmin = -Inf, xmax = .5, ymax = Inf, ymin = 50, alpha = .1, fill = "blue") +
-  xlab("Party of Appointing President") + 
+  xlab("Nominating Party") + 
   ylab("%Support for Liberal Position on CL Cases")
 
 CLindicator50.repub.plot
 ```
 
+::: {.callout-note}
+### Missing Code
+I've just noticed, while writing the solution, that I accidentally left out the code that generated this plot when I distributed the problem set. I'm sorry about that. I've added it above. If you come across something like that in the future and do want something it looks like I've accidentally left out, please don't hesitate to ask. I'll account for the fact that this code was missing when grading the exercise below.
+:::
+
+
+
 ::: {#exr-indicators-CLlib-viz .callout-exercise}
 What if we want to know how often support is greater than or equal to 50% among 
 justices nominated by Democrats? Calculate this frequency. Then, by adapting the **R** code above,
 draw a plot to help you interpret it. Do you think this frequency is a reasonable summary of the 
-way Democratic-nominated justices vote in civil liberties cases? 
+way Democrat-nominated justices vote in civil liberties cases? 
 With reference to the plot, explain why or why not. What about frequency 
 `r round(100*mean(Y[X==0] >= 50))`% as a summary of the way Republican-nominated justices vote?
+:::
+
+
+::: {.callout-solution}
+
+
+```{r}
+#| echo: true
+CLindicator50.dem.plot = ggplot(EMdata) +  
+  geom_point(aes(x=party, y=CLlib), 
+             position=position_jitter(w=.1, h=0), alpha=.4) + 
+  stat_summary(aes(x=party, y=CLlib), geom="pointrange", 
+               fun.data=mean_sd, fun.args = list(mult=2)) +  
+  annotate("rect", xmin = .5, xmax = Inf, ymax = Inf, ymin = 50, alpha = .1, fill = "blue") + #<1>
+  xlab("Nominating Party") + 
+  ylab("%Support for Liberal Position on CL Cases")
+
+CLindicator50.dem.plot
+
+dem.ge50 = mean(Y[X==1] >= 50)
+dem.ge50
+```
+1. This was what changed. 
+
+The support is greater than or equal to 50% for `r round(100*dem.ge50)`% of Democrat-nominated justices.
+Looking at the plot, I don't think this is a good summary of the way Democrat-nominated justices vote because
+a bunch near but below the threshold but very few near but above it. So this effectively undersells 
+the frequency of support for liberal positions among Democrat-nominated justices: if we'd said, e.g.,
+70% support instead of 50%, we'd have a reasonably similar frequency of `r round(100*mean(Y[X==1] >= 60))`%
+for a much higher rate of support; if we'd said 40% support instead, w'd have a much higher frequency of `r round(100*mean(Y[X==1] >= 40))`% for a reasonably similar rate of support.  
+
+For Republican-nominated justices, this summary is a bit less problematic because the data is less clustered near the threshold. In particular, there is no 'blank spot' where we can shift the threshold to claim a higher/lower level of support with similar frequency as there is for Democrat-nominated justices. 
 :::
