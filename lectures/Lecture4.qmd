@@ -162,7 +162,11 @@ $$
 $$
  
 
-- Again, the only unknown parameter is $\theta$. But there is a difference.
+- Again, the only unknown parameter is $\theta$. And we can plug in our point estimate to estimate this distribution.
+
+$$
+ \hat P_\theta(\hat\theta = t) =  \binom{n}{nt} \frac{\{m(1-\hat\theta)\}!}{\{m(1-\hat\theta)-n(1-t)\}!} \times \frac{(m\hat\theta)!}{(m\hat\theta-nt)!} \times \frac{(m-n)!}{m!} 
+$$
 
 # An Exercise
 
@@ -224,6 +228,8 @@ boot.map
 ```
 
 
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
 
 - The sampling distribution estimate we've used was $\text{Binomial}(n,\hat\theta)$ for $n=`r n`$ and $\hat\theta \approx `r approx(mean(Y))`$.
   - It's the distribution of the proportion heads in `r n` flips of a coin with probability $\hat\theta \approx `r approx(mean(Y))`$ of heads.
@@ -236,19 +242,8 @@ boot.map
   - Each time we run this poll, we call each person in our sample 0,1,2,... times
   - And the number of times we call them is random.
 
-
-
-## The Bootstrap Interpretation
-
-```{r}
-#| fig-asp: .8 
-#| fig-width: 4.5
-#| layout-ncol: 3
-
-pop.map
-sam.map
-boot.map
-```
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
 
 - If we plot our voters on a map, you can see the idea in visual terms.
     - On the left, we have the population. 
@@ -259,6 +254,9 @@ boot.map
   - Because we draw from such a large population, nobody gets called twice.
 - In the bootstrap sample, dots vary in size.
   - Because we draw $n$ people from a sample of size $n$, it's almost impossible not to call somebody twice. 
+
+:::
+::::
 
 ## Bootstrapping
 
@@ -363,39 +361,32 @@ $$
 $$
 
 
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+
 - It's useful to predict turnout among Black voters because they tend to vote differently than non-Black voters.
 - Let's suppose that we're interested in the difference in turnout between Black and non-Black voters.
 - This is a bit reductive, but it's the beginning of the semester, so we're keeping things simple. 
 - We know from the voter file that `r percent(mean(x==1))` of registered voters are Black.
 - Let's suppose we asked the people we polled if they were Black, recording their answer in a *covariate* $X_i$.
-
-## Comparing Black and Non-Black Turnout
-
-$$
-\small{
-\begin{array}{r|rr|rr|r|rr|rrrrr}
-\text{call} &  1  & & 2  & & \dots & `r n`  & & & & & & \\
-\text{question}  & X_1 & Y_1 &  X_2 & Y_2 & \dots &  X_{`r n`} & Y_{`r n`} & \overline{X}_{`r n`} & \overline{Y}_{`r n`} &\frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \text{difference} \\
-\text{outcome}    &  \underset{\textcolor{gray}{x_{`r J[1]`}}}{`r X[1]`} & \underset{\textcolor{gray}{y_{`r J[1]`}}}{`r Y[1]`}
-                  & \underset{\textcolor{gray}{x_{`r J[2]`}}}{`r X[2]`} & \underset{\textcolor{gray}{y_{`r J[2]`}}}{`r Y[2]`}
-                  & \dots 
-                  & \underset{\textcolor{gray}{x_{`r J[n]`}}}{`r X[n]`} & \underset{\textcolor{gray}{y_{`r J[n]`}}}{`r Y[n]`}
-                  & `r approx(mean(X))` & `r approx(mean(Y))` & `r approx(mean(Y[X==0]))` & `r approx(mean(Y[X==1]))` 
-                  & `r approx(mean(Y[X==1])-mean(Y[X==0]))` \\
-\end{array}
-}
-$$
-
-- In our poll, we found that...
+- And we found that...
   - `r sum(X==1)` of the people we called (`r percent(mean(X==1))`) were Black with a turnout rate of `r approx(mean(Y[X==1]))`
-  - `r sum(X==0)` of the people we called (`r percent(mean(X==0))`) were non-Black with a turnout rate of `r approx(mean(Y[X==0]))`   
+  - `r sum(X==0)` of the people we called (`r percent(mean(X==0))`) were non-Black with a turnout rate of `r approx(mean(Y[X==0]))`  
+- So we'd estimate the *difference* to be $`r approx(mean(Y[X==1]))`-`r approx(mean(Y[X==0]))` \approx  `r approx(mean(Y[X==1])- mean(Y[X==0]))`$. 
+  
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+
 - After the election, we found that ...
   - Turnout among Black registered voters was `r approx(mean(y[x==1]))` 
   - Turnout among non-Black registered voters was `r approx(mean(y[x==0]))`.
-- We'd estimate the *difference* to be $`r approx(mean(Y[X==1]))`-`r approx(mean(Y[X==0]))` \approx  `r approx(mean(Y[X==1])- mean(Y[X==0]))`$. 
 - The actual difference was $`r approx(mean(y[x==1]))`-`r approx(mean(y[x==0]))` \approx  `r approx(mean(y[x==1]) - mean(y[x==0]))`$.
-- Depending on what you're doing, that point estimate might be good enough or might not be.
-- It'd be nice to have an interval estimate.
+- Depending on what you're doing, that point estimate of `r approx(mean(Y[X==1])- mean(Y[X==0]))` may or may not have been accurate enough.
+- It would've been nice to have a confidence interval to tell us what kind of precision we could expect.
+- For that, we'll need to estimate the sampling distribution of this difference.
+
+:::
+::::
 
 ## A Table of Imaginary Polls
 
@@ -488,15 +479,9 @@ difference.histogram +
 - But, unlike before, we don't really know the parametric form of its sampling distribution.
 - Or---at least---it'd be a pain to work it out. So we'll use the bootstrap to estimate it.
 
-## A Table of Bootstrap Polls
+## Making a Table of Bootstrap Polls
 
 ```{r}
-#| fig-width: 7
-#| fig-asp: .5
-#| layout-ncol: 2
-#| fig-cap:
-#|  - Our Sample
-#|  - Three Bootstrap Samples---The First Person 'Polled'
 sam$label = 1:n
 set.seed(default.seed)
 boot.ind1 = sample(1:n, n, replace=TRUE)
@@ -524,6 +509,18 @@ state.plot + geom_text(aes(x = long, y = lat, label=label, color=I(color)), alph
 ```
 :::
 ::: {.fragment .current-visible data-fragment-index="0"}
+```{r}
+#| fig-width: 7
+#| fig-asp: .5
+#| layout-ncol: 2
+#| fig-cap:
+#|  - Our Sample
+#|  - Three Bootstrap Samples---The First and Second 'Call'
+state.plot + geom_text(aes(x = long, y = lat, label=label), color=polla, alpha=.7, size=3, data=sam) 
+state.plot + geom_text(aes(x = long, y = lat, label=label, color=I(color)), alpha=1, size=3, data=bootstrap.sam[bootstrap.sam$i %in% c(1,2), ])
+```
+:::
+::: {.fragment .current-visible data-fragment-index="1"}
 ```{r}
 #| fig-width: 7
 #| fig-asp: .5
@@ -559,7 +556,7 @@ $$
 \small{
 \begin{array}{r|rr|rr|r|rr|rrrr}
 \text{`call'} &  1 & &  2 & &  \dots & `r n` & & & & & & \\
-\text{`poll'} &  X_1^* & Y_1^* &  X_2^* & Y_2^*   & \dots &  X^*_{`r n`} & Y^*_{`r n`}  & \overline{X}^* & \overline{Y}^*  &\frac{\sum_{i:X_i^*=0} Y_i}{\sum_{i:X_i^*=0} 1} & \frac{\sum_{i:X_i^*=1} Y_i}{\sum_{i:X_i^*=1} 1} & \text{difference} \\
+\text{`poll'} &  X_1^* & Y_1^* &  X_2^* & Y_2^*   & \dots &  X^*_{`r n`} & Y^*_{`r n`}  & \overline{X}^* & \overline{Y}^*  &\frac{\sum_{i:X_i^*=0} Y_i^*}{\sum_{i:X_i^*=0} 1} & \frac{\sum_{i:X_i^*=1} Y_i^*}{\sum_{i:X_i^*=1} 1} & \text{difference} \\
 \hline
 \pollb   `r I=boot.ind1; 1`
     & \pollb   X_{`r I[1]`}  & \pollb Y_{`r I[1]`} 
@@ -599,7 +596,7 @@ $$
 $$
 
 
-## A Table of Bootstrap Polls
+## A Completed Table of Bootstrap Polls
 
 ```{r}
 #| fig-width: 7
@@ -607,7 +604,7 @@ $$
 #| layout-ncol: 2
 #| fig-cap:
 #|  - Our Sample
-#|  - Three Bootstrap Samples
+#|  - A Few Bootstrap Samples
 
 state.plot + geom_text(aes(x = long, y = lat, label=label), alpha=.7, size=3, data=sam) 
 state.plot + geom_text(aes(x = long, y = lat, label=label, color=I(color)), alpha=.5, size=3, data=bootstrap.sam)
@@ -618,7 +615,7 @@ $$
 \small{
 \begin{array}{r|rr|rr|r|rr|rrrr}
 \text{call} &  1 & & 2 & & \dots & `r n` & & & & & & \\
-\text{poll} &  X_1 & Y_1 &  X_2 & Y_2   & \dots &  X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  &\frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 0} & \text{difference} \\
+\text{poll} &  X_1 & Y_1 &  X_2 & Y_2   & \dots &  X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  &\frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \text{difference} \\
 \hline
 \polla   1   
     & \polla   `r J=J1; Y=y[J]; X=x[J]; X[1]`      & \polla `r Y[1]` 
@@ -636,7 +633,7 @@ $$
 \small{
 \begin{array}{r|rr|rr|r|rr|rrrr}
 \text{`call'} &  1 & &  2 & &  \dots & `r n` & & & & & & \\
-\text{`poll'} &  X_1^* & Y_1^* &  X_2^* & Y_2^*   & \dots &  X^*_{`r n`} & Y^*_{`r n`}  & \overline{X}^* & \overline{Y}^*  &\frac{\sum_{i:X_i^*=0} Y_i}{\sum_{i:X_i^*=0} 1} & \frac{\sum_{i:X_i^*=1} Y_i}{\sum_{i:X_i^*=1} 1} & \text{difference} \\
+\text{`poll'} &  X_1^* & Y_1^* &  X_2^* & Y_2^*   & \dots &  X^*_{`r n`} & Y^*_{`r n`}  & \overline{X}^* & \overline{Y}^*  &\frac{\sum_{i:X_i^*=0} Y_i^*}{\sum_{i:X_i^*=0} 1} & \frac{\sum_{i:X_i^*=1} Y_i^*}{\sum_{i:X_i^*=1} 1} & \text{difference} \\
 \hline
 \pollb   `r I=boot.ind1; 2`
     & \pollb   X_{`r I[1]`}  & \pollb Y_{`r I[1]`} 
@@ -698,6 +695,7 @@ for(rr in 1:10000) {
 
 ```{r}
 #| fig-width: 7
+#| fig-asp: .5 
 #| layout-ncol: 2 
 
 scale_x_dif = scale_x_continuous(limits=c(-.1,.2))
@@ -712,6 +710,14 @@ difference.histogram +
   coord_flip() + scale_x_dif
 
 bootstrap.difference.histogram + 
-  with_annotations(c(difference.samples[1], difference.bootstrap.samples), shade.width=wboot, shade.color='red') + 
+  with_annotations(c(difference.samples[1], difference.bootstrap.samples), highlight.dots=1, shade.width=wboot, shade.color='red') + 
   coord_flip() + scale_x_dif
 ```
+
+- It looks like it works in this case. 
+- But we're no longer able to argue that it should work the way we did before.
+  - For that, we took advantage of our knowledge of our estimator's parametric form.
+  - And we don't have that now.
+- We'll get there. But we'll need a few new tools we'll develop in the coming weeks.
+  - Normal approximation---a parametric form for an *approximation* to our estimator's sampling distribution.
+  - Techniques for variance calculation. This'll help us understand the parameters that go into it.
