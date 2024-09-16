@@ -3,6 +3,8 @@ title: "Lecture 4"
 subtitle: "Calibrating Interval Estimates using the Bootstrap"
 ---
 
+# Review
+
 ## Point and Interval Estimation
 
 {{< include shared-code.qmd >}}
@@ -25,18 +27,19 @@ scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025))
 scale_y = scale_y_continuous(breaks=seq(0, pmf.height,by=.01))
 
 bar.plot = ggplot() + geom_bar(aes(x=meanY.samples, y=after_stat(prop)), alpha=.3) +
-                      geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7) + 
+                      geom_vline(aes(xintercept=mean(y)), color='green', size=2, alpha=.8) + 
                       scale_x + scale_y
                       
 bar.plot + with_annotations(meanY.samples, interval.width=width(meanY.samples), height=pmf.height) + 
            coord_cartesian(xlim=c(.6,.8), ylim=c(0, pmf.height))
 ```
 
-- Last week, we talked about estimating population proportions.
-- Our **point estimates** were proportions of a random sample, drawn with replacement, from the population. 
-- To we'd be, we used **interval estimates**. In particular, *calibrated* interval estimates. Confidence intervals.  
+- In last week, we talked about estimating population frequencies.
+- Our **point estimates** were frequencies in a random sample drawn from the population. 
+- To characterize our uncertaintly, we used **interval estimates**.  
+  - In particular, *calibrated* interval estimates. Confidence intervals.  
   - To get these intervals, we add 'arms' of equal length to our point estimate.
-  - We choose the arm length so that, 95% of the time, the population proportion is within them.
+  - We choose the arm length so that, in 95% of surveys done like ours, the estimation target is within them.
 
 ## Calibration of Interval Estimates
 ```{r}
@@ -56,9 +59,9 @@ bar.plot + with_annotations(meanY.samples, interval.width=width(meanY.samples),
 - But we can use an estimate of the sampling distribution in its place. 
 - If it's a good one, we'll get approximately 95% coverage.
 
-## A Parametric Estimate of the Sampling Distribution
+## A Parametric Estimate of the Sampling Distribution 
 ```{r}
-#| label: sampling-dist-comparison
+#| label: sampling-dist-comparison-binomial
 #| fig-width: 7
 #| fig-asp: .7
 #| layout-ncol: 2 
@@ -69,7 +72,7 @@ bar.plot + with_annotations(meanY.samples, interval.width=width(meanY.samples),
 estimated.dist.samples = rbinom(10000, n, mean(Y)) / n 
 bar.plot.estimated = ggplot() + 
   geom_bar(aes(x=estimated.dist.samples, y=after_stat(prop)), alpha=.3) +
-  geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7) + 
+  geom_vline(aes(xintercept=mean(y)), color='green', size=2, alpha=.7) + 
   scale_x + scale_y 
 
 xx = seq(0,n)
@@ -86,41 +89,117 @@ p.parametric.truth + coord
 p.parametric.estimate + coord
 ```
 
+ - Our estimate was based on knowledge of the **parametric form** of the sampling distribution.
+ - When we sample with replacement, it's **binomial**.
+    - It's the distribution of the frequency of heads in `r n` flips of a coin with probability $\theta$
+    - where $\theta$ is the 'frequency of heads' in the population.
+    - e.g. $\theta\approx `r approx(mean(y))`$ is the proportion of **registered voters** who will vote in our turnout example.
 
-:::: {.panel-tabset}
-### The Formula 
- - It helps to know the **parametric form** of the sampling distribution: it's **binomial**.
-    - It's the distribution of the proportion heads in `r n` flips of a coin with probability $p \approx `r approx(mean(y))`$ of heads.
-    - where $p \approx `r approx(mean(y))`$ is the proportion of **registered voters** who will vote.
+ $$
+ P_\theta(\hat\theta = t) = \binom{n}{nt} \theta^{nt} (1-\theta)^{n(1-t)} \qqtext{ is the probability of the sample frequency being $t$}
+ $$
+
+
 - By *parametric form*, I mean a formula in terms of some parameters. 
   - That tells us what parameters we need to estimate to estimate the sampling distribution.
-  - In this case, the only (unknown) parameter is the probability of heads, $p$.
+  - In this case, the only (unknown) parameter is the $\theta$, the frequency of heads in the population.
+  - We plugged in the sample frequency, $\hat\theta$, to get our estimate of the sampling distribution.
+
+$$
+\hat P_\theta(\hat\theta = t) = \binom{n}{nt} \hat\theta^{nt} (1-\hat\theta)^{n(1-t)} \qqtext{ is our estimate of the same thing}
+$$
 
 
-- To be more precise, the binomial distribution is for the number of heads.
-- And we scale that by $1/`r n`$ to get a distribution for the proportion.
+## Sampling without Replacement
 
-### In R
-
-
-- In `R`, `dbinom(x, n, p)`, calculates this formula where ...
-  - `x` is the number of heads
-  - `n` is the number of flips
-  - `p` is the probability of heads, i.e., the proportion $\bar y$ of registered voters who will vote.
-- To estimate the sampling distribution, we plug in our point estimate $\bar Y$ for $p$.
-  
-### A Thought
-
-- Is this *the actual sampling distribution* of some population you can think of?
-- If it were, you could ...
-
-:::
-
-
-## The Bootstrap Interpretation
 ```{r}
-#| out-height: 300px
+#| label: sampling-dist-comparison-hypergeometric
+#| fig-width: 7
+#| fig-asp: .7
+#| layout-ncol: 2 
+#| fig-cap:
+#| - Our point estimate and its sampling distribution
+#| - Our estimate of its sampling distribution 
+
+mh = 200
+theta = 1/2
+nh = 100
+dist.samples = rhyper(10000, mh*theta, mh*(1-theta), nh)/ nh 
+theta.hat = dist.samples[1]
+estimated.dist.samples = rhyper(10000, round(mh*theta.hat), round(mh*(1-theta.hat)), nh) / nh
+
+pmf.height.hyper = max(dhyper(0:n, mh*theta, mh*(1-theta), nh))
+scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025)) 
+scale_y = scale_y_continuous(breaks=seq(0, pmf.height.hyper,by=.01))
+bar.plot.hyper = ggplot() + geom_bar(aes(x=dist.samples, y=after_stat(prop)), alpha=.3) +
+                      geom_vline(aes(xintercept=theta), color='green', size=1.5, alpha=.7) + 
+                      scale_x + scale_y 
+
+bar.plot.estimated = ggplot() + 
+  geom_bar(aes(x=estimated.dist.samples, y=after_stat(prop)), alpha=.3) +
+  geom_vline(aes(xintercept=theta), color='green', size=2, alpha=.7) + 
+  scale_x + scale_y 
+
+xx = seq(0,nh)
+p.parametric.truth = bar.plot.hyper + 
+  with_annotations(dist.samples, interval.width=width(dist.samples), highlight.dots=1, height=pmf.height) +
+  geom_line(aes(x=xx/nh, y=dhyper(xx, mh*theta, mh*(1-theta), nh)), color='black', alpha=.6) 
+p.parametric.estimate = bar.plot.estimated  +
+  with_annotations(c(theta.hat, estimated.dist.samples), highlight.dots=1, height=pmf.height.hyper,
+                   shade.width=width(estimated.dist.samples), shade.color='red') +
+  geom_line(aes(x=xx/nh, y=dhyper(xx, mh*theta.hat, mh*(1-theta.hat), nh)), color='black') 
+
+coord  = coord_flip(xlim=c(.35,.65), ylim=c(0, pmf.height.hyper))
+p.parametric.truth + coord 
+p.parametric.estimate + coord
+```
+
+- We can do the same thing when we sample *without replacement*.
+- We just have to use a different parametric form: the **hypergeometric distribution**.
+
+$$
+ P_\theta(\hat\theta = t) =  \binom{n}{nt} \frac{\{m(1-\theta)\}!}{\{m(1-\theta)-n(1-t)\}!} \times \frac{(m\theta)!}{(m\theta-nt)!} \times \frac{(m-n)!}{m!} 
+$$
+ 
+
+- Again, the only unknown parameter is $\theta$. But there is a difference.
+
+# An Exercise
+
+## A Survey
+```{webr-r}
+n=6
+Y = c(0,0,0,1,1,1)
+
+ggplot() + geom_point(aes(x=1:6, y=Y))
+```
+
+- We're going to run a survey on Candy Preferences.
+  - I'll draw a sample of size $n=6$, with replacement, from the people in the room.
+  - They'll pick candy and write their selection into a sample table on the board.
+  - In particular, we'll write out whether they chose Chocolate ($Y=1$) or sour candy ($Y=0$).
+- Then we're going to estimate the sampling distribution in a new way.
+  - We'll do it by rolling dice to draw samples of size $n=6$, with replacement, *from our sample*.
+  - We'll each do it five times. 
+  - And each time we'll calculate the frequency of having chosen chocolate within our new sample.
+  - At the end, we'll tally our frequencies on the board. 
+ - This'll give us an estimate of the sampling distribution we get when we *sample from our sample*.
+ - And we can compare it to the binomial estimate we're used to.
+
+## Discussion
+
+```{webr-r}
+ggplot() + geom_area(aes(x=(0:n)/n, y=dbinom(0:n, n, mean(Y))), alpha=.2)
+```
+
+
+
+# The Bootstrap
+
+## The Bootstrap Interpretation in Our Turnout Poll
+```{r}
 #| fig-asp: .8 
+#| fig-width: 4.5
 #| layout-ncol: 3
 
 boot.ind = sample(1:n, n, replace=TRUE)
@@ -145,11 +224,10 @@ boot.map
 ```
 
 
-### Bootstrapping
 
-- The estimated sampling distribution is $\text{Binomial}(n,p)/n$ for $n=`r n`$ and $p=\bar Y\approx `r approx(mean(Y))`$.
-  - It's the distribution of the proportion heads in `r n` flips of a coin with probability $p \approx `r approx(mean(Y))`$ of heads.
-  - where $p \approx `r approx(mean(Y))`$ is the proportion of **voters we've polled** who will vote. 
+- The sampling distribution estimate we've used was $\text{Binomial}(n,\hat\theta)$ for $n=`r n`$ and $\hat\theta \approx `r approx(mean(Y))`$.
+  - It's the distribution of the proportion heads in `r n` flips of a coin with probability $\hat\theta \approx `r approx(mean(Y))`$ of heads.
+  - where $\hat\theta \approx `r approx(mean(Y))`$ is the proportion of **voters we've polled** who will vote. 
 - That is, it's the sampling distribution of a 'poll' of the people in our sample, i.e.
     - roll a 625-sided die 625 times
     - call up the corresponding person in our sample
@@ -163,8 +241,8 @@ boot.map
 ## The Bootstrap Interpretation
 
 ```{r}
-#| out-height: 300px
-#| fig-asp: .8
+#| fig-asp: .8 
+#| fig-width: 4.5
 #| layout-ncol: 3
 
 pop.map
@@ -264,7 +342,8 @@ ggplot() + geom_bar(aes(x=bootstrap.samples, y=after_stat(prop)), alpha=.3, posi
 - We do not need to know the parametric form of our sampling distribution to use it.
 - All we do is re-run our poll *acting as if* our sample were the population.
   - We can do this no matter what we're estimating. 
-  - So let's try it out on some other stuff.
+  - So let's try it out on some stuff where we don't know the parametric form.
+  
   
 ## Comparing Black and Non-Black Turnout
 
@@ -412,7 +491,7 @@ difference.histogram +
 ## A Table of Bootstrap Polls
 
 ```{r}
-#| out-height: 300px
+#| fig-width: 7
 #| fig-asp: .5
 #| layout-ncol: 2
 #| fig-cap:
@@ -434,7 +513,7 @@ bootstrap.sam$i=rep(1:n, 3)
 :::: {.r-stack}
 ::: {.fragment .fade-out data-fragment-index="0"}
 ```{r}
-#| out-height: 300px
+#| fig-width: 7
 #| fig-asp: .5
 #| layout-ncol: 2
 #| fig-cap:
@@ -446,7 +525,7 @@ state.plot + geom_text(aes(x = long, y = lat, label=label, color=I(color)), alph
 :::
 ::: {.fragment .current-visible data-fragment-index="0"}
 ```{r}
-#| out-height: 300px
+#| fig-width: 7
 #| fig-asp: .5
 #| layout-ncol: 2
 #| fig-cap:
@@ -462,7 +541,7 @@ $$
 \small{
 \begin{array}{r|rr|rr|r|rr|rrrr}
 \text{call} &  1 & & 2 & & \dots & `r n` & & & & & & \\
-\text{poll} &  X_1 & Y_1 &  X_2 & Y_2   & \dots &  X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  &\frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \text{difference} \\
+\text{poll} &  X_1 & Y_1 &  X_2 & Y_2   & \dots &  X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  &\frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 0} & \text{difference} \\
 \hline
 \polla   1   
     & \polla   `r J=J1; Y=y[J]; X=x[J]; X[1]`      & \polla `r Y[1]` 
@@ -470,8 +549,8 @@ $$
     & \polla   \dots 
     & \polla                         `r X[n]`      & \polla `r Y[n]`       
     & \polla   `r approx(mean(X))`   & \polla `r approx(mean(Y))`   
-    & \polla   `r approx(mean(Y[X==0]))` & `r approx(mean(Y[X==1]))` 
-    & \polla   `r approx(mean(Y[X==1]) - mean(Y[X==0]))` 
+    & \polla  `r approx(mean(Y[X==0]))` & `r approx(mean(Y[X==1]))` 
+    & \polla `r approx(mean(Y[X==1]) - mean(Y[X==0]))` 
 \end{array}
 }
 $$
@@ -523,7 +602,7 @@ $$
 ## A Table of Bootstrap Polls
 
 ```{r}
-#| out-height: 300px
+#| fig-width: 7
 #| fig-asp: .5
 #| layout-ncol: 2
 #| fig-cap:
@@ -618,8 +697,7 @@ for(rr in 1:10000) {
 ```
 
 ```{r}
-#| out-height: 300px 
-#| fig-asp: .5
+#| fig-width: 7
 #| layout-ncol: 2 
 
 scale_x_dif = scale_x_continuous(limits=c(-.1,.2))
@@ -637,194 +715,3 @@ bootstrap.difference.histogram +
   with_annotations(c(difference.samples[1], difference.bootstrap.samples), shade.width=wboot, shade.color='red') + 
   coord_flip() + scale_x_dif
 ```
-
-- Not bad. Our bootstrap sampling distribution looks a lot like our actual sampling distribution.
-- And, in particular, the intervals widths we calculate are very close: [`r round(w,3)`]{.fg style='color:limegreen'} vs. [`r round(wboot,3)`]{.fg style='color:red'}.
-- And that's really all that matters. **Q**. Why? 
-
-::: fragment
-
-- Because that's what we use to calibrate our interval estimate.
-  - It's our point estimate --- the **black dot** 
-  - With arms wide enough to span 95% of the bootstrap sampling distribution --- the [**red-shaded interval**]{.fg style="color:red"}.
-
-:::
-
-# Why Does The Bootstrap Work?
-
-## Our Binomial-Specific Argument 
-```{r}
-#| out-height: 300px
-#| fig-asp: .6 
-#| layout-ncol: 2
-#| 
-K = 3
-ps = quantile(meanY.samples, c(.025, .5, .975))
-p = mean(y)
-
-density.stability.plot = ggplot() + 
-           geom_line(aes(x=x/n, y=dbinom(x,n,p)), data=expand.grid(p=p, x=0:n), alpha=.5) +
-           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n), linetype='dotted') +
-           geom_line(aes(x=x/n, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
-           geom_pointrange(aes(x=p, xmin=qbinom(.025,n,p)/n, xmax=qbinom(.975,n,p)/n, y=.6*pmf.height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
-           xlim(.6,.8) + guides(color=FALSE) + geom_vline(xintercept=mean(y), color='green', size=2, alpha=.5)
-centered.density.stability.plot = ggplot() + 
-           geom_line(aes(x=x/n-p, y=dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n), alpha=.5) +
-           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n-mean(y)), linetype='dotted') +
-           geom_line(aes(x=x/n-p, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
-           geom_pointrange(aes(x=0, xmin=qbinom(.025,n,p)/n-p, xmax=qbinom(.975,n,p)/n-p, y=.6*pmf.height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
-           xlim(-.1,.1) + guides(color=FALSE)
-
-density.stability.plot
-centered.density.stability.plot
-```
-
-- Last class, we argued that we could estimate the sampling distribution of a proportion well enough.
-- Our argument used the parametric form of the sampling distribution: the binomial distribution.
-  - The width of the binomial probability distribution doesn't change quickly as the probability of heads changes. 
-  - So if we have an ok estimate of the probability of heads,      i.e. the sample proportion $\bar Y$ ...
-  - then we can use that instead of the actual probability of heads, i.e. the population proportion $\bar y$.
-
-$$
-\bar Y \approx \bar y \implies \text{Binomial}(n,\bar Y) \approx \text{Binomial}(n,\bar y)
-$$
-
-- This told us the bootstrap worked because the bootstrap was doing exactly this.
-- That is, the bootstrap sampling distribution *is* Binomial with heads probability $\bar Y$.
-- But the bootstrap still works. Why? Ultimately, it's a subtle question with a lot of different answers.
-- I'm going to give you a simple one. One that's very similar to the one we used last class.
-- Instead of *equivalance* to a parametric estimate, we'll argue using *approximation* by one.
-
-## The Same Idea With Normal Approximation
-```{r}
-#| out-height: 300px
-#| fig-asp: .6 
-#| layout-ncol: 2
-
- 
-K = 3
-ps = quantile(meanY.samples, c(.025, .5, .975))
-dbinomapprox = function(x,n,p) { 
-  dnorm(x+.5, n, sqrt(p*(1-p))) - dnorm(x-.5, n, sqrt(n*p*(1-p)))
-}
-qbinomapprox = function(x,n,p) {
-  qnorm(x,n*p, sqrt(n*p*(1-p)))
-}
-
-density.stability.plot.approx = ggplot() + 
-           geom_line(aes(x=x/n, y=dbinom(x,n,p)), data=expand.grid(p=p, x=0:n), alpha=.5) +
-           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n), linetype='dotted') +
-           geom_line(aes(x=x/n, y=dbinomapprox(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
-           geom_pointrange(aes(x=p, xmin=qbinomapprox(.025,n,p)/n, xmax=qbinom(.975,n,p)/n, y=.6*default.height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
-           xlim(.6,.8) + guides(color=FALSE) + geom_vline(xintercept=mean(y), color='green', size=2, alpha=.5)
-centered.density.stability.plot.approx = ggplot() + 
-           geom_line(aes(x=x/n-p, y=dbinom(x,n,p)), data=expand.grid(p=mean(y), x=0:n), alpha=.5) +
-           geom_vline(aes(xintercept=qbinom(c(.025,.975), n,mean(y))/n-mean(y)), linetype='dotted') +
-           geom_line(aes(x=x/n-p, y=dbinomapprox(x,n,p), color=factor(p)), data=expand.grid(p=ps, x=0:n), alpha=.5) +
-           geom_pointrange(aes(x=0, xmin=qbinomapprox(.025,n,p)/n-p, xmax=qbinom(.975,n,p)/n-p, y=.6*default.height*k/K, color=factor(p)), data=data.frame(p=ps, k=1:K)) +
-           xlim(-.1,.1) + guides(color=FALSE)
-
-density.stability.plot
-centered.density.stability.plot
-```
-
-- Here I've drawn the same diagram as before, but with the binomial distribution replaced by a **normal approximation** to it.
-$$
-f_{\mu,\sigma}(x) = \frac{1}{\sqrt{2\pi}\sigma} e^{-\frac{(x-\mu)^2}{2\sigma^2}} \qfor \mu=p \qand \sigma=\sqrt{p(1-p)/n}
-$$
-
-- This is a good approximation. I can't tell the difference between this diagram and the last one.
-- And we can repeat our argument using the normal distribution's parametric form.
-  - The width of the normal distribution doesn't change too fast as its standard deviation $\sigma$ does.
-  - So if we have a good estimate of that standard deviation, e.g. $\sqrt{p(1-p)/n}$ where $p$ is the sample proportion $\bar Y$ ...
-  - then we can use that instead of the actual standard deviation, which is the same where $p$ is the population proportion $\bar y$.
-- This argument generalizes well. It works, e.g., for the difference in proportions.
-- It works whenever the actual and boostrap sampling distributions ...
-  - are both approximately normal
-  - and have similar standard deviations.
-
-## Approximate Normality for the Difference in Turnout
-
-```{r}
-#| out-height: 300px 
-#| fig-asp: .6
-#| layout-ncol: 2 
-#| fig-cap:
-#| - A histogram of draws from the actual sampling distribution and its normal approximation.
-#| - A histogram of draws from the bootstrap sampling distribution and its normal approximation. 
- 
-xx = seq(-.2,.3, length=1000)
-difference.histogram + 
-  with_annotations(difference.samples, shade.width=width(difference.samples), highlight.dots=1) +
-  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.samples), sd(difference.samples))), color='black') +
-  coord_flip() + scale_x_dif
-
-bootstrap.difference.histogram +
-  with_annotations(c(difference.bootstrap.samples), 
-                   shade.width=width(difference.bootstrap.samples), shade.color='red', highlight.dots=0) +
-  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='black') + 
-  coord_flip() + scale_x_dif
-```
-
-- The actual sampling distribution of the difference in turnout is approximately normal. 
-- So is the bootstrap sampling distribution. And they do have similar standard deviations.
-- Most things involving averages are approximately normal. This is a consequence of the **Central Limit Theorem**.
-- We won't prove that, so you'll have to take my word for it.
-  - There's a very nice proof that doesn't really require any background you don't have.
-  - It uses an argument called *Stein's method* that's very interesting and very widely applicable.
-  - But it'd take us a couple of lectures and we don't have time for that.
-
-## The Same Idea for the Difference in Turnout
-
-```{r}
-#| out-height: 300px
-#| fig-asp: .3
-
- 
-difs   = quantile(difference.samples, c(.025, .5, .975))
-sigmas = quantile(difference.sd.samples, c(.025, .5, .975))
-xgrid = seq(-.2,.3, length=1000)
-height = dnorm(0,0,min(sigmas))
-
-density.stability.plot.dif = ggplot() + 
-           geom_line(aes(x=x, y=dnorm(x,d,s), color=factor(d), linetype=factor(s)), 
-                     data=expand.grid(d=difs, s=sigmas, x=xgrid), alpha=.5) +
-           geom_pointrange(aes(x=d, xmin=qnorm(.025,d,s), xmax=qnorm(.975,d,s), 
-                            y=.6*height*k/9, color=factor(d), linetype=factor(s)), 
-                            data=cbind(expand.grid(s=sigmas, d=difs), data.frame(k=1:9))) +
-           xlim(min(xgrid), max(xgrid)) + guides(color=FALSE, linetype=FALSE) + 
-           geom_vline(xintercept=mean(y[x==1])-mean(y[x==0]), color='green', size=2, alpha=.5)
-
-density.stability.plot.dif
-```
-
-- We can use almost the same picture to argue that the bootstrap works for the difference in turnout.
-- But there is a difference. 
-  - The spread of a proportion's sampling distribution is determined by that proportion.
-  - But the spread of the difference isn't determined by the difference. 
-  - It's determined by the two proportions we're comparing.
-- This means we can't summarize the range of interval estimates we tend to get as we did before.
-- i.e., by drawing a single interval around the [2.5th]{.fg style="color:red"}, [50th]{.fg style="color:green"}, and [97.5th]{.fg style="color:blue"} percentiles of our sampling distribution.
-- Instead, we need to draw intervals at a range of widths. 
-- Above, I've drawn intervals three intervals around each point estimate.
-- One each at the 2.5th, 50th, and 97.5th percentiles of the sampling distribution of interval estimate widths.
-
-## Summary
-
-```{r}
-#| out-height: 300px
-#| fig-asp: .3
-
-
-density.stability.plot.dif
-```
-
-- Most of the time, the bootstrap sampling distribution is a good approximation of the actual sampling distribution.
-- This means we have a general procedure we can use to calibrating interval estimates: we use the bootstrap.
-- The downside is that it's a bit opaque. 
-  - We can use it to approximate our point estimate's sampling distribution *after* we've run our experiment.
-  - But that doesn't tell us what it will look like *before* we've run it.
-- That matters when we're designing experiments. It's important to know what we will and won't be able to learn.
-  - e.g., it's important to make our experiments big enough that we get the precision we need.
-  - This is called *power analysis* and it's a big part of experimental design.
-- Next class, we'll talk about how to use normal approximation to do that.
