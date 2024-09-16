@@ -142,7 +142,7 @@ bar.plot.estimated = ggplot() +
 
 xx = seq(0,nh)
 p.parametric.truth = bar.plot.hyper + 
-  with_annotations(dist.samples, interval.width=width(dist.samples), highlight.dots=1, height=pmf.height) +
+  with_annotations(dist.samples, interval.width=width(dist.samples), highlight.dots=1, height=pmf.height.hyper) +
   geom_line(aes(x=xx/nh, y=dhyper(xx, mh*theta, mh*(1-theta), nh)), color='black', alpha=.6) 
 p.parametric.estimate = bar.plot.estimated  +
   with_annotations(c(theta.hat, estimated.dist.samples), highlight.dots=1, height=pmf.height.hyper,
@@ -178,25 +178,77 @@ Y = c(0,0,0,1,1,1)
 ggplot() + geom_point(aes(x=1:6, y=Y))
 ```
 
+::: {.panel-tabset}
+### The Idea
 - We're going to run a survey on Candy Preferences.
   - I'll draw a sample of size $n=6$, with replacement, from the people in the room.
   - They'll pick candy and write their selection into a sample table on the board.
   - In particular, we'll write out whether they chose Chocolate ($Y=1$) or sour candy ($Y=0$).
 - Then we're going to estimate the sampling distribution in a new way.
-  - We'll do it by rolling dice to draw samples of size $n=6$, with replacement, *from our sample*.
-  - We'll each do it five times. 
-  - And each time we'll calculate the frequency of having chosen chocolate within our new sample.
-  - At the end, we'll tally our frequencies on the board. 
- - This'll give us an estimate of the sampling distribution we get when we *sample from our sample*.
- - And we can compare it to the binomial estimate we're used to.
+  - It'll be a lot like calculating the actual sampling distribution.
+  - We'll draw a sample of size $n$ with replacement, use it to calculate our estimator, and repeat.
+- What's different is the population we're drawing our sample from.
+- We don't have responses from the whole population, so we'll draw it from the closest thing we've got: the sample.
+  - We call this *bootstrapping*. 
+  - The estimate of the sampling distribution we get is called the *bootstrap sampling distribution*.
+
+### Instructions
+
+- I've drawn the sample we got from our survey on the board.
+- Here's how you draw a sample from the bootstrap sampling distribution of our point estimator.
+  1. Roll your die 6 times to draw a sample of size $n=6$ *from the sample*.
+  2. Calculate the sample frequency. That's one draw from the bootstrap sampling distribution. Write it down.
+- If we all do this 5 times, we'll have a bunch of draws.
+- We'll tally them up on the board and visualize the result as a histogram.
+- A histogram of draws from the *bootstrap sampling distribution*.
+
+:::
+
+## Simulating a Few More Draws
+
+```{webr-r}
+draws = 1:10000 |> map_vec(function(.) { 
+  Jstar = sample(1:n, n, replace=TRUE)
+  Ystar = Y[Jstar]
+  mean(Ystar)
+})
+computer.tally = as.data.frame(table(draws)) |>
+  rename(theta.hat=draws, count=Freq)
+```
 
 ## Discussion
 
 ```{webr-r}
-ggplot() + geom_area(aes(x=(0:n)/n, y=dbinom(0:n, n, mean(Y))), alpha=.2)
+hand.tally = data.frame(theta.hat = c(0,1,2,3,4,5,6), 
+                        count     = c(0,0,0,1,0,0,0))
+
+tally=computer.tally
+ggplot() + geom_col(aes(x=(0:n)/n, y=dbinom(0:n, n, mean(Y))), color='blue', fill='blue', linewidth=.1, alpha=.2) + 
+           geom_col(aes(x=(0:n)/n, y=tally$count/sum(tally$count)), fill='red', color='red', linewidth=.1, alpha=.2)
 ```
 
+::: {.panel-tabset}
+### Success!
+- If all has gone to plan, [our histogram]{.fg style="color:red"} looks a lot like our [binomial estimate]{.fg style="color:blue"} of the sampling distribition.
+  - If we substitute in a computer tally of 10,000 draws from the bootstrap sampling distribution, we nail it.
+  - It looks like the bootstrap sampling distribution *is* the binomial estimate. 
+- **Q**. It is. How do you know?
 
+### A Big Hint.
+  - We know the distribution of the frequency of 1s in a sample of size $n$ drawn with replacement ...
+    - ... from a population $y_1\ldots y_m$ of binary responses with frequency $\theta$.
+  - It's $\text{Binomial}(n, \theta)$. To estimate it, we plug in $\hat\theta$, the frequency of 1s in our sample. 
+  - So our Binomial estimate is the distribution of the frequency of 1s in a sample of size $n$ drawn with replacement ...
+    - ... from 'a population' $Y_1 \ldots Y_n$ with frequency $\hat\theta$.
+  - What's a sample from the bootstrap sampling distribution?
+
+### Answer.
+
+- Each bootstrap sample is the frequency of 1s in a sample of size $n$ drawn with replacement ...
+  - ... from  'a population' $Y_1 \ldots Y_n$ in which the frequency of 1s is $\hat\theta$,  the frequency of 1s in our sample. 
+  - Because that 'population' is our sample.
+
+:::
 
 # The Bootstrap
 
