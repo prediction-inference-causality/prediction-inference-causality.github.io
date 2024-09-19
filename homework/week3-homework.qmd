@@ -1,0 +1,221 @@
+---
+title: "Week 3 Homework"
+format: html
+---
+```{r}
+#| echo: false
+library(ggplot2)
+library(purrr)
+library(tidyverse)
+library(scales)
+theme_set(theme_minimal())
+```
+
+# Understanding Variance
+In [lecture 3](https://qtm285-1.github.io/assets/lectures/Lecture3#/marginalization), we've covered the example of sampling **without** replacement by calling the voters in the election. Now imagine we only handle the case when $n=2$ (only 2 calls are made). Let $m_1$ be the number of times that the voter said "Yes, I will vote" in the call, and $m$ be the total number of calls. 
+We know that for binary variables:
+$$
+E[Y_i] = P(Y_i = 1)
+$$
+$$
+E[Y_i^2] = \sum_{y_i = 0}^{1}\sum_{y_j = 0}^{1} y_iy_j\cdot P(Y_i=y_i,Y_j=y_j)= P(Y_i = 1, Y_j = 1)
+$$
+
+The equation above stands because at least a $y$ would zero out the entire expression unless both $y_i, y_j = 1$. By our previous definition of $m_1$ and $m$, we see:
+$$
+P(Y_i = 1) = \frac{m_1}{m}
+$$
+$$
+P(Y_i = 1, Y_j = 1) = \frac{m_1(m_1-1)}{m(m-1)}
+$$
+
+::: {#exr-variance-explanation .callout-exercise}
+Using the expressions lined out above, explain why the following expression is our variance:
+$$
+\frac{m_1(m_1-1)}{m(m-1)}-\frac{m_1^2}{m^2}
+$$
+
+*Hint 1*. Use the "excess form" that we talked about in class. How would you calculate the expectation of a binary random variable, that $Y_i$ and $Y_j$ are binary in this case?
+:::
+
+# Consistency and Bias
+So far we have covered concepts for an estimator being consistent or biased. Now consider the following estimator:
+$$
+\tilde{Y_i} = \frac{1}{n+1}\cdot \{\frac{1}{2}+\sum_{i=1}^{n}Y_i\}
+$$
+
+This is a specific example of a more general case where we integrate the information from a previous study. In this general case, we assume we have $n_{pseudo}$ observations from a prior study, which estimated a mean of $\theta_{prior}$. We treat these parameters as deterministic. The generalized estimator can be written as follows:
+$$
+\underset{\text{general}}{\tilde{Y_i}}  = \frac{1}{n+n_{pseudo}}\cdot \{n_{pseudo}\theta_{prior}+\sum_{i=1}^{n}Y_i\}
+$$
+
+In this more generalized fomulation, new information, $\theta_{pseudo}$ and $n_{prior}$ is incorporated. The specific example we started with can be seen as a special case of this general form, where $n_{pseudo} = 1$ and $\theta_{prior} = \frac{1}{2}$.
+
+::: {#exr-consistency_example .callout-exercise}
+Calculate the expectations of the two estimators above, $\underset{\text{general}}{\tilde{Y_i}}$ and $\tilde{Y_i}$. What can we infer from the results you get about their consistencies?
+:::
+
+Now lets's try to get a sense of what consistency does and doesn't look like. The plot below shows the sampling distributions of three estimators at three sample sizes. 
+The vertical line indicates the mean of the sampling distribution. 
+
+```{r}
+#| echo: false
+#| out-height: 4in
+set.seed(1234)
+error <- 2 * rnorm(100000)
+bias <- list(a = function(n) 0, b = function(n) sqrt(10) / sqrt(n), c = function(n) 1)
+
+plotdata <- expand_grid(estimator = names(bias), n = c(10, 40, 160)) %>%
+    pmap(function(estimator, n) {
+        thebias <- bias[[estimator]](n)
+        data.frame(estimator = estimator, n = n, muhat = thebias + error / sqrt(n))
+    }) |>
+    bind_rows()
+summaries <- plotdata |>
+    group_by(n, estimator) |>
+    summarize(mean = mean(muhat))
+
+breaks <- seq(-4, 4, by = 2) / 2
+signs <- case_when(
+    breaks < 0 ~ "-",
+    breaks == 0 ~ "",
+    breaks > 0 ~ "+"
+)
+offsets <- case_when(
+    breaks != 0 ~ sprintf("%d", abs(breaks)),
+    breaks == 0 ~ ""
+)
+labels.abstract <- sprintf("μ %s %s", signs, offsets)
+
+ggplot(plotdata) +
+    geom_histogram(aes(x = muhat, y = after_stat(density)), bins = 100, alpha = .4) +
+    geom_vline(aes(xintercept = mean), data = summaries) +
+    scale_x_continuous(breaks = breaks, labels = labels.abstract, limits = range(breaks)) +
+    theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 1)) +
+    xlab("") +
+    ylab("") +
+    facet_grid(n ~ estimator, labeller = labeller(n = label_both, estimator = label_both))
+```
+
+::: { #exr-consistency_plot  .callout-exercise}
+Consider another estimator of our sample mean $\bar{Y_i}$, when we observe a sample with replacement $Y_1 \ldots Y_n$ from a population with mean $\mu$ and standard deviation $\sigma$:
+$$
+\bar{Y_i} = \frac{1}{n}\sum_{i=1}^n Y_i
+$$ 
+
+Which of the visualizations corresponds to the more generalized estimator, $\underset{\text{general}}{\tilde{Y_i}}$, where we incorporate more information, and which of them correponds to the sample mean estimator, $\bar{Y_i}$? Are they consistent?
+:::
+
+# Convergence in Probability
+
+Now let's think about another notion of convergence. If an estimator's sampling distribution
+ends up in the right location ($\text{bias} \to 0$) with arbitrarily little spread ($\text{variance} \to 0$),
+then it makes sense that \emph{any draw from it} will be close to the estimation target $\mu$. 
+
+Recall that you can visualize your estimator as a single dot drawn
+from its sampling distribution. Like the black one below. And if you want to think of what happens if you were to repeat your survey 100 times, you can visualize the results by plotting 100 dots. Like the purple ones.
+```{r}
+K <- 100
+plotdata$height <- runif(nrow(plotdata), 0, 1.2)
+dotplotdata <- plotdata |> filter(n == 40 & estimator == "b")
+dotplotsummaries <- summaries |> filter(n == 40 & estimator == "b")
+
+ggplot(dotplotdata) +
+    geom_histogram(aes(x = muhat, y = after_stat(density)), bins = 100, alpha = .4) +
+    geom_vline(aes(xintercept = mean), data = dotplotsummaries) +
+    geom_point(aes(x = muhat, y = height),
+        alpha = .2,
+        color = "purple", data = dotplotdata[2:K, ]
+    ) +
+    geom_point(aes(x = muhat, y = height),
+        alpha = 1,
+        color = "black", data = dotplotdata[1, ]
+    ) +
+    scale_x_continuous(breaks = breaks, labels = labels.abstract, limits = range(breaks)) +
+    theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 1)) +
+    xlab("") +
+    ylab("")
+
+```
+
+
+We formalize this idea by talking about \emph{convergence in probability}. We say an estimator $\hat\mu$ converges in probability to $\mu$ if, for anyone's idea of `sufficiently close', the probability that $\hat\mu$ is sufficiently close to $\mu$ goes to one. Or equivalently, the probability that it isn't sufficiently close goes to zero.
+$$
+P(\lvert\hat\mu - \mu\rvert \ge \epsilon) \to 0 \qqtext{ as } n \to \infty
+$$
+
+Convergence in mean square *implies* convergence in probability. Let's see why. We'll use *Markov's inequality*.
+
+## Markov's Inequality
+
+Markov's inequality says that the probability the absolute value of a random variable $X$ 
+exceeds some threshold $t$ is bounded by the ratio of its expectated absolute value and $t$, i.e.,
+$$ P(X \geq t) \leq \frac{E[X]}{t}$$
+Often, instead of using this to bound the random variable we're interested in directly,
+e.g. $X=\lvert\hat\mu - \mu\rvert$, we use it to bound its square. $X \ge t$ if and only if $X^2 \ge t^2$, so the probability that $X \ge t$ is the same as the probability that $X^2 \ge t^2$. Applying Markov's inequality to the random variable $X^2$ gives us a bound in terms of $X$'s mean square.
+$$
+P(X \ge t) = P(X^2 \ge t^2) \leq \frac{E[X^2]}{t^2} \qqtext{ e.g.} 
+P(\lvert\hat\mu - \mu\rvert \ge \epsilon) = P((\hat\mu - \mu)^2 \ge \epsilon^2) \leq \frac{E[(\hat\mu - \mu)^2]}{\epsilon^2}
+$$
+
+This tells us, in terms of the mean squared error of $\hat\mu$, how likely it is that $\hat\mu$ is far from $\mu$. And, in particular, it tells us that if the mean squared error goes to zero, then the probability that $\hat\mu$ is any distance $\epsilon$ away from $\mu$ goes to zero. 
+
+Now we're going to do two things. First, we're going to prove Markov's inequality. It's good practice working with expectations and probabilities. Second, we're going to look at what Markov's inequality tells us about
+how close $\hat\mu$ is to $\mu$, i.e., we're going to use it to calculate the coverage of an interval estimate.
+
+First we define the following two functions, $f$ and $g$, with $t, x\ge 0$.
+$$
+f(x,t) = \frac{x}{t}
+$$
+$$
+g(x,t) = 1_{\ge t}(x) = \begin{cases}
+1 & \text{ if } x \ge t \\
+0 & \text{ otherwise }
+\end{cases}
+$$
+
+::: { #exr-markov-plot  .callout-exercise}
+We pick $t=3$, plot the two functions above on the same coordinate with $x$ on the x axis. Based on the graph, what can we infer about the relationship between $f(x,t)$ and $g(x,t)$?
+:::
+
+::: { #exr-markov-plot  .callout-exercise}
+It turns out that your inference is correct! For all $t, x\ge 0$, $\frac{x}{t} \ge 1_{\ge t}(x)$. Using the fact to prove *Markov's inequality*.
+
+*Hint 1*. $E[Y]\ge E[Z]$ if $Y\ge Z$
+
+*Hint 2*. Knowing that $\frac{x}{t} \ge 1_{\ge t}(x)$, we can infer that $\frac{X}{t} \ge 1_{\ge t}(X)$ for $X$ being a non-negative random variable.
+:::
+
+## Markov's Inequality and Interval Estimation
+
+So far, when we've calculated the coverage of an interval estimate in terms of its mean and variance, we've relied on normal approximation. That is, we've been using a different formula for 
+$P(\lvert\hat\mu - \mu\rvert \ge \epsilon)$ based on the idea that $\hat\mu-\mu$ has approximately the same distribution as a normally-distributed random variable $Z$ with the same mean---zero---and variance $\sigma_{\hat\mu}^2=Var[\hat\mu-\mu]$. We can use this approximation, in combination with our knowlege of the probability density of the normal approximation, to get a bound on the probability that $\lvert\hat\mu - \mu\rvert \ge \epsilon$.
+
+$$
+P(\abs{\hat\mu - \mu} \ge \epsilon) \approx P(\abs{Z} \ge \epsilon) = 1-P(\abs{Z} < \epsilon) = 1- \int_{-\epsilon}^{\epsilon} f_{\sigma_{\hat\mu}}(z) dz \qfor f_{\sigma}(z) = \frac{1}{\sqrt{2\pi}\sigma} e^{-z^2/2\sigma_{\hat\mu}^2}
+$$
+
+The reason we're always talking about intervals of the form $\hat\mu \pm 2 \sigma_{\hat\mu}$ is that, using this approximation, that yields 95% coverage. That is, $P(\abs{Z} < 2 \sigma_{\hat\mu}) \approx .95$. To see why we tend to use normal approximation instead of Markov's inequality, let's see what Markov's inequality tell us about how close an estimator is to it's estimation and about the coverage of this interval.
+
+::: {#exr-markov-interval  .callout-exercise}
+To see what Markov's inequality can tell us, first we can apply the property to the squared deviation from the mean:
+$$
+X = \{\hat{\theta}-E[\hat{\theta}]\}^2
+$$
+$$
+P(X\ge t)\le \frac{E[\{\hat{\theta}-E[\hat{\theta}]\}^2]}{t} = \frac{Var(\hat{\theta})}{t}
+$$
+
+When we do this, what does Markov's inequality tell us about how close our estimator to its mean. What is the probability that it's within 1, 2, 3 standard deviations?
+:::
+
+:::{#exr-markov-coverage  .callout-exercise}
+We can use this to calibrate an interval. What does it tell us about the probability of the interval, $\hat{\theta} \pm 2 \sigma_{\hat{\theta}}$ contains the $E[\hat{\theta}]$. How wide do we need to make the interval width to make the interval width $w$ so that $\hat{\theta} \pm \frac{w}{2}$ has 95% coverage?
+
+*Hint*. $\hat{\theta} \pm \frac{w}{2}$ contains $\theta$ if and only if $|\hat{\theta}-\theta| \le \frac{w}{2}$. Therefore, $P(\hat{\theta} \pm \frac{w}{2} \text{ contains } \theta) = P(|\hat{\theta}-\theta| \le \frac{w}{2})$.
+:::
+
+## Extra Credit (Markov's Inequality Continued)
+:::{#exr-markov-compare  .callout-exercise}
+You may have noticed that the interval we get from Markov's inequality is different from the one we get from using normal approximation.
+:::
