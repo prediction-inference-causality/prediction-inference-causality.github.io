@@ -1,6 +1,6 @@
 # Lecture 1 
 - Seemed good. A little long. Maybe 10-15 min. 
-- Cut some later stuff? Maybe make zooming easier w/ JS plot?
+- Cut some later stuff? 
 
 # Lab 1
 - Also good. Also long, even eliding all programming content and discussion stuff.  
@@ -10,4 +10,15 @@
   - Blow through randomization the sampling super quick    -1+small
  - Give the population more to do? Maybe kick off discussion?
 
-# Lecture 2
+# Lab 3
+
+- Too long. Swap w/ the Bootstrap lecture to get a normal class period. 
+
+# Bootstrap Lecture
+
+- Short. Swap works.
+- Go into a little more detail on the comparing two means stuff.
+  - Perhaps add a picture, e.g. a version of the map colored by race.
+  - Ideally, you'd have actual county info for voters so this could be accurate.
+
+
