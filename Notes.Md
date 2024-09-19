@@ -17,8 +17,9 @@
 # Bootstrap Lecture
 
 - Short. Swap works.
-- Go into a little more detail on the comparing two means stuff.
+- Go into a little more detail on the comparing two proportions stuff.
   - Perhaps add a picture, e.g. a version of the map colored by race.
   - Ideally, you'd have actual county info for voters so this could be accurate.
+- Or swap it out for estimating a mean when outcomes aren't binary. Simpler? Applies to HW. Probably a good idea.
 
 
