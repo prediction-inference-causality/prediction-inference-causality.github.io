@@ -25,55 +25,298 @@ $$
 \DeclareMathOperator{\Var}{V}
 \DeclareMathOperator{\hVar}{\widehat{V}}
 \DeclareMathOperator{\bias}{bias}
+\newcommand{\thetaprior}{\theta^{\text{prior}}}
+\newcommand{\nprior}{n^{\text{prior}}}
+\newcommand{\yprior}{y^{\text{prior}}}
 $$
 :::
 
-# Understanding Variance
-In [lecture 3](https://qtm285-1.github.io/assets/lectures/Lecture3#/marginalization), we've covered the example of sampling **without** replacement by calling the voters in the election. Now imagine we only handle the case when $n=2$ (only 2 calls are made). Let $m_1$ be the number of times that the voter said "Yes, I will vote" in the call, and $m$ be the total number of calls. 
-We know that for binary variables:
+# Variance when Sampling Without Replacement
+
+In [Lecture 3](https://qtm285-1.github.io/assets/lectures/Lecture3#/marginalization), 
+we talked about the distribution of a sample proportion when we sample *without replacement*. This is, admittedly, a long read. But one thing we can take away from it---and I'll just tell here  rather than asking you to work it out --- is the probability distribution of $Y_1$ when we make a single call and the joint distribution of $Y_1, Y_2$ when we make two calls. Those are just special cases of the 'Partially Marginalized' distribution described in Lecture 3. Letting $m_0$ and $m_1$ be the number of zeros and ones in our binary population $y_1 \ldots y_m$, these are the distributions.
+
+:::: columns
+::: {.column width=50%}
+$p$ | $Y_1$ 
+--|--
+$\frac{m_0}{m}$ | 0
+$\frac{m_1}{m}$   | 1 
+
+:::
+::: {.column width=50%}
+
+$p$ | $Y_1$ | $Y_2$
+--|--|--
+$\frac{m_0(m_0-1)}{m(m-1)}$  | 0 | 0
+$\frac{m_0m_1}{m(m-1)}$      | 0 | 1
+$\frac{m_0m_1}{m(m-1)}$      | 1 | 0
+$\frac{m_1(m_1-1)}{m(m-1)}$  | 1 | 1
+
+:::
+::::
+
+You can go ahead and cross out the $Y_1$ in the first table and write in $Y_i$,
+because this is the marginal distribution of every individual observation $Y_i$ when we draw a sample
+without replacement of *any size* $n$. You can cross out $Y_1$ and $Y_2$ in the second table and write in $Y_i$ and $Y_j$ for the same reason: it's the joint distribution of any pair $(Y_i, Y_j)$ for $i\neq j$ when we draw a sample without replacement of any size $n$. This makes them a lot more useful.
+ 
+To justify this, we can do a simple two-step thought experiment. We'll think of drawing a sample without replacement as the process of shuffling a deck of cards labeled 1 ... m,  then drawing the first $n$ cards off the top. Letting $J_1$ be what the first card says, $J_2$ what the second one says, and so out, our sample $Y_1 \ldots Y_n$ is $y_{J_1}, y_{J_2}, \ldots y_{J_n}$. Here's our argument.
+
+1. No matter how many cards we're going to draw, the distribution of the first card is the same. Same with the first two cards. Thus, what we've written above is the marginal distribution of $Y_1$ and the joint distribution of  $(Y_1,Y_2)$ when we make any number of calls $n$.
+
+2. If we'd pulled off the first $n$ cards and then counted from the bottom instead of the top, we'd get the same distribution. They're shuffled, after all. So the marginal distributions of $Y_1$ and $Y_n$ are the same and so are the joint distributions of $(Y_1,Y_2)$ and $(Y_n,Y_{n-1})$. The same thing would be true if we went through our top $n$ cards in any order. Thus, the marginal distributions of $Y_i$ are the same for all $i$ and the joint distributions of $(Y_i,Y_j)$ are the same for all $i \neq j $. 
+
+Now let's use this to calculate the variance of our sample proportion $\hat\theta=\frac{1}{n}\sum_{i=1}^{n}Y_i$.
+Most of the work is already done on [this slide](https://qtm285-1.github.io/assets/lectures/Lecture5.html#/the-standard-deviation-of-a-proportion-1) from Lecture 5.^[Look at the 'Sampling without Replacement' tab.]
+In that calculation, I used the following identity. It's colored blue there to highlight it.
+
 $$
-\E[Y_i] = P(Y_i = 1)
-$$
-$$
-\E[Y_i^2] = \sum_{y_i = 0}^{1}\sum_{y_j = 0}^{1} y_iy_j\cdot P(Y_i=y_i,Y_j=y_j)= P(Y_i = 1, Y_j = 1)
+\E\qty[ (Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] = -\frac{\theta(1-\theta)}{m-1} \qfor i\neq j
 $$
 
-The equation above stands because at least a $y$ would zero out the entire expression unless both $y_i, y_j = 1$. By our previous definition of $m_1$ and $m$, we see:
-$$
-P(Y_i = 1) = \frac{m_1}{m}
-$$
-$$
-P(Y_i = 1, Y_j = 1) = \frac{m_1(m_1-1)}{m(m-1)}
+But I didn't actually show that it's true. That's what we're going to do now. Let's start by rewriting this expression 
+so it's a little easier to work with. Like this.
+
+$$ 
+\E\qty[ (Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] = \E[Y_i Y_j] - \E[Y_i]\E[Y_j]
 $$
 
-::: {#exr-variance-explanation .callout-exercise}
-Using the expressions lined out above, explain why the following expression is our variance:
-$$
-\frac{m_1(m_1-1)}{m(m-1)}-\frac{m_1^2}{m^2}
-$$
+::: {.callout-tip collapse="true"}
+### Proof of Equivalence
+To show that these two expressions are equivalent, 
+we 'multiply out'  $(Y_i - \E[Y_i])(Y_j - \E[Y_j])$ to
+get four terms, distribute the expectation and pull out constants, 
+and cancel some equal-and-opposite terms in the result.
 
-*Hint 1*. Use the "excess form" that we talked about in class. How would you calculate the expectation of a binary random variable, that $Y_i$ and $Y_j$ are binary in this case?
+$$
+\begin{aligned}
+\E\qty[ (Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] 
+&= \E\qty[ Y_i Y_j - Y_i\E[Y_j] - Y_j\E[Y_i] + \E[Y_i]\E[Y_j] ] \\
+&= \E\qty[ Y_i Y_j ] - \E\qty[ Y_i\E[Y_j] ] - \E\qty[ Y_j\E[Y_i] ] + \E\qty[ \E[Y_i]\E[Y_j] ] \\
+&= \E\qty[ Y_i Y_j ] - \E[Y_i]\E[Y_j] - \E[Y_j]\E[Y_i] + \E[Y_i]\E[Y_j] \\
+&= \E\qty[ Y_i Y_j ] - \E[Y_i]\E[Y_j]
+\end{aligned}
+$$
 :::
 
-# Consistency and Bias
-So far we have covered concepts for an estimator being consistent or biased. Now consider the following estimator:
+What's nice about this second form is that using our tables above to calculate these expectations is easy.
+We actually have a row for $Y_i$ in our marginal table and can easily add a row to our joint table for $Y_i Y_j$.
+I'd like to ask you to calculate the thing, but since it'd probably take a litte arithmetic to manipulate what you
+get into the form $-\frac{\theta(1-\theta)}{m-1}$ we used in lecture, I'm going to ask you to verify my calculation
+instead.
+
+::: {#exr-covariance-with-replacement}
+
+Using this equivalent form, and the tables above, show that the following identity is true.
 $$
-\tilde{Y_i} = \frac{1}{n+1}\cdot \{\frac{1}{2}+\sum_{i=1}^{n}Y_i\}
+\E\qty[ (Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] = \frac{m_1(m_1-1)}{m(m-1)}-\frac{m_1^2}{m^2}
 $$
 
-This is a specific example of a more general case where we integrate the information from a previous study. In this general case, we assume we have $n_{pseudo}$ observations from a prior study, which estimated a mean of $\theta_{prior}$. We treat these parameters as deterministic. The generalized estimator can be written as follows:
-$$
-\underset{\text{general}}{\tilde{Y_i}}  = \frac{1}{n+n_{pseudo}}\cdot \{n_{pseudo}\theta_{prior}+\sum_{i=1}^{n}Y_i\}
-$$
-
-In this more generalized fomulation, new information, $\theta_{pseudo}$ and $n_{prior}$ is incorporated. The specific example we started with, $\tilde{Y_i}$, can be seen as a special case of this general form, where $n_{pseudo} = 1$ and $\theta_{prior} = \frac{1}{2}$.
-
-::: {#exr-consistency_example .callout-exercise}
-Calculate the expectations of the two estimators above, $\underset{\text{general}}{\tilde{Y_i}}$ and $\tilde{Y_i}$. What can we infer from the results you get about their consistencies?
 :::
 
-Now lets's try to get a sense of what consistency does and doesn't look like. The plot below shows the sampling distributions of three estimators at three sample sizes. 
-The vertical line indicates the mean of the sampling distribution. 
+Simplifying this into the form $-\frac{\theta(1-\theta)}{m-1}$ is a little bit of work, but not too bad.
+As usual, the trick is to give your two terms a common denominator and see what cancels. I'll 'fold' this
+so if you'd like to try it on your own, you can do so. If you just want to read it, expand the box by clicking on it
+
+::: {.callout-tip collapse="true"}
+## Simplifying our Cross-Term
+$$
+\begin{aligned}
+ \frac{m_1(m_1-1)}{m(m-1)}-\frac{m_1^2}{m^2} 
+ &= \frac{m_1(m_1-1)m - m_1^2(m-1)}{m^2(m-1)} && \text{ getting a common denominator} \\
+ &= \frac{ (m_1^2 - m_1m) - (m_1^2 m - m_1^2)}{m^2(m-1)} && \text{ expanding products} \\
+ &= \frac{ m_1^2 - m_1m}{m^2(m-1)} && \text{ canceling equal and opposite terms} \\
+ &= \frac{ m_1(m_1 - m)}{m^2(m-1)} && \text{ pulling out common factors} \\
+ &= \frac{m_1}{m} \cdot \frac{m_1-m}{m} \times \frac{1}{m-1} && \text{ grouping factors in the numerator and denominator} \\
+ &= \theta (\theta - 1) \times \frac{1}{m-1} && \text{ for } \  \theta = \frac{m_1}{m} \\
+ &= -\frac{\theta(1-\theta)}{m-1} && \text{ as desired }
+ \end{aligned}
+$$
+:::
+
+# Bias and Consistency 
+
+## Using Prior Information 
+So far, we've exclusively talked about *unbiased estimators*. That is, estimators with the property that 
+their expected value is equal to the estimation target. 
+$$ 
+\hat\theta \qqtext{ is called unbiased if } \E[\hat{\theta}] = \theta. 
+$$ 
+We say an estimator is *biased* if this isn't true. To get a sense of what that means, let's consider a simple
+example of a biased estimator. 
+$$
+\tilde{Y}_1 = \frac{1}{n+1}\cdot \{\frac{1}{2} + \sum_{i=1}^{n}Y_i\}
+$$
+
+::: {#exr-bias-1 .callout-exercise}
+Calculate the expected value of the estimator $\hat\theta =\tilde{Y}_1$. 
+Then calculate its bias $\E[\hat\theta] - \theta$ and its 
+standard deviation $\sqrt{\Var[\hat\theta]}$. Report all three.
+:::
+
+This is a specific example of a more general estimator that integrates information from a prior study. Maybe a real study or maybe a study we're imagining. Suppose we have $\nprior$ observations $\yprior_1 \ldots \yprior_{\nprior}$ from this study^[Sometimes we call these *pseudo-observations*. This particular interpretation, in which we think of them as coming from a prior study, can be used to derive this estimator from Bayesian principles.]
+$$
+\thetaprior = \frac{1}{\nprior}\sum_{i=1}^{\nprior}\yprior_i. 
+$$ 
+
+Then averaging all our observations --- from our current study and this prior one --- gives us the following estimator.
+
+$$
+\begin{aligned}
+\tilde{Y}_{\nprior}
+&= \frac{1}{\nprior + n} \qty{\sum_{i=1}^{\nprior}\yprior_i + \sum_{i=1}^{n} Y_i} \\
+&= \frac{1}{\nprior + n}  \qty{ \nprior\thetaprior + n\bar Y }
+\end{aligned}
+$$
+
+We treat these prior observations, and therefore their mean $\thetaprior$, as deterministic. 
+The simple example we started with, $\tilde{Y}_1$, is a special case where we have a single prior observation $\yprior_1 = \frac{1}{2}$.
+
+::: {#exr-bias-general .callout-exercise}
+Repeat @exr-bias-1 for $\tilde{Y}_{\nprior}$. 
+:::
+
+
+## Visualizating the Impact of Prior Information
+
+Lets's try to get a sense of how using prior information like this
+impacts our inference. We'll do it visually. The plot below shows the sampling distributions of three estimators of a population mean $\theta$ at three sample sizes $n$: 10, 40, and 160. These are the estimators.
+
+1. The estimator $\hat\theta_1 = \tilde{Y}_{\nprior}$ for $\thetaprior=3/4$ and $\nprior=10$ prior observations.
+2. The estimator $\hat\theta_2 = \tilde{Y}_{n}$ for $\thetaprior=3/4$ and $\nprior=n$ prior observations---the bigger the sample, the more prior observations we incorporate.
+3. The sample mean, $\hat\theta_3 = \bar Y$.
+
+As usual, the estimation target $\theta$ is indicated by a green line, the sampling distribution's mean by a solid blue line, and its mean plus and minus two standard deviations by dotted blue lines. In our first exercise, we'll match estimators to pictures.
+
+::: {#exr-bias-visualize .callout-exercise}
+What is the correspondence between $\theta_1$, $\theta_2$, and $\theta_3$ described above 
+and 'estimator a', 'estimator b', and 'estimator c' from the plot?
+:::
+
+::: {#fig-3-sampling-distributions}
+```{r}
+#| echo: false
+#| out-height: 4in
+set.seed(1234)
+n.prior = 10
+theta.prior = .75
+theta = .5
+
+error = 2 * rnorm(100000)
+bias = list(a = function(n) 0, 
+            b = function(n) n.prior * (theta.prior - theta) / (n.prior + n), 
+            c = function(n) n * (theta.prior-theta) / (n + n))                # n.prior = n
+variance = list(a = function(n) theta*(1-theta)/n, 
+                b = function(n) theta*(1-theta) * n / (n.prior + n)^2, 
+                c = function(n) theta*(1-theta) * n / (n + n)^2)
+
+
+plotdata = expand_grid(estimator = names(bias), n = c(10, 40, 160)) %>%
+    pmap(function(estimator, n) {
+        thebias = bias[[estimator]](n)
+        thevar = variance[[estimator]](n)
+        data.frame(estimator = estimator, n = n, muhat = thebias + error * sqrt(thevar))
+    }) |> bind_rows()
+
+summaries = plotdata |>
+    group_by(n, estimator) |>
+    summarize(mean = mean(muhat), sd = sd(muhat))
+
+breaks = seq(-2/3, 2/3, by = 1/3) 
+signs = case_when(
+    breaks < 0 ~ "-",
+    breaks == 0 ~ "",
+    breaks > 0 ~ "+"
+)
+offsets = case_when(
+    breaks != 0 ~ sprintf("%d/3", 3*abs(breaks)),
+    breaks == 0 ~ ""
+)
+labels.abstract = sprintf("θ %s %s", signs, offsets)
+
+ggplot(plotdata) +
+    geom_vline(aes(xintercept = theta), data = data.frame(theta=0), color='green',alpha=.4, linewidth=1.5) +
+    geom_histogram(aes(x = muhat, y = after_stat(density)), bins = 100, alpha = .2) +
+    geom_vline(aes(xintercept = mean), data = summaries, alpha=.4, color='blue') +
+    geom_vline(aes(xintercept = mean + 2 * sd), data = summaries, linetype = "dotted", color='blue',alpha=.4) +
+    geom_vline(aes(xintercept = mean - 2 * sd), data = summaries, linetype = "dotted", color='blue',alpha=.4) +
+    scale_x_continuous(breaks = breaks, labels = labels.abstract, limits = c(-3/4,3/4)) +
+    theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 1)) +
+    xlab("") +
+    ylab("") +
+    facet_grid(n ~ estimator, labeller = labeller(n = label_both, estimator = label_both))
+```
+
+:::
+
+
+
+
+## The Bias/Variance Tradeoff
+
+
+
+
+
+
+
+::: {#exr-bias-variance-rmse .callout-exercise}
+Suppose we increase our number of prior observations, $\nprior$, 
+without changing their mean $\thetaprior$. What happens to 
+the bias of the estimator $\tilde{Y}_{\nprior}$? 
+E.g. does it stay the same, increase, decrease, increase then decrease, decrease then increase, etc.?
+What happens to its standard deviation? And what happens
+to its *root-mean-squared-error*, $\RMSE(\tilde{Y}_{\nprior})$
+where $\RMSE(\hat\theta) = \sqrt{\E\qty[(\hat\theta - \theta)^2]}$?
+:::
+
+Having a large bias or a large standard deviation are two ways of 
+
+
+
+
+To illustrate your point, make a *polar plot* 
+
+    
+    \tilde{Y}_{\nprior}) = \sqrt{\Var(\tilde{Y}_{\nprior}) + \bias(\tilde{Y}_{\nprior})^2}$?
+
+
+
+
+your
+estimator's bias? What happens to its standard deviation.
+are
+
+
+
+
+What happens to the bias of $\tilde{
+
+:::
+Now suppose your 'prior observations' are made-up. 
+You really just think the population proportion ought to be something like $\thetaprior$,
+
+
+
+::: {#exr-bias-variance-tradeoff .callout-exercise}
+
+
+
+What do you see about the relationship between your estimator's bias and variance?
+
+
+:::
+
+You 
+
+
+## Visualizing 
+
+
+
+
+## Implications for Consistency
+
 
 ```{r}
 #| echo: false
