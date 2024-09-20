@@ -10,13 +10,19 @@
   - Blow through randomization the sampling super quick    -1+small
  - Give the population more to do? Maybe kick off discussion?
 
+# Lab 2 
+- New title? examples of random variables. I had a note and don't know what I mean by this.
+
 # Lab 3
 
 - Too long. Swap w/ the Bootstrap lecture to get a normal class period. 
+- For examples in intro: There are some rules for this stuff, but let’s do it from first principles. We’ll get to the rules later.
 
 # Bootstrap Lecture
 
 - Short. Swap works.
+- Or extend by introducing biased estimator and the bias correction idea? 
+ - That'd be cool. And probably the best time to do it.
 - Go into a little more detail on the comparing two proportions stuff.
   - Perhaps add a picture, e.g. a version of the map colored by race.
   - Ideally, you'd have actual county info for voters so this could be accurate.
