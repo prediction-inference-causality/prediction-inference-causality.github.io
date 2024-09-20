@@ -1,246 +1,188 @@
 ---
 title: "Lecture 5"
-subtitle: "Sample Size Calculation using Normal Approximation"
+subtitle: "Normal Approximation and Sample Size Calculation"
 ---
 
-```{r setup}
-library(ggplot2)
 
-library(scales)
-library(knitr)
-library(tidyverse)
 
-percent = label_percent(accuracy=1)
-approx  = function(x,accuracy=.01) { label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) }
+# Review
+
+## The Bootstrap
+
+{{< include shared-code.qmd >}}
+{{< include ga-turnout.qmd >}}
+
+```{r bootstrap.sample}
+J.star = sample(n, size=n, replace=TRUE)
+Y.star = Y[J.star]
 ```
 
-```{r ggplot-themes}
-class.theme = theme(plot.background = element_rect(fill = "transparent", colour = NA),
-        panel.background = element_rect(fill = "transparent", colour = NA),
-                    legend.background = element_rect(fill="transparent", colour = NA),
-                    legend.box.background = element_rect(fill="transparent", colour = NA),
-                    legend.key = element_rect(fill="transparent", colour = NA),
-        axis.ticks.x = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.x  = element_text(colour = "#aaaaaa"),
-        axis.text.y  = element_text(colour = "#aaaaaa"),
-        axis.title.x  = element_text(colour = "#aaaaaa"),
-        axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
-)
+:::: columns
+::: column
+The Sample
+$$
+\begin{array}{r|rrrr|r}
+i    &   1 & 2 & \dots & `r n` & \bar{Y}_{`r n`}  \\
+Y_i  &  `r Y[1]` & `r Y[2]` & \dots & `r Y[n]` & `r approx(mean(Y))` \\
+\end{array}
+$$
 
-theme_set(class.theme)
-theme_update(axis.title.x  = element_blank(),
-             axis.title.y  = element_blank())
-simplified.theme = theme_get()
+The Bootstrap Sample
 
-theme_update(axis.text.x   = element_blank(), 
-              axis.text.y   = element_blank())
-blank.theme = theme_get()
+$$
+\begin{array}{r|rrrr|r}
+i    &   1 & 2 & \dots & `r n` & \bar{Y}_{`r n`}^*  \\
+Y_i^*  &  `r Y.star[1]` & `r Y.star[2]` & \dots & `r Y.star[n]` & `r approx(mean(Y.star))` \\
+\end{array}
+$$
+:::
 
-theme_update(panel.grid.major=element_line(color=rgb(1,0,0,.1,  maxColorValue=1)),
-           panel.grid.minor=element_line(color=rgb(0,1,0,.1, maxColorValue=1)))
-grid.theme = theme_get()
+::: column
+The Population
 
-theme_set(simplified.theme)
-```
+$$
+\begin{array}{r|rrrr|r}
+j & 1 & 2 & \dots &   `r approx(m)` & \bar{y}_{`r approx(m)`}  \\
+y_{j} & `r y[1]` & `r y[2]` & \dots & `r y[m]`   & `r approx(mean(y))`  \\
+\end{array}
+$$
 
-```{r population-and-sample-black-vs-nonblack}
-#| echo: false 
-our.seed = 0
-set.seed(4)
-N = 7233584
-n = 625
-m = N
+The 'Bootstrap Population' --- The Sample
+$$
+\begin{array}{r|rrrr|r}
+j        &   1 & 2 & \dots & `r n` & \bar{y}^*_{`r n`}  \\
+y_j^*  &  `r Y[1]` & `r Y[2]` & \dots & `r Y[n]` & `r approx(mean(Y))` \\
+\end{array}
+$$
 
-b0 = floor(.7*N)
-b1 = ceiling(.3*N)
-y0 = rbinom(n=b0,size=1,prob=.68)
-y1 = rbinom(n=b1,size=1,prob=.74)
-dfpop = data.frame(y=c(y0,y1), x=c(rep(0,b0),rep(1,b1)))
-dfpop = dfpop[sample(1:N),] # shuffle the rows
-x = dfpop$x
-y = dfpop$y
+:::
+::::
 
+- Last class, we looked at a general method for estimating sampling distributions: bootstrapping.
+  1. Draw a sample of size $n$ from your sample. That's *a bootstrap sample*.
+  2. Calculate your estimator using that sample. That's *a bootstrap estimate*.
+  3. Repeat to get draws from the distribution of bootstrap estimates. That's *the bootstrap sampling distribution*.
+- It's a *nonparametric estimate*. We're approximating the sampling distribution without using its parametric form.
+- This is useful because we usually don't know its parametric form.
+  - Estimating the proportion of 1s in a population of binary outcomes is a special case in which we do.
+  - But complicating things even a little, e.g. estimating a difference in proportions, changes that.
 
-# Generate Sample Data for us (J1) and three friends (J2,J3,JM)
-set.seed(our.seed)
-J1 = sample(1:N,size=n,replace=T)
-J2 = sample(1:N,size=n,replace=T)
-J3 = sample(1:N,size=n,replace=T)
-JM = sample(1:N,size=n,replace=T)
-
-J = J1
-dfsam = dfpop[J,]
-Y = dfsam$y
-X = dfsam$x
-```
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .3 
-
-width = function(samples, alpha=.05) {
-  covg.dif = function(w) { 
-    actual = mean( mean(samples) - w/2 <= samples & samples <= mean(samples) + w/2)
-    nominal = 1-alpha 
-    actual - nominal  
-  }
-  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-mean(samples)))))$root
-}
-
-set.seed(our.seed)
-Js = array(dim=c(10000, n))
-Ys = array(dim=c(10000, n))
-for(rr in 1:10000) {
-  Js[rr,] = sample(N, n, replace=TRUE)
-  Ys[rr,] = y[Js[rr,]]
-}
-meanY.samples = rowMeans(Ys)
-default.height = .04
-scale_x = scale_x_continuous(breaks=seq(.6,.8, by=.025), limits=c(.6, .8)) 
-scale_y = scale_y_continuous(breaks=seq(0,default.height,by=.01), limits=c(0, default.height))
-
-annotate.histogram = function(histplot, samples, shade=FALSE, 
-                              shade.width=width(samples, alpha=.05), shade.color='green', shade.alpha=.15) { 
-    w66 = width(samples, alpha=1/3)
-    w95 = width(samples, alpha=.05)
-    p = histplot + 
-           geom_vline(aes(xintercept=mean(samples)), color="blue") +
-           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w66/2), color="blue", linetype='dashed') +
-           geom_vline(aes(xintercept=mean(samples)+c(-1,1)*w95/2), color="blue", linetype='dotted') 
-    if(shade) { 
-      p + geom_rect(aes(xmin=mean(samples)-shade.width/2, 
-                        xmax=mean(samples)+shade.width/2, 
-                        ymin=0, ymax=Inf), alpha=shade.alpha, fill=shade.color)
-    } else { p }
-}
-
-annotated.bar = function(samples, ...) { 
-    p = ggplot() + geom_bar(aes(x=samples, y=after_stat(prop)), alpha=.3) +
-        geom_vline(aes(xintercept=mean(y)), color='green', size=3, alpha=.7)
-    annotate.histogram(p, samples, ...) + scale_x + scale_y
-}
-
-default.highlight.colors = c('black', 'magenta', 'cyan', 'gray')
-with.points = function(histplot, samples, K=100, highlight=4, height=default.height) {
-    set.seed(our.seed)
-    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
-    heights = sample(height*(1:K)/K)
-    data = data.frame(y=heights, x=samples[1:K], 
-                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
-                      alpha=c(rep(1, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
-    histplot + geom_point(aes(y=y, x=x, color=I(color), alpha=I(alpha)), data=data)
-}
-
-with.intervals = function(histplot, samples, w=width(samples, alpha=.05), K=100, 
-                          highlight=4, highlight.alpha=1, height=default.height) { 
-    set.seed(our.seed)
-    highlight.colors = if(highlight) default.highlight.colors[1:highlight] else c()
-    heights = sample(height*(1:K)/K)
-    data = data.frame(y=heights, x=samples[1:K], w=w,
-                      color=c(highlight.colors, rep('purple', K-length(highlight.colors))),
-                      alpha=c(rep(highlight.alpha, length(highlight.colors)), rep(.1, K-length(highlight.colors))))
-    histplot + 
-        geom_pointrange(aes(y=y, x=x, xmin=x-w/2, xmax=x+w/2, color=I(color), alpha=I(alpha)), data=data)
-}
-```
+## Bootstrapping Proportions
 
 ```{r}
 #| cache: true 
-
-set.seed(our.seed)
-difference.samples = array(dim=10000)
-difference.sd.samples = array(dim=10000)
-turnout.samples = array(dim=10000)
-for(rr in 1:10000) {
-    I = sample(1:m, n, replace=TRUE)
-    X = x[I]
-    Y = y[I]
-    turnout.samples[rr] = mean(Y)
-    difference.samples[rr] = mean(Y[X==1]) - mean(Y[X==0])
-    p1 = mean(Y[X==1])
+set.seed(default.seed)
+samples = 1:10000 |> map(\(.) {
+    J = sample(1:m, n, replace=TRUE)
+    X = x[J]
+    Y = y[J]
     p0 = mean(Y[X==0])
-    difference.sd.samples[rr] = sqrt(p1*(1-p1)/sum(X==1) + p0*(1-p0)/sum(X==0))
-}
+    p1 = mean(Y[X==1])
+    data.frame(turnout=mean(Y), 
+               difference=mean(Y[X==1]) - mean(Y[X==0]), 
+               difference.sd=sqrt(p1*(1-p1)/sum(X==1) + p0*(1-p0)/sum(X==0)))
+}) |> bind_rows() 
 
-turnout.bootstrap.samples = array(dim=10000)
-difference.bootstrap.samples = array(dim=10000)
-for(rr in 1:10000) {
+bootstrap.samples = 1:10000 |> map(\(.) { 
     I = sample(1:n, n, replace=TRUE)
     Xstar = X[I]
     Ystar = Y[I]
-    turnout.bootstrap.samples[rr] = mean(Ystar)
-    difference.bootstrap.samples[rr] = mean(Ystar[Xstar==1]) - mean(Ystar[Xstar==0])
-}
+    data.frame(turnout=mean(Ystar), 
+               difference=mean(Ystar[Xstar==1]) - mean(Ystar[Xstar==0]))
+}) |> bind_rows() 
 ```
-
-## Review
 
 ```{r}
-#| out-height: 300px 
-#| fig-asp: .6
-#| layout-ncol: 2 
-#| fig-cap:
-#| - The actual sampling distribution and its normal approximation.
-#| - The bootstrap sampling distribution and its normal approximation. 
- 
-xx = seq(-.2,.3, length=1000)
-scale_x_dif = scale_x_continuous(limits=c(-.1,.2))
-wboot=width(difference.bootstrap.samples, alpha=.05)
+#| cache: true
 
-difference.histogram=ggplot() + geom_histogram(aes(x=difference.samples, y=after_stat(density)), bins=100, alpha=.3)
-annotated.difference.histogram.noshade = annotate.histogram(difference.histogram, difference.samples, shade=FALSE) 
+m.small = 1200
+theta.small = mean(y[1:m.small])
 
-pboot=ggplot() + geom_histogram(aes(x=difference.bootstrap.samples, y=after_stat(density)), alpha=.3, bins=100) 
-annotated.bootstrap.difference.histogram = annotate.histogram(pboot, difference.bootstrap.samples,
-  shade=TRUE, shade.color='red')
+Jsmall = sample(1:m.small, n, replace=FALSE)
+Ysmall = y[Jsmall]
+Xsmall = x[Jsmall]
 
-with.points(annotated.difference.histogram.noshade, difference.samples, height=10, highlight=0) + 
-  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.samples), sd(difference.samples))), color='black') +
-  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+w/2), 
-                  data=data.frame(x=difference.samples[1], y=5, w=wboot), color='black') + 
-  scale_x_dif
+samples.half = 1:10000 |> map(\(.) { 
+    Jsmall = sample(1:m.small, n, replace=FALSE)
+    Ysmall = y[Jsmall]
+    Xsmall = x[Jsmall]
+    data.frame(turnout=mean(Ysmall),
+               difference=mean(Ysmall[Xsmall==1]) - mean(Ysmall[Xsmall==0]))
+}) |> bind_rows() 
 
-with.points(annotated.bootstrap.difference.histogram, 
-            c(difference.samples[1], difference.bootstrap.samples), 
-            height=10, highlight=4) + 
-  geom_line(aes(x=xx, y=dnorm(xx, mean(difference.bootstrap.samples), sd(difference.bootstrap.samples))), color='black') + 
-   scale_x_dif
+bootstrap.samples.half = 1:10000 |> map(\(.) { 
+  I = sample(1:n, n, replace=TRUE)
+  Ystar = Ysmall[I]
+  Xstar = Xsmall[I]
+  data.frame(turnout=mean(Ystar),
+             difference=mean(Ystar[Xstar==1]) - mean(Ystar[Xstar==0]))
+}) |> bind_rows() 
 ```
 
-- Last class, we talked about a general approach to calibrating interval estimates: the bootstrap.
-- It lets us approximate the sampling distribution of our estimator without knowing its parametric form.
-- This is useful because we usually don't.
-  - Estimating a proportion is a special case in which we do.
-  - But complicating things even a little, e.g. estimating a difference in proportions, changes that.
-- And we proposed a general justification for the bootstrap based on normal approximation.
+
+
+  
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+xx = seq(0,n)
+p.binom = ggplot() + 
+  geom_area(aes(x=xx/n, y=dbinom(xx, n, mean(y))), 
+            fill='red', color='red', linewidth=.1, alpha=.3) +
+  geom_bar(aes(x=bootstrap.samples$turnout, y=after_stat(prop)), fill=teal, alpha=.3)
+
+p.hyper = ggplot() + 
+  geom_area(aes(x=xx/n, y=dhyper(xx, m.small*theta.small, m.small*(1-theta.small), n)), 
+            fill='blue', color='blue', linewidth=.1, alpha=.3) +
+  geom_bar(aes(x=bootstrap.samples.half$turnout, y=after_stat(prop)), fill=teal, alpha=.3)
+  
+scale_x = scale_x_continuous(limits=c(.6,.8))
+p.binom + scale_x
+p.hyper + scale_x
+```
+
+
+- When we're estimating a proportion, the [bootstrap sampling distribution]{.teal} is *exactly the same* as \
+the parametric estimate we get by plugging the sample proportion into the Binomial distribution's formula.
+  - That's good when we've sampled with replacement, so our [sampling distribution is actually Binomial]{.red}.
+  - It's less good when we've sampled without replacement, so our [sampling distribution is Hypergeometric]{.blue}.
+- Using this equivalence, we've talked a lot about how the bootstrap works in this special case. 
+
 
 ## Bootstrapping Differences in Proportions
 
 ```{r}
-set.seed(our.seed)
+set.seed(default.seed)
 boot.ind1 = sample(1:n, n, replace=TRUE)
 boot.ind2 = sample(1:n, n, replace=TRUE)
 boot.ind3 = sample(1:n, n, replace=TRUE)
 ```
 
-- We talked about the context of estimating a **difference in proportions**.
-- In particular, the difference in turnout between Black and non-Black voters in GA in the 2020 election.
+- We have tried it out in the context of estimating a **difference in proportions**.
+  - In particular, the difference in turnout between Black and non-Black voters in GA in the 2020 election.
 - This difference does not have a sampling distribution with a simple parametric form, e.g. the binomial distribution.
-- But we could use the bootstrap to approximate its sampling distribution. That's how we calibrated our intervals.
+- But we can calculate the bootstrap sampling distribution. That's how we calibrated. It worked in this case. 
+  - The bootstrap samping distribution had almost the same width as the actual sampling distribtion.
+  - And you can check, computationally, that bootstrap-calibrated intervals have almost exactly 95% coverage.
+- When we sample with replacement, it usually works. 
+  - In fact, it'll work for every estimator we talk about in this class.
+  - We won't have time to prove that in general---it does take some fairly sophisticated tools---but it is true.
+  - But to give you a sense of why it usually works, I'll take you through this case in next week's homework.
 
+::: {.panel-tabset}
+### Bootstrapping
 $$
 \small{
 \begin{array}{r|rr|rr|r|rr|rrrr}
 \text{call} &  1 & & 2 & & \dots & `r n` & & & & & & \\
 \text{pollster} &  X_1 & Y_1 &  X_2 & Y_2   & \dots &  X_{`r n`} & Y_{`r n`}  & \overline{X} & \overline{Y}  &\frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} & \frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} & \text{difference} \\
 \hline
-\color{black}   1   
-    & \color{black}   `r J=J1; Y=y[J]; X=x[J]; X[1]`      & \color{black} `r Y[1]` 
-    &                            \color{black}  `r X[2]`      & \color{black} `r Y[2]`      
-                                                        & \color{black}   \dots 
-    &                            \color{black}   `r X[n]`     & \color{black} `r Y[n]`       
-    & \color{black}   `r approx(mean(X))`   & \color{black} `r approx(mean(Y))`   &  \color{black}  `r approx(mean(Y[X==1]))` & `r approx(mean(Y[X==0]))` & \color{black} `r approx(mean(Y[X==1]) - mean(Y[X==0]))` \\
+\polla   1   
+    & \polla   `r J=J1; Y=y[J]; X=x[J]; X[1]`      & \polla `r Y[1]` 
+    &                            \polla  `r X[2]`      & \polla `r Y[2]`      
+                                                        & \polla   \dots 
+    &                            \polla   `r X[n]`     & \polla `r Y[n]`       
+    & \polla   `r approx(mean(X))`   & \polla `r approx(mean(Y))`   &  \polla  `r approx(mean(Y[X==1]))` & `r approx(mean(Y[X==0]))` & \polla `r approx(mean(Y[X==1]) - mean(Y[X==0]))` \\
 \end{array}
 }
 $$
@@ -251,106 +193,181 @@ $$
 \text{`call'} &  1 & &  2 & &  \dots & `r n` & & & & & & \\
 \text{`pollster'} &  X_1^* & Y_1^* &  X_2^* & Y_2^*   & \dots &  X^*_{`r n`} & Y^*_{`r n`}  & \overline{X}^* & \overline{Y}^*  &\frac{\sum_{i:X_i^*=1} Y_i}{\sum_{i:X_i^*=1} 1} & \frac{\sum_{i:X_i^*=0} Y_i}{\sum_{i:X_i^*=0} 1} & \text{difference} \\
 \hline
-\color{magenta}   `r I=boot.ind1; 2`
-    & \color{magenta}   X_{`r I[1]`}  & \color{magenta} Y_{`r I[1]`} 
-    & \color{magenta}   X_{`r I[2]`}  & \color{magenta} Y_{`r I[2]`}      
-    & \color{magenta}   \dots
-    & \color{magenta}   X_{`r I[n]`}  & \color{magenta} Y_{`r I[n]`} 
+\pollb   `r I=boot.ind1; 2`
+    & \pollb   X_{`r I[1]`}  & \pollb Y_{`r I[1]`} 
+    & \pollb   X_{`r I[2]`}  & \pollb Y_{`r I[2]`}      
+    & \pollb   \dots
+    & \pollb   X_{`r I[n]`}  & \pollb Y_{`r I[n]`} 
     & & & & & & \\
-    & \color{magenta}   `r X[I[1]]`   & \color{magenta} `r Y[I[1]]`
-    & \color{magenta}   `r X[I[2]]`      & \color{magenta} `r Y[I[2]]`      
-    & \color{magenta}   \dots
-    & \color{magenta}   `r X[I[n]]`     & \color{magenta} `r Y[I[n]]` 
-    & \color{magenta}   `r approx(mean(X[I]))`   & \color{magenta} `r approx(mean(Y[I]))`   
-    &  \color{magenta}  `r approx(mean(Y[I][X[I]==1]))` & \color{magenta} `r approx(mean(Y[I][X[I]==0]))` 
-    & \color{magenta} `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
-\color{cyan}   `r I=boot.ind2; 3`
-    & \color{cyan}   X_{`r I[1]`}  & \color{cyan} Y_{`r I[1]`} 
-    & \color{cyan}   X_{`r I[2]`}  & \color{cyan} Y_{`r I[2]`}      
-    & \color{cyan}   \dots
-    & \color{cyan}   X_{`r I[n]`}  & \color{cyan} Y_{`r I[n]`} 
+    & \pollb   `r X[I[1]]`   & \pollb `r Y[I[1]]`
+    & \pollb   `r X[I[2]]`      & \pollb `r Y[I[2]]`      
+    & \pollb   \dots
+    & \pollb   `r X[I[n]]`     & \pollb `r Y[I[n]]` 
+    & \pollb   `r approx(mean(X[I]))`   & \pollb `r approx(mean(Y[I]))`   
+    &  \pollb  `r approx(mean(Y[I][X[I]==1]))` & \pollb `r approx(mean(Y[I][X[I]==0]))` 
+    & \pollb `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
+\pollc   `r I=boot.ind2; 3`
+    & \pollc   X_{`r I[1]`}  & \pollc Y_{`r I[1]`} 
+    & \pollc   X_{`r I[2]`}  & \pollc Y_{`r I[2]`}      
+    & \pollc   \dots
+    & \pollc   X_{`r I[n]`}  & \pollc Y_{`r I[n]`} 
     & & & & & & \\
-    & \color{cyan}   `r X[I[1]]`   & \color{cyan} `r Y[I[1]]`
-    & \color{cyan}   `r X[I[2]]`      & \color{cyan} `r Y[I[2]]`      
-    & \color{cyan}   \dots
-    & \color{cyan}   `r X[I[n]]`     & \color{cyan} `r Y[I[n]]` 
-    & \color{cyan}   `r approx(mean(X[I]))`   & \color{cyan} `r approx(mean(Y[I]))`   
-    &  \color{cyan}  `r approx(mean(Y[I][X[I]==1]))` & \color{cyan} `r approx(mean(Y[I][X[I]==0]))` 
-    & \color{cyan} `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
-\color{gray}   `r I=boot.ind3; 1`
-    & \color{gray}   X_{`r I[1]`}  & \color{gray} Y_{`r I[1]`} 
-    & \color{gray}   X_{`r I[2]`}  & \color{gray} Y_{`r I[2]`}      
-    & \color{gray}   \dots
-    & \color{gray}   X_{`r I[n]`}  & \color{gray} Y_{`r I[n]`} 
+    & \pollc   `r X[I[1]]`   & \pollc `r Y[I[1]]`
+    & \pollc   `r X[I[2]]`      & \pollc `r Y[I[2]]`      
+    & \pollc   \dots
+    & \pollc   `r X[I[n]]`     & \pollc `r Y[I[n]]` 
+    & \pollc   `r approx(mean(X[I]))`   & \pollc `r approx(mean(Y[I]))`   
+    &  \pollc  `r approx(mean(Y[I][X[I]==1]))` & \pollc `r approx(mean(Y[I][X[I]==0]))` 
+    & \pollc `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
+\polld   `r I=boot.ind3; 1`
+    & \polld   X_{`r I[1]`}  & \polld Y_{`r I[1]`} 
+    & \polld   X_{`r I[2]`}  & \polld Y_{`r I[2]`}      
+    & \polld   \dots
+    & \polld   X_{`r I[n]`}  & \polld Y_{`r I[n]`} 
     & & & & & & \\
-    & \color{gray}   `r X[I[1]]`   & \color{gray} `r Y[I[1]]`
-    & \color{gray}   `r X[I[2]]`      & \color{gray} `r Y[I[2]]`      
-    & \color{gray}   \dots
-    & \color{gray}   `r X[I[n]]`     & \color{gray} `r Y[I[n]]` 
-    & \color{gray}   `r approx(mean(X[I]))`   & \color{gray} `r approx(mean(Y[I]))`   
-    &  \color{gray}  `r approx(mean(Y[I][X[I]==1]))` & \color{gray} `r approx(mean(Y[I][X[I]==0]))` 
-    & \color{gray} `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
+    & \polld   `r X[I[1]]`   & \polld `r Y[I[1]]`
+    & \polld   `r X[I[2]]`      & \polld `r Y[I[2]]`      
+    & \polld   \dots
+    & \polld   `r X[I[n]]`     & \polld `r Y[I[n]]` 
+    & \polld   `r approx(mean(X[I]))`   & \polld `r approx(mean(Y[I]))`   
+    &  \polld  `r approx(mean(Y[I][X[I]==1]))` & \polld `r approx(mean(Y[I][X[I]==0]))` 
+    & \polld `r approx(mean(Y[I][X[I]==1]) - mean(Y[I][X[I]==0]))` \\
 \end{array}
 }
 $$
 
-## Limitations  of the Bootstrap
+### Bootstrap vs. Actual Sampling Distribution
 
 ```{r}
-#| out-height: 300px 
-#| fig-asp: .5
-#| layout-ncol: 2 
-
-with.points(annotated.difference.histogram.noshade, difference.samples, height=10, highlight=0) + 
-  geom_pointrange(aes(x=x,y=y, xmin=x-w/2, xmax=x+w/2), 
-                  data=data.frame(x=difference.samples[1], y=5, w=wboot), color='black') + 
-                  scale_x_dif
-
-with.points(annotated.bootstrap.difference.histogram, 
-            c(difference.samples[1], difference.bootstrap.samples), 
-            height=10, highlight=4) + scale_x_dif
+ggplot() + geom_histogram(aes(x=bootstrap.samples$difference, y=after_stat(density)), fill=teal,bins=100, alpha=.3) + 
+           geom_histogram(aes(x=samples$difference, y=after_stat(density)), bins=100, alpha=.3)
 ```
 
-- This worked. And it's great to have a method we can use *after we have data*.
-- But it's also important to be able to reason about what we can learn *before we have data*.
-- Today, that's what we're going to talk about. It's called power analysis.
-- To do it, we'll use normal approximation again.
+### A Centered Comparison
+```{r}
+ggplot() + geom_histogram(aes(x=bootstrap.samples$difference-mean(bootstrap.samples$difference), y=after_stat(density)), fill=teal,bins=100, alpha=.3) + 
+           geom_histogram(aes(x=samples$difference-mean(samples$difference), y=after_stat(density)), bins=100, alpha=.3)
+```
+
+:::
+
+## An Important Limitation of the Bootstrap
+
+
+```{r}
+ggplot() + geom_histogram(aes(x=bootstrap.samples$difference, y=after_stat(density)), fill=teal,bins=100, alpha=.3) + 
+           geom_histogram(aes(x=samples$difference, y=after_stat(density)), bins=100, alpha=.3)
+```
+
+- The bootstrap is a great method for understand what we *have learned* after we have data. 
+  - It's easy to use and we usually get good calibration.
+- But it's also important to be able to reason about what we *can learn* before we have data.
+  - For this, the bootstrap is not very helpful. 
+- Today, we'll talk about that. To do it, we'll introduce a new tool: *normal approximation*.
+- And we'll use it for an important 'before data reasoning' task: sample size calculation.
+  - This is using what you know---or are willing to assume---to choose the size of your study.
+  - In particular, to choose it so your confidence intervals are as narrow as you want them to be.
+
+# Normal Approximation
+
+## The Normal Distribution
+
+::: zoom-free
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+
+expand.grid(x=seq(-5,5,by=.1), theta=c(-2,0,2)) |>
+  ggplot() + 
+  geom_area(aes(x=x, y=dnorm(x, theta, 1), fill=factor(theta)), position='identity', alpha=.3) +
+  guides(fill=guide_legend(title='θ'), color='none')
+
+expand.grid(x=seq(-5,5,by=.1), sigma=c(.5,1,2)) |>
+  ggplot() + 
+  geom_area(aes(x=x, y=dnorm(x, 0, sigma), fill=factor(sigma)), position='identity', alpha=.3) +
+  guides(fill=guide_legend(title='σ'), color='none')
+```
+:::
+
+- The normal distribution is a parametric family of distributions involving two parameters.
+  1. Its mean, $\theta$. 
+  2. Its standard deviation, $\sigma$.
+- We say a random variable $X$ is normally distributed with mean $\theta$ and standard deviation $\sigma$ ...
+- ... if the probability that it's in an interval $[a,b]$ is given by this integral of its *probability density*.
+$$
+P_{\theta,\sigma}(X \in [a,b]) = \int_a^b  f_{\theta,\sigma}(x)dx \qfor f_{\theta, \sigma}(x) = \frac{1}{\sqrt{2\pi}\sigma}e^{-\frac{(x-\theta)^2}{2\sigma^2}}
+$$
+
+
+- We have to talk about the probability that it's 'in an interval' rather than that it 'takes a value' because ...
+- ... the probability it actually takes on any particular value is $x$ zero: it's an integral from $x$ to $x$. 
+- This seems like an annoyance, but given what the normal distribution is actually used for, it's a blessing.^[See @sec-a-blessing if you're curious about what I mean by that.]
 
 ## Normal Approximation
-
 ```{r}
-#| out-height: 300px 
-#| fig-asp: .45
-#| layout-ncol: 2 
-#| fig-cap:
-#| - The sampling distribution of turnout and its normal approximation.
-#| - The sampling distribution of the difference and its normal approximation.
- 
-xx = seq(.6,.8, length=1000)
-turnout.histogram = ggplot() + geom_histogram(aes(x=turnout.samples, y=after_stat(density)), bins=150, alpha=.3) 
-turnout.histogram + geom_line(aes(x=xx, y=dnorm(xx, mean(turnout.samples), sd(turnout.samples))), color='black') 
+p.even = ggplot() + 
+  geom_col(aes(x=(0:10)/10,  y=10*dbinom(0:10,  10,  .5)), alpha=.2, linewidth=.1,       fill=pollb, color=pollb) +
+  geom_col(aes(x=(0:30)/30,  y=30*dbinom(0:30, 30, .5)), alpha=.2, linewidth=.1, fill=pollc, color=pollc) + 
+  geom_col(aes(x=(0:90)/90,  y=90*dbinom(0:90, 90, .5)), alpha=.2, linewidth=.1, fill=polld, color=polld) +
+           labs(x='', y='')
 
-xx = seq(-.1,.2, length=1000)
-difference.histogram=ggplot() + geom_histogram(aes(x=difference.samples, y=after_stat(density)), bins=100, alpha=.3)
-difference.histogram + geom_line(aes(x=xx, y=dnorm(xx, mean(difference.samples), sd(difference.samples))), color='black') 
+p.uneven = ggplot() + 
+  geom_col(aes(x=(0:10)/10,    y=10*dbinom(0:10,  10,  .5)), alpha=.2, linewidth=.1, fill=pollb, color=pollb) +
+  geom_col(aes(x=(0:25)/25,    y=25*dbinom(0:25, 25, .5)), alpha=.2, linewidth=.1, fill=pollc, color=pollc) + 
+  geom_col(aes(x=(0:83)/83,    y=83*dbinom(0:83, 83,  .5)), alpha=.2, linewidth=.1, fill=polld, color=polld)
+
+xx = seq(0,1,by=.01)
+
+p.even.plus.normal = p.even +
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/10))), color=pollb) + 
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/30))), color=pollc) + 
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/90))), color=polld)
+
+p.uneven.plus.normal = p.uneven + 
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/10))), color=pollb) + 
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/25))), color=pollc) + 
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/83))), color=polld)
 ```
 
-$$
-f_{\mu,\sigma}(x) = \frac{1}{\sqrt{2\pi}\sigma} e^{-\frac{(x-\mu)^2}{2\sigma^2}}
-$$
+```{r}
+#| fig-width: 4
+#| layout-ncol: 3
+ 
+pbinom.10 = ggplot() + geom_col(aes(x=(0:10)/10,  y=10*dbinom(0:10,  10,  .5)), 
+                    alpha=.2, linewidth=.1, fill=pollb, color=pollb) +
+            geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/10))), color=pollb)
 
-- A distribution's normal approximation is a normal distribution with the same mean $\mu$ and standard deviation $\sigma$.
-- We worked these out for a proportion in lab. They're both functions of the population proportion $\bar{y}$.
-- To estimate the sampling distribution, we can use the same functions of the sample proportion $\bar{Y}$.
-$$
-\begin{aligned}
-\text{normal approximation}     & \ f_{\mu,\sigma}(x) \qfor \mu = p \qand \sigma = \sqrt{\frac{p(1-p)}{n}} \qqtext{ with } p = \bar{y}. \\
-\text{corresponding estimate}   & \ f_{\hat\mu, \hat \sigma}(x) \qfor \mu = \hat p \qand \sigma = \sqrt{\frac{\hat p(1-\hat p)}{n}} \qqtext{ with } \hat p = \bar{Y}. 
-\end{aligned}
-$$
+pbinom.30 = ggplot() + geom_col(aes(x=(0:30)/30,  y=30*dbinom(0:30, 30, .5)), 
+                    alpha=.2, linewidth=.1, fill=pollc, color=pollc) +
+            geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/30))), color=pollc)
 
-::: aside
-We tend to use a 'hat' to denote estimates of parameters. $\hat p$ is an estimate of $p$, $\hat\mu$ an estimate of $\mu$, etc.
+pbinom.90 = ggplot() + geom_col(aes(x=(0:90)/90,  y=90*dbinom(0:90, 90, .5)), 
+                    alpha=.2, linewidth=.1, fill=polld, color=polld) +
+            geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/90))), color=polld)
+
+scale_y = scale_y_continuous(breaks=seq(0,8,by=1), limits=c(0,8))
+scale_x = scale_x_continuous(breaks=seq(0,1,by=.25), limits=c(0,1))
+pbinom.10 + scale_x + scale_y
+pbinom.30 + scale_x + scale_y
+pbinom.90 + scale_x + scale_y
+```
+
+- A distribution's normal approximation is a normal distribution with the same mean $\theta$ and standard deviation $\sigma$.
+  - These show up everywhere because they're easy to work with and the approximation tends to be good.
+  - Approximation is good, in particular, for the distribution of a mean of independent random variables.
+  - Or independent enough ones.
+- Above, we see three Binomial distributions with their normal approximations:
+  - the distributions of the mean of [10]{.pollb}, [30]{.pollc}, and [90]{.polld} coin flips.
+  - These approximations get increasingly accurate as the number of flips $n$ increases. 
+  - That's universal. It always happens with means. It's called the *Central Limit Theorem*.
+
+::: {.callout-note}
+### The Central Limit Theorem
+The sampling distribution of a mean of independent random variables, $\faded \frac{1}{n}\sum\limits_{i=1}^n X_i$,
+gets arbitrarily close to its normal approximation \
+as the number of random variables $\faded n$ increases to infinity. 
+
+*Caveat*. This is only true if each random variable contributes infinitesimally to the mean, i.e. $\faded \max_{i\le n} X_i/n \to 0$ as $\faded n \to \infty$.
 :::
 
 ## The Width of Normal Distributions 
@@ -367,17 +384,17 @@ signs = case_when(
 offsets = case_when(
   breaks != 0 ~ ifelse(abs(breaks)==1, 'σ', sprintf('%dσ', abs(breaks))),
   breaks == 0 ~ '')
-labels.abstract = sprintf('μ %s %s', signs, offsets)
+labels.abstract = sprintf('θ %s %s', signs, offsets)
 
 x=seq(-4,4,by=.01)
-sampling.dist.plot = ggplot() + 
+normal.dist.plot = ggplot() + 
        geom_area(aes(x=x,y=dnorm(x)), alpha=.1, color='black', fill='black') + 
        geom_vline(aes(xintercept=qnorm(.5)), linetype='solid', color='blue') +
        geom_vline(aes(xintercept=qnorm(c(.16,.84))), linetype='dashed', color='blue') +
        geom_vline(aes(xintercept=qnorm(c(.025,.975))), linetype='dotted', color='blue') +
        scale_x_continuous(breaks=seq(-4,4,by=1), labels=labels.abstract) 
 
-sampling.dist.plot
+normal.dist.plot
 ```
 
 - One thing that's convenient about the normal distribution is that it's easy to reason about.
@@ -385,56 +402,483 @@ sampling.dist.plot
   - To include `r 100*round(pnorm(1)-pnorm(-1),3)`% of draws, you go out 1 standard deviation from its mean.
   - To include `r 100*round(pnorm(2)-pnorm(-2),3)`% of draws, you go out 2 standard deviations.
   - To include `r 100*round(pnorm(3)-pnorm(-3),3)`% of draws, you go out 3 standard deviations.
-- To get almost exactly 95% of draws, we go out 1.96 standard deviations: $\mu \pm 1.96\sigma$.
+- To get almost exactly 95% of draws, we go out 1.96 standard deviations: $\theta \pm 1.96\sigma$.
 - Two is close enough in practice, but we tend to write 1.96 anyway.
   - It's a signal about what we're doing. You can get a 2 anywhere in a calculation. 
   - When you see a 1.96, you know you're talking about the middle 95% of the normal.
 
-# Estimating Proportions
+## Calibration Using Normal Approximation
 
-## 95% Intervals for Proportions
 ```{r}
 #| out-height: 300px
 #| fig-asp: .3 
 
-sampling.dist.plot
+theta = .5
+sigma = sqrt(theta*(1-theta)/90)  
+binom.90.draws = rbinom(1000, 90, .5)/90
+theta.hat = binom.90.draws[1]
+sigma.hat = sqrt(theta.hat*(1-theta.hat)/90)  
+wbinom = width_binom(theta.hat, 90)
+wnorm = 2*1.96*sigma.hat 
+
+breaks = seq(-4, 4, 1) 
+signs = case_when(
+  breaks < 0 ~ '-', 
+  breaks == 0 ~ '',
+  breaks > 0 ~ '+')
+offsets = case_when(
+  breaks != 0 ~ ifelse(abs(breaks)==1, 'σ', sprintf('%dσ', abs(breaks))),
+  breaks == 0 ~ '')
+labels.abstract = sprintf('θ %s %s', signs, offsets)
+
+x=seq(theta-4*sigma, theta+4*sigma,by=.01)
+proportion.normal.dist.plot = ggplot() + 
+       geom_area(aes(x=x,y=dnorm(x, theta.hat, sigma.hat)), alpha=.1, color='blue', fill='blue', linewidth=.1) + 
+       geom_vline(aes(xintercept=qnorm(.5, theta.hat, sigma.hat)), linetype='solid', color='blue') +
+       geom_vline(aes(xintercept=qnorm(c(.16,.84), theta.hat, sigma.hat)), linetype='dashed', color='blue') +
+       geom_vline(aes(xintercept=qnorm(c(.025,.975), theta.hat, sigma.hat)), linetype='dotted', color='blue') +
+       scale_x_continuous(breaks=seq(theta.hat-4*sigma.hat,theta.hat+4*sigma.hat, by=sigma.hat), labels=labels.abstract, limits=c(theta-4*sigma, theta+4*sigma)) 
 ```
 
-- Let's work out a 95% interval for a proportion.
-- Here's the normal approximation to the sampling distribution of our estimate $\bar{Y}$.
-
-$$
-\bar Y \sim N(\mu, \sigma) \qfor \mu = \bar y \qand \sigma = \sqrt{\bar{y}(1-\bar{y})/n}
-$$
-
-- So in roughly 95% of polls:
-  - Our estimate $\bar{Y}$ will be within 1.96 standard deviations of the population proportion $\bar y$.
-  - Or, conversely, the population proportion $\bar y$ will be within 1.96 standard deviations of our estimate $\bar{Y}$.
-
-$$
-\mu \in \bar{Y} \pm 1.96\sigma \qfor \sigma = \sqrt{\bar{y}(1-\bar{y})/n} \qqtext{ in roughly 95\% of polls.}
-$$ 
-
-## Real-world 95% Intervals for Proportions
 ```{r}
-#| out-height: 300px
-#| fig-asp: .3 
+#| fig-width: 7
+#| layout-ncol: 2
+#| fig-cap: 
+#|   - The (Binomial) sampling distribution and its normal approximation.
+#|   - Binomial and normal estimates of the sampling distribution.
 
-sampling.dist.plot
+actual.sampling.dist.plot = pbinom.90 + 
+  with_annotations(binom.90.draws,  estimand=theta, highlight.dots=0, height=8) +
+  geom_pointrange(aes(y=3, x=theta.hat, xmin=theta.hat-wbinom/2, xmax=theta.hat+wbinom/2), color='red') +
+  geom_pointrange(aes(y=3.2, x=theta.hat, xmin=theta.hat-wnorm/2,  xmax=theta.hat+wnorm/2), color='blue') +
+  scale_x_continuous(limits=c(theta-4*sigma, theta+4*sigma))
+
+xdiscrete = seq(0,1,by=1/90)
+estimated.sampling.dist.plot = proportion.normal.dist.plot + 
+   geom_col(aes(x=xdiscrete, y=90*dbinom(90*xdiscrete, 90, theta.hat)), 
+            alpha=.1, color='red', fill='red', linewidth=.1) +
+  scale_x_continuous(breaks=seq(theta.hat-4*sigma.hat,theta.hat+4*sigma.hat, by=sigma.hat), labels=labels.abstract, limits=c(theta-4*sigma, theta+4*sigma)) + 
+  geom_pointrange(aes(y=3, x=theta.hat, xmin=theta.hat-wbinom/2, xmax=theta.hat+wbinom/2), color='red') +
+  geom_pointrange(aes(y=3.2, x=theta.hat, xmin=theta.hat-wnorm/2,  xmax=theta.hat+wnorm/2), color='blue') 
+
+actual.sampling.dist.plot
+estimated.sampling.dist.plot
 ```
 
-- This interval isn't actually useful. We're writing $\sigma$ in terms of the population proportion $\bar y$. 
+- Calibrating interval estimates using normal approximation is easy.
+  - You estimate the standard deviation of your point estimator.
+  - You go out &plusmn; 1.96 (estimated) standard deviations from your point estimate.
 
 $$
-\mu \in \bar{Y} \pm 1.96\sigma \qfor \sigma = \sqrt{\bar{y}(1-\bar{y})/n} \qqtext{ in roughly 95\% of polls.}
+\text{interval estimate} = \hat\theta \pm 1.96 \hat\sigma
+$$
+
+- We're choosing our interval's width essentially the same way we always have.
+  - We're still using the middle 95% of an estimate of the sample distribution.
+  - It just looks different because we have a convenient formula for that width.
+- Above left, you can see two interval estimates superimposed on the sampling distribution of a sample proportion.
+  - The red one is calibrated using the binomial as before.
+  - The blue one is calibrated using normal approximation.
+- Above right, you can see the binomial and normal sampling distribution estimates these are based on.
+
+## When This Works
+
+```{r}
+#| fig-width: 7
+#| layout-ncol: 2
+#| fig-cap: 
+#|   - The (Binomial) sampling distribution and its normal approximation.
+#|   - Binomial and normal estimates of the sampling distribution.
+
+actual.sampling.dist.plot
+estimated.sampling.dist.plot
+```
+
+- This all works if three things are true.
+ 1. The sampling distribution needs to be in the right place, i.e. centered on the estimation target.
+ 2. The sampling distribution needs to be approximately normal.
+ 3. The estimated sampling distribution has approximately the right width.
+
+- The first is called *unbiasedness* of our point estimator. 
+  - Most of the estimators we'll talk about in this class are unbiased or almost unbiased.
+  - We'll check this for the sample proportion in a minute.
+- The second is something that the CLT tells us tends to happen, especially for large $n$.
+  - Talking about the accuracy of normal approximation is interesting, but beyond the scope of this class.
+  - I'd need at least a couple weeks to teach you about what's going on there.
+  - But you can take it as a given for most of the estimators we'll study.
+- The third amounts to getting a good estimate of our point estimator's standard deviation.
+  - We'll work on this, again for the sample proportion, later today.
+  - And we'll talk about this for other estimators throughout the semester.
+  - It is, however, a bit of a pain. That's one reason you might prefer the bootstrap.
+
+
+# Normal Approximation in Context
+
+## A Proportion when Sampling with Replacement
+
+```{r}
+#| fig-width: 4
+#| layout-ncol: 3 
+
+scale_y = scale_y_continuous(breaks=seq(0,12,by=1), limits=c(0,12))
+
+pbinom.10 + scale_x + scale_y
+pbinom.30 + scale_x + scale_y
+pbinom.90 + scale_x + scale_y
+```
+
+- When we sample from a binary population with replacement, our sample proportion's distribution is Binomial.
+  - And we can estimate that distribution by plugging our sample proportion into the Binomial formula.
+  - But its normal approximation tends to be very good, so we can get away with estimating that instead.
+
+$$
+\begin{aligned}
+\text{normal approximation}     & \ f_{\theta,\sigma}(x) \qfor  \sigma^2 = \frac{\theta(1-\theta)}{n} \\
+\text{corresponding estimate}   & \ f_{\hat\theta, \hat \sigma}(x) \qfor \hat\sigma^2 = \frac{\hat \theta(1-\hat \theta)}{n}. 
+\end{aligned}
+$$
+
+- Pictured: three Binomial distributions with their normal approximations. 
+  - These are the distributions of the sample proportion when we draw a samples of size [10]{.pollb}, [30]{.pollc}, and [90]{.polld} ...
+  - ... with replacement from a binary population in which the proportion of ones is $\theta=.5$.
+
+## A Proportion when Sampling without Replacement
+
+```{r}
+#| fig-width: 4
+#| layout-ncol: 3 
+
+
+phyper.10 = ggplot() + geom_col(aes(x=(0:10)/10,  y=10*dhyper(0:10, 10, 10, 10)), 
+                    alpha=.2, linewidth=.1, fill=pollb, color=pollb) +
+            geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt((.5*.5/10) * (10-1)/(2*10-1)))), color=pollb)
+
+phyper.30 = ggplot() + geom_col(aes(x=(0:30)/30,  y=30*dhyper(0:30, 30, 30, 30)), 
+                    alpha=.2, linewidth=.1, fill=pollc, color=pollc) +
+            geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt((.5*.5/30) * (30-1)/(2*30 - 1)))), color=pollc)
+
+phyper.90 = ggplot() + geom_col(aes(x=(0:90)/90,  y=90*dhyper(0:90, 90, 90, 90)), 
+                    alpha=.2, linewidth=.1, fill=polld, color=polld) +
+            geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt((.5*.5/90) * (90-1)/(2*90 - 1)))), color=polld)
+
+phyper.10 + scale_x + scale_y
+phyper.30 + scale_x + scale_y
+phyper.90 + scale_x + scale_y
+```
+
+- When we sample from a binary population *without* replacement, our sample proportion's distribution is Hypergeometric.
+  - And we can estimate that distribution by plugging our sample proportion into the Hypergeometric formula.
+  - But again, its normal approximation tends to be very good, so we can get away with estimating that instead.
+- When we do this, we can see where we go wrong when use use the Binomial---or equivalently the bootstrap.
+  - When our sample size $\faded n$ is a meaningful fraction of our population size $\faded m$, the Binomial is too wide.
+  - The Hypergeometric's standard deviation differs from the Binomial's by a factor of $\faded \sqrt{\frac{m-n}{m-1}}$.
+  - When we're sampling half our population, i.e. $n=m/2$, that's roughly $\faded \sqrt{1/2} \approx .7$. 
+  
+
+$$
+\begin{aligned}
+\text{normal approximation}     & \ f_{\theta,\sigma}(x) \qfor \sigma^2 = \frac{\theta(1-\theta)}{n} \times  \frac{m-n}{m-1} \\
+\text{corresponding estimate}   & \ f_{\hat\theta, \hat \sigma}(x) \qfor \hat\sigma^2 = \frac{\hat \theta(1-\hat \theta)}{n} \times \frac{m-n}{m-1}. 
+\end{aligned}
+$$
+
+- Pictured: three Hypergeometric distributions with their normal approximations. 
+  - These are the distribution of the sample proportion when we draw a samples of size [10]{.pollb}, [30]{.pollc}, and [90]{.polld} ...
+  - ... without replacement from a binary population twice the size in which the proportion of ones is $\faded \theta=.5$.
+
+## A Difference in Proportions 
+
+
+```{r}
+#| fig-width: 4
+#| layout-ncol: 2 
+#| fig-cap: 
+#|   - The sampling distribution and its normal approximation.
+#|   - Bootstrap and normal estimates of the sampling distribution.
+
+xx = seq(-.1,.2, length=1000)
+difference.histogram = ggplot() + geom_histogram(aes(x=samples$difference, y=after_stat(density)), bins=100, alpha=.3) +
+                                  geom_line(aes(x=xx, y=dnorm(xx, mean(samples$difference), sd(samples$difference))), color='black')
+
+bootstrap.difference.histogram = ggplot() + geom_histogram(aes(x=bootstrap.samples$difference, y=after_stat(density)), bins=100, alpha=.3) +
+                                  geom_line(aes(x=xx, y=dnorm(xx, mean(bootstrap.samples$difference), sd(bootstrap.samples$difference))), color='black')
+difference.histogram 
+bootstrap.difference.histogram 
+```
+
+::: {.panel-tabset}
+### Point Estimation
+
+- When we estimated the difference in turnout between Black and non-Black voters:
+  - We drew a sample $(X_1,Y_1) \ldots (X_n,Y_n)$ with replacement ...
+  - ... from a population $(x_1, y_1) \ldots (x_m, y_m)$ with binary outcomes $y_j$ and covariates $x_j$.
+  - We calculated the difference in proportion between the subsamples with $X_i=1$ and $X_i=0$.
+  - We used the bootstrap to estimate the sampling distribution of this difference.
+
+$$
+\begin{aligned}     
+\text{estimator} & = \frac{\sum_{i:X_i=1} Y_i}{\sum_{i:X_i=1} 1} - \frac{\sum_{i:X_i=0} Y_i}{\sum_{i:X_i=0} 1} \\
+\text{bootstrap estimate} & = \frac{\sum_{i:X_i^*=1} Y_i^*}{\sum_{i:X_i^*=1} 1} - \frac{\sum_{i:X_i^*=0} Y_i^*}{\sum_{i:X_i^*=0} 1}
+\end{aligned}
+$$
+
+### Interval Calibration
+
+- This sampling distribution does not have a simple parametric form, e.g. Binomial or Hypergeometric.
+  - But the bootstrap sampling distribution is an accurate estimate. 
+  - As is, if we prefer, an estimate based on normal approximation.
+  
+$$
+\begin{aligned}
+\text{normal approximation:}     & \ f_{\theta,\sigma}(x) \qfor \theta=\mu(1)-\mu(0) \qand \sigma^2 = \E\qty[\frac{\mu(1)\{1-\mu(1)\}}{N_1} + \frac{\mu(0)\{1-\mu(0)\}}{N_0}] \\
+\text{corresponding estimate:}   & \ f_{\hat\theta, \hat \sigma}(x) \qfor \hat\theta=\hat\mu(1)-\hat\mu(0) \qand \hat\sigma^2 = \frac{\hat \mu(1)\{1-\hat \mu(1)\}}{N_1} + \frac{\hat \mu(0)\{1-\hat \mu(0)\}}{N_0} 
+\end{aligned}
+$$
+
+::: {.footnotestyle}
+  Above, $N_0$ and $N_1$ are the sizes of the subsamples with $X_i=0$ and $X_i=1$ and $\mu(0)$ and $\mu(1)$ are the proportion of ones in the corresponding subpopulations. More on this Friday and next week.
+:::
+
+:::
+
+## Using Normal Approximation 
+
+\begin{aligned}
+&f_{\hat\theta, \hat \sigma}(x) \qfor \hat\sigma^2 = \frac{\hat \theta(1-\hat \theta)}{n} && \text{a proportion when sampling with replacement} \\
+&f_{\hat\theta, \hat \sigma}(x) \qfor \hat\sigma^2 = \frac{\hat \theta(1-\hat \theta)}{n} \times \frac{m-n}{m-1} && \text{a proportion when sampling without replacement} \\
+&f_{\hat\theta, \hat \sigma}(x) \qfor \hat\sigma^2 = \frac{\hat \mu(1)\{1-\hat \mu(1)\}}{N_1} + \frac{\hat \mu(0)\{1-\hat \mu(0)\}}{N_0} && \text{a difference in proportions when sampling with replacement}
+\end{aligned}
+
+
+- What makes all this work is that we're using good estimates of our estimator's standard deviation.
+  - If we have a formula for the estimator's standard deviation, this is usuallly not so hard.
+  - We estimate whatever population summaries show up in the formula and plug them in.
+- But we do need to do a bit of work to get that formula. We'll do that in a few minutes.
+- This involves calculating expectations, so we'll start there.
+
+
+# Bias and Variance when Estimating a Proportion
+
+## Properties of Expectations: Linearity 
+
 $$ 
+\begin{aligned}
+E ( a Y + b Z ) 
+&= E (aY) + E (bZ) \\
+&= aE(Y) + bE(Z)  \\
+& \text{ for random variables $Y, Z$ and numbers $a,b$ }
+\end{aligned}
+$$
 
-- If we actually knew that, we wouldn't need to estimate it. 
-- But plugging in our estimate $\bar{Y}$ gives us a usable interval.
+::: {.panel-tabset}
+### What This Means
+
+  - There are two things going on here.
+    - To take the expectation of a sum of two things, we can take two expectations and sum.
+    - To take the expectation of a constant times a random variable, we can multiply the random variable's expectation by the constant.
+  - In other words, we can *distribute* expectations and can pull constants out of them.
+
+### Implication: Unbiasedness
+
+  - The sample mean is an *unbiased* estimator of the population mean whenever we sample *uniformly at random*.
+  - *Definition.* Sampling uniformly at random from a population $y_1 \ldots y_m$ means that  ....
+    - Informally, each 'call', considered on its own, is equally likely to go to anyone in the population.
+    - In mathematical notation, $Y_i=y_{J_i}$ where $J_i=1 \ldots m$ each with probability $1/m$.   
+    - This includes sampling with replacement and sampling without replacement.
+  
+$$
+\begin{aligned}
+\E\qty[\frac1n \sum_{i=1}^n Y_i] 
+&= \frac1n \sum_{i=1}^n \E[Y_i] && \text{linearity of expectation} \\
+&= \frac1n \sum_{i=1}^n \qty{\sum_{j=1}^m y_j \times P(J_i=j) }   && \text{def. expectation} \\
+&= \frac1n \sum_{i=1}^n \qty{\sum_{j=1}^m y_j \times \frac{1}{m} } && \text{sampling uniformly at random} \\
+&= \frac1n \sum_{i=1}^n \mu  && \text{ for } \ \mu = \frac1m \sum_{j=1}^m y_j \\
+&= \frac{1}{n} \times n \times \mu = \mu
+\end{aligned}
+$$
+
+### Proof of Linearity
+
+- In essence, it comes down to the fact that all we're doing is summing.
+	- Expectations are probability-weighted sums.
+	- And we're looking at the expectation of a sum.
+- And we can change the order we sum in without changing what we get.
 
 $$
-\mu \in \bar{Y} \pm 1.96\hat\sigma \qfor \hat\sigma = \sqrt{\bar{Y}(1-\bar{Y})/n} \qqtext{ in roughly 95\% of polls.}
+\small{
+\begin{aligned}
+\E\qty( a Y + b Z ) 
+&= \sum_{y}\sum_z (a y + b z) \ P(Y=y, Z=z) && \text{ by definition of expectation} \\
+&= \sum_{y}\sum_z a y \ P(Y=y, Z=z) + \sum_{z}\sum_y b z \ P(Y=y, Z=z) && \text{changing the order in which we sum} \\
+&= \sum_{y} a y \ \sum_z P(Y=y,Z=z) + \sum_{z} b z \ \sum_y P(Y=y,Z=z) && \text{pulling constants out of the inner sums} \\
+&= \sum_{y} a y \ P(Y=y) + \sum_{z} b z \ P(Z=z)  && \text{summing to get marginal probabilities from our joint } \\
+&= a\sum_{y} y \ P(Y=y) + b\sum_{z} z \ P(Z=z)  && \text{ pulling constants out of the remaining sum } \\
+&= a\E Y + b \E Z  && \text{ by definition}
+\end{aligned}
+}
 $$
+
+:::
+
+## Properties of Expectations: Factorization of Products 
+
+$$
+\E[YZ] = \E[Y]\E[Z] \qqtext{when $Y$ and $Z$ are independent}
+$$
+
+::: {.panel-tabset}
+### What This Means
+
+- The expectation of a product of **independent** random variables is the product of their expectations.
+- *Definition.* Random variables are independent if their joint distribution is the product of their marginal distributions. 
+  - When we sample with replacement, the responses to our calls are independent.
+  - When we sample without replacement, they're *not* independent.
+- Lack of independence isn't necessarily a bad thing. 
+  - It's why sampling without replacement gives us better precision.
+  - But it can make some calculations, e.g. for the standard deviation of a mean, a bit more complicated.
+- It does *not* make calculating the expectation of a mean any harder. Why?
+
+### Proof
+
+
+$$
+\begin{aligned}
+\E[YZ] &= \sum_{yz} yz \ P(Y=y, Z=z) && \text{by definition of expectation} \\
+&= \sum_y \sum_z yz \ P(Y=y) P(Z=z) && \text{factoring and ordering sums } \\
+&= \inteal{\sum_y y \ P(Y=y)} \inpink{\sum_z z \ P(Z=z)} && \text{pulling factors that don't depend on $z$ out of the inner sum} \\
+&  \inteal{\E[Y]} \inpink{\E[Z]} && \text{by definition of expectation}
+\end{aligned}
+$$
+
+
+:::
+
+
+## The Standard Deviation of a Proportion 
+### Sampling with Replacement
+
+- We've worked out the variance (i.e. the squared standard deviation) of a binary random random variable.
+$$
+\Var[Y] = \theta(1-\theta)   \qqtext{ when } 
+Y = \begin{cases} 
+1 & \qqtext{ with probability } \theta \\ 
+0 & \qqtext{ with probability } 1-\theta 
+\end{cases}
+$$
+
+
+- When we sample uniformly at random, our sample proportion is the mean of $n$ independent variables like this. 
+
+$$
+\Var[\hat\theta] = \Var\qty[\frac1n \sum_{i=1}^n Y_i] = \E\qty[ \qty{ \frac1n \sum_{i=1}^n Y_i - \E\qty[\frac1n \sum_{i=1}^n Y_i] }^2 ] = \frac{\theta(1-\theta)}{n}
+$$
+
+::: {.panel-tabset}
+### Steps 
+
+- We can calculate it in four steps.
+  1. Centering each term. 
+  2. Squaring out the sum.^[See @sec-squaring-sums if this is unfamiliar.]
+  3. Distributing the Expectation.
+  4. Taking the expectation term-by-term. 
+
+### Steps Executed
+
+$$
+\begin{aligned}
+\Var[\hat\theta] 
+&\explain{=}{Using the definitions of $\Var$ and $\hat\theta$} 
+\E\qty[ \qty{ \frac1n \sum_{i=1}^n Y_i - \E\qty[\frac1n \sum_{i=1}^n Y_i] }^2 ] \\
+&\explain{=}{Step 1. Centering each term. We can do this because Expectation is linear.} 
+\E\qty[ \qty{ \frac1n \sum_{i=1}^n \qty(Y_i - \E[Y_i]) }^2 ] \\
+&\explain{=}{Step 2. Squaring out the Sum. This is just arithmetic: a version of $(a+b)^2=a^2+ab+ba+b^2$ for bigger sums.} 
+\E\qty[ \frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n \qty(Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] \\
+&\explain{=}{Step 3. Distributing the Expectation. Linearity of Expectation again.} \frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n \E\qty[ \qty(Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] \\
+&\explain{=}{Step 4. Taking Expectations term-by-term.} \frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n 
+\begin{cases} 
+\E\qty[ \qty(Y_i - \E[Y_i])^2 ] \explain{=}{By definition} \Var[Y_i] = \theta (1-\theta)      & \text{ when } j=i \\
+\E\qty[ \qty(Y_i - \E[Y_i]) \E \qty(Y_j - \E[Y_j]) ]
+\explain{=}{Because $Y_i$ and $Y_j$ are independent.} \E\qty[\qty(Y_i - \E[Y_i])] \E\qty[\qty(Y_j - \E[Y_j])] 
+\explain{=}{Because each factor has mean zero.} 0 & \text{ when } j \neq i 
+\end{cases} \\
+&\explain{=}{Because each sum over $j$ has one nonzero term---the one where $j=i$---and it's always $\theta(1-\theta)$}
+  \frac{1}{n^2} \sum_{i=1}^n \theta(1-\theta) = \frac{1}{n^2} \times n \times \theta(1-\theta) = \frac{\theta(1-\theta)}{n}
+\end{aligned}
+$$
+
+### Conclusion
+
+- The variance of our mean is $\faded{1/n \times}$ the variance of one observation.
+$$
+\Var\qty[\frac1n\sum_{i=1}^n Y_i] = \frac{\Var[Y_1]}{n}
+$$
+
+- So the standard deviation of our mean is $\faded {1/\sqrt{n} \times}$ the standard deviation of one observation.
+
+$$
+\sd\qty[\frac1n\sum_{i=1}^n Y_i] = \frac{\sd[Y_1]}{\sqrt{n}} = \sqrt{\frac{\theta(1-\theta)}{n}}
+$$
+
+:::
+
+
+## The Standard Deviation of a Proportion
+### Sampling without Replacement
+
+- When we sample without replacement, a lot of the same calculational steps still work.
+- But the result we get is different, so we must've done something different. [What's different?]{.blue}
+
+$$
+\Var[\hat\theta] = \Var\qty[\frac1n \sum_{i=1}^n Y_i] = \E\qty[ \qty{ \frac1n \sum_{i=1}^n Y_i - \frac1n \E[\sum_{i=1}^n Y_i] }^2 ] = \frac{\theta(1-\theta)}{n} \times \frac{m-n}{m-1}
+$$
+
+::: {.panel-tabset}
+### Steps for Sampling with Replacement
+
+
+$$
+\begin{aligned}
+\Var[\hat\theta] 
+&\explain{=}{Using the definitions of $\Var$ and $\hat\theta$} 
+\E\qty[ \qty{ \frac1n \sum_{i=1}^n Y_i - \E\qty[\frac1n \sum_{i=1}^n Y_i] }^2 ] \\
+&\explain{=}{Step 1. Centering each term. We can do this because Expectation is linear.} 
+\E\qty[ \qty{ \frac1n \sum_{i=1}^n \qty(Y_i - \E[Y_i]) }^2 ] \\
+&\explain{=}{Step 2. Squaring out the Sum. This is just arithmetic: a version of $(a+b)^2=a^2+ab+ba+b^2$ for bigger sums.} 
+\E\qty[ \frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n \qty(Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] \\
+&\explain{=}{Step 3. Distributing the Expectation. Linearity of Expectation again.} \frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n \E\qty[ \qty(Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] \\
+&\explain{=}{Step 4. Taking Expectations term-by-term.} \frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n 
+\begin{cases} 
+\E\qty[ \qty(Y_i - \E[Y_i])^2 ] \explain{=}{By definition} \Var[Y_i] = \theta (1-\theta)      & \text{ when } j=i \\
+\E\qty[ \qty(Y_i - \E[Y_i]) \E \qty(Y_j - \E[Y_j]) ]
+\explain{=}{Because $Y_i$ and $Y_j$ are independent.} \E\qty[\qty(Y_i - \E[Y_i])] \E\qty[\qty(Y_j - \E[Y_j])] 
+\explain{=}{Because each factor has mean zero.} 0 & \text{ when } j \neq i 
+\end{cases} \\
+&\explain{=}{Because each sum over $j$ has one nonzero term---the one where $j=i$---and it's always $\theta(1-\theta)$}
+  \frac{1}{n^2} \sum_{i=1}^n \theta(1-\theta) = \frac{1}{n^2} \times n \times \theta(1-\theta) = \frac{\theta(1-\theta)}{n}
+\end{aligned}
+$$
+
+### Steps for Sampling without Replacement
+$$
+\begin{aligned}
+\Var[\hat\theta] 
+&= \E\qty[ \qty{ \frac1n \sum_{i=1}^n Y_i - \frac1n \sum_{i=1}^n \E[Y_i] }^2 ] \\
+&= \E\qty[ \qty{ \frac1n \sum_{i=1}^n \qty(Y_i - \E[Y_i]) }^2 ] \\
+&= \E\qty[ \frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n \qty(Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] \\
+&= \frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n \E\qty[ \qty(Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] \\
+&= 
+\frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n 
+\begin{cases} 
+\E \qty(Y_i - \E[Y_i])^2 = \Var[Y_i] = \theta (1-\theta)      & \text{ when } j=i \\
+\textcolor{blue}{\E\qty[ \qty(Y_i - \E[Y_i]) \qty(Y_j - \E[Y_j]) ] \explain{=}{Why $-\frac{\theta(1-\theta)}{m-1}$? This'll be a homework problem.} -\frac{\theta (1-\theta)}{m-1}  } & \text{ when } j \neq i 
+\end{cases} \\
+&\explain{=}{Because each sum over $j$ now includes one copy of $\theta(1-\theta)$ and $n-1$ copies of $-\frac{\theta(1-\theta)}{m-1}$}
+\frac{1}{n^2} \sum_{i=1}^n \theta(1-\theta)\qty{1 - (n-1) \times \frac{1}{m-1}} \\
+&\explain{=}{Pulling out common factors and simplifying} \frac{\theta(1-\theta)}{n} \times \qty{1 - \frac{n-1}{m-1}} = \frac{\theta(1-\theta)}{n} \times \frac{m-n}{m-1}.
+\end{aligned}
+$$
+:::
+
 
 ## An Interval for Turnout in 2020
 
@@ -442,23 +886,34 @@ $$
 #| out-height: 300px 
 #| fig-asp: .3
  
-w95 = width(turnout.bootstrap.samples, alpha=.05)
+theta = mean(y)
+theta.hat = mean(Y)
+hbinom = n*max(dbinom(0:n, n, theta.hat))
+wbinom = width_binom(theta.hat, n)
+wnorm = 2*1.96*sqrt(theta.hat*(1-theta.hat)/n)
+w95 = wbinom
+
 xx = seq(.6,.8, length=1000)
-turnout.histogram = ggplot() + geom_histogram(aes(x=turnout.bootstrap.samples, y=after_stat(density)), bins=150, alpha=.3) 
-turnout.histogram + geom_line(aes(x=xx, y=dnorm(xx, mean(Y), sd(Y)/sqrt(n))), color='black') 
+turnout.histogram = ggplot() + 
+  geom_col(aes(x=(0:n)/n, y=n*dbinom(0:n, n, theta.hat)), alpha=.3, color='red', fill='red',linewidth=.1) + 
+  geom_area(aes(x=xx, y=dnorm(xx, theta.hat, sqrt(theta.hat*(1-theta.hat)/n))), color='blue', fill='blue', alpha=.3, linewidth=.1) + 
+  geom_pointrange(aes(y=.3*hbinom, x=theta.hat, xmin=theta.hat-wbinom/2, xmax=theta.hat+wbinom/2), color='red') +
+  geom_pointrange(aes(y=.34*hbinom, x=theta.hat, xmin=theta.hat-wnorm/2,  xmax=theta.hat+wnorm/2), color='blue') 
+turnout.histogram + scale_x_continuous(limits=c(.6, .8))
 ```
 
-- Let's compare this interval to the one we got using the bootstrap, i.e. the one based on the binomial distribution.
+- Let's compare our two approaches to calibration in our turnout poll.
 
 $$
 \begin{aligned}
-\text{bootstrap interval} &= `r round(mean(Y),4)`  \pm `r round(w95/2,4)`  \\
-\text{normal interval}    &= `r round(mean(Y),4)`  \pm `r round(1.96*sqrt(mean(Y)*(1-mean(Y))/n),4)` 
+\textcolor{red}{\text{binomial interval}} &= `r sprintf("%0.4f", round(theta.hat,4))`  \pm `r sprintf("%0.4f", round(wbinom/2,4))`  \\
+\textcolor{blue}{\text{normal interval}}    &= `r sprintf("%0.4f", round(theta.hat,4))`  \pm `r sprintf("%0.4f", round(wnorm/2,4))` 
 \end{aligned}
 $$
 
-- We have to go out to 4 digits, way beyond what's statistically meaningful, to see any difference.
-- The statistics is telling you might be off by `r round(w95/2,2)`. What's another $.0001?$
+- We have to go out to 4 digits, way beyond what's statistically meaningful, to see any difference in these intervals.
+  - Our interval estimate---either one---is telling you might be off by a few hundredths. 
+  - Who cares about another couple ten-thousandths at the edge of the interval?
 
 ## Thinking Speculatively About Intervals
 
@@ -467,23 +922,23 @@ $$
 #| out-height: 300px 
 #| fig-asp: .3
  
-turnout.histogram + geom_line(aes(x=xx, y=dnorm(xx, mean(Y), sd(Y)/sqrt(n))), color='black') 
+turnout.histogram + scale_x_continuous(limits=c(.6, .8))  
 ```
 
 - Suppose we're not satisfied with this level of precision, so we're going to collect more data.
-- Suppose we want our interval to be $\pm .01$ instead of $\pm `r round(w95/2, 2)`$. 
+- Suppose we want our interval to be $\pm .01$ instead of $\pm `r round(w95/2, 3)`$. 
 - How many people, in total, do we need to call?  We can use the normal approximation to figure that out.
 
 $$
-\hat \mu \pm 1.96\sigma \qfor \sigma = \sqrt{\bar y (1-\bar y)/n} \qqtext{ is } \hat\mu \pm .01 \qqtext{if} 1.96\sqrt{\bar y (1-\bar y)/n} = .01
+\hat \theta \pm 1.96\sigma \qfor \sigma = \sqrt{\frac{\theta (1-\theta)}{n}} \qqtext{ is } \hat\theta \pm .01 \qqtext{if} 1.96\sqrt{\frac{\theta (1-\theta)}{n}} = .01
 $$
 
-- Now all we have to do is solve for $n$. And, since we don't know $\bar y$, use our best guess, $\bar Y=`r mean(Y)`$.
+- Now all we have to do is solve for $n$. And, since we don't know $\theta$, use our best guess, $\hat\theta=`r mean(Y)`$.
 
 ::: fragment
 
 $$ 
-n = \frac{1.96^2 \bar Y (1-\bar Y)}{.01^2} \approx `r round(1.96^2*mean(Y)*(1-mean(Y))/.01^2,-2)`
+n = \frac{1.96^2 \ \hat\theta (1-\hat\theta)}{.01^2} \approx `r round(1.96^2*mean(Y)*(1-mean(Y))/.01^2,-3)`
 $$
 
 :::
@@ -494,8 +949,8 @@ $$
 
 $$
 \begin{aligned}
-\pm `r round(w95/2,3)` &= \pm 1.96\sqrt{\bar Y (1-\bar Y)/625}  \\
-\pm 0.01 &= \pm 1.96\sqrt{\bar Y (1-\bar Y)/n}   
+\pm `r round(w95/2,3)` &= \pm 1.96\sqrt{\frac{\hat\theta (1-\hat\theta)}{625}}  \\
+\pm 0.01 &= \pm 1.96\sqrt{\frac{\hat\theta (1-\hat\theta)}{n}}   
 \end{aligned}
 $$
 
@@ -503,9 +958,9 @@ $$
 
 $$
 \frac{`r round(w95/2,3)`}{.01} 
-= \frac{1.96\sqrt{\bar Y (1-\bar Y)/625}}{1.96\sqrt{\bar Y (1-\bar Y)/n}}
+= \frac{1.96\sqrt{\frac{\hat\theta (1-\hat\theta)}{625}}}{1.96\sqrt{\frac{\hat\theta (1-\hat\theta)}{n}}}
  = \sqrt{\frac{n}{625}}
-\qqtext{ so } n = 625\left(\frac{`r round(w95/2,3)`}{.01}\right)^2 \approx `r round(625*((w95/2)/.01)^2,-2)`
+\qqtext{ so } n = 625\left(\frac{`r round(wnorm/2,3)`}{.01}\right)^2 \approx `r round(625*((wnorm/2)/.01)^2,-3)`
 $$
 
 - To get the new sample size, multiply ...
@@ -518,13 +973,13 @@ $$
 
 - What do we do if we don't have any data yet? 
   - Then we don't have a 'current interval width' to compare to the 'desired interval width'.
-  - And we don't have a sample proportion $\bar Y$ to plug in for the population proportion $\bar y$.
+  - And we don't have a sample proportion $\hat\theta$ to plug in for the population proportion $\theta$.
 - But we can still use the formula we worked out earlier to get somewhere.
 $$ 
-n = \frac{1.96^2 \bar y (1-\bar y)}{.01^2} \approx `r round(1.96^2*mean(y)*(1-mean(y))/.01^2,-2)`
+n = \frac{1.96^2 \ \theta (1-\theta)}{.01^2} 
 $$
 
-- We don't have an estimate $\bar Y$, but we do know it's between 0 and 1. And, consequently, so is $\bar y (1-\bar y)$.  
+- We don't have an estimate of $\theta$, but we do know it's between 0 and 1. And, consequently, so is $\theta(1-\theta)$.
 - So we know that if we just substitute $1$ into our formula, we'll get a number that's bigger than we need.
 
 $$
@@ -548,7 +1003,7 @@ ggplot() + geom_line(aes(x=xx, y=xx*(1-xx)))
 
 - Here's the claim. Why is it true? 
 $$ 
-n := \frac{1.96^2 \bar y (1-\bar y)}{.01^2} < n' := \frac{1.96^2 \times 1/4}{.01^2}
+n := \frac{1.96^2 \ \theta (1-\theta)}{.01^2} < n' := \frac{1.96^2 \ \times 1/4}{.01^2}
 $$
 
 - **Hint.** Look at the graph of $f(x) = x(1-x)$ above.
@@ -556,93 +1011,110 @@ $$
 
 ::: fragment
 
- - Because the biggest $\bar y (1-\bar y)$ gets, for $\bar y \in [0,1]$, is $1/4$.
- - And it happens, for what it's worth, when $\bar y= 1/2$. 
+ - Because $1/4$ is the biggest $\theta (1-\theta)$ gets for $\theta \in [0,1]$.
+ - And it happens, for what it's worth, when $\theta = 1/2$. 
  - That is, we'll have the least precision --- at a given sample size --- when the proportion we're estimating is 1/2. 
 
 :::
 
-# Differences in Proportions
+
+# Appendix
+Nothing here will show up on an exam.  
+
+## Squaring Sums {#sec-squaring-sums}
+
+$$
+\qty{\sum_{i=1}^n Z_i^2} = \sum_{i=1}^n \sum_{j=1}^n Z_i Z_j
+$$
+
+- This is a generalization of the identity $(a+b)^2 = a^2 + 2ab + b^2$ to more terms.
+  - You may be so used to that you don't even think about what's really happening.
+  - Here's a version where I'm very explicit: it's a product of two copies of $(a+b)$: one [pink]{.pink} and one [teal]{.teal}.
+  
+$$
+(a+b)^2 = \inpink{(a+b)}\inteal{(a+b)} = \inpink{a}\inteal{a} + \inpink{a}\inteal{b} + \inpink{b}\inteal{a} + \inpink{b}\inteal{b} = a^2 + 2ab + b^2
+$$
+
+- How do we generalize this to more terms? We'll use the same color-coded-copies trick.
+  - It helps to count out the terms in our [pink copy]{.pink} using $i$ and in our [teal copy]{.teal} using $j$.^[If we used $i$ to count terms in both sums, we'd wind up with two different things we call $i$: one pink and one teal. We could get by saying 'pink $i$' and 'teal $i$' in class, but people you meet later on would probably get confused if you talk this way. Using $i$ and $j$ is conventional.]
+  - When we multiply out our sums, we get a product term for each pair of terms in the sum.
+  - Each product term involves [one term in the pink sum]{.pink} and [one term in the teal one]{.teal}.
+
+$$
+\qty{\sum_{i=1}^n Z_i}^2
+= \inpink{\sum_{i=1}^n Z_i} \inteal{\sum_{j=1}^n Z_j} 
+= \inpink{\sum_{i=1}^n} \inteal{\sum_{j=1}^n} \inpink{Z_i} \inteal{Z_j}
+$$
 
 
-## 95% Intervals for Differences in Proportions
+## Why Continuous Distribution is a Blessing {#sec-a-blessing}
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
 ```{r}
-#| out-height: 300px
-#| fig-asp: .3 
+#| layout-ncol: 2
+#| fig-width: 7
+p.even = ggplot() + 
+  geom_col(aes(x=(0:10)/10,  y=10*dbinom(0:10,  10,  .5)), alpha=.2, linewidth=.1,       fill=pollb, color=pollb) +
+  geom_col(aes(x=(0:30)/30,  y=30*dbinom(0:30, 30, .5)), alpha=.2, linewidth=.1, fill=pollc, color=pollc) + 
+  geom_col(aes(x=(0:90)/90,  y=90*dbinom(0:90, 90, .5)), alpha=.2, linewidth=.1, fill=polld, color=polld) +
+           labs(x='', y='')
+            
+p.uneven = ggplot() + 
+  geom_col(aes(x=(0:10)/10,    y=10*dbinom(0:10,  10,  .5)), alpha=.2, linewidth=.1, fill=pollb, color=pollb) +
+  geom_col(aes(x=(0:25)/25,    y=25*dbinom(0:25, 25, .5)), alpha=.2, linewidth=.1, fill=pollc, color=pollc) + 
+  geom_col(aes(x=(0:83)/83,    y=83*dbinom(0:83, 83,  .5)), alpha=.2, linewidth=.1, fill=polld, color=polld)
 
-sampling.dist.plot
+p.even
+p.uneven
 ```
-
-- We can do exactly the same thing to work out a 95% interval for a difference in proportions in our population.
-- But based, of course, on the normal approximation to the sampling distribution of this different estimate.
-- i.e., based on the sampling distribution of the difference in proportions in our sample.
-
-$$
-\widehat{ \text{difference} } \sim N(\mu, \sigma) \qfor \mu = \bar y_1 - \bar y_0 \qand \sigma = \sqrt{\bar{y_1}(1-\bar{y_1})/n_1 + \bar{y_0}(1-\bar{y_0})/n_0}
-$$
-
-- Here $\bar y_1$ and $\bar y_0$ are the proportions of yeses among Black and non-Black voters in our population.
-- And $n_1$ and $n_0$ are the number of Black and non-Black voters in our sample.^[Approximately. We'll talk about why it's an approximation next week.]
-- As before, we can plug in the sample proportions $\bar Y_1$ and $\bar Y_0$ to get an estimate of the standard deviation.
-
-
-## An Interval for the Turnout Difference in 2020
-
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
 ```{r}
-#| out-height: 300px 
-#| fig-asp: .3
+#| layout-ncol: 2
+#| fig-width: 7
 
-dif.est = mean(Y[X==1]) - mean(Y[X==0])
-sd.dif = sqrt(mean(Y[X==1])*(1-mean(Y[X==1]))/sum(X==1) + mean(Y[X==0])*(1-mean(Y[X==0]))/sum(X==0)) 
-w95 = width(difference.bootstrap.samples, alpha=.05)
-xx = seq(-.1, .2, length=1000)
-turnout.histogram = ggplot() + geom_histogram(aes(x=difference.bootstrap.samples-mean(difference.bootstrap.samples)+dif.est, y=after_stat(density)), bins=150, alpha=.3) 
-turnout.histogram + geom_line(aes(x=xx, y=dnorm(xx, dif.est, sd.dif)), color='black') 
+xx = seq(0,1,length=1000)
+
+p.even + 
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/10))), color=pollb) + 
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/30))), color=pollc) + 
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/30))), color=polld)
+
+p.uneven + 
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/10))), color=pollb) + 
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/25))), color=pollc) + 
+  geom_line(aes(x=xx, y=dnorm(xx, .5, sqrt(.5*.5/83))), color=polld)
 ```
+:::
+::::
 
-- This interval isn't very different from the one we got via bootstrap.  But they're maybe not that useful.
-
-$$
-\begin{aligned}
-\text{bootstrap interval} &= `r round(dif.est,4)`  \pm `r round(w95/2,4)`  \\
-\text{normal interval}    &= `r round(dif.est,4)`  \pm `r round(1.96*sd.dif,4)` 
-\end{aligned}
-$$
-
-
-### Quick Exercise 1
-- Suppose we want our interval to be $\pm .01$.
-- Roughly how many people, in total, do we need to call? 
-
-### Quick Exercise 2
-- Suppose we want to be confident in the *sign* of the difference in turnout, i.e., whether it's positive or negative.
-- Roughly how many people, in total, do we need to call? Is this something we can know with the data we have?
-
-# Exercises
-
-Do these in small groups.
-Be ready to explain your answers.
-
-
-## Group Exercise 1
-
-- Suppose a friend has polled 100 of Georgia's registered voters
-about their intention to vote in the 2024 election. 
-- They're sampling with replacement, just like you did. 
-- The interval estimate they report for turnout is [.59,.61]. 
-- **Q.** Could this interval estimate have 95% coverage?
+- Think about what happens when you tried to compare binomial distributions for different sample sizes $n$.
+- If you're lucky, and your sample sizess are all multiples of each other, then the probability shown in one wide bar \
+gets split up into several narrow bars when sample size increases.
+  - E.g., how the probability in the bar $\pollb 5/10$] gets split into $\pollc 14/30$, $\pollc 15/30$, and $\pollc 16/30$ ... 
+  - ... and then into $\polld 42/90 \ldots 48/90$ as sample size goes from $\pollb 10$ to $\pollc 30$ to $\polld 90$.
+  - That's what's going on in the plot on the left. What we see on the right is worse.
+- If your sample sizes aren't multiples, we don't just split up one wide bar's probability into several narrow ones.  
+  - For the narrow bars we see straddling two wide bars, we have to 'merge' probability  from two wide bars.
+  - It's a mess. And using bars hides the worst of it. 
+  - Most of the points that have mass for one $n$ will have none for the others.
+  - It's not possible to have a sample mean of $5/10$ with a sample size of $25$. It's the wrong denominator. 
+    - Probability mass at $\hat\theta = 1/2$ can go from maximal for $n=10$ to zero for $n=25$ ... 
+    - ... even if the population mean is the same: always $\theta=1/2$. That happens in the right plot.
+- Using an approximation with zero mass at any particular point, like the normal distribution, lets us avoid all this. 
+  - We do have to integrate whenever we want to calculate a probability.
+  - But we can easily compare the probabilities of the same interval at different sample sizes.
+  - In a sense, all the 'splitting' and 'merging' is built into the approximation.
+  
 
 
 
-- This friend is planning to run a turnout poll in California, too. 
-- But they want a 68% interval, not a 95% interval. 
-- **Q.** How many people do they need to call to ensure that their interval estimate of turnout will be $\pm$ 1%? What about $\pm$ 0.1%? 
 
-## Group Exercise 2
 
-- Suppose this friend reports that the difference in turnout rate between Black and non-Black voters will be
-between .05 and .15. 
-- They're using the same poll of 100 of Georgia's registered voters. Could this interval estimate have 95% coverage? 
-- About 30% of registered voters in Georgia are Black, so their sample includes
-about 30 Black voters and 70 non-Black voters.
+
+
+
+
+
 

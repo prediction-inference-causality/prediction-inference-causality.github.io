@@ -1,0 +1,399 @@
+---
+title: "Lab 3"
+subtitle: "Probability Background: Expectations"
+code-annotations: select
+---
+
+## Setup
+
+{{< include shared-code.qmd >}}
+
+```{=html}
+<style>
+.reveal { background: #ffffff; }
+</style>
+```
+
+```{webr-r}
+#| label: ggplot-theme
+#| context: setup
+
+lightgray = "#bbbbbb"
+gridcolor = rgb(0,0,0,.1, maxColorValue=1)
+
+lab.theme = theme(
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        panel.background = element_rect(fill = "transparent", colour = NA),
+                    legend.background = element_rect(fill="transparent", colour = NA),
+                    legend.box.background = element_rect(fill="transparent", colour = NA),
+                    legend.key = element_rect(fill="transparent", colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = lightgray),
+        axis.text.y  = element_text(colour = lightgray),
+        axis.title.x  = element_blank(),
+        axis.title.y  = element_blank(),
+        panel.grid.major=element_line(colour=gridcolor),
+        panel.grid.minor=element_line(colour=gridcolor, linewidth=0.25))
+
+theme_set(lab.theme)
+set.seed(1)
+```
+
+```{webr-r}
+#| echo: true
+n = 100
+m = 200
+theta = 7/10
+
+height.binom = max(dbinom(0:n, n, theta))
+height.hyper = max(dhyper(0:n, m*theta, m*(1-theta), n))
+
+S = 1000
+probs = data.frame(x = (0:n)/n,
+                   binom = dbinom(0:n, n, theta),
+                   hyper = dhyper(0:n, m*theta, m*(1-theta), n))
+samples = data.frame(binom = rbinom(S, n, theta)/n,
+                     hyper = rhyper(S, m*theta, m*(1-theta), n)/n,
+                     sample = (1:S)/S)
+height = max(probs$hyper)
+
+twodist.plot = ggplot() +
+  geom_area(aes(x=x, y=prob, color=dist, fill=dist), alpha=.3, position="identity", 
+    data=probs |> pivot_longer(cols=c(binom, hyper), names_to="dist", values_to="prob")) +
+  geom_vline(xintercept = theta, color='green', alpha=.7, linewidth=1.5) +
+  geom_point(aes(x=x, y=sample*height), color='purple',alpha=.2, size=.2, 
+    data=samples |> pivot_longer(cols=c(binom, hyper), names_to="dist", values_to="x")) +
+  scale_x_continuous(breaks=seq(0,1,by=.1), limits=c(.5,.9)) + 
+ guides(color='none', fill='none') + labs(y="", x="")
+```
+
+## Comparing Distributions
+
+```{webr-r}
+#| warning: false
+twodist.plot + facet_wrap(~dist)
+```
+
+- You're looking at the sampling distribution of the sample frequency, $\hat\theta$ when we've sampled 100 observations ...
+- ... [with]{.groupa} and [without]{.groupb} replacement from a binary population of size 200 with [frequency $\theta = 7/10$]{.target}.
+- **Q**. What do these distributions have in common? How do they differ? 
+
+::: fragment
+
+- What they have in common:
+  1. Their essential shape. They're both 'single bumps'. 
+  2. Their location. They're both centered on the population frequency $\theta$.
+  
+- What's different is their *spread*. The [binomial distribution]{.groupa} is wider than the [hypergeometric distribution]{.groupb}.
+
+:::
+
+## Expectation and Location
+
+::: {.panel-tabset}
+### Single Bumps 
+```{webr-r}
+#| warning: false
+twodist.plot + facet_wrap(~dist)
+```
+
+### Flips
+```{webr-r}
+#| warning: false
+flips = rbinom(S, 1, .7)
+flips.plot =ggplot() + geom_point(aes(x=flips, y=1:S/S), color='purple', alpha=.2, size=.2) + 
+           geom_bar(aes(x=flips, y=after_stat(prop)), alpha=.2) +
+           geom_vline(xintercept = .7, color='green', alpha=.7, linewidth=1.5)
+flips.plot
+```
+
+### Multiple Bumps 
+```{webr-r}
+#| warning: false
+flips = rbinom(S, 1, .5)
+B1 = rbinom(S, n, .3)/n
+B2 = rbinom(S, n, .7)/n
+B = ifelse(flips==1, B1, B2)
+bumps.plot = ggplot() + geom_point(aes(x=B, y=(height/2)*(1:S/S)), color='purple', alpha=.2, size=.2) + 
+           geom_bar(aes(x=B, y=after_stat(prop)),  alpha=.2) +
+           geom_vline(xintercept = .5, color='green', alpha=.7, linewidth=1.5)
+bumps.plot
+```
+:::
+
+
+::: {.panel-tabset}
+### Defining Expectation 
+- The *expectation* of a random variable is its *probability-weighted average*.
+  
+$$
+\E[X] = \sum_x \inpink{x}\inteal{P(X=x)}
+$$
+
+- That means summing, over the x axis, the product of ...
+  - ... the [$x$, the position]{.pink} along the x-axis 
+  - ... the [$P(X=x)$, the *bar height*]{.teal} at that position.
+
+- Does that tell us where distribution is *located*, i.e., where draws are likely to be?
+- If not, why is that useful?
+
+### Quick Practice
+
+- What is the expectation of ...
+  1. $X$, a binary random variable that's one with probability $\theta$  
+  2. $X+X=2X$
+  3. $2X-1$
+  3. $X + Y$ where $Y$ has the same distribution as $X$
+  4. $X^2$
+  5. $XY$ 
+
+:::
+
+
+## Spread
+
+::: {.panel-tabset}
+### Single Bumps 
+```{webr-r}
+#| warning: false
+twodist.plot + facet_wrap(~dist)
+```
+
+### Flips
+```{webr-r}
+#| warning: false
+flips.plot
+```
+
+### Multiple Bumps 
+```{webr-r}
+#| warning: false
+bumps.plot
+```
+:::
+
+- To summarize the spread of a distribution, we use the expectation of ...
+  - some kind of *distance* 
+  - from the center.
+- The most common measure is the *variance*, which is the expectation of the squared distance from the mean.
+  - The *standard deviation*, the square root of this, is the variance translated back into 'not-squared units'.
+  - Other measures like this might be the *median absolute difference* from *the median*. But we won't bother with those.
+
+::: {.panel-tabset}
+### Definition
+$$
+\begin{aligned}
+\Var[X] &= \E\qty[ (X - \E X)^2 ] \\
+\sd[X]  &= \sqrt{\Var[X]}
+\end{aligned}
+$$
+
+  
+### Quick Practice
+- What is the variance of ...
+  1. $X$, a binary random variable that's one with probability $\theta$  
+  2. $2X$
+  3. $2X-1$
+  3. $X + Y$ where $Y$ has the same distribution as $X$
+
+:::
+
+## Sampling, Means, and Variances
+
+:::: columns
+::: column
+```{webr-r}
+#| warning: false
+twodist.plot + facet_wrap(~dist)
+```
+:::
+::: column
+```{webr-r}
+#| warning: false
+flips.plot 
+```
+:::
+::::
+
+:::: {.panel-tabset}
+### Why Do We Care About These?
+
+- Why do we care about the expectation and variance of *a random variable*?
+- Criticism 1. The mean often isn't a great summary of location for a random variable.
+  - Variance describes deviation from the mean. If the mean is bad, so is the variance.
+- Criticism 2. Why do we care about a random variable anyway? We care about the *population* from which it's drawn.
+- Any comments in support of expectations and variances? Maybe responses to these criticisms?
+
+### Re: Criticism 2
+
+- If a random variable $Y$ is *equally likely* to be any member of a population $y_1 \ldots y_m$, then **its Expectation is the population mean**.
+
+$$
+\E[Y] = \sum_{j=1^m} \underset{response}{y_j} \times \underset{probability}{\frac{1}{m}} = \frac{1}{m}\sum_{j=1}^m y_j = \bar y
+$$
+
+- Usually, we use sampling schemes like this. Even weird ones tend to have this property.
+  - Sampling without replacement.
+  - Sampling with replacement.
+  - Randomized 'Circular' Convenience Sampling.
+    - Line up your population and roll a die to decide who to survey first. 
+    - Then survey them and the $n-1$ people to their right.
+    - 'Wrap around', starting from the other side, if you run out of people.
+
+### Re: Criticism 1
+
+- It's very reasonable to say that it's nonsense to refer to any one location for a coin flip or a pair of bumps.
+- But if you average a lot of coin flips, or a lot of independent draws from a pair of bumps...
+  - what you'll get will start to look like a single bump.^[This is what the **central limit theorem** says.]
+  - that bump will be centered on the expectation.^[This is due to the *linearity of expectation*.]
+  - and it'll be *concentrated* around it---most draws will be close to that expectation.^[This is what the *law of large numbers* says.]
+
+:::
+
+
+# Properties of Expectations
+These are repeated in the next lecture.
+
+## Linearity of Expectations
+
+::: {.panel-tabset}
+### Linearity
+$$ 
+\begin{aligned}
+E[ a Y + b Z ] 
+&= E[aY] + E[bZ] \\
+&= aE[Y] + bE[Z]  \\
+& \text{ for random variables $Y, Z$ and numbers $a,b$ }
+\end{aligned}
+$$
+
+  - There are two things going on here.
+    - To average a sum of two things, we can take two averages and sum.
+    - To average a constant times a random variable, we can multiply the random variable's average by the constant.
+  - In other words, we can *distribute* expectations and can pull constants out of them.
+  
+### Proof
+
+- In essence, it comes down to the fact that all we're doing is summing.
+	- Expectations are probability-weighted sums.
+	- And we're looking at the expectation of a sum.
+- And we can change the order we sum in without changing what we get.
+
+$$
+\small{
+\begin{aligned}
+\E\qty[ a Y + b Z ]
+&= \sum_{y}\sum_z (a y + b z) \ P(Y=y, Z=z) && \text{ by definition of expectation} \\
+&= \sum_{y}\sum_z a y \ P(Y=y, Z=z) + \sum_{z}\sum_y b z \ P(Y=y, Z=z) && \text{changing the order in which we sum} \\
+&= \sum_{y} a y \ \sum_z P(Y=y,Z=z) + \sum_{z} b z \ \sum_y P(Y=y,Z=z) && \text{pulling constants out of the inner sums} \\
+&= \sum_{y} a y \ P(Y=y) + \sum_{z} b z \ P(Z=z)  && \text{summing to get marginal probabilities from our joint } \\
+&= a\sum_{y} y \ P(Y=y) + b\sum_{z} z \ P(Z=z)  && \text{ pulling constants out of the remaining sum } \\
+&= a\E Y + b \E Z  && \text{by definition}
+\end{aligned}
+}
+$$
+
+:::
+
+## Factorization of Products of *Independent* Random Variables
+
+The expectation of a product of **independent** random variables is the product of their expectations.
+$$
+\E[YZ] = \E[Y]\E[Z] \qqtext{when $Y$ and $Z$ are independent}
+$$
+
+This comes up a lot in variance calculations. Let's prove it. It'll be good practice.
+
+::: fragment
+
+$$
+\begin{aligned}
+\E[YZ] &= \sum_{yz} yz \ P(Y=y, Z=z) && \text{by definition of expectation} \\
+&= \sum_y \sum_z yz \ P(Y=y) P(Z=z) && \text{factoring and ordering sums } \\
+&= \inteal{\sum_y y \ P(Y=y)} \inpink{\sum_z z \ P(Z=z)} && \text{pulling factors that don't depend on $z$ out of the inner sum} \\
+&  \inteal{\E[Y]} \inpink{\E[Z]} && \text{by definition of expectation}
+\end{aligned}
+$$
+:::
+
+
+# Implications for Sample Means
+
+## Bias
+
+```{r}
+xx = seq(-6,6,by=.01)
+K = 100
+heights = seq(0,.4,length.out=K)
+normals = rnorm(10000)
+
+unbiased.plot = ggplot() + 
+  geom_histogram(aes(x=normals, y=after_stat(density)), alpha=.2, bins=100) + 
+  with_annotations(normals, estimand=0, dots=100, highlight.dots=0, interval.width=1.96) + xlim(min(xx),max(xx))
+
+biased.plot = ggplot() + 
+  geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.2, bins=100) + 
+  with_annotations(normals+2, estimand=0, dots=100, highlight.dots=0, interval.width=1.96) + xlim(min(xx),max(xx))
+```
+
+```{r}
+#| layout-ncol: 2
+unbiased.plot
+biased.plot
+```
+
+::: {.panel-tabset}
+### What Bias Is
+- The **bias** of an estimator is the difference between its expected value and the value of the thing it's estimating.
+- We haven't talked about this yet because there hasn't been any. We've been using **unbiased estimators**.
+- You can see, looking at the sampling distribution on the right, that bias might cause some problems with coverage.
+- If we calibrate interval estimates to cover **the estimator's mean** 95% of the time
+  - and that's what we've really been doing
+  how often will they cover the [thing we're estimating]{.fg style="color:green"}?
+- This means biased estimators can cause big problems. We'll talk about this more later in the semester.
+- But for now, let's just show the estimator we've been using is, in fact, unbiased.
+  
+### Unbiasedness of the Sample Mean
+
+**Claim.** The sample mean is an unbiased estimator of the population mean when we use sampling with replacement, sampling without, randomized circular sampling, etc. 
+$$ \E[\hat\mu] = \mu \qqtext{ for} \hat\mu = \frac1n\sum_{i=1}^n Y_i  \qand \mu = \frac1m\sum_{j=1}^m y_j $$
+
+**Proof.**
+
+::: fragment
+
+$$
+\begin{aligned}
+\E\qty[\frac1n\sum_{i=1}^n Y_i] 
+&= \frac1n\sum_{i=1}^n \E[Y_i] && \text{ via linearity } \\
+&= \frac1n\sum_{i=1}^n \frac{1}{m}\sum_{j=1}^m y_j \times \frac{1}{m} && \text{ via equal-probability sampling } \\
+&= \frac1{n} \mu &&\text{ by definition }
+&= \frac1n \times n \times \mu = \mu.
+\end{aligned}
+$$
+
+:::
+:::
+
+## Variance of the Sample Mean
+
+::: {.panel-tabset}
+### Step 1. Squaring 
+
+Remember FOIL?
+$$
+(a+b)^2 = a^2 + 2ab + b^2
+$$
+How does that generalize to a bigger sum?
+$$
+\qty(\sum_{i=1}^n Z_i )^2 = 
+$$
+
+### Step 2. Diagonal Terms
+
+### Step 3. Cross-Terms
+
+### Step 4. Putting it All Together
+
+:::

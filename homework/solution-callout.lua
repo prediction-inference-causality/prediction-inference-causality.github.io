@@ -12,7 +12,7 @@ function Div(div)
     })
   end
   if div.classes:includes("callout-solution") then
-    local title = ""
+    local title = "Solution"
     if div.content[1] ~= nil and div.content[1].t == "Header" then
       title = div.content[1]
       div.content:remove(1)
@@ -21,6 +21,7 @@ function Div(div)
       type = "solution",
       content = div,
       title = title,
+      collapse = true
     })
   end
 end

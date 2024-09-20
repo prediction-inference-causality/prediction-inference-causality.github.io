@@ -8,6 +8,7 @@ format: html
 library(ggplot2)
 library(purrr)
 theme_set(theme_minimal())
+approx = function(x) { round(x, 2) }
 ```
 
 # NBA Data
@@ -107,6 +108,49 @@ Replicate my analyis using your sample. Report your estimate as well as your two
 *Hint*. You should be able to do this with a one-line change to my code. 
 :::
 
+::: {.callout-solution}
+
+```{r}
+#| echo: true
+#| output: false
+Y = your.sample$PTS   #<1>
+n = length(Y)         
+
+theta.hat = mean(Y)
+theta.hat
+```
+1. This is the only line of code that's different.
+
+The estimate is `r theta.hat`. To get it, you can just rerun all the code above after making the one-line change indicated by the `(1)` mark. The result should look like this. Different looking sample. Way more big-scorers.
+
+```{r}
+#| echo: false
+#| output: false
+library(ggplot2)
+
+scale_y = scale_y_continuous(breaks=seq(0,2000,by=500), limits=c(0,2300))
+scale_x = scale_x_continuous(breaks=seq(0,2000,by=500), limits=c(0,2300))
+no_labs = labs(x='', y='')
+
+points.plot = ggplot(data.frame(i = 1:n, y = Y)) +
+    geom_point(aes(x = i, y = y), alpha = .4) +
+    geom_hline(aes(yintercept = theta.hat), color = "red") +
+    scale_y + no_labs 
+points.plot
+```
+
+```{r}
+#| echo: false
+#| layout-ncol: 2
+#| fig-width: 5 
+
+points.histogram + coord_flip()                     #<1> 
+points.plot + theme(axis.text.y = element_blank())  #<2>
+```
+
+:::
+
+
 You notice that my estimate and yours are fairly different. To try to understand what's going on, you want to run a simulation study. You call up our mutual friend and request they give you the data for every player in the league. And you get it. Here it is.
 
 ```{r}
@@ -116,7 +160,7 @@ our.pop = read.csv("https://qtm285-1.github.io/assets/data/nba_population.csv")
 ```
 
 ::: {#exr-sampling-distribution .callout-exercise}
-To get a sense of the sampling distribution of the estimator you and I are using, draw 10,000 samples of size $n=100$ with replacement from this population, and get an average of points all sampled players scored of each sample to approximate our sampling distribution. Plot the averages you get in histogram to get a visual sense and then answer this: how weird is your estimate? Do you think it's likely that your sample was really drawn with replacement from this population?
+To get a sense of the sampling distribution of the estimator you and I are using, draw 10,000 samples of size $n=100$ with replacement from this population, and get an average of points all sampled players scored of each sample to approximate our sampling distribution. Plot the averages you get in a histogram to get a visual sense and then answer this: how weird is your estimate? Do you think it's likely that your sample was really drawn with replacement from this population?
 :::
 
 
@@ -143,6 +187,32 @@ estimates = pops |> map_vec(function(pop) {
 
 :::
 
+::: {.callout-solution}
+I plotted the point estimate, too. It's the red dot. It's very weird. It's nowhere near the sampling distribution of the estimator when we sample with replacement. We drew 10,000 samples and we didn't get one anywhere close to that large. I'm suspicious that our friend was mistaken when they said this sample was drawn with replacement from our population.
+
+```{r}
+#| echo: true
+
+library(purrr)
+pops = rep(list(our.pop), 10000)
+estimates = pops |> map_vec(function(pop) {
+  m = nrow(pop)
+  n = 100
+  
+  sam       = pop[sample(1:m, n, replace=TRUE),]              
+  theta.hat = mean(sam$PTS)
+  theta.hat
+})
+
+sampling.distribution.histogram = ggplot() + 
+  geom_histogram(aes(x=estimates, y=after_stat(density)), bins=20, alpha=.2)
+
+sampling.distribution.histogram +
+  geom_point(aes(x=mean(your.sample$PTS), y=.003), color="red")
+```
+
+::: 
+
 People do prefer an interval estimate to a point estimate. Let's report some. Rather than calibrate our estimates using our samples, as we usually have to do in real life^[That's next week stuff.], we'll take advantage of our knowledge of the actual sampling distribution as we did in this week's lecture. The one from @exr-sampling-distribution.
 
 ::: {#exr-interval-estimate .callout-exercise}
@@ -155,9 +225,7 @@ and one based on yours. Report these two interval estimates and draw them on you
 
 ::: {.callout-tip collapse="true"}
 ### Code You'll Want
-Here's some code that'll be useful.^[If you're interested in how the code works, give it a read and see if you can work it out. Or come to office hours and ask me. If not, that's fine---just use it.] It takes a list of numbers---e.g. draws from our sampling distribution---and gives you a width. It finds the width you need for an interval centered at the list's mean to cover all but $100\alpha\%$ of its elements. Like the green shaded region we found in [Lecture 2](https://qtm285-1.github.io/assets/lectures/Lecture2.html#/using-the-sampling-distribution-for-calibration-1). 
-If you have a list `draws` of draws from your estimator's sampling distribution, you can 
-say `width(draws)` to get the right width for a 95% confidence interval.
+Here's some code that'll be useful.^[We'll get into what the code is doing in next week's homework. But if you want to know now, go ahead and give it a read. See if you can work it out.] It takes a list of numbers---e.g. draws from our sampling distribution---and gives you a width. It finds the width you need for an interval centered at the list's mean to cover all but $100\alpha\%$ of its elements. Like the green shaded region we found in [Lecture 2](https://qtm285-1.github.io/assets/lectures/Lecture2.html#/using-the-sampling-distribution-for-calibration-1). If you have a list `draws` of draws from your estimator's sampling distribution, you can say `width(draws)` to get the right width for a 95% confidence interval.
 
 ```{r}
 #| label: width-code
@@ -171,6 +239,22 @@ width = function(draws, center = mean(draws), alpha = .05) {
     uniroot(covg.dif, interval = c(0, 2 * max(abs(draws - center))))$root
 }
 ```
+:::
+
+::: {.callout-solution}
+```{r}
+#| echo: true
+
+w = width(estimates)
+my.theta.hat = mean(my.sample$PTS)
+your.theta.hat = mean(your.sample$PTS)
+
+sampling.distribution.histogram +
+  geom_pointrange(aes(y=.004,  x=my.theta.hat,   xmin=my.theta.hat   - w/2, xmax=my.theta.hat   + w/2), color="blue") +
+  geom_pointrange(aes(y=.004,  x=your.theta.hat, xmin=your.theta.hat - w/2, xmax=your.theta.hat + w/2), color="red")
+```
+
+['My interval']{.fg style="color:blue"} is `r approx(my.theta.hat)` &plusmn; `r approx(w/2)` or equivalently [`r approx(my.theta.hat - w/2)`, `r approx(my.theta.hat + w/2)`]. ['Your interval']{.fg style="color:red"} is `r approx(your.theta.hat)` &plusmn; `r approx(w/2)` or equivalently [`r approx(your.theta.hat - w/2)`, `r approx(your.theta.hat + w/2)`]. Admittedly, the use of 'my' and 'your' here may be a bit confusing, so whatever you called them works for me.
 :::
 
 Hopefully this week's lecture has convinced you that this interval will have 95% coverage. But let's check by calculating the **coverage**, the proportion of confidence intervals that contain our estimation target. This'll be useful in the future when what we're doing is a little more complicated and error-prone. 
@@ -204,4 +288,38 @@ coverage.frequency = mean(covers)
 1. You should have code from @exr-interval-estimate to calculate an interval estimate given a sample.
 2. All you need to do here is to check whether the estimation target and fill the `this.one.covers` with the logical condition, i.e. the population mean from  `our.pop` is between the lower and upper bound of your interval. If you want to check that `t` is between `a` and `b` in **R**, you can say `a <= t & t <= b`.
 
+:::
+
+
+::: {.callout-solution}
+```{r}
+#| echo: true
+
+w = width(estimates)       #<3>
+theta = mean(our.pop$PTS)  #<4>
+
+library(purrr)
+pops = rep(list(our.pop), 10000)
+covers = pops |> map_vec(function(pop) {
+  m = nrow(pop)
+  n = 100
+  
+  J = sample(1:m, n, replace=TRUE)
+  sam = pop[J,]
+
+  theta.hat = mean(sam$PTS)                            #<1>
+  interval.estimate = c(theta.hat-w/2, theta.hat+w/2)  #<1>
+  this.one.covers = interval.estimate[1] <= theta & theta <= interval.estimate[2]  #<2>
+  this.one.covers
+})
+coverage.frequency = mean(covers)
+```
+1. I used my code from @exr-interval-estimate.
+2. I like to write 'in-interval' checks like this as `a <= t & t <= b`, instead of
+something equivalent like `t >= a & t <= b`, because it communicates what we're doing a bit better visually. 
+`t` *is* between `a` and `b` in the expression `a <= t & t <= b`. In Python, you can even write it as `a <= t <= b`.
+3. Remember this from @exr-interval-estimate?
+4. Our estimation target. The thing we're trying to cover.
+   
+It's 95%. In 10,000 draws from our sampling distribution, `r 100*coverage.frequency`% of the intervals covered.
 :::
