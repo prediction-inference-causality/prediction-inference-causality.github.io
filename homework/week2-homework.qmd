@@ -32,6 +32,13 @@ n = length(Y)
 m = length(y)
 ```
 
+```{r}
+#| echo: true
+#| label: colors
+pink     = '#ef476f'  # rgb(239,71,111)
+teal     = '#118ab2'  # rgb(17,138,178)
+```
+
 ## Warm Up
 
 To get started, we'll redo a few exercises from last week with a few modifications. First, we'll use this new binary outcome instead of points. 
@@ -74,11 +81,52 @@ width = function(draws, center = mean(draws), alpha = .05) {
 
 :::
 
+::: {.callout-solution}
+```{r}
+set.seed(1)
+```
+
+```{r}
+#| echo: true
+theta.hat = mean(Y)
+theta.hat.draws = rbinom(10000, n, theta.hat)/n
+w = width(theta.hat.draws)
+interval = c(theta.hat - w/2, theta.hat + w/2)
+```
+
+My interval estimate is $`r approx(theta.hat)` \pm `r approx(w/2)`$ or equivalently $[`r approx(interval[1])`, `r approx(interval[2])`]$.
+:::
+
 The second one is a version of last week's [Exercise 4](https://qtm285-1.github.io/assets/homework/week1-homework.qmd/#exr-your-coverage).
 
 ::: {#exr-your-coverage .callout-exercise}
 Report the coverage probability of your interval estimator. To do this, draw 10,000 samples of size $n=100$ with replacement from the population,
 calculate an interval estimate based on each of these samples just like you did in @exr-your-interval-estimate, and report the fraction of these intervals that contain the population mean. 
+:::
+
+::: {.callout-solution}
+```{r}
+set.seed(1)
+```
+
+```{r}
+#| echo: true
+
+theta = mean(y)
+coverage.probability = 1:10000 |> map_vec(function(.) {
+  J = sample(1:m, n, replace=TRUE)
+  Y = y[J]
+
+  theta.hat = mean(Y)
+  theta.hat.draws = rbinom(10000, n, theta.hat)/n
+  w = width(theta.hat.draws)
+  interval = c(theta.hat - w/2, theta.hat + w/2)
+  covers = interval[1] <= theta & theta <= interval[2]
+  covers
+}) |> mean()
+```
+
+My interval estimator's coverage probability is approximately `r percent(coverage.probability)`.
 :::
 
 ## Improving Speed and Precision at The Same Time {#sec-improving-speed-and-precision}
@@ -115,6 +163,8 @@ scatter = ggplot(data.frame(x=draws, y=max(pmf)*(1:length(draws))/length(draws))
 
 yinterval = max(pmf)*.5
 interval.data = data.frame(theta.hat=theta.hat, w1=w1, w2=w2, w3=w3, w4=w4, y=yinterval)
+
+polld = '#ef476f'
 scatter + geom_pointrange(aes(x=theta.hat, xmin=theta.hat-w1/2, xmax=theta.hat+w1/2, y=y), color=polld, data=interval.data) 
 scatter + geom_pointrange(aes(x=theta.hat, xmin=theta.hat-w2/2, xmax=theta.hat+w2/2, y=y), color=polld, data=interval.data) 
 scatter + geom_pointrange(aes(x=theta.hat, xmin=theta.hat-w3/2, xmax=theta.hat+w3/2, y=y), color=polld, data=interval.data) 
@@ -179,25 +229,60 @@ set.seed(1)
 ```{r}
 #| echo: true
 
-center = mean(Y)
 draws =  rbinom(10000, n, theta.hat)/n
+center = mean(draws)
 dots.covered = function(x) { 
   mean(center - x / 2 <= draws & draws <= center + x / 2) #<1>
 }
 probability.covered = function(x) {
-  NaN   #<2>
+  NaN    #<2>
 }
 
 x = (0:n)/n
 ggplot() +
-  geom_line(aes(x=x, y = x |> map_vec(dots.covered)), color='pink') +
-  geom_line(aes(x=x, y = x |> map_vec(probability.covered)), color='teal') +
+  geom_line(aes(x=x, y = x |> map_vec(dots.covered)), color=pink) +
+  geom_line(aes(x=x, y = x |> map_vec(probability.covered)), color=teal) +
   scale_y_continuous(breaks = c(0,.8,.95,1), minor_breaks = NULL) + 
   scale_x_continuous(breaks = seq(0,1,by=.125), limits=c(0,.5)) + 
   labs(x='', y='') 
 ```
 1. I've borrowed this code from the function `width`.
 2. Is there something analogous you should be borrowing from `width.binom`?
+
+::: {.callout-solution}
+```{r}
+set.seed(1)
+```
+
+```{r}
+#| echo: true
+
+draws =  rbinom(10000, n, theta.hat)/n
+center = mean(draws)
+dots.covered = function(x) { 
+  mean(center - x / 2 <= draws & draws <= center + x / 2) #<1>
+}
+
+theta = mean(y)                        #<3>
+probability.covered = function(x) {
+  pbinom(n*(theta+x/2),   n, theta) -  #<2>
+  pbinom(n*(theta-x/2)-1, n, theta)    #<2>
+}
+
+x = (0:n)/n
+ggplot() +
+  geom_line(aes(x=x, y = x |> map_vec(dots.covered)), color=pink) +
+  geom_line(aes(x=x, y = x |> map_vec(probability.covered)), color=teal) +
+  scale_y_continuous(breaks = c(0,.8,.95,1), minor_breaks = NULL) + 
+  scale_x_continuous(breaks = seq(0,1,by=.125), limits=c(0,.5)) + 
+  labs(x='', y='') 
+```
+1. I've borrowed this code from the function `width`.
+2. And I've borrowed this from `width.binom`.
+3. I needed this for what I borrowed from `width.binom` to work.
+   
+The height of the two lines at a given $x$-coordinate, which should be and are roughly the same, shows the fraction of our estimate of the sampling distribution that we cover with an interval of width $x$. The $x$-coordinate where these lines cross the horizontal lines $y=.8$ and $y=.95$ are the widths we need for 80% and 95% coverage respectively. They cross $y=.8$ at $x \approx  .125$, so the interval $\hat\theta \pm .125/2$ for $\hat\theta \approx `r approx(theta.hat)`$ (i.e. the interval $[`r approx(theta.hat-.125/2)` , `r approx(theta.hat+.125/2)`]$ ) is an 80% confidence interval.
+:::
 
 ## Visualizing Calibration
 
@@ -260,14 +345,20 @@ These are really just different ways of styling the same plot. On the left, the 
 #| fig-width: 5.5
 
 widths = widths.100
-ggplot() + geom_line(aes(x=thetas, y=thetas-widths/2), color='red') + 
-           geom_line(aes(x=thetas, y=thetas+widths/2), color='blue') + 
-           guides(color='none') + labs(x='theta', y='')
 
-ggplot() + geom_pointrange(aes(x=thetas, y=thetas, ymin=thetas-widths/2, 
-                               ymax=thetas+widths/2, color=factor(thetas)),
-                               size=.1) + 
-           guides(color='none') + labs(x='theta', y='')
+interval.plot.simple = ggplot() + 
+  geom_line(aes(x=thetas, y=thetas-widths/2), color='red') + 
+  geom_line(aes(x=thetas, y=thetas+widths/2), color='blue') + 
+  guides(color='none') + labs(x='theta', y='')
+
+interval.plot.evocative = ggplot() + 
+  geom_pointrange(aes(x=thetas, y=thetas, ymin=thetas-widths/2, 
+                       ymax=thetas+widths/2, color=factor(thetas)),
+                       size=.1) + 
+  guides(color='none') + labs(x='theta', y='')
+
+interval.plot.simple
+interval.plot.evocative
 ```
 :::
 
@@ -279,12 +370,38 @@ Let's use the notation $w(\theta)$ to refer to the function from @fig-calibratio
 
 :::
 
+::: {.callout-solution}
+
+$$
+\begin{aligned}
+\ell(\theta) &= \theta - \frac{w(\theta)}{2} \\
+u(\theta) &= \theta + \frac{w(\theta)}{2}
+\end{aligned}
+$$
+
+:::
+
 ::: {#exr-calibration-width-turnout .callout-exercise}
 Let's think about the 'confidence interval for our estimate of the sampling distribution' we 
-talked about at the end of class this Wednesday. The one from [the last slide](https://qtm285-1.github.io/assets/lectures/Lecture3.html#/the-estimate-works.-why-does-it-work). On that slide, I showed interval estimates $\hat\theta \pm w(\hat\theta)/2$ calibrated by plugging a point estimate $\hat\theta$ into the binomial formula to estimate the sampling distribution, like you did in @exr-your-interval-estimate. In particular, I showed these intervals for point estimates $\hat\theta$ at the two ends of the sampling distribution's middle 95%: a red one centered at $\theta-w(\theta)/2$ and a blue one centered at $\theta+w(\theta)/2$ where $\theta$ was the population frequency.
-These intervals had different widths because they were calibrated using different estimates of the sampling distribution. Write out formulas these two intervals in terms of 
-$\theta$ and the functions $\ell$ and $u$ you defined in @exr-calibration-width. Then, using your solution to @exr-calibration-width, write an equivalent formula in terms of $\theta$ and the function $w$.
+talked about at the end of class this Wednesday. The one from [the last slide](https://qtm285-1.github.io/assets/lectures/Lecture3.html#/the-estimate-works.-why-does-it-work). On that slide, I showed interval estimates $\hat\theta \pm w(\hat\theta)/2$ calibrated by plugging a point estimate $\hat\theta$ into the binomial formula to estimate the sampling distribution, like you did in @exr-your-interval-estimate. In particular, I showed these intervals for point estimates $\hat\theta$ at the two ends of the sampling distribution's middle 95%: a red one centered at $\theta-w(\theta)/2$ and a blue one centered at $\theta+w(\theta)/2$ where $\theta$ was the population frequency. These intervals had different widths because they were calibrated using different estimates of the sampling distribution. Write out formulas these two intervals in terms of $\theta$ and the functions $\ell$ and $u$ you defined in @exr-calibration-width. Then, using your solution to @exr-calibration-width, write an equivalent formula in terms of $\theta$ and the function $w$.
 :::
+
+::: {.callout-solution}
+
+$$
+\begin{aligned}
+\qty[\ell\qty(\theta-\frac{w(\theta)}{2}),\  u\qty(\theta-\frac{w(\theta)}{2})] 
+&= \qty(\theta - \frac{w(\theta)}{2}) \pm \frac{w\qty(\theta-\frac{w(\theta)}{2})}{2} 
+&& \text{ is the \inred{red} one } \\
+\qty[\ell\qty(\theta+\frac{w(\theta)}{2}),\  u\qty(\theta+\frac{w(\theta)}{2})] 
+&= \qty(\theta + \frac{w(\theta)}{2}) \pm \frac{w\qty(\theta+\frac{w(\theta)}{2})}{2} 
+&& \text{ is the \inblue{blue} one } \\
+\end{aligned}
+$$
+
+:::
+
+
 
 
 ::: {#exr-calibration-width-turnout-2 .callout-exercise}
@@ -292,6 +409,17 @@ $\theta$ and the functions $\ell$ and $u$ you defined in @exr-calibration-width.
 Using @fig-calibration-width, think about why the red interval, centered on an underestimate of the population frequency, covers the population frequency but the blue interval, centered on an overestimate, does not. No need to turn anything in as evidence that you've done the thinking. 
 
 Now suppose that, instead of being roughly 70%, turnout was roughly 30%. Maybe we're thinking about a midterm primary like we talked about in [our first class of the semester](https://qtm285-1.github.io/assets/lectures/Lecture1.html). Suppose we've calibrated interval estimates exactly the same way, using widths calibrated using estimates of the sampling distribution. And we're thinking about two particular point estimates that could happen: a new version of the red one, at the lower end of the actual sampling distribution's middle 95%, and a new version of the blue one, at the upper end of the actual sampling distribution's middle 95%. Which of the two---if any---would cover the population frequency of 30%?  What about in the case that the population frequency is 50%?
+:::
+
+::: {.callout-solution}
+If turnout were roughly 30%, the blue interval at the upper end would cover and the red interval at the lower end would not. 
+If it were 50%, neither would cover. 
+
+I'll explain why. Looking at the $x \pm w(x)/2$ formulas from @fig-calibration-width-intervals, we see that intervals 
+centered at $x=\inred{\theta-w(\theta)/2}$ and $x=\inblue{\theta+w(\theta)/2}$ cover $\theta$ if and only if $w(x) \ge w(\theta)$. That's the point of these centers: perfectly calibrated intervals centered at those points would *just* touch $\theta$. If we replace the 'perfectly calibrated' width $w(\theta)$ with one that's *greater* than $w(\theta)$, then the interval will cover $\theta$; if we replace it with one that's *less* than $w(\theta)$, then the interval will not. 
+
+
+When $\theta$ is roughly 70%, the red interval's actual width is the height of the width function $w(x)$ at $x = \theta-\frac{w(\theta)}{2}$, a point between $\theta$ and $.5$,and it is greater than $w(\theta)$ because the width function increases as we move from $\theta\approx .7$ toward its maximum at $.5$. On the other hand, the blue interval's actual width is smaller than $w(\theta)$ because we move away from $.5$ as we go from $\theta$ to its center. The situation is reversed when $\theta$ is roughly 30%, as the blue interval's center is between $\theta$ and $.5$ and the red interval's center is not. When $\theta=.5$, width at $\theta$ is maximal, so the widths we get for both the red and blue intervals are smaller than $w(\theta)$.
 :::
 
 
@@ -327,14 +455,68 @@ theta = mean(y)
 draws =  rbinom(1000, n, theta)/n
 prob = dbinom(0:n, n, theta)
 
-ggplot() +
+sampling.dist.plot = ggplot() +
   geom_col(aes(x=(0:n)/n, y=prob), alpha=.2) +
   geom_point(aes(x=draws, y=max(prob)*(1:1000)/1000), alpha=.1, size=.5, color='purple') +
   geom_vline(xintercept=theta, color='green', alpha=.7, linewidth=1.5) + 
   scale_x_continuous(breaks=seq(0,1,by=.1), limits=c(.25,.75)) +
   labs(x='', y='')
+sampling.dist.plot
 ```
 
+::: {.callout-solution}
+Let's figure out where our indicator function is one. Here's an easy way to do it visually.
+Take your pick of the two plots in @fig-calibration-width-intervals, which show the upper
+and lower bounds of our interval estimates, $\ell(\cdot)$ and $u(\cdot)$, as functions of $x$.
+Add a horizontal line at $y=\theta \approx `r round(mean(y), 2)`$. I drew a green line on top of both.
+
+```{r}
+#| layout-ncol: 2
+#| fig-width: 4.5
+
+interval.plot.simple +
+  geom_hline(yintercept=theta, color='green', alpha=.7, linewidth=.5) 
+
+interval.plot.evocative +
+  geom_hline(yintercept=theta, color='green', alpha=.7, linewidth=.5)
+```
+
+The plot on the right is a bit more evocative but the one on the left is a bit easier to read precisely. Our indicator is one at $x$s where $\theta$ is between the upper bound $\inblue{u(x)}$ and lower bound $\inred{\ell(x)}$.
+So the edges of the region we should be shading---the $x$-coordinates where our indicator switches from zero to one---are the $x$-coordinates where the green line crosses the bounds from 'outside' to 'inside'. Visually, what I'm seeing that it crosses 'in' at roughly $x=.4$ and 'back out' at roughly $x=.59$. 
+
+I can get the exact $x$ coordinates the green line is inside the bounds by actually calculating them. I can do that using  `widths.100` vector used to draw @fig-calibration-width and @fig-calibration-width-intervals. In the code below, `inside` is my indicator function evaluated at each possible value of $\hat\theta$, i.e. the ones with denominator $n$. To find the boundaries, I just take the minimum and maximum of these possible values..
+
+```{r}
+#| echo: true
+
+x = (0:n)/n
+lx = x - widths.100/2
+ux = x + widths.100/2
+
+inside = lx <= theta & theta <= ux
+lower.edge = min(x[inside])
+upper.edge = max(x[inside])
+```
+
+To draw the indicator function, I'll use `annotate` to draw a rectangle as in the Week 0 Homework.
+
+```{r}
+#| echo: true
+
+binomial.indicator = annotate(geom='rect', xmin=lower.edge, xmax=upper.edge, 
+                              ymin=-Inf, ymax=Inf, alpha=.2, fill='blue')
+sampling.dist.plot + binomial.indicator
+```
+
+Our coverage probability is just the expected value of this indicator function. It's the fraction of the sampling distribution contained in our rectangle. I didn't actually ask you to calculate it, but it's easy enough when we know our boundaries.
+
+```{r}
+actual.coverage = sum(prob[inside])
+```
+
+It's `r 100*round(actual.coverage, 3)`%.
+
+:::
 
 Our final question is a little more open-ended in how you do it. 
 You could, for example, generalize your solution to @exr-your-coverage or 
@@ -349,6 +531,81 @@ the coverage probability of the interval estimate $\hat\theta \pm w(\hat\theta)/
 for a sample of size n=625.
 :::
 
+::: {.callout-tip collapse="true"}
+### A Better `width.binom`
+
+When I was writing my solution, I found that my precision was a bit limited if I used the version of `width.binom` above because it bounces around a little. The problem is that, due to the discreteness of the binomial distribution, there's a range of widths that yield the same coverage probability. The smart thing to do would be to choose the smallest one, of course, but `uniroot` doesn't know to do that. Within that range, `uniroot` doesn't know what to pick and the choices it makes look a bit odd, as they can bounce up and down a little as we make small changes to the width---even as those changes are all in the same direction. I haven't implemented the smart thing, but I have done something that breaks these ties and fixes the bouncing. What I've done is to 'smooth' the actual binomial probabilities by mixing them with a bit of the probabilities we get using its normal approximation.
+
+```{r}
+#| echo: true
+width.binom = function(theta, n, alpha=.05, smooth.fraction=.001) {
+  if(theta == 0 || theta == 1) { return(0) }
+  covg.dif = function(w) {
+    actual.normal.approx =  
+      pnorm(theta+w/2, theta, sqrt(theta*(1-theta)/n)) - 
+      pnorm(theta-w/2, theta, sqrt(theta*(1-theta)/n))     
+    actual = pbinom(n*(theta+w/2),   n, theta) -  
+             pbinom(n*(theta-w/2)-1, n, theta)   
+    smoothed.actual = (1-smooth.fraction)*actual+smooth.fraction*actual.normal.approx        
+    nominal = 1-alpha 
+    smoothed.actual - nominal 
+  }
+  limits = c(0, 1)
+  uniroot(covg.dif, interval=limits)$root
+}
+```
+:::
+
+::: {.callout-solution}
+I'll do this by extending the approach from @exr-coverage-plot,
+where I wrote code to calculate coverage at a single value of $\theta$.
+All I need to do now is do the same thing repeatedly, 
+looping over a grid of values of $\theta$. 
+
+For a small population like our NBA one, we can try every possible value of $\theta$: $0, 1/m, 2/m, \ldots, 1$. 
+For a population like our GA voters, that's too many. We'll just count from 0 to 1 by thousandths, 
+which should be good enough for a plot.
+
+Note that there's a bit of bouncing up and down in this curve. To make this a little more palatable visually, I've plotted it as a sequence of points instead of a line. It's a useful trick. I haven't had time to think through whether the actual curve bounces a little or it's an artifact introduced by my code. *Extra Credit*. Figure out which it is and make a convincing argument. Let's make it worth something: 10 points on Midterm 1.
+
+I've drawn a green line at $y=.95$, our *nominal coverage probability*, i.e. the coverage probability we're trying for.
+
+```{r}
+#| echo: true
+#| layout-ncol: 2
+#| fig-width: 5.5
+#| fig-cap: 
+#| - "n=100"
+#| - "n=625"
+
+coverage.curve = function(n, thetas) {
+  x = (0:n)/n
+  widths = x |> map_vec(function(x) { width.binom(x, n, alpha=.05) })
+  lx = x - widths/2
+  ux = x + widths/2
+
+  thetas |> map_vec(function(theta) { 
+    probs = dbinom(0:n, n, theta)
+    inside = lx <= theta & theta <= ux
+    sum(probs[inside])
+  })
+} 
+
+thetas.100 = (0:m)/m
+thetas.625 = (0:1000)/1000
+
+ggplot() + 
+  geom_point(aes(x=thetas.100, y=coverage.curve(100, thetas.100)), color=pink, size=.25) +
+  geom_hline(yintercept=.95, color='green', alpha=.7, linewidth=.5) +
+  ylim(0,1) + labs(x='θ', y='coverage')
+
+ggplot() +
+  geom_point(aes(x=thetas.625, y=coverage.curve(625,thetas.625)), color=teal, size=.25) + 
+  geom_hline(yintercept=.95, color='green', alpha=.7, linewidth=.5) +
+  ylim(0,1) + labs(x='θ', y='coverage')
+```
+
+:::
 
 ::: {#exr-timing .callout-exercise}
 *Optional*. Knowing a bit about your experience
@@ -396,7 +653,7 @@ theta = mean(y)
 draws =  rhyper(1000, m*theta, m*(1-theta), n)/n
 prob = dhyper(0:n, m*theta, m*(1-theta), n)
 
-ggplot() +
+sampling.dist.plot.hyper = ggplot() +
   geom_col(aes(x=(0:n)/n, y=prob), alpha=.2) +
   geom_point(aes(x=draws, y=max(prob)*(1:1000)/1000), alpha=.1, size=.5,color='purple') +
   geom_vline(xintercept=theta, color='green', alpha=.7, linewidth=1.5) +  
@@ -408,10 +665,105 @@ ggplot() +
 Draw the indicator for coverage of a 95% interval, $1_{\ell(\cdot) \le \theta \le u(\cdot)}$, on the plot above. Remember to use the width of the hypergeometric distribution rather than the binomial when calculating  $\ell$ and $u$.  
 :::
 
+
+::: {.callout-solution}
+I'll do this the same way I did it in @exr-coverage-plot. But this time I'll use the hypergeometric width function.
+```{r}
+#| echo: true
+
+widths.100 = array(101)                                   #<1>
+for(ii in 0:100) {                                        #<1>          
+  widths.100[ii+1] = width.hyper(ii/n, n, m, alpha=.05)   #<1>
+}                                                         #<1>
+
+
+x = (0:n)/n
+lx = x - widths.100/2
+ux = x + widths.100/2
+
+inside = lx <= theta & theta <= ux
+lower.edge = min(x[inside])
+upper.edge = max(x[inside])
+```
+1. Here's the change. The intended change was to swap out `width.binom` for `width.hyper`. I also replaced the call to 'map_vec' with a 'for' loop because I was getting errors when I mapped and they vanished when I made exactly the same calls in a loop. I don't know why that happened.
+
+```{r}
+#| echo: true
+
+hypergeometric.indicator = annotate(geom='rect', xmin=lower.edge, xmax=upper.edge, 
+                              ymin=-Inf, ymax=Inf, alpha=.2, fill='blue')
+
+sampling.dist.plot.hyper + hypergeometric.indicator
+```
+
+Let's calculate the coverage probability.
+
+```{r}
+actual.coverage = sum(prob[inside])
+```
+
+It's `r 100*round(actual.coverage, 3)`%.
+
+:::
+
 ::: {#exr-coverage-calc-hyper .callout-exercise}
 Suppose we're estimating $\theta$, the frequency of ones in some population $y_1 \ldots y_m$,
 based on a sample of size n=`r n` drawn *without replacement* from a population of size `r m`.
 Plot, as a function of $\theta$, the coverage probability of the interval estimate $\hat\theta \pm w(\hat\theta)/2$. 
+:::
+
+
+::: {.callout-tip collapse="true"}
+### A Better `width.hyper`
+
+While writing the solution, I implemented a smoothed version of this width function,too.
+```{r}
+#| echo: true
+width.hyper = function(theta, n, m, alpha=.05, smooth.fraction=.001) { 
+  if(theta == 0 || theta == 1) { return(0) }
+  covg.dif = function(w) {
+    actual.normal.approx =  
+      pnorm(theta+w/2, theta, sqrt(theta*(1-theta)/n)*(m-n)/(m-1)) - 
+      pnorm(theta-w/2, theta, sqrt(theta*(1-theta)/n)*(m-n)/(m-1))     
+    actual = phyper(n*(theta+w/2),   m*theta, m*(1-theta), n) - 
+             phyper(n*(theta-w/2)-1, m*theta, m*(1-theta), n)
+    smoothed.actual = (1-smooth.fraction)*actual+smooth.fraction*actual.normal.approx        
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  limits = c(0, 1)
+  uniroot(covg.dif, interval=limits)$root
+}
+```
+:::
+
+::: {.callout-solution}
+The function `coverage.curve` differs from the one in solution to @exr-coverage-calc in two lines. They're marked.
+```{r}
+#| echo: true
+
+coverage.curve = function(n, thetas) {
+  x = (0:n)/n
+  widths = x |> map_vec(function(x) { width.hyper(x, n, m, alpha=.05) }) #<1>
+  lx = x - widths/2
+  ux = x + widths/2
+
+  thetas |> map_vec(function(theta) { 
+    probs = dhyper(0:n, m*theta, m*(1-theta), n)  #<2>
+    inside = lx <= theta & theta <= ux
+    sum(probs[inside])
+  })
+} 
+
+thetas.100 = (0:m)/m
+ggplot() + 
+  geom_point(aes(x=thetas.100, y=coverage.curve(100, thetas.100)), color=pink, size=.25) +
+  geom_hline(yintercept=.95, color='green', alpha=.7, linewidth=.5) +
+  ylim(0,1) + labs(x='θ', y='coverage')
+```
+1. Calculate width using the hypergeometric instead of the binomial.
+2. Calculate the expectation of our indicator using the hypergeometric probabilities rather than the binomial.
+   
 :::
 
 Finally, let's look into what would happen if we mistakenly analyzed our actual data --- which was sampled with replacement --- as if it were sampled without replacement.
@@ -425,3 +777,57 @@ a sample of size `r n` without replacement from a population of `r m`, when you'
 drawn that sample with replacement.
 :::
 
+
+::: {.callout-solution}
+So what we're going to see here is how much we *over-cover*,
+i.e. exceed our nominal coverage probability of 95%, when we calibrate using the wider binomial distribution.
+The degree of over-coverage isn't huge because $n=`r n`$ is not a huge fraction of $m=`r m`$. There's some, because it's not tiny in comparison, but I'll show the coverage plot for $n=(m-1)/2$ to see what happens in that case too.
+
+It's the same binomial indicator and width calculation function as in @exr-coverage-plot and @exr-coverage-calc,
+but we calculate the expected value of the indicator using the hypergeometric probabilities as in @exr-coverage-calc-hyper.
+
+We already have the indicator from @exr-coverage-plot, so we can just overlay it on our new sampling distribution plot.
+```{r}
+#| echo: true
+
+sampling.dist.plot.hyper + binomial.indicator
+```
+
+This time we make *one* change to `coverage.curve` from @exr-coverage-calc. I'll mark the changes we do and don't make.
+```{r}
+#| echo: true
+#| layout-ncol: 2
+#| fig-width: 5.5
+#| fig-cap: 
+#| - "n=100"
+#| - "n=(m-1)/2"
+
+coverage.curve = function(n, thetas) {
+  x = (0:n)/n
+  widths = x |> map_vec(function(x) { width.binom(x, n, alpha=.05) }) #<1>
+  lx = x - widths/2
+  ux = x + widths/2
+
+  thetas |> map_vec(function(theta) { 
+    probs = dhyper(0:n, m*theta, m*(1-theta), n)    #<2>
+    inside = lx <= theta & theta <= ux
+    sum(probs[inside])
+  })
+} 
+
+thetas = (0:m)/m
+
+ggplot() + 
+  geom_point(aes(x=thetas, y=coverage.curve(100, thetas)), color=pink, size=.25) +
+  geom_hline(yintercept=.95, color='green', alpha=.7, linewidth=.5) +
+  ylim(0,1) + labs(x='θ', y='coverage')
+
+ggplot() + 
+  geom_point(aes(x=thetas, y=coverage.curve((m-1)/2, thetas)), color=teal, size=.25) +
+  geom_hline(yintercept=.95, color='green', alpha=.7, linewidth=.5) +
+  ylim(0,1) + labs(x='θ', y='coverage')
+```
+1. Here's the change we don't make that we did in @exr-coverage-calc-hyper. We're calibrating using the binomial.
+2. Here's the change we do make. We're calculating the coverage probability using the hypergeometric.
+
+:::
