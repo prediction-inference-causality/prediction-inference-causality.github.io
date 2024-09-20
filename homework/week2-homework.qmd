@@ -12,7 +12,36 @@ library(purrr)
 theme_set(theme_minimal())
 ```
 
-This week, we're going to get into the details of calibration. We'll work out the exact coverage probabilities of real confidence intervals---ones where our widths come from estimates of our sampling distribution. We'll be using the NBA data from last week's homework. But to stay in familiar territory, we'll need a binary outcome, so we'll use a *frequency*. In particular, we'll look at the frequency that a player's team wins in over half of the games they play in.   
+## Summary
+
+This week, we're going to get into the details of real-world calibration. The kind that doesn't require that you know your estimator's actual sampling distribution. We'll start simple. In @exr-your-interval-estimate and @exr-your-coverage, you'll implement a calibrated interval estimator for a population proportion and calculate its actual coverage probability. Then, after a detour on how exactly we go from an estimate of the sampling distribution to an interval width (@exr-exact-vs-approx-width), we'll really get into how using an estimate affects the calibration of our interval estimates. 
+
+Here we take advantage of a very nice feature of the sampling distributions we get when we're estimating a proportion $\theta$.
+after sampling with or without replacement. They're determined by our estimation target $\theta$, i.e. it's Binomial or Hypergeometric with success probability $\theta$. As a result, once we have a point estimate $\hat\theta$, we've essentially determined our estimate of the sampling distribution estimate, i.e., it's Binomial or Hypergeometric with success probability $\hat\theta$. This means we can think of properties of our interval, e.g. its width or its upper and lower bounds, as functions of $\hat\theta$. And we can visualize these functions.  That's what @fig-calibration-width and @fig-calibration-width-intervals are about, and you'll be using them in @exr-calibration-width-@exr-calibration-width-turnout-2 to understand a phenomeon we saw on the [last slide](https://qtm285-1.github.io/assets/lectures/Lecture3.html#/the-estimate-works.-why-does-it-work) of Lecture 3: around some point estimates, we get a wider-than-perfectly-calibrated interval, which effectively helps it cover the estimation target, and around others we get a narrower-than-perfectly-calibrated interval, which does the opposite. By looking at the width of the sampling distribution as a function of $\theta$, we can understand where and why this happens---no programming required. 
+
+We'll conclude by using our visualizations to 
+calculate the *actual coverage probability* of our imperfectly-calibrated interval estimates. 
+First, in @exr-coverage-plot, we'll do it at a single value of $\theta$---effectively repeating @exr-your-coverage
+using our understanding of what these intervals look like rather than brute-force simulation. Then, in @exr-coverage-calc, 
+we'll repeat the process for a range of $\theta$ values, allowing us to plot the actual coverage probability of our real-world interval estimates as a function of $\theta$.
+
+This is all for the case of sampling with replacement. Some extra credit exercises,
+@exr-coverage-plot-hyper-@exr-coverage-calc-hyper-but-with-replacement, repeat this
+process for the case of sampling without replacement.
+
+## The Point 
+
+For a lot of estimators, calibration is a bit more complicated than it is here. 
+For example, that the width of the sampling distribution of a *difference* of two proportions
+depends on more than that difference---it depends on the two proportions themselves. We lose our one-to-one
+mapping between the point estimate and the sampling distribution, so the way estimating this sampling 
+distribution affects calibration is a bit more complex than it is here. My hope is that, having a shared
+visual language for how calibration works in this simple case, we'll have an easier time talking about 
+how it works when it's a bit more complicated.
+
+## The Data
+
+We'll be using the NBA data from last week's homework. But to stay in familiar territory, we'll need a binary outcome, so we'll use a *frequency*. In particular, we'll look at the frequency that a player's team wins in over half of the games they play in.   
 
 You may have caught on that 'your sample' from last week's homework probably isn't sampled with replacement from the population after all. So we'll work with 'my sample'.
 Here's some code you can run to get the data set up. Just like in class, we'll use (little) `y` for the population and (big) `Y` for the sample.^[If you're getting an error about `pmap_vec` not being found, you've probably got a pretty old version of **purrr** installed. That function, like `map_vec` from last week's homework, was added in [**purrr** version 1.0 in December 2022](https://www.tidyverse.org/blog/2022/12/purrr-1-0-0). You can update it by running `install.packages("purrr")`.]
