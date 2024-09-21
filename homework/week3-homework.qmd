@@ -24,6 +24,38 @@ $$
 $$
 :::
 
+# Introduction
+
+## Summary
+
+In our previous homeworks, we've focused mostly on calibration.  We've talked about what our estimators' sampling distributions look like, how to use them to calibrate interval estimates, and what happens when we do. In this one, what we're really focusing on is the accuracy of our point estimators. We'll talk about different ways a point estimator can be untrustworthy, like being biased or highly variable, using our first example of a estimator that actually is biased. A simple one, but one that people really do use. This'll give us the opportunity to think a bit about how to choose between different estimators for the same estimation target. 
+
+After thinking a bit about what we might actually want from an estimator, 
+which does involve an element of individual preference, we'll take a moment
+to understand *consistency*, the one property that almost everyone agrees 
+they do want an estimator to have. Maybe people put a little too much emphasis on this, 
+since it's really the bare minimum you could ask for. All that means is that if you're willing to collect any amount of data, you can get as close to the estimation target as anyone might want. Unless you're trying to estimate something really weird, you can afford to have higher standards.
+The good news is that when you try to show an estimator is consistent, you usually wind up showing a lot more than that. 
+You need to use some pretty weird arguments to show an estimator is consistent without actually getting some quantitative information about how close it gets to the estimation target at different sample sizes. 
+
+The main idea we'll be using to think about all this is our estimators' root-mean-squared error---the square root of its mean-squared distance from the estimation target.^[I like to say 'typical distance' and 'typical error' instead of 'root-mean-squared distance' and 'root-mean-squared error' because it's shorter, gets the essential idea across, and doesn't have a technical meaning that might conflict with my use of it this way like 'average distance' would. I've written it out in full here, but you may find me saying 'typical distance' now and then when I speak.] This doesn't tell us *everything* that the whole sampling distribution does, but it's a lot easier to calculate, especially when we've got a complicated estimator or sampling scheme. As an example, we'll carry out the missing step from Lecture 5's [variance calculation](https://qtm285-1.github.io/assets/lectures/Lecture5.html#/the-standard-deviation-of-a-proportion-1) for a sample proportion when sampling without replacement. 
+
+We'll conclude by returning to the familiar challenge of interval calibration. We'll see that information about root-mean-squared error
+alone is enough to calibrate intervals so they get *at least* 95% coverage. We say this approach is *conservative* because we tend 
+to have to sacrifice a bit of precision --- we get wider intervals than necessary --- to have greater faith that they do have the
+coverage probability we're claiming. In this case, we get this 'extra faith' because we aren't relying on our sampling distribution
+looking like the normal distribution or the bootstrap working. We're just relying on our knowledge of mean-squared-error which,
+for an estimator we can prove to be unbiased, really just comes down to our ability to estimate our estimator's variance. We'll 
+look into exactly how much precision this leaves on the table by comparing them to intervals based on normal approximation and 
+the bootstrap using both a simple mathematical argument (@exr-markov-interval) and fake-data simulation (@exr-interval-comparison).
+There is also, if you're interested, a short extra credit exercise exploring where the extra precision normal approximation allows 
+us is really coming from. 
+
+## The Point
+
+Something about choosing between estimators, critiquing others choices, and being able to communicate about this.
+FINISH THIS
+
 # Variance when Sampling Without Replacement
 
 In [Lecture 3](https://qtm285-1.github.io/assets/lectures/Lecture3#/marginalization), 
@@ -272,6 +304,17 @@ Just to check that you're following the math, do this quick exercise.
 Explain why $\E \qty[ \qty{ \hat\theta - \E[\hat\theta]} \cdot \qty{\E[\hat\theta] - \theta} ] = 0$.
 :::
 
+Now here's a real one. For the first time this semester, we're talking about 
+different estimators for the same estimation target. This exercise is an opportunity 
+to think about how you might choose between them. I've asked you to answer a few 
+questions and sketch a few things to help you think through the issues, but I've tried to
+leave this pretty open-ended because this really is a question without a single 
+right answer. To some extent, it's about what you think is important. You don't
+have to stand by this choice for the rest of your life, so it's okay if you miss
+something important and wind up changing your mind later, e.g. when you talk with
+your classmates or read the solution. It's really just to get you started thinking
+about these kinds of choices and what you might want to consider when making them.
+
 ::: {#exr-bias-variance-rmse .callout-exercise}
 
 Suppose we increase our number of prior observations, $\nprior$, 
@@ -318,6 +361,8 @@ if the root mean square difference between them, $\sqrt{E[(Z_n - Z)^2]}$, gets a
 as $n \to \infty$. And we say an estimator $\hat\theta$ is *consistent in mean-square* if it converges in mean square to 
 the estimation target $\theta$ as *sample size* $n$ goes to infinity.
 
+Here are a few exercises to get you thinking about what consistency can and can't look like.
+
 ::: {#exr-mean-square-convergence-and-rmse .callout-exercise}
 If we know that an estimator $\hat\theta$ is mean-square consistent, do we know
 that its root-mean-squared error goes to zero? What about 
@@ -350,7 +395,7 @@ We tend to visualize our estimate as a single dot, e.g. the black dot below. Tha
 when we want to think about what estimates we could have plausibly gotten, we tend to think about the dots we'd
 get if we were to repeat our survey a hundred times or a billion, each time calculating an estimate the same way.
 The sampling distribution of our estimator. We can plot actual dots, like the purple ones below, or histogram them,
-to get a sense of what this looks like. 
+to get a sense of what this looks like. Hopefully all this is familiar-verging-on-boring to you by now. 
 
 ```{r}
 K <- 100
@@ -377,7 +422,7 @@ ggplot(dotplotdata) +
 ```
 
 Whereas convergence in mean square is about the *typical distance* between these dots and our estimation target, *convergence in probability* 
-is about the fraction of these dots that falls within a small distance $\epsilon$. We say a random variable $\hat\theta$ converges in probability to $\theta$ if, for anyone's idea of `sufficiently close', the probability that $\hat\theta$ is sufficiently close to $\theta$ goes to one. 
+is about the fraction of these dots that falls within a small distance $\epsilon$. We say a random variable $\hat\theta$ converges in probability to $\theta$ if, for anyone's idea of 'sufficiently close', the probability that $\hat\theta$ is sufficiently close to $\theta$ goes to one. 
 $$
 P(\lvert\hat\theta - \theta\rvert \le \epsilon) \to 1 \qqtext{ as } n \to \infty \qqtext{ for any } \epsilon > 0
 $$
@@ -387,8 +432,7 @@ P(\lvert\hat\theta - \theta\rvert > \epsilon) \to 0 \qqtext{ as } n \to \infty \
 $$
 
 If $\hat \theta$ is an estimator and $\theta$ is our estimation target, we say $\hat\theta$
-is *consistent in probability* if it converges in probability to $\theta$. 
-
+is *consistent in probability* if it converges in probability to $\theta$.^[This is nonstandard terminology. What I'm calling 'consistency in probability' is usually called *weak consistency* for reasons that are a little hard to explain without a fair amount of background in topology and measure-theoretic probability. If you say 'consistent in probability', people who usually say *weak consistency* will know what you mean and maybe even follow your lead, but it may take them a second. 'Convergence in probability' is standard terminology, for what it's worth.]
 
 ::: {.callout-note }
 ### Convergence in Probability and Interval Estimation
@@ -405,23 +449,22 @@ Convergence in mean square *implies* convergence in probability. Let's use *Mark
 ## Markov's Inequality
 
 Markov's inequality says that the probability that a non-negative random variable $X$
-hits or exceeds some threshold $\epsilon$ is bounded by the ratio of its expectated value and $\epsilon$, i.e.,
+hits some threshold $\epsilon$ is bounded by the ratio of its expected value and $\epsilon$, i.e.,
 $$ 
 P(X \geq \epsilon) \leq \frac{\E[X]}{\epsilon} 
 $$
 
 Often, instead of using this to bound the random variable we're interested in directly,
-e.g. $X=|\hat\theta - \theta|$, we use it to bound its square. 
-$|X| \ge \epsilon$ if and only if $X^2 \ge \epsilon^2$, so the probability that $|X| \ge \epsilon$ is the same as the probability that $X^2 \ge \epsilon^2$. 
-Applying Markov's inequality to the random variable $X^2$ gives us a bound in terms of $X$'s mean square. And, in the specific case
-that $X$ is $|\hat\theta-\theta|$, the magnitude of an estimator's error, we can use this to to get a bound on the probability that this error exceeds the threshold $\epsilon$ in terms of its *root-mean-squared-error* $\RMSE(\hat\theta)=\E[(\hat\theta-\theta)^2]$.
+e.g. $X=|\hat\theta - \theta|$, we use it to bound the random variable's square. 
+$|X| \ge \epsilon$ if and only if $X^2 \ge \epsilon^2$, so the probability that $|X| \ge \epsilon$ is the same as the probability that $X^2 \ge \epsilon^2$. Applying Markov's inequality to the random variable $X^2$ gives us a bound in terms of $X$'s mean square which, in the specific case
+that $X$ is $|\hat\theta-\theta|$, is the *mean squared error* of the estimator $\hat\theta$, $\RMSE(\hat\theta)^2=\E[(\hat\theta-\theta)^2]$
 
 $$
 P(X \ge \epsilon) = P(X^2 \ge \epsilon^2) \leq \frac{\E[X^2]}{\epsilon^2} \qqtext{ e.g.} 
 P(|\hat\theta - \theta| \ge \epsilon) = P((\hat\theta - \theta)^2 \ge \epsilon^2) \leq \frac{\E[(\hat\theta - \theta)^2]}{\epsilon^2}
 $$
 
-This tells us that, if the root-mean-squared error of $\hat\theta$ goes to zero, then the probability that $\hat\theta$ is any distance $\epsilon$ away from $\theta$ goes to zero. Convergence in mean square *implies* convergence in probability.
+This tells us that, if the root-mean-squared error of $\hat\theta$ goes to zero, then the probability that $\hat\theta$ is any distance $\epsilon$ away from $\theta$ goes to zero, i.e., consistency in mean-square implies consistency in probability.
  
 *Plan*. We're going to conclude with a few exercises. First, we're going to prove Markov's inequality. 
 It's good practice working with expectations and probabilities. Then, we're going to look 
@@ -446,7 +489,7 @@ Prove Markov's inequality.
 
 ## Markov's Inequality and Interval Estimation
 
-So far, when we've calibrated interval estimates using our estimator's standard deviation, we've relied on normal approximation. In effect, we've been using a formula for $P(\lvert\hat\theta - \theta\rvert \le \epsilon)$ that's accurate when $\hat\theta$ has a normal distribution and close enough when its distribution is close enough to normal.
+So far, when we've calibrated interval estimates using our estimator's standard deviation, we've relied on normal approximation. In effect, we've been using a formula for $P(\lvert\hat\theta - \theta\rvert \le \epsilon)$ that's accurate when $\hat\theta$ has a normal distribution and close enough when its distribution is close enough to normal. In this problem, we're going to think about doing without this reliance on approximate normality.
 
 Let's consider $\hat\theta$, an unbiased estimator of $\theta$ with standard deviation $\sigma$, so the 
 normal approximation to the distribution of $\hat\theta-\theta$ has the density $f_{0,\sigma}(x)$ below.
@@ -478,6 +521,10 @@ so if $P(X > \epsilon) \le u$, then $P(X \le \epsilon) = 1-P(X > \epsilon) \ge 1
 Markov's inequality says $\ge$ instead of $>$, don't be. You have a bound on $P(X > \epsilon)$ too. 
 $P(X > \epsilon) \le  P(X\ge \epsilon)$ because $X \ge \epsilon$ whenever $X > \epsilon$.
 :::
+
+
+REAL WORK SHOULD BE DONE HERE
+
 
 Now let's try this out on the NBA data from last week's homework.
 ```{r}
