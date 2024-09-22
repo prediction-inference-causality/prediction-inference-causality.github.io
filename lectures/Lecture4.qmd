@@ -1,11 +1,40 @@
 ---
 title: "Lecture 4"
 subtitle: "Calibrating Interval Estimates using the Bootstrap"
+format: live-revealjs
 ---
 
 # Review
 
 ## Point and Interval Estimation
+
+{{< include ../_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{webr}
+#| label: ggplot-theme
+#| include: false
+
+lightgray = "#aaaaaa"
+body.bg = rgb(231, 240, 236, maxColorValue=255)
+gridcolor = rgb(0,0,0,.1, maxColorValue=1)
+
+lab.theme = theme(
+        plot.background = element_rect(fill = body.bg, colour = NA),
+        panel.background = element_rect(fill = body.bg, colour = NA),
+                    legend.background = element_rect(fill=body.bg, colour = NA),
+                    legend.box.background = element_rect(fill=body.bg, colour = NA),
+                    legend.key = element_rect(fill=body.bg, colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = lightgray),
+        axis.text.y  = element_text(colour = lightgray),
+        axis.title.x  = element_blank(),
+        axis.title.y  = element_blank())
+
+theme_set(lab.theme)
+set.seed(1)
+```
+
 
 {{< include shared-code.qmd >}}
 {{< include ga-turnout.qmd >}}
@@ -171,7 +200,7 @@ $$
 # An Exercise
 
 ## A Survey
-```{webr-r}
+```{webr}
 n=6
 Y = c(0,0,0,1,1,1)
 
@@ -206,7 +235,7 @@ ggplot() + geom_point(aes(x=1:6, y=Y))
 
 ## Simulating a Few More Draws
 
-```{webr-r}
+```{webr}
 draws = 1:10000 |> map_vec(function(.) { 
   Jstar = sample(1:n, n, replace=TRUE)
   Ystar = Y[Jstar]
@@ -218,7 +247,7 @@ computer.tally = as.data.frame(table(draws)) |>
 
 ## Discussion
 
-```{webr-r}
+```{webr}
 hand.tally = data.frame(theta.hat = c(0,1,2,3,4,5,6), 
                         count     = c(0,0,0,1,0,0,0))
 
@@ -240,7 +269,7 @@ ggplot() + geom_col(aes(x=(0:n)/n, y=dbinom(0:n, n, mean(Y))), color='blue', fil
   - It's $\text{Binomial}(n, \theta)$. To estimate it, we plug in $\hat\theta$, the frequency of 1s in our sample. 
   - So our Binomial estimate is the distribution of the frequency of 1s in a sample of size $n$ drawn with replacement ...
     - ... from 'a population' $Y_1 \ldots Y_n$ with frequency $\hat\theta$.
-  - What's a sample from the bootstrap sampling distribution?
+  - What's a draw from the bootstrap sampling distribution?
 
 ### Answer.
 
