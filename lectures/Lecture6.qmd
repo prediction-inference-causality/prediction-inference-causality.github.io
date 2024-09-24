@@ -6,7 +6,7 @@ subtitle: "Comparing Two Groups"
 
 # Examples and Introduction
 
-## [Black]{.groupa} vs. [non-Black]{.groupb} Voters in GA
+## [Black]{.groupb} vs. [non-Black]{.groupa} Voters in GA
 
 {{< include shared-code.qmd >}}
 {{< include ga-turnout.qmd >}}
@@ -34,7 +34,7 @@ $$
 $$
 
 
-## Recipients of Threatening Letters vs. Others in MI
+## [Recipients of Threatening Letters]{.groupb} vs. [Others]{.groupa} in MI
 
 ```{r}
 set.seed(0)
@@ -56,20 +56,20 @@ xco = function(w,x,scale=.3) { x + (scale/2)*(2*as.numeric(w) - 1) }
 social.pressure.plot = ggplot(pop[j.plot,], aes(x=xco(treatment==' Neighbors', age), y=as.numeric(voted=='Yes'), color=treatment, shape=p2002)) +
   geom_point(alpha=.2, size=1, position=position_jitter(h=.1, w=.05, seed=0)) +
   guides(color='none', shape='none') + 
-  scale_y_continuous(breaks=c(0,.5, 1), labels=c('No','','Yes')) + 
-  scale_x_continuous(breaks=seq(20,105,5)) 
+  scale_y_continuous(breaks=c(0,.5, 1), labels=c("Didn't",'',"Voted")) + 
+  scale_x_continuous(breaks=seq(20,105,5)) + labs(x="Age", y="")
 ```
+
 
 ```{r}
 #| label: fig-social-pressure
 social.pressure.plot
 ```
 
+- The green dots are people who received a letter pressuring them to vote. @fig-social-pressure-letter.
+- The red dots are people who didn't.
 
-![](figs/gerber-green-larimer-neighbors.png){#fig-neighbors-letter}
-
-
-## Residents With vs. Without 4-Year Degrees in CA
+## [Residents With]{.groupb} vs. [Without]{.groupa} 4-Year Degrees in CA
 
 {{< include ca-income.qmd >}}
 
@@ -144,15 +144,26 @@ For illustration, I've made up a fake population that looks like a bigger versio
 #| layout-ncol: 2 
 #| fig-width: 7
 
-earnings.jitter.pop = ggplot(pop.earnings) + 
-    geom_point(aes(x=degree, y=income, color=degree), 
-               size=.2, position=position_jitter(seed=0,w=.3), alpha=.1) +
-     scale_y() + guides(color='none')
 
 earnings.jitter = ggplot(earnings) + 
     geom_point(aes(x=degree, y=income, color=degree), 
                size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
      scale_y() + guides(color='none')
+
+earnings.jitter.pop = ggplot(pop.earnings) + 
+    geom_point(aes(x=degree, y=income, color=degree), 
+               size=.2, position=position_jitter(seed=0,w=.3), alpha=.1) +
+     scale_y() + guides(color='none')
+ 
+pop.deviations = pop.earnings |> 
+  group_by(degree) |> 
+  mutate(deviation=income-mean(income))
+
+earnings.jitter.pop.deviations = ggplot(pop.deviations) + 
+    geom_point(aes(x=degree, y=deviation, color=degree), 
+               size=.2, position=position_jitter(seed=0,w=.3), alpha=.1) +
+     scale_y(limits=c(-1e5,1e5)) + guides(color='none')
+
 
 earnings.jitter.pop + 
   stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
@@ -227,14 +238,12 @@ biased.plot
   - standard deviation. Roughly speaking, that determines the width of our 95% confidence intervals.
 
 # Probability Review 
-This is review from Friday.
 
-## Population Means as Expectations
+## Population Means and Variances as Expectations
 
 ```{r}
-#| out-height: 300px
 #| layout-ncol: 2 
-#| fig-width: 7
+#| fig-width: 6
 
 earnings.jitter.pop.nocolor = ggplot(pop.earnings) + 
     geom_point(aes(x=0, y=income), 
@@ -247,35 +256,42 @@ earnings.jitter.nocolor = ggplot(earnings) +
      scale_y() + guides(color='none')
 
 earnings.jitter.pop.nocolor + 
-  stat_summary(aes(x=0, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+  stat_summary(aes(x=0, y=income), geom="pointrange", fun.data=mean_sd) +
+  scale_x_continuous(limits=c(-.3,.3), breaks=c()) 
+
 earnings.jitter.nocolor + 
-  stat_summary(aes(x=0, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+  stat_summary(aes(x=0, y=income), geom="pointrange", fun.data=mean_sd) + 
+  scale_x_continuous(limits=c(-.3,.3), breaks=c()) 
 ```
 
 - If a random variable $Y$ is *equally likely* to be any member of a population $y_1 \ldots y_m$, ...
 - ... then its expectation is the population mean $\mu=\frac{1}{m}\sum_{j=1}^m y_j$.
+- ... and its variance is the population variance $\sigma^2 = \frac{1}{m}\sum_{j=1}^m (y_j - \mu)^2$.
+- *Terminology.* When each of our observations $Y_i$ is like this, we're *sampling uniformly-at-random*.
     
 $$
-\E[Y] = \sum_{j=1}^m \underset{\text{response}}{y_j} \times \underset{\text{probability}}{\frac{1}{m}} = \frac{1}{m}\sum_{j=1}^m y_j = \mu
+\begin{aligned}
+\E[Y] 
+&= \sum_{j=1}^m \underset{\text{response}}{y_j} \times \underset{\text{probability}}{\frac{1}{m}} = \frac{1}{m}\sum_{j=1}^m y_j = \mu \\
+\E[(Y-\E[Y])^2]  
+&= \sum_{j=1}^m \underset{\text{deviation}^2}{(y_j - \mu)^2} \times \underset{\text{probability}}{\frac{1}{m}} = \frac{1}{m}\sum_{j=1}^m (y_j - \mu)^2 = \sigma^2
+\end{aligned}
 $$
 
-- *Terminology.* If each observation $Y_i$ in our sample is like this, we're *sampling uniformly-at-random*.
-
-## Conditioning
+## Subpopulations and Conditioning
 
 ```{r}
-#| out-height: 300px
 #| layout-ncol: 2
-#| fig-width: 7
+#| fig-width: 6
+
 earnings.jitter.pop + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun.data=mean_sd) 
 earnings.jitter + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun.data=mean_sd) 
 ```
+
+::: {.panel-tabset}
+### Conditioning 
 
 - **Conditioning** is, in effect, a way of thinking about sampling as a two-stage process.
   - First, we choose the color of our dot, i.e., the value of $X_i$, according to it frequency in the population.
@@ -283,44 +299,42 @@ earnings.jitter +
 - Because this is just a way of thinking, each person still gets chosen with probability $1/m$.
   
 $$
+\begin{aligned}
 P(J_i=j) = 
 \begin{cases}
-   \frac{m_{green}}{m} \ \ \ \ \ \times \frac{1}{m_{green}} \ \ \ \ \ =\ \frac{1}{m} & \text{if the $j$th dot is green  ($x_j=1$) } \\
-    \frac{m-m_{green}}{m} \times \frac{1}{m-m_{green}} \ = \ \frac{1}{m} & \text{otherwise}
+   \frac{m_{green}}{m} \ \times \frac{1}{m_{green}}  \ = \ \frac{1}{m} & \text{if the $j$th dot is green  ($x_j=1$) } \\
+    \frac{m_{red}}{m} \ \times \frac{1}{m_{red}}  \  = \ \frac{1}{m} & \text{otherwise}
 \end{cases}
-$$
-  
+\end{aligned}
+$$  
 
-- When we're sampling with replacement, we can think of the first stage as a coin flip ...
-- ... that decides whether we roll the 'red die' or the 'green die' in the second stage.
+- The first stage is 'a coin flip' that decides whether we roll the 'red die' or the 'green die' in the second.
 
-
-## Subpopulation Means as Conditional Expectations
-
-```{r}
-#| out-height: 300px
-#| layout-ncol: 2 
-#| fig-width: 7
-earnings.jitter.pop + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-earnings.jitter + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-```
+### Conditional Probability 
 
 - The **Conditional Probability** of $Y_i$ is the probability resulting from the second stage.
-- It's a function of the result of the first. 
   - $P(Y_i=y \mid X_i=1)$ is the probability distribution of $Y_i$ when we're 'rolling the green die'.
   - $P(Y_i=y \mid X_i=0)$ is the probability distribution of $Y_i$ when we're 'rolling the red die'.
-- And the **Conditional Expectation** of $Y_i$ is the 'second stage expected value' in the same sense.
+
+### Conditional Expectation
+
+- The **Conditional Expectation** of $Y_i$ is the 'second stage expected value' in the same sense.
   - $\E[Y_i \mid X_i=1]$ is the expected value of $Y_i$ when we're 'rolling the green die'. 
-  - That is, the mean value $\mu(1)$ of $y_j$ in the subpopulation drawn as little green dots.
+  - It's the mean value $\mu(1)$ of $y_j$ in the subpopulation drawn as little green dots.
   - $\E[Y_i \mid X_i=0]$ is the expected value of $Y_i$ when we're 'rolling the red die'.
-  - That is, the mean value $\mu(0)$ of $y_j$ in the subpopulation drawn as little red dots.
+  - It's the mean value $\mu(0)$ of $y_j$ in the subpopulation drawn as little red dots.
+    
+### Conditional Variance 
 
+- The **Conditional Variance** of $Y_i$ is like this too. It's the 'second stage variance.' 
+  - $\Var[Y_i \mid X_i=1]$ is the variance of $Y_i$ when we're 'rolling the green die'.
+  - It's the variance $\sigma^2(1)$ of $y_j$ in the subpopulation drawn as little green dots.
+  - $\Var[Y_i \mid X_i=0]$ is the variance of $Y_i$ when we're 'rolling the red die'.
+  - It's the variance $\sigma^2(0)$ of $y_j$ in the subpopulation drawn as little red dots.
 
-## About Conditional Expectations 
+:::
+
+## About Conditional Expectations and Variances
 
 ```{r}
 #| layout-ncol: 2
@@ -328,9 +342,16 @@ earnings.jitter +
 
 summaries = earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
 pop.summaries = pop.earnings %>% group_by(degree) %>% summarize(mean=mean(income), sd=sd(income))
-earnings.jitter.pop + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) 
-earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries) 
+
+earnings.jitter.pop + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun.data=mean_sd) 
+earnings.jitter + 
+  stat_summary(aes(x=degree, y=income), geom="pointrange", fun.data=mean_sd) 
 ```
+
+
+::: {.panel-tabset}
+### Conditional Expectations
 
   1.  The **conditional expectation function** $\mu(x)=E[Y \mid X=x]$.
       - $\mu$ is a function; evaluated at $x$, it's a number. It's not random.
@@ -340,90 +361,92 @@ earnings.jitter + geom_pointrange(aes(x=degree, y=mean, ymin=mean-sd, ymax=mean+
       - $\mu(X)$ is the mean of a **random subpopulation** of people.
       - It's the conditional expectation function **evaluated at** the random variable $X$.
 
-# Working with Expectations
-This is mostly review from Friday.
+### Conditional Variance
 
-## Linearity 
+  1.  The **conditional variance function** $\sigma^2(x)=E[\{Y - \mu(x)\}^2 \mid X=x]$.
+      - $\sigma^2$ is a function; evaluated at $x$, it's a number. It's not random.
+      - It's the variance of the subpopulation of people with $X=x$.
+   
+  2.  The conditional variance $\sigma^2(X)=E[\{Y - \mu(X)\}^2 \mid X]$.
+      - $\sigma^2(X)$ is the variance of a **random subpopulation** of people.
+      - It's the conditional variance function **evaluated at** the random variable $X$.
+
+ - This is like what happens with conditional expectations because it is one. 
+ - It's the conditional expectation of some random variable. What random variable?
+
+###  Conditional Variance as a Conditional Expectation
+
+- It's the conditional expectation of the square of $\inblue{Y-\mu(X)}$, a *conditionally centered* version of $Y$. 
+
+$$
+\Var[Y \mid X] = \E[\inblue{\{Y-\mu(X)\}}^2 \mid X] \qfor \mu(X) = \E[Y \mid X]
+$$
+ 
+:::
+
+
+# Working with Expectations
+
+## Linearity {#sec-linearity}
 $$ 
 \begin{aligned}
 E ( a Y + b Z ) 
 &= E (aY) + E (bZ) 
-= aE(Y) + bE(Z)  
-&& \text{ for random variables $Y, Z$ and numbers $a,b$ }
+= aE(Y) + bE(Z) \\ 
+&\text{ for random variables $Y, Z$ and numbers $a,b$ }
 \end{aligned}
 $$
 
-**Important Application**. The sample mean is unbiased when we sample uniformly-at-random.
+**Application**. When we sample uniformly-at-random, the sample mean is unbiased.
 
 $$
 \begin{aligned}
 \E[\hat\mu] 
 &= \E\qty[\frac1n\sum_{i=1}^n Y_i] \\
-&= \frac1n\sum_{i=1}^n \E[Y_i] && \text{ via linearity } \\
-&= \frac1n\sum_{i=1}^n \mu     && \text{ via uniform-at-random sampling } \\
+&= \frac1n\sum_{i=1}^n \E[Y_i]  \\
+&= \frac1n\sum_{i=1}^n \mu     \\
 &= \frac1n \times n \times \mu = \mu.
 \end{aligned}
 $$
 
-## Factorization of Products 
-
-$$
-\E[YZ] = \E[Y]\E[Z] \qqtext{when $Y$ and $Z$ are independent}
-$$
-
-**Important Application**. The variance of a mean of independent and identically distributed observations is \ 
-$\faded{1/n \times}$ the variance of one.
-
-$$
-\begin{aligned}
-\Var[\hat\mu] 
-&=
-\E\qty[ \qty{ \frac1n \sum_{i=1}^n Y_i - \E\qty[\frac1n \sum_{i=1}^n Y_i] }^2 ] \\
-&= \E\qty[ \qty{ \frac1n \sum_{i=1}^n \qty(Y_i - \E[Y_i]) }^2 ] \\
-&= \E\qty[ \frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n \qty(Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] \\
-&= \frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n \E\qty[ \qty(Y_i - \E[Y_i])(Y_j - \E[Y_j]) ] \\
-&= \frac{1}{n^2} \sum_{i=1}^n \sum_{j=1}^n 
-\begin{cases} 
-\E\qty[ \qty(Y_i - \E[Y_i])^2 ] & \text{ when } j=i \\
-\inblue{\E\qty[ \qty(Y_i - \E[Y_i]) \E \qty(Y_j - \E[Y_j]) ] \E\qty[\qty(Y_i - \E[Y_i])] \E\qty[\qty(Y_j - \E[Y_j])] = 0} 
-& \text{ when } j \neq i 
-\end{cases} \\
-&=  \frac{1}{n^2} \sum_{i=1}^n \Var[Y_i] \frac{1}{n^2} \times n \times \Var[Y_i]  
-\end{aligned}
-$$
-
-# Working with Conditional Expectations
-
-## Linearity
-
-```{r}
-earnings.jitter.pop + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-```
-
+**Conditional Version**.
 $$ 
 \begin{aligned}
 E\{ a(X) Y + b(X) Z \mid X \} 
 &= E\{a(X)Y \mid X\} + E\{ b(X)Z \mid X\} \\
-&= a(X)E(Y \mid X) + b(X)E(Z \mid X)
+&= a(X)E(Y \mid X) + b(X)E(Z \mid X) \\
+& \text{ for random variables $X, Y, Z$ and functions $a,b$ }
 \end{aligned}
 $$
 
-
-## Irrelevance of independent conditioning variables
-$$ E[ Y \mid X, X' ] = E[ Y \mid X ] \quad \text{ when $X'$ is independent of $X,Y$ } $$
-
-If $X'$ is unrelated to $X$ and $Y$, holding it constant doesn't affect the relationship between them.
-
-**Important Application.**
-
-When our observations are independent, the conditional mean of $Y_i$ given $X_1 \ldots X_n$ is the conditional mean of $Y_i$ given $X_i$ alone.
+## Expectations of Products Factor into Products of Expectations {#sec-factorization} 
 
 $$
-\E[Y_i \mid X_1 \ldots X_n] = \E[Y_i \mid X_i] = \mu(X_i) \qqtext{ when $(X_1, Y_1) \ldots (X_n, Y_n)$ are independent.}
+\color{gray}
+\E[\inpink{Y}\inteal{Z}] = \inpink{\E[Y]}\inteal{\E[Z]} \qqtext{when $\inpink{Y}$ and $\inteal{Z}$ are independent}
 $$
 
+**Application**. When we sample with replacement, the sample mean's variance is the population variance divided by $n$.
+
+$$
+\color{gray}
+\begin{aligned}
+\Var[\hat\mu] 
+&= \E\qty[ \qty{ \frac{1}{n}\sum_{i=1}^n Y_i - \E \qty[ \frac{1}{n}\sum_{i=1}^n Y_i ] }^2 ] \\
+&= \E\qty[ \qty{ \frac{1}{n}\sum_{i=1}^n (Y_i - \E[Y_i]) }^2 ]  \\
+&= \E\qty[ \qty{ \frac{1}{n}\sum_{i=1}^n Z_i }^2 ] 
+&& \text{ for } \ Z_i = Y_i - \E[Y_i] \\
+&= \E\qty[ \qty{ \inpink{\frac{1}{n}\sum_{i=1}^n Z_i }} \times \qty{\inteal{\frac{1}{n}\sum_{j=1}^n Z_j}} ] 
+&&\text{ with }  \E[ Z_i  ] =  \E[ Y_i  ] - \E[Y_i] = \mu - \mu = 0 \\
+&= \E\qty[ \frac{1}{n^2}\inpink{\sum_{i=1}^n} \inteal{\sum_{j=1}^n} \inpink{Z_i} \inteal{Z_j} ]    
+&&\text{ and } \ \E[ Z_i^2] = \E[ \{ Y_i - \E[Y_i] \}^2 ] = \Var[Y_i] = \sigma^2 \\
+&= \frac{1}{n^2} \inpink{\sum_{i=1}^n} \inteal{\sum_{j=1}^n} \E\qty[\inpink{Z_i} \inteal{Z_j} ]  \\
+&= \frac{1}{n^2} \inpink{\sum_{i=1}^n} \inteal{\sum_{j=1}^n} \begin{cases} 
+\E[Z_i^2]=\sigma^2 & \text{if } j=i \\ 
+\inpink{\E[Z_i]}\inteal{\E[Z_j]} = 0 \times 0  & \text{if } j\neq i \end{cases} \\
+&= \frac{1}{n^2} \inpink{\sum_{i=1}^n} \sigma^2 =  \frac{1}{n^2} \times n \times \sigma^2 = \frac{\sigma^2}{n} 
+\end{aligned}
+$$
 
 ## The Law of Iterated Expectations 
 ```{r}
@@ -449,17 +472,157 @@ tinylims.0 = xlim(min(Xdodge[X==0])-sd(Xdodge[X==0]), max(Xdodge[X==0] + sd(Xdod
 tinylims = xlim(min(Xdodge)-sd(Xdodge), max(Xdodge + sd(Xdodge)))
 ```
 
+
+::: {.panel-tabset}
+### A Tiny Example 
 ```{r}
-Y = c(Y, Y+.5)
+tinypop.plot.withspread
+```
+
+### A Realistic Example 
+
+```{r}
+earnings.jitter.pop.withspread  
+```
+
+:::
+
+$$
+\E[Y] = \E\qty[ \E( Y \mid X ) ] \quad \text{ for any random variables $X, Y$} 
+$$
+
+::: {.panel-tabset}
+### A Tiny Example
+
+:::: columns
+::: column
+$p$ | $X_i$ | $\E[Y_i \mid X_i]$ 
+--- | --- | ---
+$\frac{`r sum(X==0)`}{`r length(Y)`}$ | $0$ | $`r mean(Y[X==0])`$ 
+$\frac{`r sum(X==1)`}{`r length(Y)`}$ | $1$ | $`r mean(Y[X==1])`$
+:::
+::: column
+What is $\E[Y_i]$?
+:::
+::::
+
+### A Realistic Example
+
+:::: columns
+::: column
+```{r}
+no = 'no 4-year degree'
+yes = '4-year degree'
+```
+
+$p$ | $X_i$ | $\E[Y_i \mid X_i]$ 
+--- | --- | ---
+$`r mean(pop.earnings$degree==no) |> approx()`$ | 0 | $`r pop.earnings |> filter(degree==no) |> pull(income) |> mean() |> approx()`$
+$`r mean(pop.earnings$degree==yes) |> approx()`$ | 1 | $`r pop.earnings |> filter(degree==yes) |> pull(income) |> mean() |> approx()`$
+
+:::
+::: column
+
+What is $\E[Y_i]$?
+:::
+::::
+
+:::
+
+## The Law of Iterated Iterated Expectations^[This is really still called the law of iterated expectations.] {#sec-iterated-iterated}
+
+::: {.panel-tabset}
+### A Tiny Example
+```{r}
+Y = c(Y, Y+.75)
 X = rep(0 + (1:6 > 3), 2)
 Xdodge = X + rep(.02*c(-1,0,1),4)
 W = rep(0:1, each=6)
 
+filled.diamond = 18
+diamond = 	'&#9670;'
+
 tinypop.wx.plot = ggplot(data.frame(X=X,Y=Y,Xdodge=Xdodge,W=W)) + 
-  geom_point(aes(x=Xdodge, y=Y, color=factor(X), shape=factor(W)), alpha=.5, size=3*dot.size) + 
+  geom_point(aes(x=Xdodge, y=Y, color=factor(X), shape=factor(W)), alpha=.5, size=3*dot.size) +
   guides(color='none', shape='none')
+tinypop.wx.plot
 ```
 
+### Annotated 
+
+```{r}
+tinypop.wx.plot + 
+  stat_summary(aes(x=X, y=Y, shape=factor(W)), geom="point", fun=mean, size=2*dot.size, alpha=.3) +
+  stat_summary(aes(x=X, y=Y), geom="point", fun=mean, shape=filled.diamond, size=3*dot.size, alpha=.3) 
+```
+
+:::
+
+$$
+\E\qty[Y \mid X] = \E\qty[ \ \E[Y \mid W, X] \ \mid X] \quad \text{ for any random variables $W, X, Y$} 
+$$
+
+::: {.panel-tabset}
+### What It Is
+- This says the law of iterated expectations works when we're one stage into '3 stage sampling'.
+- It's the law of iterated expectations for the probability distribution we get when ...
+  - We've flipped 'color coin' to choose $X$.
+  - But we haven't flipped the 'shape coin' to choose $W$.
+    
+### What It Says
+- It says that if we want to calculate the expectation of $Y$ given a column $X$, we can ...
+  - First average over $Y$ given a column $X$ *and* a shape $W$ to get a random variable taking on $4$ values.
+  - Then average that over the shape $W$ to get a random variable taking on only $2$ values.
+
+### An Exercise 
+- Suppose we're sampling with replacement from the tiny population above.
+1. Annotate the plot to show the function versions of $\E[Y\mid W, X]$ and $\E[Y\mid X]$.
+2. Make a table describing the random variable $\E[Y\mid W, X]$ 
+3. Marginalize to get a table describing $\E[Y\mid X]$.
+4. Marginalize again to get the number $\E[Y]$.
+
+### Solution
+
+:::: columns 
+::: {.column width=40%}
+### $\E[Y \mid W, X]$
+
+
+$p$ | $W$ | $X$ | $\E[Y \mid W, X]$
+--- | --- | --- | ---
+$\frac{3}{12}$ | `r circle`   | [0]{.groupa} | $`r mean(Y[W==0 & X==0])`$
+$\frac{3}{12}$ | `r triangle` | [0]{.groupa} | $`r mean(Y[W==1 & X==0])`$
+$\frac{3}{12}$ | `r circle`   | [1]{.groupb} | $`r mean(Y[W==0 & X==1])`$
+$\frac{3}{12}$ | `r triangle` | [1]{.groupb} | $`r mean(Y[W==1 & X==1])`$
+
+The function is the gray `r circle` and `r triangle` in the plot.
+
+:::
+::: {.column width=40%}
+### $\E[Y \mid X]$
+$p$ | $X$ | $\E[Y \mid X]$
+--- | --- | ---
+$\frac{6}{12}$  | [0]{.groupa}  |  $`r mean(Y[X==0])`$
+$\frac{6}{12}$ |  [1]{.groupb}  |  $`r mean(Y[X==1])`$
+
+The function is the gray `r diamond` in the plot.
+:::
+::: {.column width=20%}
+### $\E[Y]$
+
+`r mean(Y)`
+
+That's midway \
+between the \
+two diamonds.
+
+:::
+::::
+
+:::
+
+
+## Irrelevance of independent conditioning variables {#sec-irrelevance}
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
@@ -467,31 +630,25 @@ tinypop.wx.plot = ggplot(data.frame(X=X,Y=Y,Xdodge=Xdodge,W=W)) +
 tinypop.plot.withspread
 earnings.jitter.pop.withspread  
 ```
+
+$$ \E[ \inteal{Y} \mid \inteal{X}, \inpink{X'} ] = \inteal{\E[ Y \mid X ]} \quad \text{ when $X'$ is independent of $X,Y$ } $$
+
+
+**Application.**
+When we sample with replacement, the conditional expectation of $Y_i$ given $X_1 \ldots X_n$ is the conditional mean of $Y_i$ given $X_i$ alone.
+
 $$
-\E[Y] = \E\qty[ \E( Y \mid X ) ] \quad \text{ for any random variables $X, Y$} 
+\E[Y_i \mid X_1 \ldots X_n] = \E[Y_i \mid X_i] = \mu(X_i) \qqtext{ when $(X_1, Y_1) \ldots (X_n, Y_n)$ are independent.}
 $$
 
-## The Law of Iterated Iterated Expectations 
+## The Indicator Trick
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
-tinypop.wx.plot
-social.pressure.plot #+
-#  stat_summary(aes(x=color, y=y, shape=shape), geom="pointrange", fun=mean, 
-#          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
+
+tinypop.plot.withspread
+earnings.jitter.pop.withspread  
 ```
-
-$$
-\E[Y \mid W] = \E[ \E\qty[Y \mid W, X] \mid W] \quad \text{ for any random variables $W, X, Y$} 
-$$
-
-- This is really still called the law of iterated expectations.
-- It says the law of iterated expectations works when we're one stage into '3 stage sampling'.
-- It's the law of iterated expectations for the probability distribution we get when ...
-  - We've flipped the 'shape coin' to choose $W$ 
-  - But we haven't flipped the 'color coin' to choose $X$.
-
-## The Indicator Trick
 
 $$
 1_{=x}(X)\mu(X) = 
@@ -508,7 +665,7 @@ $$
 1_{=x}(X)\mu(x)
 $$
 
-**Important Implication.**
+**Application.**
 
 $$
 \E[1_{=x}(X)\mu(X)] = \E[ 1_{X=x} \mu(x) ] = \mu(x) \E[1_{=x}(X)] = \mu(x) \times P(X=x) 
@@ -518,25 +675,14 @@ $$
 
 ## A Sample Mean is Unbiased
 
-**Claim.** The sample mean is an unbiased estimator of the population mean.
+**Claim.** When we sample uniformly-at-random, the sample mean is an unbiased estimator of the population mean.
 $$ \E[\hat\mu] = \mu $$
 
-::: fragment
-
-$$
-\begin{aligned}
-\E\qty[\frac1n\sum_{i=1}^n Y_i] 
-&= \frac1n\sum_{i=1}^n \E[Y_i] && \text{ via linearity } \\
-&= \frac1n\sum_{i=1}^n \mu     && \text{ via equal-probability sampling } \\
-&= \frac1n \times n \times \mu = \mu.
-\end{aligned}
-$$
-
-:::
+We proved this earlier today using linearity of expectations. See @sec-linearity.
 
 ## A Subsample Mean is Unbiased
 
-**Claim.** A subsample mean is an unbiased estimator of the corresponding subpopulation mean.
+**Claim.** When we sample with replacement, a subsample mean is an unbiased estimator of the corresponding subpopulation mean.
 $$ \E[\hat\mu(1)] = \mu(1) $$
 
 ::: {.panel-tabset}
@@ -573,19 +719,24 @@ $$
   - This implies unbiasedness in the usual sense via the law of iterated expectations.
 
 $$
-\E[\hat\mu(1) \mid X_1 \ldots X_n] = \mu(1) \qqtext{ and therefore } \E[\hat\mu(1)] = \E\qty[\E\qty[\hat\mu(1) \mid X_1 \ldots X_n]] = \E[\mu(1)] = \mu(1) 
-$$
-
-$$
 \begin{aligned}
 \E[\hat\mu(1) \mid X_1 \ldots X_n] 
-&=\E\qty[\frac{\sum_{i:X_i=1} Y_{i}}{\sum_{i:X_i=1} 1} \mid X_1 \ldots X_n] \\
 &=\E\qty[\frac{\sum_{i=1}^{n} 1_{=1}(X_i) Y_{i}}{\sum_{i=1}^{n} 1_{=1}(X_i)} \mid X_1 \ldots X_n] \\
-&=\frac{\sum_{i=1}^{n} 1_{=1}(X_i) \E\qty{ Y_{i} \mid X_1 \ldots X_n}}{\sum_{i=1}^{n}1_{=1}(X_i)}
-&=\frac{\sum_{i=1}^{n} 1_{=1}(X_i) \E\qty{ Y_{i} \mid X_i}}{\sum_{i=1}^{n}1_{=1}(X_i)}
-&=\frac{\sum_{i=1}^{n}1_{=1}(X_i) \mu(1)}{\sum_{i=1}^{n}1_{=1}(X_{i})}
-&= \mu(1) \ \frac{\sum_{i=1}^{n} 1_{=1}(X_i) }{\sum_{i=1}^{n}1_{=1}(X_{i})} = \mu(1) 
+&\explain{=}{via linearity. All the indicators (and their sum) are functions of $X_1\ldots X_n$.}
+\frac{\sum_{i=1}^{n} 1_{=1}(X_i) \E\qty{ Y_{i} \mid X_1 \ldots X_n}}{\sum_{i=1}^{n}1_{=1}(X_i)} \\
+&\explain{=}{via irrelevance of independent conditioning variables. $(X_i,Y_i)$ are independent of the other $X$s.}
+\frac{\sum_{i=1}^{n} 1_{=1}(X_i) \E\qty{ Y_{i} \mid X_i}}{\sum_{i=1}^{n}1_{=1}(X_i)} \\
+&\explain{=}{This is just a change of notation, as $\mu(X_i)=\E[Y_i \mid X_i]$, but it makes it easier to understand what happens next.} 
+\frac{\sum_{i=1}^{n} 1_{=1}(X_i) \mu(X_i)}{\sum_{i=1}^{n}1_{=1}(X_i)} \\
+&\explain{=}{via the indicator trick.}\frac{\sum_{i=1}^{n}1_{=1}(X_i) \mu(1)}{\sum_{i=1}^{n}1_{=1}(X_{i})} \\
+&\explain{=}{via linearity} \mu(1) \ \frac{\sum_{i=1}^{n} 1_{=1}(X_i) }{\sum_{i=1}^{n}1_{=1}(X_{i})} = \mu(1) 
 \end{aligned}
+$$
+
+and therefore, using the law of iterated expectations,  
+
+$$
+\E[\hat\mu(1)] = \E\qty[\E\qty[\hat\mu(1) \mid X_1 \ldots X_n]] = \E[\mu(1)] = \mu(1) 
 $$
 
 :::
@@ -598,6 +749,8 @@ $$
 \E[\hat\mu(1) - \hat\mu(0)] = \mu(1) - \mu(0) 
 $$
 
+**Why?**
+
 ::: fragment
 This follows from the linearity of expectations and unbiasedness of the subsample means.
 
@@ -607,7 +760,18 @@ $$
 
 :::
 
-## Implications 
+**Is it conditionally unbiased?**
+
+::: fragment
+It is. That follows from linearity of conditional expectations and conditional unbiasedness of the subsample means.
+
+$$
+\E[\hat\mu(1) - \hat\mu(0) \mid X_1 \ldots X_n] = \E[\hat\mu(1) \mid X_1 \ldots X_n] - \E[\hat\mu(0) \mid X_1 \ldots X_n] =  \mu(1) - \mu(0) 
+$$
+
+:::
+
+## Implications of Unbiasedness
 
 ```{r}
 #| layout-ncol: 2
@@ -638,7 +802,10 @@ ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bin
 - If we can estimate the width of its sampling distribution, we can get interval estimates with the coverage we want.
 - The question that remains is whether those interval estimates are narrow enough to be useful.
 
+
 # Spread
+
+## The Question
 
 ```{r}
 #| layout-ncol: 2
@@ -658,7 +825,7 @@ ggplot() + geom_histogram(aes(x=normals, y=after_stat(density)), alpha=.3, bins=
            geom_point(aes(y=heights, x=normals[1:length(heights)]), color='purple', alpha=.3) +
            xlim(-12,12)
 
-ggplot() + geom_histogram(aes(x=normals+2, y=after_stat(density)), alpha=.3, bins=100) +
+ggplot() + geom_histogram(aes(x=3*normals, y=after_stat(density)), alpha=.3, bins=100) +
            geom_vline(xintercept=0, color='green', linewidth=3, alpha=.4) + 
            geom_vline(xintercept=0, color='blue') + 
            geom_vline(xintercept=3*c(-1,1), color='blue', linetype='dashed') +
@@ -679,76 +846,17 @@ earnings.jitter.pop
 - You can think of there being two kinds of variation in a population. 
   - Within-group variation. 
   - Between-group variation.
-
-## Conditional Variance {.smaller}
-
-```{r}
-#| layout-ncol: 2 
-#| fig-width: 7 
-tinypop.plot.withspread
-earnings.jitter.pop.withspread
-```
-
-- The **conditional variance** describes the spread of one random variable *within groups*. 
-- Like the conditional expectation of the random variable, there are two related concepts.
-
-1. The **conditional variance function**. This is a function of $x$.
-$$
-\sigma^2(x) := \Var(Y \mid X=x) = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X=x]
-$$
-
-2. The conditional variance $\sigma^2(X) = \Var(Y \mid X)$. This is a random variable.
-$$
-\sigma^2(X) := \Var(Y \mid X)   = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X]
-$$
-
-
-## The Conditional Variance Function
-
-```{r}
-#| layout-ncol: 2 
-#| fig-width: 7
-tinypop.plot 
-earnings.jitter.pop + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-```
-
-$$
-\sigma^2(x) := \Var(Y \mid X=x) = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X=x]
-$$
-
-- This is the variance of $Y$ within the subpopulation of people with $X=x$.
-  - $\sigma(1)$ is a number describing the spread of the green dots in our population.
-  - $\sigma(0)$ is a number describing the spread of the red dots in our population.
-- It's the conditional expectation function of the random variable $\textcolor{blue}{\{Y-\E(Y \mid X)\}^2}$.
-- We call it 'the conditional variance function of $Y$ given $X=x$.
-
-## The Conditional Variance 
-```{r}
-#| layout-ncol: 2
-#| fig-width: 7
-tinypop.plot 
-earnings.jitter.pop + 
-  stat_summary(aes(x=degree, y=income), geom="pointrange", fun=mean, 
-          fun.min = function(x) mean(x) - sd(x), fun.max = function(x) mean(x) + sd(x)) 
-```
-
-$$
-\sigma^2(X) := \Var(Y \mid X)   = \E\qty[ \textcolor{blue}{\qty{ Y-\E(Y \mid X) }^2} \mid X]
-$$
-
-- This is the variance of $Y$ within **a random subpopulation** of people.
-    - It's the conditional variance function **evaluated at** the random variable $X$.
-    - And  the conditional expectation of the random variable $\textcolor{blue}{\{Y-\E(Y \mid X)\}^2}$.
-- We call it 'the conditional variance of $Y$ given $X$'.
-- This is the sort of thing that shows up when you use the law of iterated expectations.
+-
 
 ## The Law of Total Variance
 
 ```{r}
-#| out-height: 500px
-#| fig-ncol: 2
+#| layout-ncol: 2
+#| fig-width: 7
+
+Y = c(.75,1,1.25, 1,1.25,1.5)
+X = 0 + (1:6 > 3)
+Xdodge = X + rep(.02*c(-1,0,1),2)
 
 ggplot() + geom_point(aes(x=Xdodge, y=Y, color=factor(X)), alpha=.7, size=4) + 
   scale_y_continuous(breaks=seq(0,3,by=.5), limits=c(0,3)) + guides(color='none') 
@@ -761,10 +869,11 @@ $$
 $$
 
 - The Law of Total Variance relates Conditional and Unconditional Variance
-- It's like the Law of Total Expectation, but for Variance
+- It's like the Law of Iterated Expectations, but for Variance.
 - It's a useful way to decompose the variance a random variable.
 - Think about where most of the variance in $Y$ is coming from in the two populations shown above.
 
+We won't prove this, but it's in the slides if you're interested. See @sec-proving-total-variance.
 
 ## Check Your Understanding 
 
@@ -790,55 +899,108 @@ earnings.jitter.pop +
     2. Using 'Population Language'
         - e.g. 'the variance of income (Y) within the random subpopulation with degree status X'
 
-# Variance Calculations
 
-## Review: The Variance of A Mean of IID Random Variables
+## The Variance of the Sample Mean
+
+**Claim.** When we sample w/ replacement, the variance of the sample mean \
+is the population variance divided by the number of people in the sample.
+
+$$ 
+\Var[\hat\mu] = \frac{\sigma^2}{n}  
+$$
+
+- We proved this earlier today using. See @sec-factorization.
+ - We used, among other things, the property that expectations of products factor into products of expectations. 
+- Our proof for the subsample mean will be similar with more conditioning. 
+  - We'll use a conditional version of that we can derive using the 'law of iterated iterated expectations'.
+
+##  Conditional Expectations of Products Factor {#sec-conditional-factorization .small}
+
+When we sample with replacement, the conditional expectation of products factors into a product of conditional expectations.
+
+$$
+\E[Y_i \ Y_j \mid X_1 \ldots X_n] = \E[Y_i \mid X_i]\E[Y_j \mid X_j] = \mu(X_i)\mu(X_j) \qqtext{ when $(X_1, Y_1) \ldots (X_n, Y_n)$ are independent.}
+$$
+
+This is a subtle application of two of our 'laws'.
 $$
 \begin{aligned}
-\Var[\bar Y] 
-&= \E\qty[ \qty{ \frac{1}{n}\sum_i Y_i - \E \qty( \frac{1}{n}\sum_i Y_i ) }^2 ] \\
-&= \E\qty[ \qty{ \frac{1}{n}\sum_i (Y_i - \E Y_i) }^2 ]  \\
-&\overset{*}{=} \E\qty[ \qty{ \frac{1}{n}\sum_i Z_i }^2 ] && \text{for} \ \ Z_i = Y_i - \E Y_i \\
-&= \E\qty[ \qty{ \inpink{\frac{1}{n}\sum_i Z_i }} \times \inteal{\frac{1}{n}\sum_j Z_j} ] && 
-&= \E\qty[ \frac{1}{n^2}\sum_i \sum_j \inpink{Z_i} \inteal{Z_j} ]    \\
-&= \frac{1}{n^2} \sum_i \sum_j \E\qty[\inpink{Z_i} \inteal{Z_j} ]  \\
-&= \frac{1}{n^2} \sum_i \sum_j \begin{cases} 
-\E Z_i^2=\Var[Y_i] & \text{if } j=i \\ 
-\inpink{\E[Z_i]}\inteal{\E[Z_j]} = 0 \times 0  & \text{if } j\neq i \end{cases} \\
-&= \frac{1}{n^2} \sum_i \Var[Y_i] = \frac{1}{n^2} \times n \times \Var[Y_i] = \frac{\Var[Y_i]}{n}
+&\E[Y \mid X] = \E[ \E\qty[Y \mid W, X] \mid X] \quad \text{ for any random variables $W, X, Y$}  
+&& \text{Law of Iterated Iterated Expectations} \\
+&\E[ \inteal{Y} \mid \inteal{X}, \inpink{X'} ] = \inteal{\E[ Y \mid X ]} \quad \text{ when $X'$ is independent of $X,Y$ } 
+&& \text{Irrelevance of Independent Conditioning Variables}
 \end{aligned}
 $$
 
-*: We pause here to give the centered version of $Y_i$ a name: $Z_i$. This is what we know about it.
+
+::: {.panel-tabset}
+### The Proof 
 
 $$
+\color{gray}
 \begin{aligned}
-\E[ Z_i  ] 
-&\explain{=}{it has expected value zero.}
-\E[ Y_i - \mu ] = \E[ Y_i  ] - \mu = \mu - \mu = 0. \\
-&\explain{=}{the expected value of its square is the variance of $Y_i$ }
-\E[ Z_i^2] = \E[ \{ Y_i - \E[Y_i] \}^2 ] = \Var[Y_i] 
+\E[ \inpink{Y_i} \ \inteal{Y_j} \mid X_1 \ldots X_n] 
+&\explain{=}{Here's use the law of iterated iterated expectations to 'break the second stage into a second and third'} 
+\E[\E[\inpink{Y_i} \ \inteal{Y_j} \mid \inpink{Y_i}, X_1 \ldots X_n] \mid X_1 \ldots X_n] \\
+&\explain{=}{Here we pull $Y_i$ out of the inner expectation (stage 3). That's justified by linearity of conditional expectations because it's a function of $\inpink{Y_i}, X_1 \ldots X_n$, the stuff we chose in stages 1 and 2.}
+\E[ \inpink{Y_i} \ \E[\inteal{Y_j} \mid \inpink{Y_i}, X_1 \ldots X_n] \mid X_1 \ldots X_n] \\
+&\explain{=}{Here we drop the irrelevant conditioning variables from the inner expectation. In the notation above, $Y=Y_j$, $X=X_j$, and $X'=(Y_i, X_1 \ldots X_n \text{ except } X_j)$, which describes other 'calls', is independent of $(X,Y)=(X_j, Y_j)$.} 
+\E[\inpink{Y_i} \ \E[\inteal{Y_j} \mid X_j] \mid X_1 \ldots X_n] \\
+&\explain{=}{Here we pull $\inteal{Y_j}$ out of the outer expectation (stage 2). That's justified by linearity of conditional expectations because it's a function of $X_1 \ldots X_n$, the stuff we chose in stage 1.}
+\inteal{\E[Y_j \mid X_j]} \ \E[\inpink{Y_i} \mid X_1 \ldots X_n] \\
+&\explain{=}{Here we drop the irrelevant conditioning variables from expectation involving $\inpink{Y_i}$. In the notation above, $Y=Y_i$, $X=X_i$, and $X'=(Y_j, X_1 \ldots X_n \text{ except } X_i)$, which describes other 'calls', is independent of $(X,Y)=(X_i, Y_i)$.}
+\inteal{\E[Y_j \mid X_j]} \ \inpink{\E[Y_i \mid X_i]} \\ 
+&\explain{=}{This is the same thing in different notation.}
+\inteal{\mu(X_j)} \ \inpink{\mu(X_i)}
 \end{aligned}
 $$
+
+### The Idea Behind the Proof
+
+- This proof is a bit stranger conceptually than it is as a matter of pushing symbols around.
+  - You don't have to get it conceptually if you don't want to. 
+  - Sometimes it's not worth it. But if you do want to, here's what's going on.
+- We start out thinking about a 'two stage' sampling process.
+  1. We flip our 'color coin' $n$ times to choose $X_1 \ldots X_n$. 
+    - Those flips together are $X$ in our iterated expectations formula.
+  2. We roll n times to choose $Y_1 \ldots Y_n$. 
+    - For $Y_i$, we roll the 'red die' if $X_i=0$ and the 'green die' if $X_i=1$. 
+    - You can think of the product $Y_i Y_j$ as $Y$ in our iterated expectations formula.
+- Then we use the 'law of iterated iterated expectations' to break that second stage into two.
+  a. We roll once to choose $Y_i$. That's $W$ in our iterated expectations formula. 
+  b. We roll $n-1$ times to choose the rest of $Y_1 \ldots Y_n$. 
+- After that, we simplify using linearity and the irrelevance of independent conditioning variables.
+
+### It's an Odd Idea, But It Works
+  
+- It sound a little odd because our '3 stage sampling' scheme depends on the pair $Y_i, Y_j$ we're thinking about.
+  - When we think about the pairs $Y_1 Y_3$ and $Y_2 Y_3$, we're thinking about two different ways of drawing $Y_3$. 
+  - And we can't really do both. It's just one thing. We can't draw it twice.
+- That's ok because we don't really have to sample this way. It's just a way of thinking about doing a calculation.
+  - This is a bit like how we can think of any pair $Y_i,Y_j$ as distributed like $Y_1,Y_2$ when \
+  [calculating about variance after sampling without replacement](https://qtm285-1.github.io/assets/homework/week3-homework.html#exr-covariance-with-replacement) in this week's homework.
+  - Ultimately, it's about linearity. When we're calculating the expectation of a sum, \
+    we only care about the marginal distribution of each term. 
+  - When that term involves only two observations, like we see in variance calculations, \
+    we can think about the random mechanism that gives us each pair separately. 
+
+:::
+
 
 ## The Variance of the Subsample Mean
 
-**Claim.** When we sample with replacement, the variance of a subsample mean is the **expected value** of the subpopulation variance divided by the number of people in the subsample.
+**Claim.** When we sample with replacement, the variance of a subsample mean is the \
+**expected value** of the subpopulation variance divided by the number of people in the subsample.
 $$ 
 \Var[\hat\mu(1)] = \E\qty[ \frac{\sigma^2(1)}{N_1} ] \quad \text{ for } \quad N_1 = \sum_{i=1}^n 1_{=1}(X_i)  
 $$
 
-- This is like what we saw in the unconditional case, with a twist.
-- The number of people in the subsample is random, so instead of $1/n$, we have $\E[ 1/N_1 ]$.
-- Let's prove it.
-  - It's not hard, but it's a bit long. The key is organization. 
-  - We'll break things down into manageable pieces and focus on one piece at a time. 
-
+- This is like what we saw in the unconditional case, but with a twist.
+- The number of people in the subsample is random, so instead of $1/n$, we have $\E[ \frac{1}{N_1} ]$.
 
 ## Step 1. Total Variance
 
 ```{r}
-#| out-height: 250px
 #| fig-asp: .25
 tinypop.plot + tinylims
 ```
@@ -853,33 +1015,38 @@ $$
 \end{aligned}
 $$
 
-This is one place it helps to know our estimator is *conditionally unbiased*. 
+- This is one place it helps to know our estimator is *conditionally unbiased*. 
   - That conditional expectation is the constant $\mu(1)$.
   - So the 'between-groups' variance term is zero. 
 
-## Step 2. Centering and Squaring in the Conditional Variance 
+## Step 2. Centering and Squaring  
 
 $$
 \begin{aligned}
-\Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }  
-&= \E\qty{ \qty[\hat \mu(1) - \mu(1) ]^2 \mid X_1 \ldots X_n } 
-&= \E \qty[ \qty{\frac{\sum_{i=1}^n 1_{=1}(X_i)Y_{i}}{\sum_{i=1}^n 1_{=1}(X_i)} - \mu(1)}^2 \mid X_1 \ldots X_n ] 
-&= \E \qty[ \qty{ \frac{\sum_{i=1}^n 1_{=1}(X_i){\qty(Y_{i} - \mu(1))}}{\sum_{i=1}^n 1_{=1}(X_i)}}^2  \mid X_1 \ldots X_n ] 
-&= \E \qty[ \qty{ \frac{\sum_{i=1}^n 1_{=1}(X_i)Z_i}{\sum_{i=1}^n 1_{=1}(X_i)}}^2  \mid X_1 \ldots X_n ] \qfor Z_i = Y_{i} - \mu(X_i)
-&= \E \qty[ \frac{\inpink{\sum_{i=1}^n}\inteal{\sum_{j=1}^n} \inpink{1_{=1}(X_i)Z_i} \inteal{1_{=1}(X_j)Z_j}}{\qty{\sum_{i=1}^n 1_{=1}(X_i) }^2} \mid X_1 \ldots X_n ] 
-&= \frac{\inpink{\sum_{i=1}^n}\inteal{\sum_{j=1}^n} \inpink{1_{=1}(X_i)} \inteal{1_{=1}(X_j)}\E\qty[\inpink{Z_i} \inteal{Z_j} \mid X_1 \ldots X_n]  }{\qty{\sum_{i=1}^n 1_{=1}(X_i) }^2}
+\Var\qty[ \hat \mu(1) \mid X_1 \ldots X_n ]
+&\explain{=}{Definitionally.} 
+\E\qty[ \qty{\hat \mu(1) - \mu(1) }^2 \mid X_1 \ldots X_n ] \\
+&\explain{=}{Also definitionally.}
+\E\qty[ \qty{\frac{\sum_{i=1}^n 1_{=1}(X_i)Y_{i}}{\sum_{i=1}^n 1_{=1}(X_i)} - \mu(1)}^2 \mid X_1 \ldots X_n ] \\
+&\explain{=}{Multiplying $\mu(1)$ by $N_1/N_1$ to get a common denominator}
+\E \qty[ \qty{ \frac{\sum_{i=1}^n 1_{=1}(X_i){\inblue{\qty{Y_{i} - \mu(1)}}}}{\sum_{i=1}^n 1_{=1}(X_i)}}^2  \mid X_1 \ldots X_n ] \\
+&\explain{=}{The indicator trick tells us the factors we've highlighted in \inblue{blue} are the same.}
+\E \qty[ \qty{ \frac{\sum_{i=1}^n 1_{=1}(X_i)\inblue{Z_i}}{\sum_{i=1}^n 1_{=1}(X_i)}}^2  \mid X_1 \ldots X_n ] \qfor \inblue{Z_i = Y_{i} - \mu(X_i)} \\
+&\explain{=}{Expanding the square.}
+\E \qty[ \frac{\inpink{\sum_{i=1}^n}\inteal{\sum_{j=1}^n} \inpink{1_{=1}(X_i)Z_i} \ \inteal{1_{=1}(X_j)Z_j}}{\qty{\sum_{i=1}^n 1_{=1}(X_i) }^2} \mid X_1 \ldots X_n ] \\
+&\explain{=}{Distributing the expectation. We can pull out the denominator and the indicator in each term because they're functions of $X_1 \ldots X_n$.} 
+\frac{\inpink{\sum_{i=1}^n}\inteal{\sum_{j=1}^n} \inpink{1_{=1}(X_i)} \inteal{1_{=1}(X_j)}\E\qty[\inpink{Z_i} \inteal{Z_j} \mid X_1 \ldots X_n]  }{\qty{\sum_{i=1}^n 1_{=1}(X_i) }^2}
 \end{aligned} 
 $$
 
-These $Z_i$ are like the ones we have in the unconditional case, but conditional. 
+This random variable $Z_i$ is like the one we have in the unconditional case, but conditionally. 
 
 $$
 \begin{aligned}
-\E[ Z_i \mid X_i ] = \E[ Y_i - \mu(X_i) \mid X_i ] = \E[ Y_i \mid X_i ] - \mu(X_i) = \mu(X_i) - \mu(X_i) && \text{they have conditional expectation zero }
-\E[ Z_i^2 \mid X_i] = \E[ \{ Y_i - \E[Y_i \mid X_i] \}^2 \mid X_i] = \Var[Y_i \mid X_i]   && \text{the conditional expectation of $Z_i$ is the conditional variance of $Y_i$ }
+\E[ Z_i \mid X_i ] &= \E[ Y_i - \mu(X_i) \mid X_i ] = \E[ Y_i \mid X_i ] - \mu(X_i) = \mu(X_i) - \mu(X_i) && \explain{\ }{It has conditional expectation zero. } \\
+\E[ Z_i^2 \mid X_i] &= \E[ \{ Y_i - \E[Y_i \mid X_i] \}^2 \mid X_i] = \Var[Y_i \mid X_i]   && \explain{\ }{The conditional expectation of its square is the conditional variance of $Y_i$ }
 \end{aligned}
 $$
-
 
 
 ## Step 3. Taking Expectations Term-by-Term
@@ -888,9 +1055,11 @@ $$
 $$
 \begin{aligned}
 \E\qty[\inpink{Z_i}\inteal{Z_j} \mid X_1 \ldots X_n] 
-&=\E\qty[ Z_i^2  \mid X_1 \ldots X_n]  \\
-&=\E\qty[ Z_i^2 \mid X_i ] \\
-&=\Var[Y_i \mid X_i] = \sigma^2(X_i)
+&\explain{=}{Because $i=j$}
+\E\qty[ Z_i^2  \mid X_1 \ldots X_n]  \\
+&\explain{=}{Because $X' = (X_1 \ldots X_n \text{except} X_i)$ is independent of $X_i$ and $Y_i$.} 
+\E\qty[ Z_i^2  \mid X_i]  \\
+&\explain{=}{Definitionally}\Var[Y_i \mid X_i] = \sigma^2(X_i)
 \end{aligned}
 $$
 
@@ -898,30 +1067,34 @@ $$
 $$
 \begin{aligned}
 \E\qty[\inpink{Z_i} \inteal{Z_j} \mid X_1 \ldots X_n] 
-&=\E\qty[ \E[\inpink{Z_i} \inteal{Z_j} \mid X_1 \ldots X_n, Z_i]  ] \\
-&=\E\qty[ \inpink{Z_i} \E[\inteal{Z_j} \mid X_1 \ldots X_n, Z_i] \mid X_1 \ldots X_n ] \\
-&=\E\qty[ \inpink{Z_i} \inteal{\E[Z_j \mid X_j]} \mid X_1 \ldots X_n ] \\
-&=\E[ \inpink{Z_i} \times 0 \mid X_1 \ldots X_n ] = 0
+&\explain{=}{This is the factorization identity we proved a few slides back.}\inpink{\E\qty[Z_i \mid X_i]} \inteal{\E\qty[Z_j \mid X_j]} \\ 
+&\explain{=}{Definitionally} 0 \times 0 
 \end{aligned}
-$$
+$$  
+
 
 ## Step 4. Putting the Pieces Together
 
 $$
 \begin{aligned}
 \Var\qty[ \hat \mu(1) \mid X_1 \ldots X_n ] 
-&= \underset{\faded \text{within-groups term}}{\E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] } + \underset{\faded \text{between-groups term}}{\Var\qty[ \E\qty{\hat \mu(1) \mid X_1 \ldots X_n} ] } 
-&= \E\qty[\frac{\inpink{\sum_{i=1}^n}\inteal{\sum_{j=1}^n} \inpink{1_{=1}(X_i)} \inteal{1_{=1}(X_j)}\E\qty[\inpink{Z_i} \inteal{Z_j} \mid X_1 \ldots X_n]  }{\qty{\sum_{i=1}^n 1_{=1}(X_i) }^2}] + 0 \\
-&= \E\qty[\frac{\sum_{i=1}^n 1_{=1}(X_i) \sigma^2(X_i) }{\qty{\sum_{i=1}^n 1_{=1}(X_i) }^2}] \\
-&= \E\qty[\frac{\sigma^2(X_i)}{\sum_{i=1}^n 1_{=1}(X_i) } ]
+&\explain{=}{Step 1} 
+\underset{\faded \text{within-groups term}}{\E \qty[ \Var\qty{ \hat \mu(1) \mid X_1 \ldots X_n }] } + \underset{\faded \text{between-groups term}}{ 0 } \\ 
+&\explain{=}{Step 2} 
+\E\qty[\frac{\inpink{\sum_{i=1}^n}\inteal{\sum_{j=1}^n} \inpink{1_{=1}(X_i)} \inteal{1_{=1}(X_j)}\E\qty[\inpink{Z_i} \inteal{Z_j} \mid X_1 \ldots X_n]  }{\qty{\sum_{i=1}^n 1_{=1}(X_i) }^2}] + 0 \\
+&\explain{=}{Step 3} 
+\E\qty[\frac{\inpink{\sum_{i=1}^n 1_{=1}(X_i)} \ \sigma^2(X_i) }{\qty{\sum_{i=1}^n 1_{=1}(X_i) }^2}] \\
+&\explain{=}{The indicator trick again.} 
+\E\qty[\frac{\inpink{\sum_{i=1}^n 1_{=1}(X_i)} \ \sigma^2(1) }{\qty{\sum_{i=1}^n 1_{=1}(X_i) }^2}] \\
+&\explain{=}{Cancelling a common factor of $N_1$ in the numerator and denominator.} 
+\E\qty[\frac{\sigma^2(1)}{\sum_{i=1}^n 1_{=1}(X_i) } ]
 \end{aligned}
 $$
 
 
 ## The Variance of **Differences in Means**
 
-
-**Claim.** The variance of the difference in subsample means is the **sum** of the variances of the subsample means themselves.
+**Claim.** The variance of the difference in subsample means is the **sum** of the variances of the subsample means. 
 $$ 
 \Var[\hat\mu(1) - \hat\mu(0)] = \E\qty[ \frac{\sigma^2(1)}{N_1} + 
 \frac{\sigma^2(0)}{N_0}] \quad \text{ for } \quad N_x = \sum_{i=1}^n 1_{=x}(X_i)
@@ -930,8 +1103,10 @@ $$
 This'll be a Homework Exercise.
 
 
-# Case Study: The NSW Experiment
+# Case Study  
+The NSW Experiment
 
+## The National Supported Work Demonstration
 ```{r}
 #| cache: true
 nsw = read.csv('https://davidahirshberg.bitbucket.io/teaching/regression/fall2021/data/nsw.csv')
@@ -961,13 +1136,48 @@ nsw.interval.plot = ggplot() +
 nsw.interval.plot
 ``` 
 
+::: {.panel-tabset}
+### The Program
+
+- The National Supported Work Demonstration was an experimental program in the 1970s that provided job training and other services.
+- Here 'experimental' doesn't just mean untested. It was run as a big experiment.
+- To help estimate the impact of the program, participants were randomized into two groups.
+  - The 'treated' group received the training and services.
+  - The 'control' group did not. 
+
+### The Result 
+
+- A year or two after the program ended, they compared the incomes of the two groups.
+  - And the difference within the sample was about \$`r round(difference)` per year. In 1978 dollars.
+  - That's not bad. A dollar in 1978 was worth about what \$4.80 is today.
+  - So adjusting for inflation, that's an in-sample difference of about \$`r round(difference*4.8)`. Huge impact.
+- But there's problem. It's not clear that this describes a real population-level difference.
+- The sample was relatively small. And, as a result, their interval estimate was pretty wide.
 
 $$
 \mu(1)-\mu(0) \in `r approx(difference)` \pm `r approx(wboot/2)` \qqtext{is a 95\% confidence interval}
 $$ 
 
+### Breaking it Down
+- Here's what we know. 
+  - $\sigma(1) = `r sd(Y[X==1])`$ and $\sigma(0) = `r sd(Y[X==0])`$
+  - $N_1 = `r sum(X==1)`$ and $N_0 = `r sum(X==0)`$
+- If we wanted to rerun this study and get a more conclusive result, what would we need to do?
+  - Would we have to provide services to more people? 
+  - Or could we just enroll more people in the control group?
+  - How can you tell?
 
-# Appendix: Proving the Law of Total Variance
+:::
+
+# Appendix: Additional Figures
+
+## The Social Pressure Letter
+::: { #fig-social-pressure-letter}
+![](figs/gerber-green-larimer-neighbors.png)
+::: 
+
+
+# Appendix: Proving the Law of Total Variance {#sec-proving-total-variance}
 
 ## Starting Point: Interpreting Variance as Excess {.smaller}
 
