@@ -27,21 +27,21 @@ $$
 
 ```{r}
 #| echo: false
-#| out-height: 4in 
 set.seed(1234)
 error = 2*rnorm(100000)
+
+target = 1
 bias = list(a=function(n) 0, b=function(n) -10/(n+10), c=function(n) -1)
 sds   = list(a=function(n) 1/sqrt(n), b=function(n) sqrt(n/(n+10)^2), c=function(n) 0)
-
 plotdata = expand_grid(estimator=names(bias), n=c(10,40,160)) %>%
   pmap(function(estimator, n) {
     thebias = bias[[estimator]](n)
     thesd   = sds[[estimator]](n)
-    data.frame(estimator=estimator, n=n, muhat=thebias + error * thesd)
+    data.frame(estimator=estimator, n=n, muhat=target + thebias + error * thesd)
     }) %>% bind_rows() 
 summaries = plotdata %>% group_by(n, estimator) %>% summarize(mean=mean(muhat))
 
-breaks = seq(-1.5,1.5,by=.5)
+breaks = seq(-.5,2.5,by=.5)
 ggplot(plotdata) + geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100, alpha=.4) + 
                    geom_vline(aes(xintercept=mean), data=summaries) + 
                    scale_x_continuous(breaks=breaks, limits=range(breaks)) + 
@@ -64,6 +64,11 @@ $$
 Match each estimator to the plot of its sampling distribution, e.g. $\hat\theta_1: a$, $\hat\theta_2: b$, etc. 
 Of the estimators $\hat\theta_1$, $\hat\theta_2$, and $\hat\theta_3$, which do you know to be consistent? 
 Which *could possibly* be consistent?
+:::
+
+::: {.callout-note}
+### Correction
+The x-axis ticks were mislabeled in the version of this document posted earlier. They were off by 1, so 'estimator a' was centered at 0, etc. This has been fixed. I apologize for any confusion this caused.
 :::
 
 ::: {.callout-solution}
@@ -94,6 +99,14 @@ On top of it, I've drawn four interval estimators.
 
 - Which are calibrated to have at least 95\% coverage? Put a check next to those.
 - Which are calibrated to have almost exactly 95\% coverage? Circle your check for those.
+:::
+
+::: {.callout-solution}
+
+From the top, the first, third, and fourth have 95\% coverage---the widest 3. The third and fourth have almost exactly 95\% coverage.
+
+*Explanation*.
+All 3 are wide enough to span at least 95\% of draws from (i.e. probability mass of the) sampling distribution. The third and fourth, which are roughly the same, have almost exactly 95\% coverage.  The first is too wide for that---it spans almost all draws from the sampling distribution.
 :::
 
 ```{r}
@@ -147,13 +160,6 @@ ggplot() + geom_histogram(aes(x=bootstrap.estimates, y=after_stat(density)), alp
            xlab('') + ylab('') + theme_bw()
 ```
 
-::: {.callout-solution}
-
-From the top, the first, third, and fourth have 95\% coverage---the widest 3. The third and fourth have almost exactly 95\% coverage.
-
-*Explanation*.
-All 3 are wide enough to span at least 95\% of draws from (i.e. probability mass of the) sampling distribution. The third and fourth, which are roughly the same, have almost exactly 95\% coverage.  The first is too wide for that---it spans almost all draws from the sampling distribution.
-:::
 
 ## Problem 2
 The miracle of random sampling is that we're able to estimate
