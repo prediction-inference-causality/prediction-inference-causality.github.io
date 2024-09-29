@@ -3,7 +3,6 @@ title: "Practice Midterm 1"
 subtitle: "QTM 220"
 ---
 
-
 ```{r}
 #| echo: false
 library(tidyverse) 
@@ -24,93 +23,80 @@ $$
 $$
 :::
 
-::: {.callout-warning}
-Some students have complained that this exam is not enough like the actual exam. I agree. Let's work on that.
-Some of these problems may be better as homework. We may also want to make Problem 4, which does match up well,
-a bit clearer by choice of number---$[0,.02]$ vs $[0,.03]$ isn't really a big difference.
-:::
-
-# Problem 1
-We call an estimator *consistent* if, when our sample size $n$ is large enough, it converges to the thing we intend to estimate.
-That is, an estimator $\hat\mu$ is a consistent estimator of $\mu$ if $\E (\hat \mu - \mu)^2 \to 0$ as $n \to \infty$. 
-One example of a consistent estimator, when we observe a sample with replacement $Y_1 \ldots Y_n$ from a population with mean $\mu$
-and standard deviation $\sigma$, is the sample mean $\hat \mu = \frac{1}{n}\sum_{i=1}^n Y_i$.
-
-It can be helpful to think in terms of *location* and *spread*. An estimator is consistent if and only if both its bias and variance go to zero as the sample size goes to infinity. Here's proof.
-$$
-\begin{aligned}
-\E\qty[ \qty{\hat\mu - \mu}^2 ] 
-&= \E\qty[ \qty{\qty(\hat\mu - \E[\hat\mu]) + \qty(\E[\hat\mu] - \mu)}^2 ] \\
-&= \E\qty[ \qty(\hat\mu - \E[\hat\mu])^2 + 2\qty(\E[\hat\mu] - \mu)\qty(\hat\mu - \E[\hat\mu]) + \qty(\E[ \hat \mu] - \mu)^2 ] \\
-&= \E\qty(\hat\mu - \E[\hat\mu])^2 + 2\qty(\E[\hat\mu] - \mu)\E\qty(\hat\mu - \E[\hat\mu])+ \qty(\E[\hat \mu] - \mu)^2  \\
-&= \Var(\hat\mu) + 2\bias(\hat\mu) \times 0 + \bias(\hat\mu)^2 = \Var(\hat\mu) + \bias(\hat\mu)^2 
-\end{aligned}
-$$
-
-
-::: {.callout-exercise}
-### Part A
-The plot below shows the sampling distributions of three estimators at three sample sizes. 
-The vertical line indicates the mean of the sampling distribution. Which of these estimators are consistent? 
-Circle zero or more: a, b, c.
+# Problem 1 
 
 ```{r}
 #| echo: false
 #| out-height: 4in 
 set.seed(1234)
 error = 2*rnorm(100000)
-bias = list(a=function(n) 0, b=function(n) sqrt(10)/sqrt(n), c=function(n) 1)
+bias = list(a=function(n) 0, b=function(n) -10/(n+10), c=function(n) -1)
+sds   = list(a=function(n) 1/sqrt(n), b=function(n) sqrt(n/(n+10)^2), c=function(n) 0)
 
 plotdata = expand_grid(estimator=names(bias), n=c(10,40,160)) %>%
   pmap(function(estimator, n) {
     thebias = bias[[estimator]](n)
-    data.frame(estimator=estimator, n=n, muhat=thebias + error / sqrt(n))
+    thesd   = sds[[estimator]](n)
+    data.frame(estimator=estimator, n=n, muhat=thebias + error * thesd)
     }) %>% bind_rows() 
 summaries = plotdata %>% group_by(n, estimator) %>% summarize(mean=mean(muhat))
 
-breaks = seq(-4, 4, by=2)/2 
-signs  = case_when(
-  breaks < 0 ~ '-', 
-  breaks == 0 ~ '',
-  breaks > 0 ~ '+')
-offsets = case_when(
-  breaks != 0 ~ sprintf('%d', abs(breaks)),
-  breaks == 0 ~ '')
-labels.abstract = sprintf('μ %s %s', signs, offsets)
-
+breaks = seq(-1.5,1.5,by=.5)
 ggplot(plotdata) + geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100, alpha=.4) + 
                    geom_vline(aes(xintercept=mean), data=summaries) + 
-                   scale_x_continuous(breaks=breaks, labels=labels.abstract, limits=range(breaks)) + 
+                   scale_x_continuous(breaks=breaks, limits=range(breaks)) + 
                    facet_grid(n ~ estimator, labeller=labeller(n=label_both, estimator=label_both)) + 
                    theme_bw() + theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1)) + 
-                   xlab('') + ylab('')
+                   xlab('') + ylab('') + ylim(0,3)
 ```
 
+Suppose we've drawn a sample $Y_1 \ldots Y_n$ with replacement from a population $y_1 \ldots y_m$ with mean $\theta=\frac{1}{m}\sum_{j=1}^m y_j$. The plot above shows the sampling distributions of these three estimators of $\theta$.
+$$
+\begin{aligned}
+\hat \theta_1 &= 0 \\
+\hat \theta_2 &= \frac{1}{n}\sum_{i=1}^n Y_i \\
+\hat \theta_3 &= \frac{1}{n+10}\sum_{i=1}^n Y_i  
+\end{aligned}
+$$
+
+::: {.callout-exercise}
+### Part A
+Match each estimator to the plot of its sampling distribution, e.g. $\hat\theta_1: a$, $\hat\theta_2: b$, etc. 
+Of the estimators $\hat\theta_1$, $\hat\theta_2$, and $\hat\theta_3$, which do you know to be consistent? 
+Which *could possibly* be consistent?
 :::
+
 ::: {.callout-solution}
-Estimators $a$ and $b$ are consistent. Estimator $c$ is not; it converges to $\mu+1$, not $\mu$.
+$\hat\theta_1$ is $c$, $\hat\theta_2$ is $a$, and $\hat\theta_3$ is $b$. I know $\hat\theta_2$ and $\hat\theta_3$ are consistent, 
+whereas $\hat\theta_1$ *could* be consistent but I don't know that.
+
+*Explanation*.
+It's easy to identify the sampling distribution of $\hat\theta_1$, as it has no spread at all: it's always $0$.
+And we can differentiate between the sampling distributions of $\hat\theta_2$ and $\hat\theta_3$ by observing
+that $\hat\theta_2$ (the sample mean) is unbiased, so it must be the one whose center doesn't change as $n$ does.
+
+I know $\hat\theta_2$ and $\hat\theta_3$ are consistent, as their standard deviations both go to zero as $n$ goes to infinity
+and the bias of $\theta_2$ is zero and that of $\theta_3$ is $10\theta/(n+10)$ which goes to zero as $n$ goes to infinity.
+I don't know that $\hat\theta_1$ is, since its bias is $-\theta$ no matter what $n$ is. 
+
+But --- if you disconnect this part from the sampling distributions I've drawn --- 
+$\hat\theta_1$ *could* be consistent, since its standard deviation does go to zero as $n$ goes to infinity (it's zero for all $n$) and its bias would be zero if $\theta$ were $0$.
+I wouldn't take points off for saying it couldn't be for two reasons. First, I did draw the sampling distributions for you, and what I've drawn is inconsistent with $\theta$ being 0.
+Second, it's so rare that anything is ever *exactly* zero that I wouldn't fault you for answering the question as if it outright never happened. But that idea---that $\hat\theta_1$ would be consistent if $\theta$ were $0$---was what I was trying to get at with this *could* question.
 :::
 
 ::: {.callout-exercise}
 ### Part B
- Suppose you have a sample $Y_1, Y_2, \ldots, Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma > 0$. 
- Consider the estimator $\hat\mu=Y_1$. Is this estimator consistent? Why or why not?
-:::
-::: {.callout-solution}
-No. Its variance does not go to zero. At any sample size $n$, its variance will be $\Var[Y] = \sigma^2 > 0$.
-:::
 
-::: {.callout-exercise}
-### Part C
+In the plot below, I've shown a bootstrap estimate of the sampling distribution of an estimator $\hat\theta$.
+Suppose it's a good estimate, so you can get away with thinking of it as the estimator's actual sampling distribution.
+On top of it, I've drawn four interval estimators. 
 
-In the plot below, I've shown a bootstrap estimate of the sampling distribution of an estimator $\hat\mu$.
-Suppose it's a good estimate---you can get away with thinking of it as the estimator's \emph{actual} sampling distribution.
-On top of it, I've drawn four interval estimates. 
-
-- Which have at least 95\% coverage? Put a check next to those.
-- Which have almost exactly 95\% coverage? Circle your check for those.
+- Which are calibrated to have at least 95\% coverage? Put a check next to those.
+- Which are calibrated to have almost exactly 95\% coverage? Circle your check for those.
 
 ```{r}
+#| cache: true
 our.seed = 220
 set.seed(our.seed)
 N = 7233584
@@ -160,10 +146,12 @@ ggplot() + geom_histogram(aes(x=bootstrap.estimates, y=after_stat(density)), alp
            xlab('') + ylab('') + theme_bw()
 ```
 
-:::
 ::: {.callout-solution}
-From the top, the first, third, and fourth have 95\% coverage---the widest 3. They're wide enough to span at least 95\% of draws from (i.e. probability mass of the) sampling distribution.
-The third and fourth, which are roughly the same, have almost exactly 95\% coverage.  The first is too wide for that---it spans almost all draws from the sampling distribution---so its coverage is closer to 99\%.
+
+From the top, the first, third, and fourth have 95\% coverage---the widest 3. The third and fourth have almost exactly 95\% coverage.
+
+*Explanation*.
+All 3 are wide enough to span at least 95\% of draws from (i.e. probability mass of the) sampling distribution. The third and fourth, which are roughly the same, have almost exactly 95\% coverage.  The first is too wide for that---it spans almost all draws from the sampling distribution.
 :::
 
 ## Problem 2
@@ -189,119 +177,226 @@ $$
 $$
 
 ::: {.callout-exercise}
+###
 Now suppose that you've been lazy, and instead of calling $n$ different people, you've just called
 one and reported their income $n$ times. That is, you've got 'a sample of size n', $\tilde Y_1 \ldots \tilde Y_n$,
 with $\tilde Y_1=Y_1, \tilde Y_2 = Y_1, \tilde Y_3 = Y_1, \ldots$. What is the variance of the mean of this 'sample',
 $\frac1n\sum_{i=1}^n \tilde Y_i$? And if it's not $\sigma^2/n$ like we got for the mean of $Y_1 \ldots Y_n$,
-explain---with reference to the calculation above---why it is not. If there's a line or lines where something different happens,
-say which; say what happens instead; and explain why.
+explain---with reference to the calculation above---why it is not. If there's a line or lines where something different happens, say which; say what happens instead; and explain why.
 :::
 ::: {.callout-solution}
-The problem is in the second to last line. Note that if we replace each instance of $Y_i$ with $\tilde Y_i=Y_1$, then
-$Z_i=Y_1 - \E Y_1$ for all $i$ and $Z_iZ_j=(Y_1-\E Y_1)^2$ for all $i$ and $j$. This means that 
-$\E Z_i Z_j=\sigma^2$ always instead of only when $i=j$ and, as a result, $\frac{1}{n^2}\sum_i\sum_j \E Z_i Z_j$
-is an average of $n^2$ copies of $\sigma^2$ --- one for each pair $(i,j)$. It's $\sigma^2$.
+The variance of this 'sample mean' is $\sigma^2$.
+The problem is in the second to last line. Note that if we replace each instance of $Y_i$ with $\tilde Y_i=Y_1$, then $Z_i=Y_1 - \E Y_1$ for all $i$ and $Z_iZ_j=(Y_1-\E Y_1)^2$ for all $i$ and $j$. This means that $\E Z_i Z_j=\sigma^2$ always instead of only when $i=j$ and, as a result, $\frac{1}{n^2}\sum_i\sum_j \E Z_i Z_j$ is an average of $n^2$ copies of $\sigma^2$ --- one for each pair $(i,j)$. 
 ::: 
 
 # Problem 3
 
-Suppose Emory has developed a new 4+1 (Bachelors+Masters) program in Engineering
-and they want to compare it to the extant Emory/Georgia Tech dual degree program.
-Letting $Y_1(1) \ldots Y_n(1)$ and $Y_1(0) \ldots Y_n(0)$ be outcomes (e.g. post-program starting salaries) $n$ qualified applicants would receive in the 4+1 program and the dual degree program respectively, they are interested in estimating the average treatment effect $\tau = \E[Y_i(1)-Y_i(0)]$. Suppose all applicants are willing to participate in either program but 3/4 prefer the Emory/Tech one.
 
-Two approaches to erollment are being considered.
+A brewer delivers a batch of a million bottles to its distributor. 
+The distributor has recently been getting complaints, so they've instituted a new quality control process to try to ensure that the proportion of bad bottles is 2% or less. They set aside a hundred bottles, drawn with replacement from that million, for testing. And they find that 3 of them---3%---is bad. Having done this, they claim that the batch doesn't meet its standards and refuse to pay. The brewer has called you in to consult. 
 
-1. Let students participate in the program they prefer. 
-2. Randomize acceptance into these two programs, assigning each applicant to the 4+1 with probability $1/2$ and the Emory/GA Tech program with probability $1/2$. 
-   
-Either way, we'll estimate the average treatment effect by comparing the mean outcome for students participating in the 4+1 program to the mean outcome for students participating in the Emory/Tech program. That is, we'll use this difference-in-means estimator.  
-
-
-$$
-\hat \tau = \hat \mu(1) - \hat \mu(0) \qfor \hat\mu(x)=\frac{1}{N_x}\sum_{i:X_i=x}Y_i \qand N_x = \sum_{i:X_i=x} 1
-$$
-
-Here $X_i$ is a binary variable indicating which program student $i$ participates in.
-
-$$
-X_i = \begin{cases} 1 & \text{if student $i$ participates in the 4+1} \\ 0 & \text{if student $i$ participates in the Emory/Tech program} \end{cases} 
-$$
-
-And the variance of this difference in means is this.
-
-$$
-\Var[\hat\tau] = \E\qty[\frac{\sigma^2(1)}{N_1} + \frac{\sigma^2(0)}{N_0}] 
-$$
-
-::: {.callout-exercise}
+::: {.callout-exercise} 
 ### Part A
-The first approach has the benefit of allowing people to make choices for themselves.
-Explain why the university might prefer the second one. Give two reasons. One must be valid \emph{even if} students preferences were, in fact, randomized. 
+The distributor is claiming that, on the basis of their test, they're confident that the 
+proportion of bad bottles in the million delivered exceeds 2%. Are you? Explain why 
+or why not. 
+
+You'll probably want to use the plots below. These are plots of the
+sampling distribution of the sample proportion $\hat\theta=\frac{1}{100}\sum_{i=1}^{100} Y_i$
+when $Y_1 \ldots Y_{100}$ are sampled without replacement from a binary population of size 
+1 million in which the proportion $\theta$ of 1s is $.02$, $.015$, and $.01$.
 :::
 ::: {.callout-solution}
-The first reason is that without randomization, the groups of students who enter the two programs may not be comparable.
-For example, if the extant program has a reputation for being more rigorous, then the students who choose it may be more
-into doing hard work, which might translate into higher salaries after graduation \emph{irrespective of program}.
-Formally, the estimable quantity $\E[Y_i \mid X_i=x]$ is an average of the potential outcome $Y_i(1)$ over those who prefer program $x$, 
-whereas the counterfactual quantity $\E[Y_i(x)]$ is an average over the whole population; unless randomization guarantees they're the same,
-we can't estimate the latter because we don't know anything about the distribution of $Y_i(x)$ for those who prefer the other program.
+I am not confident that it exceeds 2%. If the proportion of bad bottles in the million were exactly 2%, and I drew 100 bottles without replacement like this repeatedly, almost 20% of the time I'd get a sample with exactly 3 bad bottles. And over 30% of the time, I'd get a sample with *at least* 3 bad bottles. We can see that in the plot on the left, which shows how frequently the proportion of bad bottles set aside for testing would be 0/100, 1/100, 2/100, ...
 
-Now suppose the two groups were comparable, just of different sizes. This is what you'd get if applicants decided which program they preferred by 
-flipping \emph{two} coins and choosing the 4+1 only if they got heads on both. In this case, the first approach would be essentially fine, but you'd
-get a more precise estimate of the average treatment effect with the second approach.  That's because the variance of a difference in subsample
-means is $\E[ \sigma^2(1)/N_1 + \sigma^2(0)/N_0]$; assuming assuming subpopulation variances are comparable, that means they're be roughly proportional to
-$1/N_1 + 1/N_0$. If $N_1=N_0=n/2$, this is $1/(n/2) + 1/(n/2) = 4/n$. If $N_1=n/4$ and $N_0=3n/4$, it's $1/(n/4) + 1/(3n/4) = 4/n + 4/3n = 16/3n$.
-That's not dramatically bigger but it's bigger: it's $(16/3)/4 = 4/3$ times as big.
-
-
-Note that my answer here is way more than I'd expect you to write on a real exam. 
-I'm just trying to give you as complete an explanation as I can. 
-That'll be true of the next two, too.
+*That's enough, but I'd say a bit more if I were actually in this situation. I'd say this.*
+Even if it were lower, this would happen pretty often. From the plot in the center, we see that if the proportion of bad bottles in the million were 1.5%, we'd have at least 3 bad bottles in the sample we test about 20% of the time. And from the one on the right, we see that even if the proportion in the million were 1%, we'd see at least 3 bad ones in our test about 10% of the time.
 :::
+
+```{r}
+#| layout-ncol: 3
+#| fig-width: 2
+#| fig-cap: 
+#|   - "for θ=.02"
+#|   - "for θ=.15"
+#|   - "for θ=.01"
+m = 1000000
+n = 100
+x=(0:n)/n 
+
+scale = list(scale_x_continuous(limits=c(-.01, .08)), 
+             scale_y_continuous(limits=c(0, .4)),
+             labs(x='', y=''))
+
+theta = .02 
+pmf = dhyper(x*n, m*theta, m*(1-theta), n)
+ggplot() + geom_col(aes(x=x, y=pmf)) + scale  
+
+theta = .015 
+pmf = dhyper(x*n, m*theta, m*(1-theta), n)
+ggplot() + geom_col(aes(x=x, y=pmf)) + scale  
+
+theta = .01
+pmf = dhyper(x*n, m*theta, m*(1-theta), n)
+ggplot() + geom_col(aes(x=x, y=pmf)) + scale  
+```
+
 
 ::: {.callout-exercise}
 ### Part B
-Suppose the university does adopt the second approach.  And let 
-$Y_i$ be that student's employment status at graduation, i.e. $Y_i=1$ if student $i$ has a job on graduation and $0$ otherwise. In our sample of $n=100$ students, half of the students were assigned to the 4+1 program and half to the Emory/Tech program. And within each group, half of the students have jobs at graduation.
-Report a 95\% confidence interval for the average treatment effect $\tau$.
-
-Please show your work. And while we would like your answer fully simplified, i.e. written
-in the form $[a,b]$ for two numbers $a$ and $b$, don't worry about being precise with your arithmetic.
-It may be helpful to remember that the variance of a binary random variable $Y_i$ with mean $p$ 
-is $p(1-p)$.
+The brewer claims, based on its own testing, that the proportion of bad bottles in their deliveries will be no more than 1%. You learn that the distributor will be rejecting deliveries whenever the proportion of bad ones in the sample they test exceeds 2% and, after consulting with the brewer, you decide that the best course of action is to ask them to adjust the size of their sample so they'll reject no more than 5% of deliveries. Assuming the brewer is correct about their proportion of bad bottles, which of the following is a good sample size to ask for: 100, 400, or 1600?
 :::
+
 ::: {.callout-solution}
-Our point estimate, $\hat\mu(1) - \hat\mu(0)$, is $1/2 - 1/2 = 0$.
-We'll report a 95% interval of the form $\text{estimate} \pm 1.96 \times \text{estimated standard error}$,
-which in this case is just $\pm 1.96 \times \text{estimated standard error}$.  To make that a number,
-let's estimate the standard error. And, as discussed in the previous answer, the standard error is
-the square root of $\E[ \sigma^2(1)/N_1 + \sigma^2(0)/N_0]$ where $\sigma^2(x) = \Var[Y_i \mid X_i=x]$;
-to estimate this, we'll plug in $1/(n/2)$ and $1/(n/2)$ as estimates of their respective expectations and, the variance of a binary random variable $Y_i$ with expectation $p$ being $p(1-p)$, we'll estimate $\sigma^2(x)=\Var[Y_i \mid X_i=x]$ by $\hat p (1-\hat p)$ where $\hat p$ is the average of $Y_i$ in the corresponding subsample. This is $1/2$ in both groups, so our estimate of $\sigma^2(x)$ is $(1/2)(1-1/2)=1/4$ for both $x=0$ and $x=1$. Thus, our estimated standard error is the square root of $(1/4)/(n/2) + (1/4)/(n/2) = (1/2)/n + (1/2)/n = 1/n$, i.e., it's $1/\sqrt{n}$.
-As a result, our confidence interval is $[-1.96/\sqrt{n}, 1.96/\sqrt{n}]$. 
-Plugging in $n=100$, we get $[-.196, .196]$.
+400.
+
+*Explanation*.
+We're assuming the population proportion $\theta=.01$ and we want to choose $n$ so that the sample proportion $\hat\theta$ is less than or equal to $.02$ 95% of the time. This boils down to a question about how big
+our sample size $n$ has to be for the interval $\theta \in \hat\theta \pm .01$ to have 95% coverage, as 
+$\theta \in \hat\theta \pm .01$ if and only if $\hat\theta \in \theta \pm .01$, i.e. (given $\theta=0.1$)
+if and only if $\hat\theta \in [0, .02]$.  We know that $\hat\theta \pm 2 \ \mathop{sd}(\hat\theta)$
+should have 95% coverage and that 
+
+$$
+\mathop{sd}(\hat\theta)=\sqrt{\frac{\theta(1-\theta)}{n}} = \sqrt{\frac{.01 \times .99}{n}} \approx \sqrt{\frac{.01}{n}} = \frac{.1}{\sqrt{n}}.
+$$
+
+From here, we can solve for $n$ like this.
+
+$$
+.01 = 2 \mathop{sd}(\hat\theta) \approx \frac{.1}{\sqrt{n}} \qfor \sqrt{n} \approx \frac{2 \times .1}{.01} = 20
+\qqtext{i.e.} n \approx 20^2=400.  
+$$
+
 :::
 
 # Problem 4
 
-A brewer delivers 100,000 bottles to its distributor.
-Everyone accepts that there'll be a bad bottle now and then, but the distributor
-has a reputation to protect---they want to ensure that the proportion of bad bottles
-is small. The brewer says they've checked 100 bottles from the same batch and 
-only one was off. And they're claiming, on the basis of this, to have a 95% confidence
-interval of $[0,.02]$ for the proportion of bad bottles in the delivery. 
+In the block of **R** code below, I've implemented the estimators $\hat\theta_2$ and $\hat\theta_3$ 
+from Problem 1.
+
+```{r}
+#| echo: true 
+theta.hat.2 = function(Y) { mean(Y) }
+theta.hat.3 = function(Y) { sum(Y)/(length(Y)+10) }
+```
+
+```{r}
+#| echo: false
+#| cache: true
+set.seed(123)
+m = 1000
+n = 100
+y = rbinom(m, size=1, prob=.8)
+Y = sample(y, size=n, replace=TRUE)
+
+theta = mean(y)
+
+sampling.dist = function(estimator) {
+  1:10000 |> map_vec(function(.) {
+    Y = sample(y, size=n, replace=TRUE)
+    estimator(Y)
+  }) 
+}
+
+sampling.dist.2 = sampling.dist(theta.hat.2)
+sampling.dist.3 = sampling.dist(theta.hat.3)
+```
+
+And here is code that does a thing.
+```{r}
+#| echo: true
+do.thing = function(estimator) {
+  1:10000 |> map_vec(function(.) {
+    Ystar = sample(Y, size=n, replace=TRUE)
+    estimator(Ystar)
+  }) 
+}
+```
+
+Below, I've plotted the sampling distributions of $\hat\theta_2$ (left) and $\hat\theta_3$ (right) in gray
+with their means indicated by blue vertical lines, a histogram of the result of calling `do.thing(theta.hat.2)` (left) and `do.thing(theta.hat.3)` (right) in orange, a green vertical line indicating the value of $\theta$, and interval estimates of the form $\hat\theta_2 \pm 1.96\hat\sigma_2$ (left) and $\hat\theta_3 \pm 1.96\hat\sigma_3$ (right) where $\hat\sigma_2$ and $\hat\sigma_3$ are the results of calling `sd(do.thing(theta.hat.2))` and `sd(do.thing(theta.hat.3))` respectively. 
 
 ::: {.callout-exercise}
-Is this reasonable? Explain why or why not. You may think of the bottles that have been checked as a sample drawn,
-with replacement, from the 100,000 that were delivered.
+### Part A
+If we take this approach to calibrating an interval estimator centered on $\hat\theta_2$,
+what is the coverage probability of these intervals: roughly 95%, roughly 50%, or roughly 5%?  What about the interval estimators centered on $\hat\theta_3$?
+:::
+
+::: {.callout-solution}
+95% for $\hat\theta_2$ and 50% for $\hat\theta_3$.
+
+*Explanation*. The 'thing' `do.thing` does is draw 10,000 samples from the bootstrap sampling distribution of our estimator, so these are the intervals $\hat\theta \pm 1.96\hat\sigma$ where $\hat\sigma$ is the standard deviation of the estimator's bootstrap sampling distributions standard deviation. But we don't need to know that to answer this question. All we need to know is that, whatever it does, we get histograms with the same widths as our estimators' actual sampling distributions. That gives us 95% coverage for the unbiased estimator $\hat\theta_2$,
+but only about 50% coverage for the estimator $\hat\theta_3$, which has bias roughly equal to this interval's width. Why 50%? Because when bias and interval width are equal, we get an interval that covers when our point estimate is on the right half of its sampling distribution and one that doesn't when it's on the left half.
+:::
+
+```{r}
+#| fig-width: 5
+#| layout-ncol: 2
+
+bootstrap.estimates.2 = do.thing(theta.hat.2)
+theta.h2 = theta.hat.2(Y)
+p1 = ggplot() + 
+  geom_bar(aes(x=sampling.dist.2, y=after_stat(prop)), alpha=.2) + 
+  geom_bar(aes(x=bootstrap.estimates.2, y=after_stat(prop)), alpha=.4, fill='orange') + 
+  geom_vline(xintercept=theta, color='green', size=1.5, alpha=.8) +
+  geom_vline(xintercept=mean(sampling.dist.2), color='blue', size=.75, alpha=.6) + 
+  geom_pointrange(aes(y=1/15, x=theta.h2, xmin = theta.h2-1.96*sd(bootstrap.estimates.2), xmax = theta.h2+1.96*sd(bootstrap.estimates.2))) +
+  scale_x_continuous(limits=c(.4,1), breaks=seq(0, 1, by=.1)) + labs(x='', y='')
+
+bootstrap.estimates.3 = do.thing(theta.hat.3)
+theta.h3 = theta.hat.3(Y)
+p2=ggplot() + 
+  geom_bar(aes(x=sampling.dist.3, y=after_stat(prop)), alpha=.2) + 
+  geom_bar(aes(x=bootstrap.estimates.3, y=after_stat(prop)), alpha=.4, fill='orange') + 
+  geom_vline(xintercept=theta, color='green', size=1.5, alpha=.8) +
+  geom_vline(xintercept=mean(sampling.dist.3), color='blue', size=.75, alpha=.6) + 
+  geom_pointrange(aes(y=1/15, x=theta.h3, xmin = theta.h3-1.96*sd(bootstrap.estimates.3), xmax = theta.h3+1.96*sd(bootstrap.estimates.3))) +
+  scale_x_continuous(limits=c(.4,1), breaks=seq(0, 1, by=.1)) + labs(x='', y='')
+
+p1
+p2
+```
+
+
+::: {.callout-exercise}
+### Part B
+Below, I've added another interval estimate to each plot. A blue one. These are $\hat\theta_2 \pm 1.96 \hat\sigma_2$ and $\hat\theta_3 \pm 1.96 \hat\sigma_3$ where, letting $\hat\theta_2^{(1)} \ldots \hat\theta_2^{(10,000)}$ be the elements of `do.thing(theta.hat.2)` 
+and $\hat\theta_3^{(1)} \ldots \hat\theta_3^{(10,000)}$ be the elements of `do.thing(theta.hat.3)`,
+$$
+\begin{aligned}
+\hat\sigma_2^2 &= \frac{1}{10,000}\sum_{r=1}^{10,000} (\hat\theta_2^{(r)} - \bar Y)^2  \\
+\hat\sigma_3^2 &= \frac{1}{10,000}\sum_{r=1}^{10,000} (\hat\theta_3^{(r)} - \bar Y)^2. 
+\end{aligned}
+$$
+
+Explain why the blue interval on the left looks about the same as the black one but the one on the right is wider.
+Why might you want to use these blue intervals instead of the black ones?
 :::
 ::: {.callout-solution}
-Let's calculate an interval we think they should be using. 
-This is a bit easier than the one we just did. We're just estimating a proportion, not a difference in proportions,
-so the sample mean's standard error is the square root of $p(1-p)/n$ where $p$ is the proportion of bad bottles in the delivery.
-We don't know $p$, but we can estimate it by the sample proportion $\hat p = 1/100 = .01$; as a result, our estimated standard error is
-the square root of $(1/100)(1-1/100)/100 \approx 1/100^2$---i.e. it's $1/100$.\footnote{Here I've used the pretty good approximation 
-$1-1/100 \approx 1$.}  Because our sample mean is $1/100$ too, this means our interval should be 
-$[1/100 - 1.96 \times 1/100, \ 1/100 + 1.96 \times 1/100] \approx [1/100 - 2/100, \ 1/100 + 2/100] = [-.01, .03]$. Because a proportion can't be negative, we'd usually report that as $[0, .03]$.
+What we've done is made $\hat\sigma$ the root-mean-squared distance of a draw $\hat\theta^\star$ from our estimator's bootstrap sampling distribution from the sample's mean $\bar Y$ instead of from the bootstrap sampling distribution's mean. When we're using the estimator $\hat\theta_2$, $\bar Y$ *is* the bootstrap sampling distribution's mean, so nothing changes. When we're using the estimator $\hat\theta_2$, it's not---our draws $\hat\theta^\star$ tend to be lower---so the root-mean-squared distance to $\bar Y$ is bigger than the standard deviation of $\hat\theta_2$. We might want to use these because, when we have a biased estimator, they get wider to account for the bias, which improves coverage. 
 
-Now let's think about what the brewer is telling us. The upper bound on their interval is $.02$, substantially smaller. They're understating their uncertainty about the quality of what they've delivered---i.e. they're saying it's better than they can justify based on the size of the sample they've checked. Not reasonable.
+
+*Detail I wouldn't expect you to provide.* In fact, it gets the right amount wider. Think of a point estimate at the left edge of the middle 95% of the sampling distribution of $\hat\theta_3$---about where the black interval ends. If you calibrated an interval estimate around it 'the blue way', it'd just touch the estimation target. You can see why by thinking about the analogy that motivates the bootstrap.
+
+*About the Bootstrap*.
+When we use the bootstrap, we're thinking of the relationship between a bootstrap sample and the sample as analogous
+to the relationship between the sample and population. So what we're really doing here is calculating the root-mean-squared difference between a bootstrap version of our estimator, $\hat\theta^\star$, to a bootstrap version of our estimation target, $\theta^\star=\bar Y$---that's the mean of the 'population' that our bootstrap sample is drawn from.  When $\hat\theta^\star$ an an unbiased estimator of $\theta^\star$, this is just its standard deviation. But when $\hat\theta^*$ is a *biased estimator* of $\theta^\star$, it's a bootstrap version of root-mean-squared-error.
+$$
+\text{bootstrap rmse} = \sqrt{\text{bootstrap bias}^2 + \text{bootstrap sd}^2}.
+$$
+Often, the bootstrap analogy works and the bootstrap bias and bootstrap sd are about the same as the actual bias and actual sd.
+This mean we'll get 95% coverage from our biased estimator, as we're inflating the width of our intervals just enough that that happens. That is not, however, necessarily the best way to take advantage of our ability to use the bootstrap to anticipate our estimator's bias. Instead of using it to inflate the width of our intervals, we can use it to correct the bias of our estimator so we don't have to inflate them. More on this later in the semester.
+
 :::
+
+```{r}
+#| fig-width: 5
+#| layout-ncol: 2
+
+sd2 = sqrt(mean((bootstrap.estimates.2 - mean(Y))^2))
+p1 + geom_pointrange(aes(y=1/16, x=theta.h2, xmin = theta.h2-1.96*sd2, xmax = theta.h2+1.96*sd2), color='blue') 
+
+sd3 = sqrt(mean((bootstrap.estimates.3 - mean(Y))^2))
+p2 + geom_pointrange(aes(y=1/16, x=theta.h3, xmin = theta.h3-1.96*sd3, xmax = theta.h3+1.96*sd3), color='blue') 
+```
