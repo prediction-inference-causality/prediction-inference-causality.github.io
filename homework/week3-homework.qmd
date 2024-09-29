@@ -16,6 +16,7 @@ $$
 \DeclareMathOperator{\RMSE}{RMSE}
 \DeclareMathOperator{\E}{E}
 \DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\sd}{sd}
 \DeclareMathOperator{\hVar}{\widehat{V}}
 \DeclareMathOperator{\bias}{bias}
 \newcommand{\thetaprior}{\theta^{\text{prior}}}
@@ -137,6 +138,14 @@ $$
 
 :::
 
+::: {.callout-solution}
+$Y_iY_j$ is 1 if both $Y_i$ and $Y_j$ are 1 and otherwise zero, so $\E[Y_iY_j]$ is the probability that both $Y_i$ and $Y_j$ are 1.
+Referring to our joint distribution table above, that's $\frac{m_1(m_1-1)}{m(m-1)}$. That's our first term. 
+And because we've sampled uniformly-at-random, expected value of $Y_i$ (and $Y_j$) is $\theta=m_1/m$, the population mean,
+so the product of the expectations is $\theta^2=(m_1/m)^2$. Subtracting these, as in our new 'equivalent formula' for the
+cross term, gives us the result we're looking for.
+:::
+
 Simplifying this into the form $-\frac{\theta(1-\theta)}{m-1}$ is a little bit of work. As usual, the trick is to give your two terms a common denominator and see what cancels. 
 
 I'll save you the trouble, but I'll 'fold' it like I usually do solutions, so if you'd like to try it on your own, you can without the solution staring you in the face. If you do just want to read it, expand the box by clicking on it.
@@ -178,6 +187,23 @@ Calculate the expected value of the estimator $\hat\theta =\tilde{Y}_1$.
 Then calculate its bias $\E[\hat\theta] - \theta$ and its 
 standard deviation $\sqrt{\Var[\hat\theta]}$. Report all three.
 :::
+::: {.callout-solution}
+$$
+\begin{aligned}
+\E[\tilde Y_1] &= 
+\E\qty[\frac{\frac{1}{2} + \sum_{i=1}^{n}Y_i}{n+1}]  
+= \frac{\frac{1}{2} + \sum_{i=1}^{n}\E[Y_i]}{n+1} = \frac{\frac{1}{2} + n\theta}{n+1} \\
+\text{bias} &= \E[\tilde Y_1] - \theta = \frac{\frac{1}{2} + n\theta}{n+1} - \theta = \frac{\frac{1}{2} + n\theta - (n+1)\theta}{n+1} = \frac{\frac{1}{2} - \theta}{n+1} \\
+\Var[\tilde Y_1] 
+&= \E\qty[ \qty{\frac{\qty(\frac{1}{2} + \sum_{i=1}^{n}Y_i)}{n+1} - \frac{\frac{1}{2} + n\theta}{n+1}}^2 ] \\
+&= \E\qty[ \qty{\frac{\sum_{i=1}^{n}(Y_i - \theta)}{n+1}}^2  ] \\
+&= \E\qty[ \qty{\frac{n}{n+1} \frac{1}{n}\sum_{i=1}^{n}(Y_i - \theta)}^2  ] \\
+&= \qty(\frac{n}{n+1})^2 \E\qty[ \qty{\frac{1}{n}\sum_{i=1}^{n}(Y_i - \theta)}^2 ] \\
+&= \qty(\frac{n}{n+1})^2 \Var[\bar Y] = \qty(\frac{n}{n+1})^2 \frac{\theta(1-\theta)}{n} = \frac{n\theta(1-\theta)}{(n+1)^2} \qqtext{ so } \\
+\sd(\tilde Y_1) &= \sqrt{\frac{n\theta(1-\theta)}{(n+1)^2}}
+\end{aligned}
+$$
+:::
 
 This is a specific example of a more general estimator that integrates information from a prior study. Maybe a real study or maybe a study we're imagining. Suppose we have $\nprior$ observations $\yprior_1 \ldots \yprior_{\nprior}$ from this study.^[Sometimes we call these *pseudo-observations*. This particular interpretation, in which we think of them as coming from a prior study, can be used to derive this estimator from Bayesian principles.]
 $$
@@ -201,6 +227,22 @@ The simple example we started with, $\tilde{Y}_1$, is a special case where we ha
 Repeat @exr-bias-1 for $\tilde{Y}_{\nprior}$. 
 :::
 
+::: {.callout-solution}
+$$
+\begin{aligned}
+\E[\tilde Y_{\nprior}] &= 
+\E\qty[\frac{\nprior\thetaprior + \sum_{i=1}^{n}Y_i}{n+\nprior}]  
+= \frac{\nprior \thetaprior + n\theta}{\nprior + n} \\
+\text{bias} &= \E[\tilde Y_{\nprior}] - \theta = \frac{\nprior \thetaprior + n\theta}{\nprior + n} - \theta = \frac{\nprior \thetaprior + n\theta - (n+\nprior)\theta}{n+\nprior} = \frac{\nprior( \thetaprior - \theta)}{\nprior + n} \\
+\Var[\tilde Y_{\nprior}] 
+&= \E\qty[ \qty{\frac{\nprior\thetaprior  + \sum_{i=1}^{n}Y_i}{\nprior + n} - \frac{\nprior\thetaprior + n\theta}{\nprior + n}}^2 ] \\ 
+&= \E\qty[ \qty{\frac{\sum_{i=1}^{n}(Y_i - \theta)}{\nprior + n}}^2  ]
+= \qty(\frac{n}{\nprior + n})^2 \Var[\bar Y] = \frac{n\theta(1-\theta)}{(\nprior + n)^2} \qqtext{ so } \\
+\sd(\tilde Y_{\nprior}) &= \sqrt{\frac{n\theta(1-\theta)}{(\nprior + n)^2}}
+\end{aligned}
+$$
+:::
+
 
 ## Visualizating the Impact of Prior Information
 
@@ -216,6 +258,11 @@ As usual, the estimation target $\theta$ is indicated by a green line, the sampl
 ::: {#exr-bias-visualize .callout-exercise}
 What is the correspondence between $\hat\theta_1$, $\hat\theta_2$, and $\hat\theta_3$ described above 
 and 'estimator a', 'estimator b', and 'estimator c' from the plot?
+:::
+
+::: {.callout-solution}
+$\hat\theta_1$ is 'estimator b', $\hat\theta_2$ is 'estimator c', and $\hat\theta_3$ is 'estimator a'.
+What gives this away is the bias of each estimator. The bias of estimator 'a' is zero (like the bias of the sample mean $\hat\theta_3$), the bias of estimator 'b' is decreasing as $n$ grows (like the bias $10(3/4-\theta)/(10+n)$ of $\hat\theta_1$), and the bias of estimator 'c' is constant (like the bias $n(3/4-\theta)/2n= (3/4-\theta)/2$ of $\hat\theta_2$).
 :::
 
 ::: {#fig-3-sampling-distributions}
@@ -305,6 +352,11 @@ Just to check that you're following the math, do this quick exercise.
 Explain why $\E \qty[ \qty{ \hat\theta - \E[\hat\theta]} \cdot \qty{\E[\hat\theta] - \theta} ] = 0$.
 :::
 
+::: {.callout-solution}
+It's the expected value of a mean-zero random variable $\qty{ \hat\theta - \E[\hat\theta]}$ times a constant $\qty{\E[\hat\theta] - \theta}$. 
+Linearity of expectations justifies rewriting this as that constant times the expectation of the mean-zero random variable, i.e., times $0$.
+:::
+
 Now here's a real one. For the first time this semester, we're talking about 
 different estimators for the same estimation target. This exercise is an opportunity 
 to think about how you might choose between them. I've asked you to answer a few 
@@ -339,6 +391,126 @@ that stuff. But it can't depend on $\theta$. That's something you don't know.
 
 :::
 
+::: {.callout-solution}
+Let's recall our formulas for the bias and standard deviation of $\tilde{Y}_{\nprior}$ and sum their squares to get 
+its mean squared error.
+
+$$
+\begin{aligned}
+\text{bias} &= \frac{\nprior(\thetaprior-\theta)}{\nprior+n} \\
+\text{sd} &=\frac{\sqrt{n\theta(1-\theta)}}{\nprior+n} \\
+\text{rmse}  &= \sqrt{\frac{ (\nprior)^2 (\thetaprior-\theta)^2 + n\theta(1-\theta)}{(\nprior+n)^2}}
+\end{aligned}
+$$
+
+The bias of this estimator increases in magnitude as $\nprior$ grows.
+In particular, it grows more or less linearly when $\nprior$ is small relative to $n$ and level off then slows, taking the value $(\thetaprior-\theta)/2$ for $\nprior=n$ and converging to $\thetaprior-\theta$ as $\nprior$ goes to infinity. The standard deviation of this estimator decreases as $\nprior$ grows, taking on half the value it has for $\nprior=0$ when $\nprior=n$ and converging to zero as $\nprior$ goes to infinity. The root-mean-squared error of this estimator, decreases then increases as $\nprior$ grows. 
+
+I'm going to give you a long, detailed answer for the rest of this question. I wasn't expecting anything like it from you, 
+but I thought it might interest you and maybe clarify a few things you might've thought about when you approached the question
+yourself. I'll start with precise plots of the bias, sd, and rmse curves for $\thetaprior=.5$ and three values of $\theta$: $.6$, $.55,$ and $.525$. So that we can compare across different values of $\theta$, I'll plot each twice: once on a common set of axes (left) and once with the minimums of $\text{rmse}$ aligned (right).
+```{r}
+#| layout-ncol: 2
+#| fig-width: 5
+#| fig-cap:
+#|  - bias (red), sd (blue), and rmse (green) as a function of nprior when thetaprior=.5, theta=.6, and n=100
+thetaprior = .5
+theta = .6
+n = 100
+
+bias   = function(np) { np*(thetaprior - theta)/(np + n) } 
+stddev = function(np) { sqrt(n*theta*(1-theta)/(n + np)^2) }
+rmse   = function(np) { sqrt( np^2*(thetaprior-theta)^2 + n*theta*(1-theta) ) / (n + np) }
+
+x = seq(0,4*n,by=1)
+p = ggplot() + 
+    geom_line(aes(x=x, y=abs(bias(x))), color="red") + 
+    geom_line(aes(x=x, y=stddev(x)), color="blue") + 
+    geom_line(aes(x=x, y=rmse(x)), color="green") + labs(x='nprior', y='') + 
+    geom_vline(aes(xintercept = theta*(1-theta)/(thetaprior-theta)^2), linetype='dotted')
+
+p + xlim(0, 420)
+p + xlim(0,2*theta*(1-theta)/((thetaprior-theta)^2))
+```
+
+
+```{r}
+#| layout-ncol: 2
+#| fig-width: 5
+#| fig-cap:
+#|  - bias (red), sd (blue), and rmse (green) as a function of nprior when thetaprior=.5, theta=.55, and n=100
+#| 
+thetaprior = .5
+theta = .55
+n = 100
+
+bias   = function(np) { np*(thetaprior - theta)/(np + n) } 
+stddev = function(np) { sqrt(n*theta*(1-theta)/(n + np)^2) }
+rmse   = function(np) { sqrt( np^2*(thetaprior-theta)^2 + n*theta*(1-theta) ) / (n + np) }
+
+x = seq(0,4*n,by=1)
+p = ggplot() + 
+    geom_line(aes(x=x, y=abs(bias(x))), color="red") + 
+    geom_line(aes(x=x, y=stddev(x)), color="blue") + 
+    geom_line(aes(x=x, y=rmse(x)), color="green") + labs(x='nprior', y='') + 
+    geom_vline(aes(xintercept = theta*(1-theta)/(thetaprior-theta)^2), linetype='dotted')
+
+p + xlim(0, 420)
+p + xlim(0,2*theta*(1-theta)/((thetaprior-theta)^2))
+```
+
+```{r}
+#| layout-ncol: 2
+#| fig-width: 5
+#| fig-cap:
+#|  - bias (red), sd (blue), and rmse (green) as a function of nprior when thetaprior=.5, theta=.525, and n=100
+#| 
+thetaprior = .5
+theta = .525
+n = 100
+
+bias   = function(np) { np*(thetaprior - theta)/(np + n) } 
+stddev = function(np) { sqrt(n*theta*(1-theta)/(n + np)^2) }
+rmse   = function(np) { sqrt( np^2*(thetaprior-theta)^2 + n*theta*(1-theta) ) / (n + np) }
+
+x = seq(0,8*n,by=1)
+p = ggplot() + 
+    geom_line(aes(x=x, y=abs(bias(x))), color="red") + 
+    geom_line(aes(x=x, y=stddev(x)), color="blue") + 
+    geom_line(aes(x=x, y=rmse(x)), color="green") + labs(x='nprior', y='') + 
+    geom_vline(aes(xintercept = theta*(1-theta)/(thetaprior-theta)^2), linetype='dotted')
+
+p + xlim(0, 420)
+p + xlim(0,2*theta*(1-theta)/((thetaprior-theta)^2))
+```
+
+One salient feature is the minimum of the rmse curve, which I'll indicate with a dotted line. We can find it by setting the mean squared error with respect to $\nprior$ to zero and solving for $\nprior$. We use the quotient rule $[f(x)/g(x)]' = [f'(x)g(x) - f(x)g'(x)]/g(x)^2$. Since we're looking for a minimum, we can ignore the denominator. We want $x=\nprior$ where $f'(x)g(x) - f(x)g'(x) = 0$ for $f(x) = x^2 (\thetaprior-\theta)^2 + n\theta(1-\theta)$  and $g(x) = (x + n)^2$.
+$$
+\begin{aligned}
+0 &= f'(x)g(x) - f(x)g'(x) \\ 
+&= 2x(\thetaprior-\theta)^2(x+n)^2 - 2x^2(\thetaprior-\theta)^2(x+n) - 2n\theta(1-\theta)(x+n) \\ 
+&= 2x(\thetaprior-\theta)^2 (x+n)\qty{(x+n) - x} - 2n\theta(1-\theta)(x+n) \\ 
+\end{aligned}
+$$
+which happens, cancelling the common factor of $2n(x+n)$, for $x=\theta(1-\theta)/(\thetaprior-\theta)^2$. 
+
+
+Another salient feature is the point where bias and standard deviation are equal, which is indicated by a crossing of the red and blue lines in the plots. We can solve for this as follows.
+$$
+\frac{\nprior(\thetaprior-\theta)}{\nprior+n} = \frac{\sqrt{n\theta(1-\theta)}}{\nprior+n}
+\qqtext { where }
+\nprior = \sqrt{n\theta(1-\theta)} / (\thetaprior-\theta)
+$$
+
+One interesting thing to notice is that, while both of these points shift to the right as $\thetaprior$ gets closer to $\theta$, the point where rmse is minimized shifts to the right *faster*.  An implication of this that we can see in the plots is that choosing $\nprior$ to minimize rmse will result in an estimator with a larger $\text{bias}/\text{sd}$ ratio when $\thetaprior$ is close to $\theta$ than when it is far away. Why does this matter? Because the bigger the ratio of $\text{bias}/\text{sd}$, the worse our interval estimators' coverage probability will be. When this ratio is roughly 1.96, we'll get about 50% coverage. We see that [here in the slides](https://qtm285-1.github.io/assets/lectures/Lecture6.html#/implications-of-unbiasedness) when discussing implications of bias. So it tells us that choosing $\nprior$ to minimize $\rmse$ is not necessarily a good idea from an inferential perspective. When we do this, poor coverage isn't a price we pay for choosing $\thetaprior$ badly---it's our 'reward' for choosing it well. In light of this, I think choosing $\nprior$ to minimize $\rmse$ is a bad idea. We could try to do something a bit more complicated like choosing $\nprior$ to minimize $\rmse$ subject to a constraint on the bias/sd ratio, e.g., $\text{bias}/\text{sd} \le 1/2$, to ensure close-to-nominal coverage. But what I'd suggest is simpler: just set $\nprior=0$ and use the sample mean. 
+
+All of this assumes we can actually choose $\nprior$ to minimize $\rmse$. It isn't obvious that we can given that our $\rmse$ formula involves the unknown population proportion $\theta$, but you can do something a lot like that by minimizing an *estimate* of $\text{rmse}$. People do this often, although typically in more complex estimation problems. The most popular technique for this is probably [Cross-Validation](https://en.wikipedia.org/wiki/Cross-validation_(statistics)), which we'll talk about later in the semester. [Stein's Unbiased Risk Estimate](https://en.wikipedia.org/wiki/Stein's_unbiased_risk_estimate) is an interesting alternative. We won't get there this semester, but it doesn't require all that much background to understand, so take a look at the wikipedia page if you're curious.
+
+::: 
+
+
+
+
 ## Consistency
 
 We say an estimator is *consistent* if it converges to the estimation target
@@ -372,6 +544,15 @@ its bias and standard deviation?
 If we know that an estimator $\hat\theta$ is *not* consistent in mean square, what does that tell us about its root-mean-squared error, bias, and standard deviation?
 :::
 
+::: {.callout-solution}
+As a matter of definition, an estimator is consistent if (and only if) its root-mean-squared error goes to zero. 
+And because mean squared error is the sum of its squared bias and squared standard deviation, this implies that
+both its bias and standard deviation go to zero. 
+
+If an estimator is not consistent in mean square, then its root-mean-squared error does not go to zero, 
+so *at least one of* its bias or its standard deviation does not go to zero.
+::: 
+
 ::: {#exr-mean-square-convergence .callout-exercise}
 Of the three estimators depicted in @fig-3-sampling-distributions --- estimators 'a', 'b', and 'c' ---
 which are mean-square consistent?  Using the figure, explain your reasoning. 
@@ -379,8 +560,10 @@ which are mean-square consistent?  Using the figure, explain your reasoning.
 Because consistency is about what happens as $n\to\infty$, it's not really possible to know
 whether an estimator is consistent by looking at what happens at 3 sample sizes, like we have in the figure.
 You'd have to guess what the next row would look like, and the next, etc. But you don't need to guess. 
-You have the actual estimator definitions, albeit mismatched, in @exr-bias-visualize. That said, rather than phrasing your explanation in terms of any formulas you might have from @exr-bias-general, talk about
-what you see in the figure and what the formulas tell you that *you would see* if we were to add rows for $n$ increasing to $\infty$. 
+You have the actual estimator definitions, albeit mismatched, in @exr-bias-visualize. That said, rather than phrasing your explanation in terms of any formulas you might have from @exr-bias-general, talk about what you see in the figure and what the formulas tell you that *you would see* if we were to add rows for $n$ increasing to $\infty$. 
+:::
+::: {.callout-solution}
+Estimators 'a' and 'b' are mean-square consistent. The bias of 'a' is zero at all sample sizes and the bias of 'b' is decreasing to zero as sample size increases. And both have standard deviations that go to zero as sample size increases. Estimator 'c' is not mean-square consistent because its bias isn't improving with sample size.
 :::
 
 # Convergence in Probability
@@ -487,6 +670,15 @@ The usual proof of Markov's inequality is based on a few simple observations.
 ::: { #exr-markov-proof  .callout-exercise}
 Prove Markov's inequality. 
 :::
+::: {.callout-solution}
+To see that $x/\epsilon \ge 1_{\ge \epsilon}(x)$ for all $x \ge 0$, consider separately the cases 
+$x \ge \epsilon$ and $x < \epsilon$. If $x \ge \epsilon$, $1_{\ge \epsilon}(x)=1$ and $x/\epsilon \ge 1$. If $x < \epsilon$, $1_{\ge \epsilon}(x)=0$ and $x/\epsilon > 0$ (for $x > 0$). It follows that if $X$ is any non-negative random variable, then $X/\epsilon \ge 1_{\ge \epsilon}(X)$ and therefore that 
+$$
+\begin{aligned}
+P(X \ge \epsilon) = \E[\int 1_{\ge \epsilon}(X)]  \le \E\qty[\frac{X}{\epsilon}] = \frac{\E[X]}{\epsilon}
+\end{aligned}
+$$
+:::
 
 ## Markov's Inequality and Interval Estimation
 
@@ -523,6 +715,19 @@ Markov's inequality says $\ge$ instead of $>$, don't be. You have a bound on $P(
 $P(X > \epsilon) \le  P(X\ge \epsilon)$ because $X \ge \epsilon$ whenever $X > \epsilon$.
 :::
 
+::: {.callout-solution}
+Applying Markov's inequality to $|\hat\theta-\theta|^2$, which has mean-square $\sigma^2$ because $\hat\theta$ is unbiased, for$\epsilon = (t\sigma)^2$ gives
+
+$$
+P(|\hat\theta-\theta|^2 \ge (t\sigma)^2) \le \frac{\E[(\hat\theta-\theta)^2]}{(t\sigma)^2} = \frac{\sigma^2}{(t\sigma)^2} = \frac{1}{t^2}.
+$$
+The probability that $|\hat\theta-\theta| > t\sigma$ is also no larger than $1/t^2$ because this happens *only if* $|\hat\theta-\theta|^2 \ge (t\sigma)^2$. And it follows that the probability that $|\hat\theta-\theta| \le t\sigma$ is greater than $1-1/t^2$. 
+
+To find the value of $t$ that makes this lower bound equal to $.95$, we solve $1-1/t^2=.95$ to find $t=\sqrt{1/(1-.95)}= \sqrt{20} \approx 4.5$.
+And because $\hat\theta \in [\theta - t\sigma, \theta + t\sigma]$ if (and only if) $|\hat\theta-\theta| \le t\sigma$, it follows that this interval has a coverage probability of at least $.95$.
+
+:::
+
 Now let's try this out on the NBA data we've been working with recently.
 ```{r}
 #| echo: true
@@ -539,6 +744,7 @@ y = pop |> pmap_vec(indicator)
 
 n = length(Y)
 m = length(y)
+theta = mean(y)
 ```
 
 The sample $Y_1 \ldots Y_{`r n`}$ we'll use is drawn with replacement from a population $y_1 \ldots y_{`r m`}$
@@ -568,5 +774,182 @@ Style your plots as you see fit. Overlay the distributions or plot them side-by-
 ::: callout-note
 *Note.* 
 Your interval estimates should not use any information about the population other than what's in the sample. If you need a standard deviation or something like that, estimate it using the sample.
+
+:::
+
+
+::: {.callout-solution}
+
+
+I've made a separate plot for each of the two point estimators, showing the sampling distribution as a gray bar graph, the bootstrap sampling distribution as an orange bar graph, the normal approximation to the sampling distribution as a black line, and three interval estimates.  I've used the same axis scales and laid them out on top of one another so we can compare location and spread easily. To calibrate my bootstrap interval, I used the function `width` from previous homeworks.
+
+```{r}
+set.seed(12345)
+```
+
+```{r}
+#| echo: false 
+width = function(samples, center=mean(samples), alpha=.05) { 
+    limits = c(0, 2*max(abs(samples-center)))
+    covg_dif = function(w) { 
+      actual = mean(center - w/2 <= samples & samples <= center + w/2)
+      nominal = 1-alpha 
+      actual - nominal  
+  }
+  uniroot(covg_dif, interval=limits)$root
+}
+```
+
+```{r}
+#| echo: true
+
+library(tidyverse)
+
+theta.prior = mean(Y.prior)
+n.prior = length(Y.prior)
+prior.obs.estimator = function(Y) { (theta.prior*n.prior + sum(Y)) / (n.prior + n) } 
+
+sampling.distribution = function(estimator) {
+    draws = 1:10000 |> map_vec(function(.) {
+        J = sample(1:m, size=n, replace = TRUE)
+        Y = y[J]
+        estimator(Y)
+    })
+}
+
+bootstrap.sampling.distribution = function(estimator, draws=10000) {
+    1:draws |> map_vec(function(.) {
+        I = sample(1:n, size=n, replace = TRUE)
+        Y.star = Y[I] 
+        estimator(Y.star)
+    })
+}
+
+plot.estimated.sampling.distribution = function(point.estimate, sampling.draws, 
+                                                bootstrap.draws, estimated.sd, binwidth) {
+    xgrid = seq(point.estimate-5*estimated.sd, point.estimate+5*estimated.sd, 
+                length.out = 1000)
+    normal.approx = dnorm(xgrid, mean = point.estimate, sd = estimated.sd)
+    intervals = data.frame(
+        center = rep(point.estimate, 3),
+        width = c(width(bootstrap.draws), 2*1.96*estimated.sd, 2*sqrt(20)*estimated.sd),
+        method = c("bootstrap", "normal approx", "markov's inequality"),
+        y=max(normal.approx)*c(.3,.4,.5))
+
+    ggplot() + 
+        geom_bar(aes(x = draws, y=after_stat(prop)/binwidth), 
+            alpha = .2, data=data.frame(draws=sampling.draws)) +
+        geom_bar(aes(x = draws, y=after_stat(prop)/binwidth), 
+            alpha = .4, fill='orange', data=data.frame(draws=bootstrap.draws)) +
+        geom_line(aes(x=x, y=density), data=data.frame(x=xgrid, density=normal.approx)) +
+        geom_pointrange(aes(x=center, xmin=center-width/2, xmax=center+width/2, 
+                            y=y, color=method), data=intervals)
+}
+scales = list(scale_x_continuous(limits = c(.2,.8)), scale_y_continuous(limits = c(0,16)))
+```
+
+```{r}
+#| echo: true
+#| fig-cap: 
+#|  - "The sampling distribution of the sample mean and three interval estimates."
+#|  - "The sampling distribution of the mean-with-prior-observations estimator and three interval estimates."
+
+theta.hat = mean(Y)
+plot.estimated.sampling.distribution(mean(Y), 
+                                    sampling.distribution(mean), 
+                                    bootstrap.sampling.distribution(mean), 
+                                    sqrt(theta.hat * (1-theta.hat) / n), 1/n) + 
+                                    scales + labs(x="", y="")
+
+theta.hat = prior.obs.estimator(Y)
+plot.estimated.sampling.distribution(prior.obs.estimator(Y), 
+                                    sampling.distribution(prior.obs.estimator), 
+                                    bootstrap.sampling.distribution(prior.obs.estimator), 
+                                    sqrt(n*theta.hat * (1-theta.hat) / (n.prior+n)^2), 1/(n.prior+n)) + 
+                                    scales + labs(x="", y="")
+```
+
+To calculate coverage, I ran this code. Because we have to bootstrap our estimator for each sample drawn from our population,
+computation time can get out of control if we use 10k samples from the population and 10k draws from the bootstrap sampling distribution as usual. I used 1000 of each, which is about 100 times faster. 
+ 
+```{r}
+#| echo: true 
+#| cache: true
+
+library(tidyverse)
+
+bootstrap.width = function(estimator) {
+    bootstrap.draws = bootstrap.sampling.distribution(estimator, draws=1000)
+    width(bootstrap.draws)
+}
+normal.width = function(estimator) {
+    theta.hat = estimator(Y)
+    if(identical(estimator, prior.obs.estimator)) {
+        2*1.96*sqrt(n*theta.hat * (1-theta.hat) / (n.prior+n)^2)
+    } else {
+        2*1.96*sqrt(theta.hat * (1-theta.hat) / n)
+    }
+}
+
+coverage = function(estimator) {
+    1:1000 |> map(function(.) {
+        J = sample(1:m, size=n, replace = TRUE)
+        Y = y[J]
+        point.estimate = estimator(Y)
+
+        bootstrap.covers = abs(point.estimate - theta) <= bootstrap.width(estimator)/2 
+        normal.covers = abs(point.estimate - theta) <= normal.width(estimator)/2  
+        markov.covers = abs(point.estimate - theta) <= (sqrt(20)/1.96)*normal.width(estimator)/2 
+        data.frame(bootstrap=bootstrap.covers, normal=normal.covers, markov=markov.covers)
+    }) |> bind_rows() |> 
+          summarize(across(everything(), mean))
+}
+
+mean.coverage = coverage(mean)
+prior.obs.coverage = coverage(prior.obs.estimator)
+```
+
+  point estimator | bootstrap coverage | normal coverage | markov coverage |
+ --- | -------- | -------- | -------- |
+$\bar Y$         | `r mean.coverage$bootstrap` | `r mean.coverage$normal` | `r mean.coverage$markov` |
+$\tilde Y_{100}$ | `r prior.obs.coverage$bootstrap` | `r prior.obs.coverage$normal` | `r prior.obs.coverage$markov` |
+
+
+The clear takeway, from an interval estimation perspective, is that calibration via bootstrap or normal approximation is a better idea than calibration using Markov's inequality. As established in @exr-markov-interval, intervals calibrated using Markov's inequality are roughly $\sqrt{20}/1.96 \approx `r round(sqrt(20)/1.96,1)`$ times wider. The question of which point estimator to use is a little more subtle.  Here the prior-observations estimator looks pretty good. We get substantially narrower intervals and the coverage probability of our bootstrap and normal-approximation-calibrated intervals is close to the nominal level---it's 90%. But we know from our discussion in @exr-bias-visualize that using this estimator can be risky. 
+We've managed to do well because our prior mean $\thetaprior \approx `r round(theta.prior, 2)`$ was close to the population mean $\theta \approx `r round(theta, 2)`$ and we haven't used it 'too much'. In fact, we're in a pretty similar situation to the I plotted in the last row in my solution to @exr-bias-visualize --- we have $n=100$, $\theta\approx .5$, and $\theta-\thetaprior\approx .025$ --- where using $\nprior=100$ as we have here is a substantial improvement relative to $\nprior=0$ in terms of root-mean-squared error and not-too-unreasonable inferentially because it gave us a $\text{bias}/\text{sd}$ ratio of roughly $1/2$. That said, I wouldn't have been comfortable using it because I wouldn't have known I was this situation without knowing the actual value of the estimation target $\theta$. If it had been the case that $\theta=.58$, which is consistent with what out 95% interval for the sample mean tells us is possible, then we'd have been a similar situation to the one I plotted in the first row in my solution to @exr-bias-visualize --- we'd have had a $\text{bias}/\text{sd}$ ratio of roughly $2$ --- and the result would be 50% coverage. 
+
+Note that here what I'm doing when I talk about these plots is a doing-the-math-by-hand version of testing out an estimator on data I've simulated by drawing samples from a few different fake populations. What I'm saying is, in essence, that the estimator $\tilde Y_{\nprior}$ works well in some populations and not in others, and since I don't know which will happen in my actual population, I don't feel comfortable using it.
+
+
+I'd have been more comfortable using it at the larger sample size $n=400$, 
+since having more actual observations waters down the influence of the $100$ prior observations.
+I still wouldn't have chosen it myself, as once the sample size gets large enough that the potential
+for bias starts to erode, the interval-narrowness advantage erodes too. Here's a version of the plot I made in @exr-bias-visualize for $n=400$ with $\thetaprior=.5$ and $\theta=.6$, where you can see that at $\nprior=100$ we have a bias/sd ratio of $1$, which is ok but not great, but also a pretty minimal reduction in standard deviation
+relative to using the sample mean (i.e. $\nprior=0$). 
+
+```{r}
+#| fig-width: 10
+#| fig-cap:
+#|  - bias (red), sd (blue), and rmse (green) as a function of nprior when thetaprior=.5, theta=.6, and n=400
+thetaprior = .5
+theta = .6
+n = 400
+
+bias   = function(np) { np*(thetaprior - theta)/(np + n) } 
+stddev = function(np) { sqrt(n*theta*(1-theta)/(n + np)^2) }
+rmse   = function(np) { sqrt( np^2*(thetaprior-theta)^2 + n*theta*(1-theta) ) / (n + np) }
+
+x = seq(0,n,by=1)
+p = ggplot() + 
+    geom_line(aes(x=x, y=abs(bias(x))), color="red") + 
+    geom_line(aes(x=x, y=stddev(x)), color="blue") + 
+    geom_line(aes(x=x, y=rmse(x)), color="green") + labs(x='nprior', y='') + 
+    geom_vline(aes(xintercept = theta*(1-theta)/(thetaprior-theta)^2), linetype='dotted')
+
+p
+```
+
+The difference this larger sample size would make for me is that I'd be less inclined to disagree with someone else's choice to use $\tilde Y_{\nprior}$, as I'd be content knowing that there isn't much difference between it and the sample mean. Here the context does matter. I can be pretty confident that $\theta$ is close to $.5$ because,
+while it's not exactly the average win/game ratio of *teams* in the NBA (which has to be $.5$ because one team wins and one loses in each game), it should be pretty close. It's not going to further out than $.4$ or $.6$. If it were plausible that $\thetaprior$ differed from $\theta$ more, we'd have to water down our prior observations with more real ones to ensure the prior observations weren't doing much.
 
 :::
