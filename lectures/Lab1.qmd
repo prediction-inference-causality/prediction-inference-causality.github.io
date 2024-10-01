@@ -1,9 +1,12 @@
 ---
 title: "Lab 1"
 subtitle: "Probability Background: Sampling"
+format: "live-revealjs"
 ---
 
 ## Today, We Make An Important Decision
+
+{{< include ../_extensions/r-wasm/live/_knitr.qmd >}}
 
 ```{=html}
 <style>
@@ -11,9 +14,9 @@ subtitle: "Probability Background: Sampling"
 </style>
 ```
 
-```{webr-r}
+```{webr}
 #| label: ggplot-theme
-#| context: setup
+#| include: false
 
 library(ggplot2)
 
@@ -73,7 +76,7 @@ $$
  - To get a sense of what a population looks like, we can plot one.
  - But because we're not going to talk to our whole population, we'll have to make one up.
 
-```{webr-r}
+```{webr}
 #| label: define-population
  
 m = 6
@@ -132,7 +135,7 @@ $$
 $$
 
 ### ... in Code
-```{webr-r}
+```{webr}
 #| label: calculate-estimand
 estimand = mean(pop$y)       
 estimand
@@ -140,7 +143,7 @@ estimand
 
 ### ... Visually
 
-```{webr-r}
+```{webr}
 pop.plot + geom_hline(yintercept=estimand,
                       color='green', linewidth=2, alpha=.2)
 ```
@@ -157,7 +160,7 @@ $$
 
 - This one. I've taken my plot of the population and *colored in* the dots I talked to.
 
-```{webr-r}
+```{webr}
 sampling.rate = 1/2
 
 N = round(m * sampling.rate)
@@ -177,7 +180,7 @@ $$
 
 ### in Code
 
-```{webr-r}
+```{webr}
 estimator = function(sam) { 
   Y = sam$y     
   mean(Y) 
@@ -187,7 +190,7 @@ estimator(sam)
 
 ### Visually
 
-```{webr-r}
+```{webr}
 sam.plot + geom_hline(yintercept=estimator(sam))
 ```
 
@@ -233,13 +236,13 @@ Why $Y_i$ and $y_j$?
 
 We're going to repeat the process this many times.
 
-```{webr-r}
+```{webr}
 R = 1000
 ```
 
 To do that, I'm going to use the function *map_vec* from the package **purrr**.
 
-```{webr-r}
+```{webr}
 plus.one = function(x) { x + 1 }
 one.to.ten = 0:9 |> map_vec(plus.one)
 one.to.ten
@@ -254,7 +257,7 @@ one.to.ten
   - It allocates the output vector and puts each function value into it.
   - To make it a one-liner, you can use an *anonymous function*.
 
-```{webr-r}
+```{webr}
 one.to.ten.again = 0:9 |> map_vec(\(x) x+1)
 one.to.ten.again
 ```  
@@ -275,7 +278,7 @@ one.to.ten.again
     - returns a sample mean---an estimate of the population mean.
 - We'll run it `R` times on our population by *mapping* our function over a list containing `R` copies the population.
 
-```{webr-r}
+```{webr}
 pops = rep(list(pop), R)
 ```
 
@@ -287,12 +290,12 @@ pops = rep(list(pop), R)
   - A function. Above, that's `plus.one`.
 - You'd think I'd call it like this.
 
-```{webr-r}
+```{webr}
 map_vec(0:9, plus.one)
 ```
 
 - Instead, I called it like this.
-```{webr-r}
+```{webr}
 0:9 |> map_vec(plus.one)
 ```
 
@@ -304,7 +307,7 @@ map_vec(0:9, plus.one)
 - It's especially natural when you want to do a sequence of things to a list.
   - e.g., if we want to take the list zero to nine, add one to each element, then square each result.
 
-```{webr-r}
+```{webr}
 square = function(x) { x^2 }
 0:9 |> map_vec(plus.one) |> map_vec(square) # in piped form
 map_vec(map_vec(0:9, plus.one), square)     # in unpiped form
@@ -326,7 +329,7 @@ map_vec(map_vec(0:9, plus.one), square)     # in unpiped form
 ::: {.panel-tabset}
 ### Do it 
 
-```{webr-r}
+```{webr}
 estimate = NaN                                       
 sam.plot = pop.plot + geom_hline(yintercept=estimate)    
 sam.plot          
@@ -346,7 +349,7 @@ sam.plot
 
 ### ... Again and Again
 
-```{webr-r}
+```{webr}
 with.replacement = function(pop, sampling.rate=1/2) { 
   N = round(m * sampling.rate) 
   J = sample(1:m, N, replace=TRUE)
@@ -395,7 +398,7 @@ ggplot(data.frame(sample=estimator.samples, rep=(1:R)/R)) +
 ::: {.panel-tabset}
 ### Do it 
 
-```{webr-r}
+```{webr}
 estimate = NaN                                       
 sam.plot = pop.plot + geom_hline(yintercept=estimate)    
 sam.plot          
@@ -403,7 +406,7 @@ sam.plot
 
 ### ... Again and Again
 
-```{webr-r}
+```{webr}
 # editor-code-line-numbers: 2
 without.replacement = function(pop, sampling.rate=1/2) {
   N = round(m * sampling.rate) 
@@ -441,7 +444,7 @@ In **R**, this a one line change to the sampling code.
 ::: {.panel-tabset}
 ### Do it  
 
-```{webr-r}
+```{webr}
 estimate = NaN                                       
 sam.plot = pop.plot + geom_hline(yintercept=estimate)    
 sam.plot          
@@ -449,7 +452,7 @@ sam.plot
 
 ### ... Again and Again
 
-```{webr-r}
+```{webr}
 # editor-code-line-numbers: 2-3
 by.randomization = function(pop, sampling.rate=1/2) {
   flips = rbinom(m, 1, sampling.rate)
@@ -497,7 +500,7 @@ ggplot(data.frame(sample=estimator.samples, rep=(1:R)/R)) +
 ::: {.panel-tabset}
 ### Do it  
 
-```{webr-r}
+```{webr}
 estimate = NaN                                       
 sam.plot = pop.plot + geom_hline(yintercept=estimate)    
 sam.plot          
@@ -505,7 +508,7 @@ sam.plot
 
 ### ... Again and Again
 
-```{webr-r}
+```{webr}
 
 ```
 
@@ -526,7 +529,7 @@ sam.plot
 ::: {.panel-tabset}
 ### Do it 
 
-```{webr-r}
+```{webr}
 estimate = NaN                                       
 sam.plot = pop.plot + geom_hline(yintercept=estimate)    
 sam.plot          
@@ -540,7 +543,7 @@ sam.plot
 ### ... Again and Again
 
 
-```{webr-r}
+```{webr}
 # editor-code-line-numbers: 2
 by.shuffling = function(pop, sampling.rate=1/2) {
   N = round(m * sampling.rate) 
@@ -574,7 +577,7 @@ ggplot(data.frame(sample=estimator.samples, rep=(1:R)/R)) +
 ::: {.panel-tabset}
 ### Do it 
 
-```{webr-r}
+```{webr}
 estimate = NaN                                       
 sam.plot = pop.plot + geom_hline(yintercept=estimate)    
 sam.plot          
@@ -589,7 +592,7 @@ sam.plot
 ### ... Again and Again
 
 
-```{webr-r}
+```{webr}
 # editor-code-line-numbers: 2
 randomization.then.sampling = function(pop, sampling.rate=1/2) {
   flips = rbinom(m, 1, sampling.rate)
@@ -620,7 +623,7 @@ ggplot(data.frame(sample=estimator.samples, rep=(1:R)/R)) +
 ## Comparing the Results
 
 
-```{webr-r}
+```{webr}
 sampling.rate = 1/2
 all.samples = pops |> map(function(...) {
   data.frame(with.replacement=with.replacement(pop, sampling.rate),

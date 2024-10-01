@@ -1,6 +1,6 @@
 ---
 title: "Midterm 1"
-subtitle: "QTM 220"
+subtitle: "QTM 285-1"
 ---
 
 
@@ -24,51 +24,67 @@ $$
 $$
 :::
 
-::: {.callout-warning}
-I got a lot of answers on Problem 1 that explain what the code calculates in terms of the vector $Y$, not in terms of the sample or the population it's drawn from. In later exams, esp. the final, I tried to fix that. Let's try to do that here. 
-
-And maybe let's give the estimator $\tilde{Y}$ from Problem 3 a bit more story behind it, e.g. dividing by $n+2$ with the intention of 
-reducing variance instead of $n-2$.
-:::
 
 # Problem 1
-Suppose we have a sample $Y_1 \ldots Y_n$ stored on an \textbf{R} vector $Y$ of length $n$.
-We run this code.
+Suppose we've drawn a sample $Y_1 \ldots Y_n$ with replacement from a population $y_1 \ldots y_m$ with mean $\theta=\frac{1}{m}\sum_{j=1}^m y_j$. 
+And we've stored it in an **R** vector $Y$ of length $n$. What I'm calling $Y_i$ in mathematical notation is  `Y[i]` in **R**. We run this code.
 
 ```{r}
 set.seed(123)
-n = 1000
-Y = rnorm(n)
+m = 10000000 
+y = rnorm(m) + (6*rbinom(m, size=1, prob=.5)-3)
+
+n = 10000
+J = sample(1:m, size=n, replace=TRUE)
+Y = y[J]
 ```
 
 ```{r}
 #| echo: true
-B=10000
-Y.bar = rep(NA,B)
-for(b in 1:B) {
-  Y.bar[b]= mean(sample(Y,size=n,replace=TRUE))
-}
+#| cache: false
+theta.hat.star = 1:10000 |> map_vec(function(.) { 
+  I = sample(1:n, size=n, replace=TRUE)
+  Y.star = Y[I]
+  mean(Y.star)
+}) 
 ```
 
-```{r}
-#| out-height: 6in
+
+```{r} 
 #| fig-ncol: 2
+#| fig-width: 5.5
 #| fig-subcap:
 #|  -  Histogram of the vector Y's elements
-#|  -  Histogram of the Y.bar's elements
-ggplot() + geom_histogram(aes(x=Y,     y=after_stat(density)), alpha=.3) + 
+#|  -  Histogram of the vector theta.hat.star's elements
+ggplot() + geom_histogram(aes(x=Y, y=after_stat(density)), 
+bins=50, alpha=.3) + 
            geom_vline(aes(xintercept=mean(Y)), alpha=.5) + 
            geom_vline(aes(xintercept=mean(Y)+c(-1,1)*sd(Y)), linetype='dashed', alpha=.5) + 
-           geom_pointrange(aes(x=mean(Y), xmin=mean(Y)-1.96*sd(Y), xmax=mean(Y)+1.96*sd(Y), y=.15)) + theme_bw() + xlab('') + ylab('')
-ggplot() + geom_histogram(aes(x=Y.bar, y=after_stat(density)), alpha=.3) + 
-           geom_vline(aes(xintercept=mean(Y.bar)), alpha=.5) + 
-           geom_vline(aes(xintercept=mean(Y.bar)+c(-1,1)*sd(Y.bar)), linetype='dashed', alpha=.5) + 
-           geom_pointrange(aes(x=mean(Y.bar), xmin=mean(Y.bar)-1.96*sd(Y)/sqrt(n), xmax=mean(Y.bar)+1.96*sd(Y)/sqrt(n), y=5)) + theme_bw() + xlab('') + ylab('')
+           geom_pointrange(aes(x=mean(Y), xmin=mean(Y)-1.96*sd(Y), xmax=mean(Y)+1.96*sd(Y), y=.05)) + theme_bw() + xlab('') + ylab('') +
+           scale_x_continuous(breaks=seq(-8,8,by=2)) +
+           scale_y_continuous(breaks=seq(0,.20,by=.05)) + 
+           coord_cartesian(xlim=c(-8,8), ylim=c(0,.20))
+
+ggplot() + geom_histogram(aes(x=theta.hat.star, y=after_stat(density)), 
+                           bins=50, alpha=.3) + 
+           geom_vline(aes(xintercept=mean(theta.hat.star)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(theta.hat.star)+c(-1,1)*sd(theta.hat.star)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(theta.hat.star), xmin=mean(theta.hat.star)-1.96*sd(theta.hat.star), xmax=mean(theta.hat.star)+1.96*sd(theta.hat.star), y=5)) + theme_bw() + xlab('') + ylab('') + 
+           scale_x_continuous(breaks=seq(-.08,.12,by=.02)) +
+           scale_y_continuous(breaks=seq(0,20,by=5)) + 
+           coord_cartesian(xlim=c(-.08,.12), ylim=c(0,20))
 ```
+
+::: {.callout-note}
+When you answer the 'What does this code calculate?' questions below, 
+please phrase your answer in statistical terms. Say things like 
+'the sample _'or 'the _ sampling distribution' or 'a _ based on _ approximation'
+rather than 'the _ of the vector `Y`'.
+:::
 
 ::: {.callout-exercise}
 ### Part A
-What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket
+What does this code calculate? State it in words and mark it with an 'A', and an arrow or bracket
 if necessary for clarity, on the appropriate plot above.
 ```{r}
 #| echo: true
@@ -83,7 +99,7 @@ The sample mean. It's indicated by the solid vertical line on the left histogram
 
 ::: {.callout-exercise}
 ### Part B
-What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+What does this code calculate? State it in words and mark it with a 'B', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 ```{r}
 #| echo: true
 #| eval: false
@@ -97,11 +113,11 @@ The sample standard deviation. It's the distance between the solid vertical and 
 
 ::: {.callout-exercise}
 ### Part C
-What does this code calculate? State it in words and mark it with an 'c', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+What does this code calculate? State it in words and mark it with an 'C', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 ```{r}
 #| echo: true
 #| eval: false
-sd(Y.bar)
+sd(theta.hat.star)
 ```
 
 :::
@@ -112,7 +128,7 @@ It's the distance between the solid vertical and either dashed vertical line on 
 
 ::: {.callout-exercise}
 ### Part D
-What does this code calculate? State it in words and mark it with an 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+What does this code calculate? State it in words and mark it with an 'D', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 ```{r}
 #| echo: true
 #| eval: false
@@ -127,107 +143,120 @@ A 95\% confidence interval --- based on normal approximation --- for the mean of
 
 ::: {.callout-exercise}
 ### Part E
-How could you calculate roughly the same thing as in part d using `sd(Y.bar)` and not `sd(Y)`?
+How could you calculate roughly the same thing as in Part D, if you had `mean(Y)` and `theta.hat.star` but not `Y` itself?
 :::
 ::: {.callout-solution}
 We can use the standard deviation of the bootstrap sampling distribution, rather than `sd(Y)/sqrt(n)`, as our estimate of standard error.
 ```{r}
 #| echo: true
 #| eval: false
-mean(Y) - 1.96* sd(Y.bar)
-mean(Y) + 1.96* sd(Y.bar)
+mean(Y) - 1.96* sd(theta.hat.star)
+mean(Y) + 1.96* sd(theta.hat.star)
 ```
 
 :::
 
-# Problem 2
-In 2015, Berkeley implemented a penny-per-ounce tax on soda. Advocates claimed the tax would reduce the rate of diabetes in the city's population. Now we want to check this claim---in a sense. What we want to know is the 
-difference between the rate of diabetes among residents of Berkeley --- one city in the San Francisco Bay Area --- to the rate among residents of the Bay Area as a whole. 
+:::  {.callout-exercise}
+### Part F 
+How would you calculate roughly the same thing as in Part D and Part E if you had `theta.hat.star` and nothing else?
 
-What we can use to do this is a sample, drawn with replacement, from the population of Bay Area Residents. To be precise, suppose the Bay Area has $m$ residents, each with an id $j \in 1 \ldots m$. Our population is $(x_1,y_1) \ldots (x_m, y_m)$ 
-where 
-$$
-\begin{aligned}
-x_j &= \begin{cases} 1 & \ \text{ if Bay Area resident $j$ lives in Berkeley} \\  0 & \ \text{ otherwise} \end{cases} \\
-y_j &= \begin{cases} 1 & \ \text{ if Bay Area resident $j$ has diabetes} \\ 0 & \ \text{ otherwise} \end{cases}
-\end{aligned}
-$$
-We have a sample $(X_1, Y_1) \ldots (X_n, Y_n)$ drawn with replacement from this population.
+*Hint.* You may want to take a look at the extra credit problem at the end of the exam. 
+The answer to this one is not-all-that-hidden in the question to that one.
+:::
 
+# Problem 2 
+
+Suppose that you've drawn a sample $Y_1 \ldots Y_{n}$ of size $n=75$ with replacement from a binary population $y_1 \ldots y_{m}$
+of size $m=99$. You want a 95% confidence interval for $\theta$, the proportion of 1s in the population, but you want to do the 
+calculations yourself, so you ask a classmate to do it. You tell them the sample proportion $\hat\theta$ is $1/3$ and the sample and population sizes, but you forget to tell them you sampled with replacement, so they do the calculation as if you sampled *without replacement*. 
+
+Here's a plot that's pretty informative about what's going on. On the left is the sampling distribution estimate you'd have used for calibration if we'd done it yourself---the binomial distribution for $n$ trials with success probability $\hat\theta$. This is a good estimate of $\hat\theta$'s actual sampling distribution. On the right is the Hypergeometric distribution your friend used for calibration. I've drawn the interval your friend gave you on top of both. I've also drawn dotted vertical lines at the endpoints of the interval.
+
+```{r}
+#| echo: false
+#| fig-width: 5.5
+#| layout-ncol: 2
+
+n = 75
+m = 99
+theta.hat = 25/75 
+x = (0:75)/75 
+xx = seq(0,1,by=.001)
+
+scales = list(scale_x_continuous(breaks=seq(0,1,by=1/10)),
+              scale_y_continuous(breaks=seq(0,1,by=1/20)), 
+              coord_cartesian(xlim=c(.1,.55), ylim=c(0,.2)),
+              labs(x='', y=''))
+sigma.hat.with = sqrt(theta.hat*(1-theta.hat)/n)
+sigma.hat.without = sqrt(((m-n)/(m-1))*theta.hat*(1-theta.hat)/n)
+
+ggplot() + geom_col(aes(x=x, y=dbinom(x*n, size=n, prob=theta.hat)), alpha=.5) + 
+        #   geom_line(aes(x=xx, y=(1/n)*dnorm(xx, theta.hat, sigma.hat.with))) + 
+           geom_pointrange(aes(x=theta.hat, xmin=theta.hat-2*sigma.hat.without, xmax=theta.hat+2*sigma.hat.without, y=.04)) +
+           geom_vline(xintercept=c(theta.hat-2*sigma.hat.without, theta.hat+2*sigma.hat.without), linetype='dotted') +
+           scales
+ggplot() + geom_col(aes(x=x, y=dhyper(x*n, m*theta.hat, m*(1-theta.hat), n)), alpha=.5) + 
+        #   geom_line(aes(x=xx, y=(1/n)*dnorm(xx, theta.hat, sigma.hat.without))) + 
+           geom_pointrange(aes(x=theta.hat, xmin=theta.hat-2*sigma.hat.without, xmax=theta.hat+2*sigma.hat.without, y=.04)) +
+           geom_vline(xintercept=c(theta.hat-2*sigma.hat.without, theta.hat+2*sigma.hat.without), linetype='dotted') +
+           scales 
+```
+
+Let's think about the interval estimator you're using. It's $\hat\theta \pm w_H(\hat\theta)/2$ where $w_H(\theta)$ is the width of the middle 95% of a Hypergeometric distribution. In particular, if we shuffle a deck of $m$ cards with $m\theta$ red cards and $m(1-\theta)$ black cards, that Hypergeometric distribution is the distribution of the fraction of the top $n$ cards that are red.  
 
 ::: {.callout-exercise}
-### Part A
-Express your estimand --- the population summary you want to estimate--- in terms of $(x_1, y_1) \ldots (x_m,y_m)$.
-:::
-::: {.callout-solution}
-$$
-\frac{\sum_{j=1}^m x_j y_j}{\sum_{j=1}^m x_j} - \frac{\sum_{j=1}^m y_j}{m}
-$$
-:::
+Roughly what is the coverage probability of the interval estimator $\hat\theta \pm w_H(\hat\theta)/2$: 5%, 33%, 50%, 66%, or 95%? 
 
-::: {.callout-exercise}
-### Part B
-Express that estimand, using conditional and unconditional expectations, in terms of a single pair of random variables $(X_i,Y_i)$ drawn from this population.
+*Hint.* Use the picture. If you're not sure because you're having trouble 'measuring the picture' accurately, here's a tip that may help. 
+If you want to compare the area in the middle of a histogram to the area at the edges, think about the edges as two identical triangles. 
+The combined area of the two triangles is the area of *a rectangle* with the same width and height as one of the triangles---the rectangle
+we get by rotating one of the triangles 180 degrees and setting it on top of the other. Compare the area of that *rectangle* to the area of the middle of the histogram. If you can fit 19 copies of the rectangle in the middle of the histogram, you've got 95% coverage. 
+If you can fit 2 copies of the rectangle in the middle of the histogram, you've got 66% coverage. If you can fit 1 copy, 
+you've got 50% coverage.
 :::
-::: {.callout-solution}
-$$ 
-\E[Y_i \mid X_i=1] - \E[Y_i] 
-$$
-:::
-
-::: {.callout-exercise}
-### Part C
-In terms of $\overline{X}=\frac1n\sum_{i=1}^n X_i$, $\overline{Y}=\frac1n\sum_{i=1}^n Y_i$, and $\overline{XY}=\frac1n\sum_{i=1}^n X_i Y_i$, state an *unbiased point estimate*.
-:::
-::: {.callout-solution}
-$$
-\frac{\sum_{i=1}^n X_i Y_i}{\sum_{i=1}^n X_i} - \frac{\sum_{i=1}^n Y_i}{n} = \overline{XY}/\overline{X} - \overline{Y}
-$$
-:::
-
 
 # Problem 3
 
- Suppose you have a sample $Y_1, Y_2, \ldots, Y_n$ drawn with replacement from a population with mean $\mu$ and standard deviation $\sigma$. 
- 
- 
- Consider the following estimator for $\mu$: $\tilde{Y} = \frac{1}{n-2} \sum_{i=1}^n Y_i$.
+ Suppose you have a sample $Y_1 \ldots Y_n$ drawn with replacement from a population $y_1 \ldots y_m$ with mean $\theta$ and standard deviation $\sigma$. 
+ You're going to answer a few questions about the following estimators for $\theta$: $\hat\theta_1 = Y_1$ and $\hat\theta_2 = \frac{1}{2n} \sum_{i=1}^n Y_i$.
+ *You may need to do some calculations to answer them, but you do not need to show your work. Just state your answers. If these are at all hard to find, e.g. because you've written out a long calculation, please circle them.*
 
 ::: {.callout-exercise}
 ### Part A
- What is $E[\tilde{Y}]$?
+What are these estimators' expected values, $\E[\hat\theta_1]$ and $\E[\hat\theta_2]$?
 :::
 ::: {.callout-solution}
 $$
 \begin{aligned}
- \E\qty[\tilde{Y}] &= E\qty[ \frac{1}{n-2} \sum_{i=1}^n Y_i] \\
- &= \frac{1}{n-2} E\qty[ \sum_{i=1}^n Y_i]\\
- &= \frac{1}{n-2} \qty(\sum_{i=1}^n E[Y_i])\\
- &=\frac{1}{n-2} \qty(\sum_{i=1}^n \mu )\\
- &=\frac{1}{n-2} n\mu \\
- &= \frac{n}{n-2}\mu
+\E[\hat\theta_1] 
+&= \E[Y_1] = \theta \\
+\E[\hat\theta_2] 
+&= \E\qty[ \frac{1}{2n} \sum_{i=1}^n Y_i] \\
+ &= \frac{1}{2n} \E\qty[ \sum_{i=1}^n Y_i]\\
+ &= \frac{1}{2n} \qty(\sum_{i=1}^n \E[Y_i])\\
+ &=\frac{1}{2n} \qty(\sum_{i=1}^n \theta )\\
+ &=\frac{1}{2n} n\theta \\
+ &= \frac{\theta}{2}
 \end{aligned}
 $$
 :::
 
 ::: {.callout-exercise}
 ### Part B
-What is the estimator's bias, $E[\tilde{Y}] - \mu$?
+What are these estimators' biases, $\E[\hat\theta_1] - \theta$ and $\E[\hat\theta_2] - \theta$?
 :::
 ::: {.callout-solution}
 $$
 \begin{aligned}
- \E[\tilde{Y} - \mu] &= \frac{n}{n-2}\mu - \mu \\
- &= \qty(\frac{n}{n-2} - 1)\mu \\
- &= \qty(\frac{n}{n-2} - \frac{n-2}{n-2})\mu \\
- &= \frac{2}{n-2}\mu
+ \E[\hat\theta_1] - \theta &= \theta - \theta = 0 \\
+ \E[\hat\theta_2] - \theta &= \frac{\theta}{2} - \theta = -\frac{\theta}{2}
 \end{aligned}
 $$
 :::
 
 ::: {.callout-exercise}
 ### Part C
-Showing your work, calculate $Var[\tilde{Y}]$.
+What are these estimators' variances, $\Var[\hat\theta]$ and $\Var[\hat\theta_2]$?
 :::
 ::: {.callout-solution}
  $$
@@ -290,22 +319,70 @@ ggplot(plotdata) + geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100,
 It's b. $a$ is unbiased and $c$'s bias doesn't decrease with $n$.
 :::
 
+::: {.callout-exercise}
+### Part E 
+
+Suppose $Y_1 \ldots Y_n$ is the sample from Problem 1. 
+On the two grids below, sketch the bootstrap sampling distributions of $\hat\theta_1$ and $\hat\theta_2$.
+Indicate the sampling distribution's mean and standard deviation on each sketch.
+
+On the grids I've given you, I've left off the actual numbers labeling the 'ticks' on the x and y axes.
+That way, you can choose the scale for each sketch to make them as easy as possible to draw. When you 
+have chosen a scale, please do label those ticks.
+:::
+
+
+```{r} 
+#| fig-ncol: 2
+#| fig-width: 5.5
+ 
+ggplot() + 
+  geom_blank(aes(x=1, y=1)) + 
+  scale_x_continuous(breaks=seq(-8,8,by=2)) +
+  scale_y_continuous(breaks=seq(0,.20,by=.05)) + 
+  coord_cartesian(xlim=c(-8,8), ylim=c(0,.20)) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) + 
+  xlab('') + ylab('')
+
+ggplot() + 
+  geom_blank(aes(x=1, y=1)) +
+  scale_x_continuous(breaks=seq(-.08,.12,by=.02)) +
+  scale_y_continuous(breaks=seq(0,20,by=5)) + 
+  coord_cartesian(xlim=c(-.08,.12), ylim=c(0,20)) +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank()) + 
+  xlab('') + ylab('')
+```
+
+
 # Problem 4
 
 Suppose a friend has polled 100 of Georgia's registered voters
 about their intention to vote in the 2024 election. The interval
-estimate they report for turnout is [.59,.61]. 
+estimate they report for turnout is [.58,.62]. 
 
 ::: {.callout-exercise}
-Could this interval estimate have 95\% coverage?
-Explain your answer. \emph{Hint. If $Y$ is a binary random variable
-that takes on the value 1 with probability $p$ (and 0 with probability $1-p$), $\Var[Y]=p(1-p)$.}
+### Part A
+Could this interval estimate be (correctly) calibrated to have 95\% coverage? Explain your answer. 
 :::
 
 ::: {.callout-solution}
 No. The standard error of the mean of $100$ binary random variables
- $Y_i$ with $\E Y_i=p$ is $\sqrt{p(1-p)/100}$. Because we know that $p\approx 6/10$, this is roughly $(6/10)(4/10)/100=\sqrt{24}/100 \approx 5/100$. 
- As a result, a 95\% confidence interval should have a width of roughly
- $2 \times 1.96 \times 5/100 \approx 20/100=.2$. The width of their interval is 
- $1/10$ of this.
+$Y_i$ with $\E[Y_i]=\theta$ is $\sqrt{p(1-p)/100}$. Because we know that $p\approx 6/10$, this is roughly $(6/10)(4/10)/100=\sqrt{24}/100 \approx 5/100$. 
+As a result, a 95\% confidence interval should have a width of roughly
+$2 \times 1.96 \times 5/100 \approx 20/100=.2$. The width of their interval is 
+$1/10$ of this.
 :::
+
+::: {.callout-exercise}
+### Part B
+If they wanted an interval estimate that was accurate to within 1%, 
+i.e. an interval of the form $\hat\theta \pm .01$, roughly how many voters should they have polled? 
+Choose the closest number from this list: 100, 1000, 10000, 100000.
+::: 
+
+## Problem 5 (Extra Credit)
+
+::: {.callout-exercise}
+### Stuff
+
+::: 
