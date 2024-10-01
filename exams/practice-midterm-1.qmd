@@ -101,6 +101,13 @@ On top of it, I've drawn four interval estimators.
 - Which are calibrated to have almost exactly 95\% coverage? Circle your check for those.
 :::
 
+::: {.callout-note}
+### A Clarification.
+If I ask a problem like this on an exam, I'll make it clear that 'at least but not exactly 95\% coverage' 
+means substantially more than 95\% coverage. Maybe I'll give you a list of choices for each interval, e.g. 1%, 5%, 50%, 95%, 99% that are spread out enough that familiarity with the illustrations we use often in class will make it clear which is which.
+:::
+
+
 ::: {.callout-solution}
 
 From the top, the first, third, and fourth have 95\% coverage---the widest 3. The third and fourth have almost exactly 95\% coverage.
@@ -200,7 +207,7 @@ The problem is in the second to last line. Note that if we replace each instance
 
 
 A brewer delivers a batch of a million bottles to its distributor. 
-The distributor has recently been getting complaints, so they've instituted a new quality control process to try to ensure that the proportion of bad bottles is 2% or less. They set aside a hundred bottles, drawn with replacement from that million, for testing. And they find that 3 of them---3%---is bad. Having done this, they claim that the batch doesn't meet its standards and refuse to pay. The brewer has called you in to consult. 
+The distributor has recently been getting complaints, so they've instituted a new quality control process to try to ensure that the proportion of bad bottles is 2% or less. They set aside a hundred bottles, drawn without replacement from that million, for testing. And they find that 3 of them---3%---is bad. Having done this, they claim that the batch doesn't meet its standards and refuse to pay. The brewer has called you in to consult. 
 
 ::: {.callout-exercise} 
 ### Part A
@@ -222,18 +229,19 @@ Even if it were lower, this would happen pretty often. From the plot in the cent
 
 ```{r}
 #| layout-ncol: 3
-#| fig-width: 2
+#| fig-width: 3.5
 #| fig-cap: 
 #|   - "for θ=.02"
-#|   - "for θ=.15"
+#|   - "for θ=.015"
 #|   - "for θ=.01"
 m = 1000000
 n = 100
 x=(0:n)/n 
 
-scale = list(scale_x_continuous(limits=c(-.01, .08)), 
-             scale_y_continuous(limits=c(0, .4)),
-             labs(x='', y=''))
+scale = list(scale_x_continuous(limits=c(-.01, .08), breaks=seq(0, .07, by=.02)), 
+             scale_y_continuous(limits=c(0, .45)),
+             labs(x='', y=''),
+             theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)))
 
 theta = .02 
 pmf = dhyper(x*n, m*theta, m*(1-theta), n)
@@ -254,28 +262,141 @@ ggplot() + geom_col(aes(x=x, y=pmf)) + scale
 The brewer claims, based on its own testing, that the proportion of bad bottles in their deliveries will be no more than 1%. You learn that the distributor will be rejecting deliveries whenever the proportion of bad ones in the sample they test exceeds 2% and, after consulting with the brewer, you decide that the best course of action is to ask them to adjust the size of their sample so they'll reject no more than 5% of deliveries. Assuming the brewer is correct about their proportion of bad bottles, which of the following is a good sample size to ask for: 100, 400, or 1600?
 :::
 
+::: {.callout-note}
+*Comment.* 
+This one was harder than I intended. I'll make sure the actual exam's question on choosing a sample size is more straightforward. What I'm going to do here is explain the straightforward approach I was thinking of. That's the kind of thing you'll want to be able to do for the exam. If you want to read a bit about the subtleties, some of which came up a bit during our review session, take a look at the note below the second solution. Don't feel obligated. This isn't something I intend as required reading before or after the exam. But given that the question I asked wound up raising a few questions, I felt like I owed you answers.
+:::
+
 ::: {.callout-solution}
 400.
 
-*Explanation*.
-We're assuming the population proportion $\theta=.01$ and we want to choose $n$ so that the sample proportion $\hat\theta$ is less than or equal to $.02$ 95% of the time. This boils down to a question about how big
-our sample size $n$ has to be for the interval $\theta \in \hat\theta \pm .01$ to have 95% coverage, as 
-$\theta \in \hat\theta \pm .01$ if and only if $\hat\theta \in \theta \pm .01$, i.e. (given $\theta=0.1$)
-if and only if $\hat\theta \in [0, .02]$.  We know that $\hat\theta \pm 2 \ \mathop{sd}(\hat\theta)$
-should have 95% coverage and that 
+*The Simple Explanation*.
+Our delivery will be rejected when the sample proportion $\hat\theta$ is greater than $.02$. To ensure our delivery is rejected no more than 95% of the time, we want to choose $n$ so 95% of draws from $\hat\theta$'s sampling distribution are less than or equal to $.02$. Now we're going to make 3 guesses/approximations that make this simpler.
 
-$$
-\mathop{sd}(\hat\theta)=\sqrt{\frac{\theta(1-\theta)}{n}} = \sqrt{\frac{.01 \times .99}{n}} \approx \sqrt{\frac{.01}{n}} = \frac{.1}{\sqrt{n}}.
-$$
+1. We'll choose $n$ to ensure that the *middle 95%* of draws from our sampling distribution are less than or equal to $.02$. This is overkill. Having the *smallest 95%* of draws be less than or equal to $.02$ is enough.
+2. We'll assume the worst about the brewer's actual proportion of bad bottles. They say $\theta \le .01$, so let's assume $\theta=.01$.  
+3. We'll assume assume that the sampling distribution of our sample proportion $\hat\theta$ will be approximately normal no matter which sample size we choose. 
 
-From here, we can solve for $n$ like this.
+The mean and standard deviation of our estimator $\hat\theta$ are $\theta$ and $\sqrt{\theta(1-\theta)/n}$ respectively.^[Almost. Since we're sampling without replacement, the actual standard deviation is $\sqrt{(m-n)/(m-1)}$ times smaller, as we saw [in a recent homework](https://qtm285-1.github.io/assets/homework/week3-homework.html#exr-covariance-with-replacement). But since $m$ is a million and $n$ is 100, this is so close to 1 it makes no practical difference.] Given our guesses/approximations, this means that roughly 95% of draws from its sampling distribution will be in the interval $\theta \pm 1.96 \sqrt{\theta(1-\theta)/n}$ for $\theta=.01$ and we want to choose $n$ so that the upper bound on this interval is no larger than $.02$. When we do this, we find we want roughly $n=20^2=400$ observations.
+$$
+.01 + 1.96 \sqrt{\frac{.01 \times .99}{n}} \le .02 
+\qqtext{ when } 1.96 \sqrt{\frac{.01 \times .99}{n}} \le .01 
+$$
+i.e. when
+$$
+\sqrt{n} \ge 1.96 \frac{\sqrt{.01 \times .99}}{.01} \approx 2 \frac{\sqrt{.01}}{.01} = 2 \frac{.1}{.01} = 20.
+$$
+:::
 
-$$
-.01 = 2 \mathop{sd}(\hat\theta) \approx \frac{.1}{\sqrt{n}} \qfor \sqrt{n} \approx \frac{2 \times .1}{.01} = 20
-\qqtext{i.e.} n \approx 20^2=400.  
-$$
+::: {.callout-solution collapse="true"}
+### A Subtler Explanation (Very Optional)
+
+Here I'm going to write a bit about what happens when we drop the 3 simplifying assumptions we made above. I'll go in order: first 1, then 2, then 3.
+
+First, let's think about what happens when focus on the *smallest 95%* of draws instead of the middle 95%. That is, when we want the 95th percentile of our sampling distribution to be less than or equal to $.02$. If we stick with our other assumptions, this means changing $1.96$ to `r round(qnorm(.95),2)` in the calculation above, because $\theta+`r round(qnorm(.95),2)`\sigma$ is the 95th percentile of a normal distribution with mean $\theta$ and standard deviation $\sigma$.
+
+::: {#fig-smallest-95}
+
+```{r}
+xx = seq(-4,4,by=.01)
+normal = dnorm(xx)
+scales = scale_x_continuous(limits=c(-4,4), breaks=seq(-3,3,by=1), 
+                            labels=c('θ-3σ', 'θ-2σ', 'θ-σ', 'θ', 'θ+σ', 'θ+2σ', 'θ+3σ'))
+
+ggplot() + geom_line(aes(x=xx, y=normal)) +
+           geom_area(aes(x=xx[abs(xx) < qnorm(.975)], y=normal[abs(xx) < qnorm(.975)]), 
+            alpha=.2, fill='red') +
+           geom_vline(xintercept=qnorm(.975), color='red', linetype='dotted', alpha=.6) +
+           geom_area(aes(x=xx[xx < qnorm(.95)], y=normal[xx < qnorm(.95)]), 
+            alpha=.2, fill='green') + 
+           geom_vline(xintercept=qnorm(.95), color='green', linetype='dotted', alpha=.8) +
+           scales + labs(x='', y='')
+```
+
+An illustration comparing the draws we were counting before when we used $1.96$ (shaded red) to the draws we're counting now using 1.64 (shaded green). The orange area counts the draws they have in common; the green area the draws below them that we weren't counting before; and the red area the larger draws we had to count to get up to 95% as as a result. To improve the visibility of the two upper bounds I'm talking about, I've plotted them as dotted lines.
 
 :::
+
+It makes a meaningful difference, but not enough to change our answer from 400 to 100. If we substitute `r round(qnorm(.95),2)` for `r round(qnorm(.975), 2)` in the calculation above, we decrease our estimate of $n$ by a factor of $(`r round(qnorm(.95),2)` / `r round(qnorm(.975),2)`)^2 \approx `r round((qnorm(.95)/qnorm(.975))^2, 2)`$. 
+
+We can use the smallest 95% of the sampling distribution to calibrate an interval estimate just like we've used the middle 95%. The difference is that this 
+is a *one-sided interval* that goes from some lower bound all the way to infinity. In particular, if we let $w_+$ be the distance from $\theta$ to the 95th percentile of $\hat\theta$'s sampling distribution (the dotted green line above), then $[\hat\theta - w_+, \infty]$ is a one-sided interval estimate with 95% coverage. If that sampling distribution is normal with standard deviation $\sigma$, it's $[\hat\theta - `r round(qnorm(.95), 2)`\sigma, \infty]$. Why is that calibrated for 95% coverage? Because it contains $\theta$ for 95% of draws $\hat\theta$ from the sampling distribution --- the smallest 95% of draws. We can flip all this around, and think about the *largest* 95% of draws, if we want an interval that extends from some upper bound all the way to $-\infty$.
+
+Second, let's think about what happens when we stop assuming the worst about the brewer's actual proportion of bad bottles. This assumption doesn't cause us any problems. The upper bound we're comparing to $.02$, whether we use $\theta + 1.96\sigma$ or $\theta + `r round(qnorm(.95),2)`\sigma$ for $\sigma = \sqrt{\theta(1-\theta)/n}$, increases as we increase $\theta$. This means ensuring the bound is $.02$ or smaller for $\theta=.01$ ensures it's $.02$ or smaller for all $\theta \le .01$.
+
+Finally, let's think about what happens when we stop assuming that the sampling distribution of our sample proportion $\hat\theta$ will be approximately normal no matter which sample size we choose. If we're choosing between the three sample sizes $100$, $400$, and $1600$, we can just work out the 95th percentile of our estimator's actual sampling distribution at all three sample sizes and choose the smallest sample size at which it's less than or equal to $.02$. We already know, from our plots from Part A, that it doesn't work at $100$. Let's check the other two.
+
+::: {#fig-sampling-dist-varying-n}
+```{r}
+#| layout-ncol: 3
+#| fig-width: 3.5
+#| fig-cap: 
+#|   - "for θ=.01 and n=100"
+#|   - "for θ=.01 and n=400"
+#|   - "for θ=.01 and n=1600"
+m = 1000000
+theta = .01 
+
+n = 100
+x=(0:n)/n 
+xx=seq(-2,2,by=.001)
+pmf = dhyper(x*n, m*theta, m*(1-theta), n)
+ggplot() + geom_col(aes(x=x, y=pmf)) + scale +
+           geom_line(aes(x=xx, y=(1/n)*dnorm(xx, mean=theta, sd=sqrt(theta*(1-theta)/n))), alpha=.7, color='red') +
+           geom_vline(xintercept=theta+qnorm(0.95)*sqrt(theta*(1-theta)/n), color='green', linetype='dotted', alpha=.6) +
+           geom_vline(xintercept=theta+qnorm(0.975)*sqrt(theta*(1-theta)/n), color='red', linetype='dotted', alpha=.6) +
+           geom_vline(xintercept=(1/n)*qhyper(0.95, m*theta, m*(1-theta), n), color='magenta', linetype='dotted', alpha=.6)
+
+n = 400
+x=(0:n)/n 
+pmf = dhyper(x*n, m*theta, m*(1-theta), n)
+ggplot() + geom_col(aes(x=x, y=pmf)) + scale +
+           geom_line(aes(x=xx, y=(1/n)*dnorm(xx, mean=theta, sd=sqrt(theta*(1-theta)/n))), alpha=.7, color='red') +
+           geom_vline(xintercept=theta+qnorm(0.95)*sqrt(theta*(1-theta)/n), color='green', linetype='dotted', alpha=.6) +
+           geom_vline(xintercept=theta+qnorm(0.975)*sqrt(theta*(1-theta)/n), color='red', linetype='dotted', alpha=.6) +
+           geom_vline(xintercept=(1/n)*qhyper(0.95, m*theta, m*(1-theta), n), color='magenta', linetype='dotted', alpha=.6)
+
+n = 1600
+x=(0:n)/n 
+pmf = dhyper(x*n, m*theta, m*(1-theta), n)
+ggplot() + geom_col(aes(x=x, y=pmf)) + scale  +
+           geom_line(aes(x=xx, y=(1/n)*dnorm(xx, mean=theta, sd=sqrt(theta*(1-theta)/n))), alpha=.7, color='red') +
+           geom_vline(xintercept=theta+qnorm(0.95)*sqrt(theta*(1-theta)/n), color='green', linetype='dotted', alpha=.6) +
+           geom_vline(xintercept=theta+qnorm(0.975)*sqrt(theta*(1-theta)/n), color='red', linetype='dotted', alpha=.6) +
+           geom_vline(xintercept=(1/n)*qhyper(0.95, m*theta, m*(1-theta), n), color='magenta', linetype='dotted', alpha=.6)
+```
+The sampling distribution of $\hat\theta$ when $\theta=.02$ for $n=100$ (left), $n=400$ (center), and $n=1600$ (right). The normal approximation to each sampling distribution is drawn over it in red and the 95th percentile of the actual sampling distribution and its normal approximation are plotted as [magenta]{.magenta} and [green]{.green} dotted lines respectively and the 97.5th percentile of the normal approximation---the upper bound we get using 1.96 instead of `r round(qnorm(.95,2))`---is  plotted as a [red]{.red} dotted line.
+:::
+
+What we see is pretty interesting. Our normal approximation is pretty bad at $n=100$, ok for $n=400$, and pretty good at $n=1600$. And the 95th percentile of the normal approximation tends to be a bit smaller than the 95th percentile of the actual sampling distribution. But our choice of $n=400$ works: the 95th percentile of the actual sampling distribution is *exactly* $.02$ at $n=400$. What's happened is that the errors in our two approximations --- in using the normal instead of the hypergeometric and thinking about the middle 95% instead of the smallest 95% of draws --- have basically canceled each other out.  
+
+That this worked out so nicely was luck. I was thinking both sources of error would be small enough not to matter much, not that they'd cancel out. And when you really dig into what's happened, it's pretty strange. If you look at the three upper bounds we've been talking about as functions of $n$ plotted below, you can see the one that's exactly right---the 95th percentile of the actual sampling distribution---has a bit of a sawtooth pattern on top of the overall trend. Why? Think about how the 95th percentile of the *number* of bad bottles changes as we increase our sample size $n$. It has flat spots---it's 0, then 1, then 2, then 3, etc. To get the  95th percentile of the proportion of bad bottles in the sample, we take the 95th percentile of the *number* and divide it by $n$. Because this denominator $n$ is increasing in the numerator's flat spots, the 95th percentile of the proportion goes down --- that's the downward slope of each 'tooth' of the saw --- until the numerator jumps up to the next level --- those are the jumps in the sawtooth pattern. The 95th percentile of the actual sampling distribution tends to bounce *between* the 95th and 97.5th percentiles of its normal approximation and at $n=100$ and $n=400$ it's just taken a jump up, so it's closer to the 97.5th. 
+
+::: {#fig-sampling-dist-varying-n}
+```{r}
+#| layout-ncol: 2
+#| fig-width: 5
+n = seq(100,1600,by=1)
+first.crossing = n[which(map_vec(n, \(x)qhyper(0.95, m*theta, m*(1-theta), x)/x) <= .02)[1]]
+
+ggplot() + geom_line(aes(x=n, y=map_vec(n, \(x)qhyper(0.95, m*theta, m*(1-theta), x)/x)), color='magenta', alpha=.6) +
+           geom_line(aes(x=n, y=map_vec(n, \(x)theta+qnorm(.95)*sqrt(theta*(1-theta)/x))), color='red', alpha=.6) + 
+           geom_line(aes(x=n, y=map_vec(n, \(x)theta+qnorm(.975)*sqrt(theta*(1-theta)/x))), color='green', alpha=.6) +
+           geom_vline(xintercept=c(100,400,1600), alpha=.2) + labs(x='n', y='') +
+           geom_vline(xintercept=first.crossing, color='blue', alpha=.2)
+
+ggplot() + geom_line(aes(x=n, y=map_vec(n, \(x)qhyper(0.95, m*theta, m*(1-theta), x))), color='magenta', alpha=.6) +
+           geom_vline(xintercept=c(100,400,1600), alpha=.2) + labs(x='n', y='') +
+           geom_vline(xintercept=first.crossing, color='blue', alpha=.2)
+```
+Left: The three upper bounds we've talked about plotted as functions of $n$. The 95th percentile of the actual sampling distribution of $\hat\theta$ in [magenta]{.magenta}, the 95th percentile of its normal approximation in [red]{.red} ($\theta+`r round(qnorm(.95),2)`\sigma$), and the 97.5 percentile of its normal approximation in [green]{.green} ($\theta+`r round(qnorm(.975),2)`\sigma$). Right: The 95th percentile of the *number* of bad bottles in the sample. 
+:::
+
+If we accept the premise that what the brewer really wants is to ensure 95% of (infinitely many) shipments pass this test, there is actually a way for the brewer to take advantage of this strange sawtooth pattern in this example. Suppose that the distributor is willing to increase the sample size, but only if the distributor compensates them for the cost of the additional bottles they have to open and test. Instead of asking them to open $400$, we can ask them to open `r first.crossing`. That's the first $n$ at which the 95th percentile of the sampling distribution is less than or equal to $.02$, so it's the cheapest way to ensure that 95% of the distributor's tests result in a delivery that does get accepted. 
+
+This is, of course, all a bit contrived. There's no particular reason for the brewer to want 95% of shipments to get accepted vs. 96% or 95.5%, especially if they're not getting paid for the deliveries that get rejected. 
+:::
+
 
 # Problem 4
 
@@ -380,6 +501,17 @@ $$
 Explain why the blue interval on the left looks about the same as the black one but the one on the right is wider.
 Why might you want to use these blue intervals instead of the black ones?
 :::
+
+::: {.callout-note}
+### Extra Credit Problems.
+This one was meant to be a little unfamiliar---something you couldn't do on autopilot even if 
+ you had perfect recall of the lectures and homeworks. I will put something a bit like this on
+ the exam, but it'll be an extra credit problem and clearly identified as an extra credit problem. 
+If want to prepare for it, you might want to think a little bit more about $\hat\sigma_2$ 
+and its relationship to the usual estimate of the standard deviation of the sample mean $\bar Y$, 
+$\hat\sigma = \sqrt{\frac{1}{n}\sum_{i=1}^n (Y_i - \bar Y)^2 / n}$. 
+:::
+
 ::: {.callout-solution}
 What we've done is made $\hat\sigma$ the root-mean-squared distance of a draw $\hat\theta^\star$ from our estimator's bootstrap sampling distribution from the sample's mean $\bar Y$ instead of from the bootstrap sampling distribution's mean. When we're using the estimator $\hat\theta_2$, $\bar Y$ *is* the bootstrap sampling distribution's mean, so nothing changes. When we're using the estimator $\hat\theta_2$, it's not---our draws $\hat\theta^\star$ tend to be lower---so the root-mean-squared distance to $\bar Y$ is bigger than the standard deviation of $\hat\theta_2$. We might want to use these because, when we have a biased estimator, they get wider to account for the bias, which improves coverage. 
 
