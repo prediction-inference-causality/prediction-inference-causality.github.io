@@ -76,6 +76,7 @@ ggplot() + geom_histogram(aes(x=theta.hat.star, y=after_stat(density)),
 ```
 
 ::: {.callout-note}
+### What Your Answers Should Look Like
 When you answer the 'What does this code calculate?' questions below, 
 please phrase your answer in statistical terms. Say things like 
 'the sample _'or 'the _ sampling distribution' or 'a _ based on _ approximation'
@@ -156,143 +157,149 @@ mean(Y) + 1.96* sd(theta.hat.star)
 
 :::
 
-:::  {.callout-exercise}
-### Part F 
-How would you calculate roughly the same thing as in Part D and Part E if you had `theta.hat.star` and nothing else?
-
-*Hint.* You may want to take a look at the extra credit problem at the end of the exam. 
-The answer to this one is not-all-that-hidden in the question to that one.
-:::
-
 # Problem 2 
 
-Suppose that you've drawn a sample $Y_1 \ldots Y_{n}$ of size $n=75$ with replacement from a binary population $y_1 \ldots y_{m}$
-of size $m=99$. You want a 95% confidence interval for $\theta$, the proportion of 1s in the population, but you want to do the 
-calculations yourself, so you ask a classmate to do it. You tell them the sample proportion $\hat\theta$ is $1/3$ and the sample and population sizes, but you forget to tell them you sampled with replacement, so they do the calculation as if you sampled *without replacement*. 
+Suppose that you've drawn a sample $Y_1 \ldots Y_{n}$ of size $n=998$ with replacement from a binary population $y_1 \ldots y_{m}$
+of size $m=1332$. You want a 95% confidence interval for $\theta$, the proportion of 1s in the population, but you don't want to do the 
+calculations yourself, so you ask a classmate to do it. You tell them the sample proportion $\hat\theta$ is $1/3$ and the 
+sample and population sizes, but you forget to tell them you sampled with replacement, so they do the calculation as if you sampled *without replacement*. 
 
-Here's a plot that's pretty informative about what's going on. On the left is the sampling distribution estimate you'd have used for calibration if we'd done it yourself---the binomial distribution for $n$ trials with success probability $\hat\theta$. This is a good estimate of $\hat\theta$'s actual sampling distribution. On the right is the Hypergeometric distribution your friend used for calibration. I've drawn the interval your friend gave you on top of both. I've also drawn dotted vertical lines at the endpoints of the interval.
+Here's a plot that's pretty informative about what's going on. On the left is the Binomial sampling distribution estimate you'd have used for calibration if we'd done it yourself. On the right is the Hypergeometric estimate your friend used for calibration. I've drawn the interval your friend gave you on top of both. I've also drawn dotted vertical lines at the endpoints of the interval.
 
 ```{r}
 #| echo: false
 #| fig-width: 5.5
 #| layout-ncol: 2
+#| fig-cap: 
+#|  - The Binomial distribution for n trials with success probability 1/3   
+#|  - The Hypergeometric distribution for n trials with success probability 1/3 in a population of size m
 
-n = 75
-m = 99
-theta.hat = 25/75 
-x = (0:75)/75 
+n = 998
+m = 1332
+theta.hat = 1/3 
+x = (0:998)/998
 xx = seq(0,1,by=.001)
 
 scales = list(scale_x_continuous(breaks=seq(0,1,by=1/10)),
-              scale_y_continuous(breaks=seq(0,1,by=1/20)), 
-              coord_cartesian(xlim=c(.1,.55), ylim=c(0,.2)),
+              scale_y_continuous(breaks=seq(0,1,by=1/100)), 
+              coord_cartesian(xlim=c(.25,.4), ylim=c(0,.06)),
               labs(x='', y=''))
 sigma.hat.with = sqrt(theta.hat*(1-theta.hat)/n)
 sigma.hat.without = sqrt(((m-n)/(m-1))*theta.hat*(1-theta.hat)/n)
 
 ggplot() + geom_col(aes(x=x, y=dbinom(x*n, size=n, prob=theta.hat)), alpha=.5) + 
-        #   geom_line(aes(x=xx, y=(1/n)*dnorm(xx, theta.hat, sigma.hat.with))) + 
-           geom_pointrange(aes(x=theta.hat, xmin=theta.hat-2*sigma.hat.without, xmax=theta.hat+2*sigma.hat.without, y=.04)) +
-           geom_vline(xintercept=c(theta.hat-2*sigma.hat.without, theta.hat+2*sigma.hat.without), linetype='dotted') +
+           geom_pointrange(aes(x=theta.hat, xmin=theta.hat-2*sigma.hat.without, xmax=theta.hat+2*sigma.hat.without, y=.01)) +
+           geom_vline(xintercept=c(theta.hat-2*sigma.hat.without, theta.hat+2*sigma.hat.without), linetype='dotted') + 
+           geom_vline(xintercept=c(theta.hat), alpha=.2) + 
            scales
 ggplot() + geom_col(aes(x=x, y=dhyper(x*n, m*theta.hat, m*(1-theta.hat), n)), alpha=.5) + 
-        #   geom_line(aes(x=xx, y=(1/n)*dnorm(xx, theta.hat, sigma.hat.without))) + 
-           geom_pointrange(aes(x=theta.hat, xmin=theta.hat-2*sigma.hat.without, xmax=theta.hat+2*sigma.hat.without, y=.04)) +
-           geom_vline(xintercept=c(theta.hat-2*sigma.hat.without, theta.hat+2*sigma.hat.without), linetype='dotted') +
-           scales 
+           geom_pointrange(aes(x=theta.hat, xmin=theta.hat-2*sigma.hat.without, xmax=theta.hat+2*sigma.hat.without, y=.01)) +
+           geom_vline(xintercept=c(theta.hat-2*sigma.hat.without, theta.hat+2*sigma.hat.without), linetype='dotted') + 
+           geom_vline(xintercept=c(theta.hat), alpha=.2) + 
+           scales
+
 ```
 
-Let's think about the interval estimator you're using. It's $\hat\theta \pm w_H(\hat\theta)/2$ where $w_H(\theta)$ is the width of the middle 95% of a Hypergeometric distribution. In particular, if we shuffle a deck of $m$ cards with $m\theta$ red cards and $m(1-\theta)$ black cards, that Hypergeometric distribution is the distribution of the fraction of the top $n$ cards that are red.  
+This tells you a lot. But calibration isn't really about a single interval estimate. It's about an *interval estimator*: a function of the sample that gives you an interval estimate. So let's define the one we're using. Let $w_H(x)$ be the width your friend would have used if you'd told them the sample proportion was $x$---the width of the middle 95% of the sample-and-population-size-appropriate Hypergeometric distribution when $x$ is the proportion of 1s in the population. Your interval estimator is $\hat\theta \pm w_H(\hat\theta)/2$. 
 
-::: {.callout-exercise}
-Roughly what is the coverage probability of the interval estimator $\hat\theta \pm w_H(\hat\theta)/2$: 5%, 33%, 50%, 66%, or 95%? 
-
-*Hint.* Use the picture. If you're not sure because you're having trouble 'measuring the picture' accurately, here's a tip that may help. 
-If you want to compare the area in the middle of a histogram to the area at the edges, think about the edges as two identical triangles. 
-The combined area of the two triangles is the area of *a rectangle* with the same width and height as one of the triangles---the rectangle
-we get by rotating one of the triangles 180 degrees and setting it on top of the other. Compare the area of that *rectangle* to the area of the middle of the histogram. If you can fit 19 copies of the rectangle in the middle of the histogram, you've got 95% coverage. 
-If you can fit 2 copies of the rectangle in the middle of the histogram, you've got 66% coverage. If you can fit 1 copy, 
-you've got 50% coverage.
-:::
-
-# Problem 3
-
- Suppose you have a sample $Y_1 \ldots Y_n$ drawn with replacement from a population $y_1 \ldots y_m$ with mean $\theta$ and standard deviation $\sigma$. 
- You're going to answer a few questions about the following estimators for $\theta$: $\hat\theta_1 = Y_1$ and $\hat\theta_2 = \frac{1}{2n} \sum_{i=1}^n Y_i$.
- *You may need to do some calculations to answer them, but you do not need to show your work. Just state your answers. If these are at all hard to find, e.g. because you've written out a long calculation, please circle them.*
+If you want to calculate the coverage probability of this interval estimator *exactly*, you could. Or you could if you had a computer. The last extra credit problem on the calibration homework was about this. But to start with, let's make this simpler.
 
 ::: {.callout-exercise}
 ### Part A
-What are these estimators' expected values, $\E[\hat\theta_1]$ and $\E[\hat\theta_2]$?
+Suppose the sampling distribution estimate I drew above on the left is *exactly the same shape* as the actual sampling distribution of the sample proportion $\hat\theta$, like I just picked the actual sampling distribution up from where it was centered---at the population proportion $\theta$---and set it down centered at $\hat\theta$. And suppose that our friend wasn't really using the estimate we gave them to calculate the width of the interval. No matter what we told them about $\hat \theta$, they'd have given us an interval $\hat\theta \pm w_H/2$ where $w_H$ is the interval width we see in the plots above. If all that were true, roughly what is the coverage probability of the interval estimator $\hat\theta \pm w_H/2$: 5%, 33%, 50%, 66%, or 95%?
+
+*Hint.* If you're not sure because you're having trouble 'measuring the picture' accurately, here's a tip that may help. If you want to compare the area in the middle of a histogram to the area at the edges, think about the edges as two identical triangles. The combined area of the two triangles is the area of *a rectangle* with the same width and height as one of the triangles---the rectangle we get by rotating one of the triangles 180 degrees and setting it on top of the other. Compare the area of that rectangle to the area of the middle of the histogram. You've got 95% coverage if the ratio is 5/95=1/19, so you can fit 19 copies of the rectangle in the middle of the histogram. You've got 66% coverage if it's $1/2$, so you can fit 2 copies of the rectangle in the middle of the histogram. And you've got 50% coverage if you can fit in one copy of the rectangle.
 :::
-::: {.callout-solution}
-$$
-\begin{aligned}
-\E[\hat\theta_1] 
-&= \E[Y_1] = \theta \\
-\E[\hat\theta_2] 
-&= \E\qty[ \frac{1}{2n} \sum_{i=1}^n Y_i] \\
- &= \frac{1}{2n} \E\qty[ \sum_{i=1}^n Y_i]\\
- &= \frac{1}{2n} \qty(\sum_{i=1}^n \E[Y_i])\\
- &=\frac{1}{2n} \qty(\sum_{i=1}^n \theta )\\
- &=\frac{1}{2n} n\theta \\
- &= \frac{\theta}{2}
-\end{aligned}
-$$
+
+Now let's get back to reality. Your interval estimate really is $\hat\theta \pm w_H(\hat\theta)/2$ where $w_H(x)$ is as it is described above Part A.
+And what's drawn above on the left really is the Binomial distribution for $n$ trials with success probability $\hat\theta$, not a picked-up-and-moved version of the Binomial for success probability $\theta$. To help make sense of what these differences mean, I've provided you with a new version of a familiar plot. It's the plot we used, at the end of our first lecture on real-world calibration, to argue that we could get away with calibrating an interval estimate around $\hat\theta$ as if its sampling distribution where Binomial with success probability $\hat\theta$ instead of $\theta$ itself.
+
+Here is the plot. It shows the Binomial distribution for success probability $x$ and the corresponding version of our interval estimate, $x \pm w_H(x)/2$, at 3 values of $x$: $x=\hat \theta$ and $x=\hat\theta \pm 1.96\sqrt{.5^2/n}$. On the left, we see those things where they are. On the right, they're shifted so they're centered at zero.
+```{r}
+#| echo: false
+#| layout-ncol: 2
+#| fig-width: 5.5
+
+alpha = .003
+K = 3
+binom.width = function(p, n, alpha=alpha) {
+  2*qnorm(1-alpha/2)*sqrt(p*(1-p)/n)
+}
+hyper.width = function(p, n, m, alpha=alpha) {
+  2*qnorm(1-alpha/2)*sqrt(p*(1-p)*(m-n)/(m-1)/n)
+}
+height = (1/2)*max(dhyper(0:n, m*theta.hat, m*(1-theta.hat), n))
+
+thetas = c(theta.hat-1.96*sqrt(.25/n), theta.hat, theta.hat+1.96*sqrt(.25/n))
+density.stability.plot = ggplot() + 
+           geom_line(aes(x=x/n, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=thetas, x=0:n), alpha=.5) +
+           geom_pointrange(aes(x=p, xmin=p-w/2, xmax=p+w/2, y=y, color=factor(p)), data=data.frame(p=thetas, w=hyper.width(thetas, n, m,alpha=.05), y=c(.3,.375,.45)*height)) +
+           scales + guides(color=FALSE) + labs(x='',y='')
+
+centered.scales = list(
+  scale_x_continuous(breaks=seq(-1,1,by=1/10)),
+  scale_y_continuous(breaks=seq(0,1,by=1/100)), 
+  coord_cartesian(xlim=c(-.075,.075), ylim=c(0,.06)),
+  labs(x='', y=''))
+centered.density.stability.plot = ggplot() + 
+           geom_line(aes(x=x/n-p, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=thetas, x=0:n), alpha=.5) +
+           geom_pointrange(aes(x=0, xmin=-w/2, xmax=w/2, y=y, color=factor(p)), data=data.frame(p=thetas, w=hyper.width(thetas, n, m, alpha=.05), y=c(.3,.375,.45)*height)) + 
+           centered.scales + guides(color=FALSE) + labs(x='',y='')
+           
+density.stability.plot
+centered.density.stability.plot
+```
+
+::: {.callout-exercise}
+Is your answer to Part A is a good approximation to the actual coverage of your interval estimate?  
+In a sentence or two, referring to the plot above, explain why or why not. You may take as a given that $\theta \in \hat\theta \pm 1.96\sqrt{.5^2/n}$. 
+
+*Extra credit*. In a sentence, explain why it's pretty likely that 
+$\theta \in \hat\theta \pm 1.96\sqrt{.5^2/n}$. 
+:::
+
+
+# Problem 3
+
+ Suppose you have a sample $Y_1 \ldots Y_n$ drawn with replacement from a population $y_1 \ldots y_m$ with mean $\theta$ and standard deviation $\sigma$. You're going to answer a few questions about a very simple estimator for $\theta$: $\hat\theta=Y_1$. 
+
+::: {.callout-exercise}
+### Part A
+What is this estimator's expected value, $\E[\hat\theta]$?
 :::
 
 ::: {.callout-exercise}
 ### Part B
-What are these estimators' biases, $\E[\hat\theta_1] - \theta$ and $\E[\hat\theta_2] - \theta$?
-:::
-::: {.callout-solution}
-$$
-\begin{aligned}
- \E[\hat\theta_1] - \theta &= \theta - \theta = 0 \\
- \E[\hat\theta_2] - \theta &= \frac{\theta}{2} - \theta = -\frac{\theta}{2}
-\end{aligned}
-$$
+What is this estimator's bias, $\E[\hat\theta]-\theta$?
 :::
 
 ::: {.callout-exercise}
 ### Part C
-What are these estimators' variances, $\Var[\hat\theta]$ and $\Var[\hat\theta_2]$?
-:::
-::: {.callout-solution}
- $$
- \begin{aligned}
- \Var\qty[\tilde{Y}] &= \Var\qty[ \frac{1}{n-2} \displaystyle \sum_{i=1}^n Y_i] \\
- &= \frac{1}{(n-2)^2} \Var[ \sum_{i=1}^n Y_i]\\
- &= \frac{1}{(n-2)^2} \qty(\sum_{i=1}^n V[Y_i])\\
- &=\frac{1}{(n-2)^2} \qty(\sum_{i=1}^n \sigma^2 )\\
- &=\frac{1}{(n-2)^2} n\sigma^2 \\
- &= \frac{n\sigma^2}{(n-2)^2}
-\end{aligned}
-$$
+What is this estimator's variance, $\Var[\hat\theta]$? 
 :::
 
 ::: {.callout-exercise}
 ### Part D
 The plot below shows the sampling distributions of three estimators at three sample sizes. 
-The vertical line indicates the mean of the sampling distribution. Which of these estimators is
-$\tilde{Y}$? Is it a, b, or c?
+The vertical line indicates the mean of the sampling distribution. Which of these is $\hat\theta$: estimator a, b, or c?
 
 ```{r}
 #| echo: false
 #| out-width: 6.5in 
 #| fig-asp: 1
 set.seed(1234)
-mu=4
+mu = 4
 sigma = 1
 
-error = 2*rnorm(100000)
-bias = list(a=function(n) 0, b=function(n) 2*mu/(n-2), c=function(n) 2*mu/(40-2))
-se = function(n) { sqrt(n*sigma^2 / (n-2)^2) }
+error = rnorm(100000)
+bias = list(a=function(n) 0, b=function(n) 2*mu/(n-2), c=function(n)0)
+se = list(a=function(n) sigma, b=function(n) { sqrt(n*sigma^2 / (n-2)^2) }, c=function(n) { sigma/sqrt(n) })
 
 plotdata = expand_grid(estimator=names(bias), n=c(10,20,40)) %>%
   pmap(function(estimator, n) {
     thebias = bias[[estimator]](n)
-    data.frame(estimator=estimator, n=n, muhat=thebias + error * se(n))
+    these = se[[estimator]](n)
+    data.frame(estimator=estimator, n=n, muhat=thebias + error * these)
     }) %>% bind_rows() 
 summaries = plotdata %>% group_by(n, estimator) %>% summarize(mean=mean(muhat))
 
@@ -304,7 +311,7 @@ signs  = case_when(
 offsets = case_when(
   breaks != 0 ~ sprintf('%d', abs(breaks)),
   breaks == 0 ~ '')
-labels.abstract = sprintf('μ %s %s', signs, offsets)
+labels.abstract = sprintf('θ %s %s', signs, offsets)
 
 ggplot(plotdata) + geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100, alpha=.4) + 
                    geom_vline(aes(xintercept=mean), data=summaries) + 
@@ -315,20 +322,23 @@ ggplot(plotdata) + geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100,
 ```
 
 :::
-::: {.callout-solution}
-It's b. $a$ is unbiased and $c$'s bias doesn't decrease with $n$.
-:::
 
 ::: {.callout-exercise}
 ### Part E 
 
 Suppose $Y_1 \ldots Y_n$ is the sample from Problem 1. 
-On the two grids below, sketch the bootstrap sampling distributions of $\hat\theta_1$ and $\hat\theta_2$.
-Indicate the sampling distribution's mean and standard deviation on each sketch.
+On one of the grids below, sketch the bootstrap sampling distribution of $\hat\theta$. 
+Then indicate the mean and the mean &plusmn; 1 standard deviation on your sketch. 
 
-On the grids I've given you, I've left off the actual numbers labeling the 'ticks' on the x and y axes.
-That way, you can choose the scale for each sketch to make them as easy as possible to draw. When you 
+I've given you two grids so that, if you've attempted a drawing in pen or have hit 
+the limit of what your eraser can handle, you can cross out one grid and work on the other.
+On the grids, I've left off the actual numbers labeling the 'ticks' on the x and y axes.
+That way, you can choose the scale to make it as easy as possible to draw. When you 
 have chosen a scale, please do label those ticks.
+
+*Hint*. In more formal notation, the estimator we're talking about is the result of applying a function of $n$ variables that always gives you the first one, $\hat\theta(a_1 \ldots a_n) = a_1$,
+to the sample $Y_1 \ldots Y_n$: $\hat\theta(Y_1\ldots Y_n) = Y_1$. Its bootstrap sampling distribution is the distribution of estimates we get when we apply this function to bootstrap samples, i.e., to
+samples $Y_1^* \ldots Y_n^*$ drawn with replacement from the sample $Y_1 \ldots Y_n$.
 :::
 
 
@@ -380,9 +390,78 @@ i.e. an interval of the form $\hat\theta \pm .01$, roughly how many voters shoul
 Choose the closest number from this list: 100, 1000, 10000, 100000.
 ::: 
 
-## Problem 5 (Extra Credit)
+# Problem 5 (Extra Credit)
+
+In this problem, we're going to be thinking about the bootstrap
+in more formal terms than usual. Suppose we have an estimator $\hat\theta$ that
+we can think of as the result of applying a function of $n$ variables, $\hat\theta(a_1 \ldots a_n)$,
+to the sample $Y_1 \ldots Y_n$: $\hat\theta = \hat\theta(Y_1 \ldots Y_n)$. 
+We usually calculate its bootstrap sampling distribution by histogramming 
+bootstrap estimates  $\hat\theta^\star=\hat\theta(Y_1^\star \ldots Y_n^\star)$ 
+that we get by applying the function $\hat\theta$ to bootstrap samples 
+$Y_1^\star \ldots Y_n^\star$ drawn, with replacement, from our original sample $Y_1 \ldots Y_n$.
+The thing we see when we do this is a *conditional distribution*. 
+It's the distribution of  $\hat\theta^\star$ conditional on the original sample $Y_1 \ldots Y_n$. 
+
+Really, what we see is a histogram approximation to it, but we can draw as many bootstrap
+samples as we want, so we can draw a near-perfect histogram approximation if we want to.
+Let's forget about the histogram stuff---I mention it just for the sake of familiarity--- 
+and think about the conditional distribution we're using the histogram to visualize.
+
+When we talk about the mean and variance of the bootstrap sampling distribution, 
+what we're talking about are conditional expectations. They're 
+'second stage expected values' if you think of a multi-stage sampling process 
+where you first draw $Y_1 \ldots Y_n$ and then draw $Y_1^\star \ldots Y_n^\star$
+which is, after all, what we're doing.
+
+$$
+\begin{aligned}
+&\E[\hat\theta^\star \mid Y_1 \ldots Y_n]   && \qqtext{  is the bootstrap sampling distribution's mean.} \\
+&\Var[\hat\theta^\star \mid Y_1 \ldots Y_n] && \qqtext{  is the bootstrap sampling distribution's variance.}
+\end{aligned}
+$$
+
+Here we're going to going to talk about the bootstrap sampling distribution of the sample mean $\hat\theta=\frac1n \sum_{i=1}^n Y_i$.
 
 ::: {.callout-exercise}
-### Stuff
+### Part A
+Whenever we draw the bootstrap sampling distribution of a sample mean $\hat\theta$, its mean $\E[\hat\theta^\star \mid Y_1 \ldots Y_n]$ always seems to be the sample mean $\hat\theta$ itself. 
 
-::: 
+Using what you know about the conditional distribution of 
+$Y_1^\star \ldots Y_n^\star$ given $Y_1 \ldots Y_n$, calculate 
+this conditional expectation and show that it's the sample mean $\hat\theta=\bar Y$.
+:::
+
+::: {.callout-exercise}
+### Part B 
+In our practice exam, we used the bootstrap sampling distribution's 
+standard deviation as an estimate of the standard deviation of our 
+actual sampling distribution. It seemed to work. 
+
+Find a formula,
+in terms of $Y_1 \ldots Y_n$, for the bootstrap sampling distribution's variance. Then explain why using the bootstrap variance is a reasonable alternative to using the usual formula: $\hat\sigma^2/n$ where $\hat\sigma^2=\frac{1}{n}\sum_{i=1}^n (Y_i-\bar Y)^2$ is the sample variance.
+:::
+
+
+::: {.callout-exercise}
+### Part C 
+Repeat Part A for the 'mean with prior observations', 
+$\hat\theta=\frac{1}{n_0+n}\left(n_0\theta_0 + \sum_{i=1}^n Y_i\right)$. 
+To keep your calculations compact, it may be helpful to write this 
+as a simple weighted average of the sample mean and the constant $\theta_0$:
+it's $a\theta_0 + b\bar Y$  where $a$, $b$, and $\theta_0$ are constants and $a+b=1$. 
+
+If we think of our 'bootstrap estimation target' as $\theta^\star = \bar Y$, the mean in the 'population' our bootstrap sample is drawn from, what is this estimator's *conditional bias* 
+$\E[\hat\theta^\star \mid Y_1 \ldots Y_n] - \theta^\star$? Suppose that, thinking of this as an estimate of your actual estimator's bias $\E[\hat\theta] -\theta$, you define a *bias-corrected* version of your estimator by subtracting this estimate from your estimator.
+
+$$
+ \hat\theta_{bc} = \hat\theta - \text{bias}^\star 
+ \qfor
+ \bias^\star = \E[\hat\theta^\star \mid Y_1 \ldots Y_n] - \theta^\star
+$$
+
+What's the bias of your bias-corrected estimator?
+What about its variance? Is it larger or smaller than the variance of
+your original estimator $\hat\theta$?
+
+:::
