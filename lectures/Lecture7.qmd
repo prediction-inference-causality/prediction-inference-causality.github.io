@@ -17,6 +17,13 @@ earnings.jitter = ggplot(earnings) + geom_point(aes(x=education, y=income, color
 earnings.scatter = ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
                               size=dot.size, alpha=.1) +
                scale_x() + scale_y() + guides(color=FALSE) 
+
+earnings.jitter.pop = ggplot(pop.earnings) + 
+    geom_point(aes(x=degree, y=income, color=degree), 
+               size=.2, position=position_jitter(seed=0,w=.3), alpha=.1) +
+     scale_y() + guides(color='none')
+
+with.summaries = stat_summary(aes(x=degree, y=income), geom="pointrange", fun.data=mean_sd)
 ```
 
 ```{r}
@@ -46,6 +53,11 @@ Ignore the gaps at 15 and 17 years for now. We'll come back to them.
   - To visualize it, I've marked each one on a map. 
   - To display some of the information we have, I've made a table.
 - I've used color to emphasize the dichotomous view of education we've been using.
+
+### Sampling stuff--mix in  
+- In these examples, our sample was drawn with replacement from some population. Or we're pretending it was.
+- In this one, it's the population of all California residents between 25 and 35 with at least an 8th grade education.
+
   
 :::: columns
 
@@ -59,14 +71,21 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1,
 
 ::: column
 
-```{r table-no-color}
+
+```{r table}
+style.tab = function(tab, cols=c('income', 'education','county'), nhead=3, ntail=1) {
+  tab$income50k = 0+(tab$income > 50000)
+  tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
+  tab$county = ifelse(tab$county=='los angeles', 'LA',  tab$county)
+  ellipsis.tab = tab[, cols] %>% ellipsis(nhead=nhead,ntail=ntail)
+  ellipsis.tab |>
+    kable |> kable_styling() |> 
+    row_spec(which(ellipsis.tab$education >= 16),  background=groupb) |>
+    row_spec(which(ellipsis.tab$education <  16),  background=groupa) 
+}
+
 tab = earnings[sample(nrow(earnings)), ]
-tab$income = sprintf('$%dk', round(as.numeric(tab$income) / 1000))
-ellipsis.tab = tab[, c('income', 'education', 'age', 'county')] %>% ellipsis(nhead=8,ntail=2)
-ellipsis.tab %>%
-  kable %>% kable_styling() %>% 
-  row_spec(which(ellipsis.tab$education >= 16), background=twocolor.green) %>%
-  row_spec(which(ellipsis.tab$education <  16),  background=twocolor.red) 
+style.tab(sample.tab, cols=c('income', 'education', 'age', 'county'), nhead=8, ntail=2)
 ```
 :::
 
@@ -77,11 +96,17 @@ The locations shown on the map are made up. They're not the actual locations of 
 The survey includes some location information for some people, but as you can see in the table, not for everyone.
 :::
 
-## Visualization
+## A Reminder about Visualization
 
 ```{r}
-#| out-height: 500px
+#| layout-ncol: 2
+#| fig-width: 7 
+#| fig-cap: 
+#|   - with jitter 
+#|   - without jitter
+
 earnings.jitter
+earnings.scatter
 ```
 
 - Our primary visualization will be a *scatter plot*. It shows a dot for each person in our sample. 
@@ -91,12 +116,95 @@ earnings.jitter
   - This is called 'jittering'. Sometimes a plot like this is called a 'jitter plot'.
 - As before, we can use color to highlight the categories of people [with]{.twocolor-green} and [without]{.twocolor-red} 4-year degrees.
 
-## The Same Thing Without Fuzz
+
+For illustration, I've made up a fake population that looks like a bigger version of the sample.
+
+## Our Estimator and Target
+
+::: {.panel-tabset}
+### A Map 
 
 ```{r}
-#| out-height: 500px
-earnings.scatter
+#| layout-ncol: 2 
+#| fig-width: 7
+ca.plot + 
+ geom_point(aes(x=long, y=lat, color=degree), data=pop.earnings, size=.02, alpha=.1) + 
+ guides(color='none')
+ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=earnings, size=.1, alpha=.5) +
+  guides(color='none')
 ```
+
+### A Scatter Plot 
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7 
+#| fig-cap: 
+
+earnings.jitter.pop
+earnings.jitter 
+```
+
+
+### A Table
+
+:::: columns
+::: column
+```{r}
+style.tab(pop.tab)
+```
+:::
+::: column
+```{r}
+style.tab(sample.tab)
+```
+:::
+::::
+
+:::: columns
+::: column
+### Population
+$$
+(x_1, y_1) \ldots (x_m, y_m)
+$$
+:::
+::: column
+### Sample
+$$
+(X_1, Y_1) \ldots (X_n, Y_n)
+$$
+:::
+::::
+
+## Group Means 
+
+Or something? Last slide? Who knows.
+
+:::: columns
+::: column
+### Estimation Target
+$$
+\begin{aligned}
+\mu(1) - \mu(0) \qfor \mu(x) 
+&= \frac{1}{m_x}\sum_{j:x_j = x } y_j \\
+\qqtext{ where } \quad m_x &= \sum_{j:x_j=x} 1 
+\end{aligned}
+$$
+:::
+::: column
+### Estimator
+$$ 
+\begin{aligned} 
+\hat\mu(1) - \hat\mu(0) 
+\qfor \hat\mu(x) &= \frac{1}{N_x}\sum_{i:X_i=x} Y_i \\
+\qqtext{ where } \quad N_x &= \sum_{i:X_i=x} 1.
+\end{aligned}
+$$
+:::
+::::
+
+ - Pop only. No stats stuff.
+ - Next time, stats stuff. 
+
 
 ## Summarization
 ```{r}
