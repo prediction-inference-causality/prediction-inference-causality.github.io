@@ -36,7 +36,10 @@
 - For more examples in intro: There are some rules for this stuff, but let’s do it from first principles. We’ll get to the rules later. Maybe?
 - Check whether there's stuff from lecture on Cond Expectations that we want to borrow 
   - e.g. connection between population mean and variance and RVs drawn uniformly-at-random. 
-
+- Figure out some way of doing irrelevance of 'independent' conditioning variables 
+  - The point: unbiasedness of subsample mean when sampling w/ replacement
+  - It is unbiased, right?
+  
 # Bootstrap Lecture
 
 - Short. Swap to lab (3) works.
