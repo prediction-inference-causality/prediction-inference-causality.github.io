@@ -1,0 +1,333 @@
+---
+title: "Week 5 Homework"
+format: html
+---
+::: hidden
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+$$
+:::
+
+# Summary
+{{< include shared-code.qmd >}}
+```{r}
+set.seed(1)
+theme_set(whitebw.theme())
+```
+
+This week's homework addresses two issues we've left hanging.
+
+::: {.panel-tabset}
+### 1. Why We Usually Get Near-Perfect Calibration 
+
+::: {#fig-calibration}
+```{r}
+#| layout-ncol: 2
+#| fig-width: 5
+#| fig-cap: 
+#|   - "Three sampling distributions and the interval spanning their middle 95%"
+#|   - "All the same stuff shifted so that it's centered at zero" 
+
+n = 625
+theta = .7
+binom.width = function(p,n,...) { width_cdf(\(x)pbinom(n*x, n, p), p, limits=c(0,1), ...) }
+height = max(dbinom(0:n, n, theta))   
+K = 3
+w95 = binom.width(theta, n, alpha=.05)
+thetas = c(theta-w95/2, theta, theta+w95/2)
+ws = thetas |> map_vec(\(p) binom.width(p,n,alpha=.05))
+
+density.stability.plot = ggplot() + 
+           geom_line(aes(x=x/n, y=dbinom(x,n,p)), data=expand.grid(p=theta, x=0:n), alpha=.5) +
+           geom_vline(aes(xintercept=thetas), linetype='dotted') +
+           geom_line(aes(x=x/n, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=thetas, x=0:n), alpha=.5) +
+           geom_pointrange(aes(x=p, xmin=p-w/2, xmax=p+w/2, y=.6*height*k/K, color=factor(p)), data=data.frame(p=thetas, w=ws, k=1:K)) +
+           xlim(.6,.8) + guides(color=FALSE) + geom_vline(xintercept=theta, color='green', size=1, alpha=.5)
+
+centered.density.stability.plot = ggplot() + 
+           geom_line(aes(x=x/n-p, y=dbinom(x,n,p)), data=expand.grid(p=theta, x=0:n), alpha=.5) +
+           geom_vline(aes(xintercept=thetas-theta), linetype='dotted') +
+           geom_line(aes(x=x/n-p, y=dbinom(x,n,p), color=factor(p)), data=expand.grid(p=thetas, x=0:n), alpha=.5) +
+           geom_pointrange(aes(x=0, xmin=-w/2, xmax=w/2, y=.6*height*k/K, color=factor(p)), data=data.frame(p=thetas, w=ws, k=1:K)) +
+           xlim(-.1,.1) + guides(color=FALSE) 
+           
+density.stability.plot
+centered.density.stability.plot
+```
+Our calibration plot, which shows a 'confidence interval' for our estimate of the sampling distribution. When we're estimating the population proportion $\theta=`r theta`$ using a sample of size $n=`r n`$, drawn with replacement, 95% of the time, you'll get an estimate somewhere between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} ones. And, as a result, the width of your interval estimate will be somewhere between the [red]{.fg style="color:red"} and [blue]{.fg style="color:blue"} widths. When we center everything, we see that these interval widths are almost identical. In particular,the widths of our intervals are much closer than their centers. What's that about?
+:::
+
+I know what you're thinking: we had a whole homework assignment on this. 
+But that's only half-right. In the [Week 2 Homework](https://qtm285-1.github.io/asssets/homework/week2-homework.html), 
+we focused on showing *that* we get near-perfect calibration, not really why. But using normal approximation, we can do the why part pretty easily. This'll be quick, and it'll involve a bit of calculus, which makes it a good warm-up 
+for what we'll do next.  It'll give us an opportunity to revisit some of our Week 2 stuff using a more formula-driven perspective, too.
+
+### 2. Variance Calculation for Comparisons 
+
+::: {#fig-nsw}
+```{r}
+#| layout-ncol: 2
+#| fig-width: 5
+#| fig-cap: 
+#|   - "The difference's bootstrap sampling distribution"
+#|   - "The ratio's bootstrap sampling distribution"
+nsw.data = read.csv('https://davidahirshberg.bitbucket.io/teaching/regression/fall2021/data/nsw.csv')
+nsw = nsw.data |> 
+  filter(dataset=='nsw') 
+
+X = as.numeric(nsw$treated)
+Y = as.numeric(nsw$income78)
+n = length(Y)
+
+difference = mean(Y[X==1]) - mean(Y[X==0])
+ratio = mean(Y[X==1]) / mean(Y[X==0])
+bootstrap.samples = map(1:10000, function(.) {
+    I = sample(1:n, n, replace=TRUE)
+    Xstar = X[I]
+    Ystar = Y[I]
+    data.frame(difference = mean(Ystar[Xstar==1]) - mean(Ystar[Xstar==0]),
+               ratio = mean(Ystar[Xstar==1]) / mean(Ystar[Xstar==0]))
+}) |> bind_rows()
+
+w95.boot = width(bootstrap.samples$difference, alpha=.05)
+interval = difference + c(-1,1)*w95.boot/2
+difference.interval.plot = ggplot() +
+  geom_histogram(aes(x=bootstrap.samples$difference), alpha=.3, bins=100) +
+  geom_vline(xintercept=difference, color='blue', alpha=.4) +
+  geom_pointrange(aes(x=difference, xmin=interval[1], xmax=interval[2], y=100), color='blue') 
+difference.interval.plot
+
+w95.boot = width(bootstrap.samples$ratio, alpha=.05)
+interval = ratio + c(-1,1)*w95.boot/2
+ratio.interval.plot = ggplot() +
+  geom_histogram(aes(x=bootstrap.samples$ratio), alpha=.3, bins=100) +
+  geom_vline(xintercept=ratio, color='blue', alpha=.4) +
+  geom_pointrange(aes(x=ratio, xmin=interval[1], xmax=interval[2], y=100), color='blue') + 
+  scale_x_continuous(breaks=seq(.9,2.1,by=.2))
+ratio.interval.plot
+```
+The bootstrap sampling distributions of the difference and ratio of mean post-program incomes between treated and non-treated participants in the National Supported Work Demonstration.
+:::
+
+I said, in our [Lecture on Comparing Two Groups](https://qtm285-1.github.io/assets/lectures/Lecture6.html#the-variance-of-differences-in-means),
+that you'd be calculating the variance of a difference in subsample means in this one. You'll be doing that and a little more: you'll be calculating,approximately, the variance of a *ratio* of subsample means, too. Because sometimes that's closer to what you want to know. People often say, for example, that women in this country earn 78 cents on the dollar for doing the same work as men. That's a ratio. Tackling this in addition to the difference won't be too much additional work. After a little bit of calculus, we basically wind up in the same place as we do for the difference.
+
+:::
+
+# Calculus Review: Linear Approximation
+
+We're going to be using *linear approximation* to simplify some of our calculations. Given a function $f(x)$, we can approximate it near 
+any point $x_0$ like this.
+$$
+f(x) \approx f(x_0) + f'(x_0)(x-x_0)
+$$
+
+Hopefully you remember that from calculus. If you like, you can call this *first-order Taylor approximation*. And there are a few formulas for the error of this approximation, which is called the *remainder in Taylor's Theorem*, in most calculus textbooks. 
+
+When we're thinking about functions of multiple variables, we use the multivariate version, which involves *partial derivatives*.
+$$
+\begin{aligned}
+f(x,y) 
+&\approx f(x_0,y_0) + \qty[\frac{\partial f}{\partial x}(x_0,y_0)] (x-x_0) \ + \ \qty[\frac{\partial f}{\partial y}(x_0,y_0)] (y-y_0).
+\end{aligned}
+$$
+
+# Why We Usually Get Near-Perfect Calibration 
+
+Suppose we've sampled with replacement from a binary population in which $\theta$ is the proportion of ones.
+If we use the sample mean $\hat\theta$ as our point estimate and calibrate a 95% confidence interval around it using normal approximation, this is the interval we get.
+
+$$
+\hat\theta \pm 1.96 \hat\sigma / \sqrt{n} \qfor \hat\sigma^2 = \hat\theta(1-\hat\theta) 
+$$
+
+On the other hand, the interval we'd want---assuming we're still happy to use normal approximation---uses the actual variance of our sample proportion, $\sigma^2=\theta(1-\theta)$, instead of the estimate $\hat\sigma^2$. @fig-calibration is an attempt to convince ourselves that it doesn't make much of a difference at all. I think I called the difference 'a fingernail thick' in lecture. Now you're going to quantify this difference. We'll assume that $\hat\theta$ is one of the 'good draws' from its sampling distribution, which for our purposes will mean that it's in the interval $\theta \pm 1.96\sigma / \sqrt{n}$, the middle 95% of the sampling distribution's normal approximation.
+
+::: {#exr-width-error  .callout-exercise}
+Suppose $\hat\theta \in \theta \pm 1.96\sigma / \sqrt{n}$ for $\sigma^2=\theta(1-\theta)$. 
+Find an approximate upper bound on the difference $|\hat w - w|$ between the estimated interval width $\hat w = 2 \times 1.96 \hat\sigma / \sqrt{n}$ and the ideal-but-unusable interval width $w= 2 \times 1.96 \sigma / \sqrt{n}$. 
+What *fraction* of the ideal width $w$ is your bound? 
+
+
+Your bound, both in absolute terms and as a fraction of $w$, should be a function of $\theta$ and $n$.
+
+
+You'll probably want to use linear approximation to do this.
+$$
+\hat\sigma - \sigma = f(\hat\theta) - f(\theta) \approx f'(\theta)(\hat\theta - \theta) \qfor f(x) = \sqrt{x(1-x)}. 
+$$
+
+:::
+
+::: {#exr-width-error-interp .callout-exercise}
+Are there values of $\theta$ where this difference $\hat w - w$ is a large fraction of the ideal width $w$?
+If so, how large? Use @fig-width-curves to explain what's going on in intuitive terms.
+:::
+
+::: {#fig-width-curves}
+```{r}
+#| echo: false
+#| warning: false
+#| layout-ncol: 3
+#| fig-height: 3
+#| fig-width: 3.5
+#| fig-cap: 
+#| - "n=100"
+#| - "n=400"
+#| - "n=1600"
+
+thetas = seq(0,1,length.out=100)
+widths.100  = sapply(thetas, function(theta) binom.width(theta, n = 100, alpha = 0.05))
+widths.500  = sapply(thetas, function(theta) binom.width(theta, n = 400, alpha = 0.05))
+widths.1000 = sapply(thetas, function(theta) binom.width(theta, n = 1600, alpha = 0.05))
+
+pad.diff = function(x) { 
+  diffx = diff(x)
+  c(diffx[1], diffx) 
+}
+
+df.100  = data.frame(theta = thetas, width = widths.100,  dw=pad.diff(widths.100))
+df.500  = data.frame(theta = thetas, width = widths.500,  dw=pad.diff(widths.500))
+df.1000 = data.frame(theta = thetas, width = widths.1000, dw=pad.diff(widths.1000))
+
+ggplot(df.100) + 
+    geom_line(aes(x = theta, y = width)) +
+    labs(x = "theta", y = "width") 
+
+ggplot(df.500) + 
+    geom_line(aes(x = theta, y = width)) + 
+    labs(x = "theta", y = "width'") 
+
+ggplot(df.1000) + 
+    geom_line(aes(x = theta, y = width)) +
+    labs(x = "theta", y = "width'") 
+
+```
+The width of the middle 95% of $\hat\theta$'s sampling distribution as a function of $\theta$ at three sample sizes $n$.\
+This should be familiar from the [Week 2 Homework](https://qtm285-1.github.io/asssets/homework/week2-homework.html). 
+:::
+
+# Variance Calculation for Comparisons
+
+## Differences in Means 
+
+::: {#fig-nsw}
+```{r}
+#| fig-width: 9
+ggplot(nsw) + 
+    geom_point(aes(x=treated, y=income78, color=factor(treated)), 
+    position = position_jitter(width = 0.2, height = 0), alpha=.2) + guides(color='none') + 
+    stat_summary(aes(x=treated, y=income78), fun.data=mean_sd, geom='pointrange') +
+    scale_x_discrete(labels=c('Control', 'Treated')) + scale_y_continuous(labels = scales::dollar) 
+```
+1978 income for participants in the National Supported Work Demonstration.
+:::
+
+In our [Lecture on Comparing Two Groups](https://qtm285-1.github.io/assets/lectures/Lecture6.html#/the-variance-of-differences-in-means), we talked about how to use subsample means to compare two groups. 
+In particular, we talked about the case that we've drawn a sample $(X_1,Y_1) \ldots (X_n,Y_n)$ with replacement from a population $(x_1,y_1) \ldots (x_m,y_m)$ in which $x_j \in \{0,1\}$ indicates membership in one of two groups, e.g. [treated]{.groupb} and [control]{.groupa} groups in @fig-nsw. And we talked about using the difference $\ingroupb{\hat\mu(1)}-\ingroupa{\hat\mu(0)}$ 
+in the mean of $Y_i$ for the subsamples in which $\ingroupb{X_i=1}$ and $\ingroupa{X_i=0}$ to estimate the corresponding difference $\ingroupb{\mu(1)}-\ingroupa{\mu(0)}$ in the population. 
+
+::: {#exr-review-unbiasedness .callout-exercise}
+We showed that an individual subsample mean $\hat\mu(x)$ is an unbiased estimator of the corresponding population mean $\mu(x)$. That implies that the difference of two such estimates, $\hat\mu(1)-\hat\mu(0)$, is an unbiased estimator of the difference of the corresponding population means, $\mu(1)-\mu(0)$.  
+
+Explain why the first implies the second. A sentence or even a couple words should do.
+:::
+
+We also calculated a formula for the variance of a subsample mean $\hat\mu(x)$.
+$$
+\Var[\hat\mu(x)] = \frac{\sigma^2(x)}{N_x} \text{ for } N_x = \sum_{i}1_{=x}(X_i) \qand \sigma^2(x) = \Var[Y_i \mid X_i=x]
+$$
+
+And I stated without proof a formula for the variance of the difference of two subsample means. 
+$$
+\Var\qty[\hat{\mu}(1)-\hat{\mu}(0)] = \E\qty[\frac{1}{N_1}\sigma^2(1)+\frac{1}{N_0}\sigma^2(0)] \text{ for } N_x = \sum_{i}1_{=x}(X_i)
+$$
+
+It's a simple formula. The variance of the difference in means is the sum of the variances of the two means. 
+Why is that the case? To start to see why, we can start from definitions and do a bit of arithmetic. 
+
+$$
+\begin{aligned}
+    \Var\qty[\hat{\mu}(1)-\hat{\mu}(0)] 
+    &= \E\qty[ \qty(\{\hat{\mu}(1) - \hat{\mu}(0)\} - \{\mu(1)-\mu(0)\})^2 ]  \\
+    &= \E\qty[ \qty(\{\hat{\mu}(1) - \mu(1)\} - \{\hat{\mu}(0) -\mu(0)\})^2 ] \\
+    &= \E\qty[ \qty(\{\hat{\mu}(1) - \mu(1)\})^2 ] + \E\qty[ \qty(\{\hat{\mu}(0) -\mu(0)\})^2 ] \\
+    &- 2\E\qty[ \{\hat{\mu}(1) - \mu(1)\}\{\hat{\mu}(0) -\mu(0)\}]
+\end{aligned}
+$$
+
+The first two terms here are the ones that appear in our formula above: the variances of the two means. For that formula to be correct, the last term has to be zero. It's up to you to prove that.
+
+:::{#exr-variance-crossterm  .callout-exercise}
+Complete the argument by proving that the 'cross term' is zero, i.e., that
+$$
+\E\qty[\{\hat{\mu}(1) - \mu(1)\}\{\hat{\mu}(0) -\mu(0)\}] = 0.
+$$
+:::
+
+::: {.callout-tip collapse="true"}
+### A Tip.
+Look over the calculation we used for one subsample mean $\hat{\mu}(x)$
+[here](https://qtm285-1.github.io/assets/lectures/Lecture6.html#/the-variance-of-the-subsample-mean).
+You'll want to use a lot of the same ideas: writing sums over our subsamples as sums over $1 \ldots n$ by putting in group indicators $1_{=x}(X_i)$, conditioning on $X_1 \ldots X_n$, the indicator trick, thinking about what happens when $j=i$ and $j\neq i$ in the double sum we get when we expand the product, etc. In the subsample meancalculation, the $j=i$ terms gave us some stuff that was nonzero. Why isn't that happening here?
+:::
+
+## Ratios of Means
+
+If $\hat\mu(1)-\hat\mu(0)$ is a good estimator of $\mu(1)-\mu(0)$, then shouldn't $\hat\mu(1)/\hat\mu(0)$ be a good estimator of $\mu(1)/\mu(0)$?  Let's look into it. To do this, we'll think of the ratio as a function of the two means.
+$$
+\frac{\hat\mu(1)}{\hat\mu(0)} - \frac{\mu(1)}{\mu(0)} = f(\hat\mu(1), \hat\mu(0)) - f(\mu(1), \mu(0)) \qfor f(x,y) = \frac{x}{y}.
+$$
+
+And we'll use *a linear approximation to this function* to think about this difference.
+
+$$
+\begin{aligned}
+f(\hat\mu(1), \hat\mu(0)) \approx f(\mu(1), \mu(0)) 
+&+ \qty[\frac{\partial f}{\partial x}(\mu(1), \mu(0))](\hat\mu(1) - \mu(1)) \\
+&+ \qty[\frac{\partial f}{\partial y}(\mu(1), \mu(0))](\hat\mu(0) - \mu(0))
+\end{aligned}
+$$
+
+This approximation should be good if $\hat\mu(1)$ and $\hat\mu(0)$ are close to $\mu(1)$ and $\mu(0)$. 
+
+::: {#exr-justify-taylor-approx  .callout-exercise}
+When our sample includes a reasonably large number of observations in both groups, 
+it's reasonable to expect that they should be close. With a sentence or two, or a rough sketch if you prefer, explain why. 
+:::
+
+Now that we've justified the approximation, let's use it to analyze our ratio estimator.
+
+:::{#exr-ratio-bias  .callout-exercise}
+Write out a formula for the linear approximation to the ratio estimator $\hat\mu(1)/\hat\mu(0)$ 
+in terms of $\mu(0)$, $\mu(1)$, $\hat\mu(1)-\mu(1)$, and $\hat\mu(0)-\mu(0)$. 
+Then approximate its bias by comparing the expected value of this linear approximation 
+to the estimation target $\mu(1)/\mu(0)$.
+:::
+
+::: {#exr-ratio-variance  .callout-exercise}
+By calculating the variance of the linear approximation to $\hat\mu(1)/\hat\mu(0)$ 
+you used in @exr-ratio-bias, find a formula approximating the variance of this ratio estimator.
+Use it to calculate a 95% confidence interval based on normal approximation for the ratio $\mu(1)/\mu(0)$ 
+in the National Supported Work Demonstration. Draw it on top of the plot of that estimator's bootstrap 
+sampling distribution in @fig-nsw. Does it look like your approximations are giving you something close 
+to what you'd get using the bootstrap?
+
+You'll want some information from [our discussion](https://qtm285-1.github.io/assets/lectures/Lecture6.html#/the-national-supported-work-demonstration) of this study in lecture.
+:::
+
+All of that ignores the error of our linear approximation as a potential problem.
+We should, if we like, be able to reason about this error using tools from calculus.
+
+::: {#exr-bias-bound .callout-exercise}
+*Extra Credit*. Using some version of Taylor's Theorem to characterize the error of the 
+linear approximation you've been working with, refine your answer to @exr-ratio-bias: 
+find an *upper bound* on the absolute value of the estimator's bias. This should be a formula
+involving $\mu(1)$, $\mu(0)$, and the subsample sizes $N_1$ and $N_0$. Compare it to your
+approximation of the estimator's standard deviation from @exr-ratio-variance. Are you
+worried that confidence intervals like the one you calculated in @exr-ratio-variance might
+have coverage well below the nominal level of 95%?
+:::
