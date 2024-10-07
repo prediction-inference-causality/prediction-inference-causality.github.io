@@ -10,25 +10,39 @@ subtitle: "Summarizing Trends involving Many Groups"
 
 ```{r scatter-plots}
 
+pop.dot.size = .75
+n = nrow(earnings)
+m = nrow(pop.earnings)
+
+# reduce size of pop 6x sample size to keep the browser happy
+pop.idx = c(1:5*n, (m-n+1):m) 
+
 earnings.jitter = ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
-                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.2) +
                    scale_x() + scale_y() + guides(color=FALSE)
                     
 earnings.scatter = ggplot(earnings) + geom_point(aes(x=education, y=income, color=degree), 
-                              size=dot.size, alpha=.1) +
+                              size=dot.size, alpha=.2) +
                scale_x() + scale_y() + guides(color=FALSE) 
 
-earnings.jitter.pop = ggplot(pop.earnings) + 
+earnings.jitter.pop = ggplot(pop.earnings[pop.idx, ]) + 
     geom_point(aes(x=education, y=income, color=degree), 
-               size=.2, position=position_jitter(seed=0,w=.3), alpha=.1) +
-     scale_y() + guides(color='none')
+               size=pop.dot.size, position=position_jitter(seed=0,w=.3), alpha=.2) +
+     scale_x() + scale_y() + guides(color='none')
 
-with.summaries = stat_summary(aes(x=degree, y=income), geom="pointrange", fun.data=mean_sd)
+pop.summaries = pop.earnings |> 
+  group_by(education) |> 
+  summarize(mean=mean(income), sd=sd(income), meanx=mean(education))
+
+with.summaries = function(pop) { 
+  pop.summaries = pop |> 
+    group_by(education) |> 
+  summarize(mean=mean(income), sd=sd(income), meanx=mean(education))
+  geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=pop.summaries)
+}
 ```
 
 ```{r}
-#| out-width: 1290px
-#| fig-asp: .32
 earnings.jitter
 ```
 
@@ -118,9 +132,9 @@ earnings.scatter
 
 ```{r}
 #| layout-ncol: 2 
-#| fig-width: 5
+#| fig-width: 5.5
 ca.plot + 
- geom_point(aes(x=long, y=lat, color=degree), data=pop.earnings, size=.02, alpha=.1) + 
+ geom_point(aes(x=long, y=lat, color=degree), data=pop.earnings, size=.02, alpha=.2) + 
  guides(color='none')
 ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=earnings, size=.1, alpha=.5) +
   guides(color='none')
@@ -129,7 +143,7 @@ ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=earnings, size=.1, a
 ### Scatter Plots
 ```{r}
 #| layout-ncol: 2
-#| fig-width: 5 
+#| fig-width: 7
 
 earnings.jitter.pop
 earnings.jitter 
@@ -141,12 +155,12 @@ earnings.jitter
 :::: columns
 ::: column
 ```{r}
-style.tab(pop.tab, nhead=6, ntail=2)
+style.tab(pop.tab, nhead=5, ntail=2)
 ```
 :::
 ::: column
 ```{r}
-style.tab(sample.tab, nhead=6, ntail=2)
+style.tab(sample.tab, nhead=5, ntail=2)
 ```
 :::
 ::::
@@ -167,17 +181,19 @@ style.tab(sample.tab, nhead=6, ntail=2)
   1. Choosing a target. We think about how we would summarize the population if we had surveyed everyone.
   2. Point estimation. However we would summarize the population, we do summarize our sample.  
   3. Interval estimation. We work out what our point estimator's sampling distribution tells us about our target.
-- What is new, now that we're taking a more granular view of education, is that there's a lot more to the first step.
-  - Today, all we'll do is think about what we might want to know. We'll talk as if we *had* surveyed everyone.
-  - Next time, we'll talk about point and interval estimation. It'll be familiar, but there'll be some new twists. 
+  
+  ### What is New
+  
+- Now that we're taking a more granular view of education, there's a lot more to the first step.
+- Today, all we'll do is think about what we might want to know. We'll talk as if we *had* surveyed everyone.
+- Next time, we'll talk about point and interval estimation. It'll be familiar, but there'll be some new twists. 
   
 
 ## Summarization
 ```{r}
 
 binary.summaries = function(earnings) { 
-  earnings |>
-          group_by(degree) %>% 
+  earnings |> group_by(degree) |> 
           summarize(mean=mean(income), 
                     sd=sd(income), 
                     meanx=mean(education), 
@@ -185,7 +201,7 @@ binary.summaries = function(earnings) {
 }
 
 earnings.jitter.pop + geom_pointrange(aes(x=meanx, y=mean, ymin=mean-sd, ymax=mean+sd), 
-                                      data=binary.summaries(pop.earnings))
+                                      data=binary.summaries(pop.earnings)) 
 ```
 
 - Looking at the dots alone, we can get rough answers to some simple questions.
@@ -199,10 +215,10 @@ earnings.jitter.pop + geom_pointrange(aes(x=meanx, y=mean, ymin=mean-sd, ymax=me
 
 ```{r}
 
-ggplot(pop.earnings) + geom_point(aes(x=coarsen(education, degree), y=income, color=degree), 
-                              size=dot.size, position=position_jitter(seed=0,w=.3), alpha=.1) +
+ggplot(pop.earnings[pop.idx, ]) + geom_point(aes(x=coarsen(education, degree), y=income, color=degree), 
+                              size=pop.dot.size, position=position_jitter(seed=0,w=.3), alpha=.2) +
                    scale_x() + scale_y() + guides(color=FALSE) + 
-                   geom_pointrange(aes(x=meanx.dichotomous, y=mean, ymin=mean-sd, ymax=mean+sd), data=binary.summaries)
+                   geom_pointrange(aes(x=meanx.dichotomous, y=mean, ymin=mean-sd, ymax=mean+sd), data=binary.summaries(pop.earnings))
 ```
 
 - It's worth visualizing the information lost by dichotomizing education.
@@ -217,18 +233,18 @@ ggplot(pop.earnings) + geom_point(aes(x=coarsen(education, degree), y=income, co
 
 ```{r}
 
-default.color = green
+default.color = twocolor.red 
 jitter = function(earnings, foreground=TRUE, color=default.color) { 
   earnings$foreground = foreground
   earnings$color = color
-  ggplot(earnings) + geom_point(aes(x=education, y=income, alpha=foreground, color=I(color)), 
-                                size=dot.size, position=position_jitter(seed=0,w=.3)) +
+  ggplot(earnings[pop.idx, ]) + geom_point(aes(x=education, y=income, alpha=foreground, color=I(color)), 
+                                size=pop.dot.size, position=position_jitter(seed=0,w=.3)) +
                                 scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.2)) + 
                                 guides(color=FALSE, alpha=FALSE)
 } 
                    
 jitter(pop.earnings) + 
-  stat_summary(aes(x=education, y=income), geom="pointrange", fun.data=mean_sd)
+  with.summaries(pop.earnings) 
 ```
 
 - Let's think about what we can do with the additional information we have now.
@@ -240,27 +256,27 @@ jitter(pop.earnings) +
     - 14 vs. 12: the value of a 2-year degree (only) vs. a high school degree (only).
 
 ## Column Comparisons as 'Forgetting'
-::: {.panel-tabset}
-
-### 18 vs. 16
+:::: r-stack 
+::: {.fragment .fade-out data-fragment-index="0"}
 ```{r}
 X = pop.earnings$education
-jitter(pop.earnings, foreground=X %in% c(18,16)) + 
-  stat_summary(aes(x=education, y=income), geom="pointrange", fun.data=mean_sd)
-```
-
-### 16 vs. 14
-```{r}
-jitter(pop.earnings, foreground=X %in% c(16,14)) + 
-  stat_summary(aes(x=education, y=income), geom="pointrange", fun.data=mean_sd)
-```
-
-### 14 vs. 12
-```{r}
-jitter(pop.earnings, foreground=X %in% c(14,12)) + 
-  stat_summary(aes(x=education, y=income), geom="pointrange", fun.data=mean_sd)
+jitter(pop.earnings, foreground=X %in% c(18,16)) +
+  with.summaries(pop.earnings[pop.earnings$education %in% c(18,16), ])
 ```
 :::
+::: {.fragment .current-visible data-fragment-index="0"}
+```{r}
+jitter(pop.earnings, foreground=X %in% c(16,14)) + 
+  with.summaries(pop.earnings[pop.earnings$education %in% c(16,14), ])
+```
+:::
+::: {.fragment .current-visible data-fragment-index="1"}
+```{r}
+jitter(pop.earnings, foreground=X %in% c(14,12)) + 
+  with.summaries(pop.earnings[pop.earnings$education %in% c(14,12), ])
+```
+:::
+::::
 
 - This is essentially the same as what we did when we dichotomized education.
   - We just 'forget' the other groups. We don't look at them. And all our pre-midterm stuff still works. 
@@ -272,6 +288,14 @@ jitter(pop.earnings, foreground=X %in% c(14,12)) +
 
 ## Coarsening
 
+:::: r-stack 
+::: {.fragment .fade-out data-fragment-index="0"}
+```{r}
+jitter(pop.earnings) + 
+  with.summaries(pop.earnings) 
+```
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
 ```{r}
 groups = factor(1:4, 
                levels=1:4, 
@@ -285,8 +309,8 @@ group = function(x) {
     18:20 ~ groups[4])
 }
 
-x = pop.earnings$education
-y = pop.earnings$income
+x = pop.earnings[pop.idx, ]$education
+y = pop.earnings[pop.idx, ]$income
 
 coarsened.summaries = data.frame(X=x, Y=y, G=group(x)) |> 
   group_by(G) |> 
@@ -294,9 +318,12 @@ coarsened.summaries = data.frame(X=x, Y=y, G=group(x)) |>
 
 
 ggplot() + geom_point(aes(x=coarsen(x,group(x)), y=y), 
-                      color=default.color, position=position_jitter(w=.3, seed=0), alpha=.3) +
+                      color=default.color, position=position_jitter(w=.3, seed=0), alpha=.2, size=pop.dot.size) +
            geom_pointrange(aes(x=mean.X, y=mean, ymin=mean-sd, ymax=mean+sd), data=coarsened.summaries) + scale_x() + scale_y()
 ```
+:::
+::::
+
 
 - One remedy is to go back to working with coarser groupings. 
 - We can make up own by *aggregating*---combining---the columns we have.
@@ -338,8 +365,8 @@ education=case_match(cps.data$a_hga,
 :::
 ::: {.column width="50%"} 
 ```{r}
-#| fig-width: 5.5
-#| fig-asp: 1
+#| fig-width: 7
+#| fig-asp: .7
 jitter(pop.earnings)
 ```
 :::
@@ -381,7 +408,7 @@ jitter(pop.earnings, color=colors) + stat_summary(aes(x=education, y=income), ge
 - Often, when we want to report a numeric summary, we do resort to dichotomization.
 - But having the more granular information allows us to choose the groups we want.
 - There are many meaningful choices.
-    - [&gt;16: people with graduate degrees.]{.pink} 
+    - [&gt;16: people with graduate degrees.]{.mustard} 
     - [&le;12: people who haven't been to college.]{.teal}
 
 ## A Coarsened Comparison: &gt;16 vs. 16
@@ -392,7 +419,7 @@ dsummaries = pop.earnings[pop.earnings$education >= 16, ] %>%
           summarize(mean=mean(income),
                     sd=sd(income), mean.X = mean(education)) 
 dichotomous.gt16vs16 = ggplot(pop.earnings) + geom_point(aes(x=education, y=income, color = education > 16, alpha=education >= 16),
-                                size=dot.size, position=position_jitter(seed=0,w=.3)) +
+                                size=pop.dot.size, position=position_jitter(seed=0,w=.3)) +
                                 geom_pointrange(aes(x=mean.X, y=mean, ymin=mean-sd, ymax=mean+sd), data=dsummaries) +
                                 scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.2)) + 
                                 guides(color=FALSE, alpha=FALSE)
@@ -422,7 +449,6 @@ $$
 \frac{\sum\limits_{j=1}^n \ind{18,20}(x_j) y_j}{\sum\limits_{j=1}^n \ind{18, 20}(x_j)} - \frac{\sum\limits_{j=1}^n\ind{16}(x_j)y_j}{\sum\limits_{j=1}^n \ind{16}(x_j)} 
 \ \ \text{ where } \ \ 1_{S}(x) = \begin{cases} 1 & \text{ if } x \in S \\ 0 & \text{ otherwise} \end{cases}.
 \\
-$$
 
 ### In code
 
@@ -449,7 +475,7 @@ dsummaries = pop.earnings[pop.earnings$education %in% c(8:12, 14), ] %>%
           summarize(mean=mean(income),
                     sd=sd(income), mean.X = mean(education)) 
 dichotomous.14vsle12 = ggplot(pop.earnings) + geom_point(aes(x=education, y=income, color = education == 14, alpha=education %in% c(8:12,14)),
-                                size=dot.size, position=position_jitter(seed=0,w=.3)) +
+                                size=pop.dot.size, position=position_jitter(seed=0,w=.3)) +
                                 geom_pointrange(aes(x=mean.X, y=mean, ymin=mean-sd, ymax=mean+sd), data=dsummaries) +
                                 scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.2)) + 
                                 guides(color=FALSE, alpha=FALSE)
@@ -667,22 +693,15 @@ $$
 
 ## Comparing Two Summaries 
 
-:::: columns
-::: {.column width="45%"}
 ```{r}
-#| fig-width: 5
-#| fig-asp: .6
 hs.comparison.plot = aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5))
 hs.comparison.plot
 ```
-:::
-::: {.column width="55%"}
+
 Year Increment  | &rarr; 9 | &rarr; 10 | &rarr; 11 | &rarr; 12 
 |--|--|--|--|--|
 | Mean Income Increment | `r approx(increments[1],.1)` | `r approx(increments[2],.1)` | `r approx(increments[3],.1)` | `r approx(increments[4],.1)` |
 | Proportion of People | `r approx(proportions[1])` | `r approx(proportions[2])` | `r approx(proportions[3])` | `r approx(proportions[4])` |
-:::
-::::
 
 ::: {.panel-tabset}
 ### Question 
@@ -697,27 +716,21 @@ Year Increment  | &rarr; 9 | &rarr; 10 | &rarr; 11 | &rarr; 12
   - We've said the average over years is the slope of the blue line.
   - In this caricature, what does the average over people look like?
 
-:::: columns 
-::: {.column width="45%"} 
 ```{r}
-#| fig-width: 5
-#| fig-asp: .6
 foreground = X %in% c(11,12)
+summaries$alpha = ifelse(summaries$education %in% c(11,12), 1, .02)
 caricatured.aggregate.comparison.plot = jitter(pop.earnings, foreground) + 
-  geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 12,]) +
+  geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd, alpha=I(alpha)), data=summaries[summaries$education <= 12,]) +
   geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% c(8,12),], color='blue', alpha=.4) +
   geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
   scale_y(c(0, .7e5))
 caricatured.aggregate.comparison.plot + scale_x(c(7.5, 12.5)) + scale_y(c(0, .7e5))
 ```
-:::
-::: {.column width="55%"}
+
 | Year Increment | &rarr; 9 | &rarr; 10 | &rarr; 11 | &rarr; 12 |
 |-----------------|-----|------|------|------|
 | Mean Income Increment | | | | `r approx(increments[4],.1)` |
 | Proportion of People | 0 | 0 | 0 | 1 |
-:::
-::::
 
 ### Answer
 
@@ -735,12 +748,7 @@ Calculation | `r approx(sample.average.increment)`  | `r approx(average.incremen
 :::
 
 ## Comparing Two More
-:::: columns 
-::: {.column width="45%"}
 ```{r}
-#| fig-width: 5
-#| fig-asp: .6
-
 degree.years  = c(12, 14, 16, 18, 20)
 increments = mu(degree.years[2:5])-mu(degree.years[1:4])
 
@@ -754,14 +762,11 @@ degree.comparison.plot = jitter(pop.earnings, foreground) +
   scale_x(c(11.5,20.5)) + scale_y()
 degree.comparison.plot
 ```
-:::
-::: {.column width="55%"}
+
 Year Increment  | &rarr; 14 | &rarr; 16 | &rarr; 18 | &rarr; 20 
 |--|--|--|--|--|
 | Mean Income Increment | `r approx(increments[1],.1)` | `r approx(increments[2],.1)` | `r approx(increments[3],.1)` | `r approx(increments[4],.1)` |
 | Proportion of People | `r approx(proportions[1])` | `r approx(proportions[2])` | `r approx(proportions[3])` | `r approx(proportions[4])` |
-:::
-::::
 
 ::: {.panel-tabset}
 ### Question
@@ -775,31 +780,29 @@ Year Increment  | &rarr; 14 | &rarr; 16 | &rarr; 18 | &rarr; 20
 - Compare the average over people to the average over degrees. 
 - Is it bigger, smaller, or about the same?
 
-### Two Caricatures
+### A Caricature
 
 - In our last example, our caricature exaggerated the proportions---it made them 0 or 1.
 - In this one, we can exaggerate the *constancy of the increments*.
 
-:::: columns 
-## A Coarse Caricature
-::: column
 Year Increment  | &rarr; 14 | &rarr; 16 | &rarr; 18 | &rarr; 20 
 |--|--|--|--|--|
 | Mean Income Increment | `r approx(increments[2],1)` | `r approx(increments[2],1)` | `r approx(increments[2],1)` | `r approx(increments[2],1)` |
 | Proportion of People | `r approx(proportions[1])` | `r approx(proportions[2])` | `r approx(proportions[3])` | `r approx(proportions[4])` |
-:::
-::: column
-## A Highly Refined One
+
+### A Highly Refined Caricature
+
+- If we're worried that we're not being precise enough, we can use a more refined caricature.
+- In this one, most --- but not all --- of the increments are the same.
+
 Year Increment  | &rarr; 14 | &rarr; 16 | &rarr; 18 | &rarr; 20 
 |--|--|--|--|--|
 | Mean Income Increment | `r approx(increments[1],1)` | `r approx(increments[2],1)` | `r approx(increments[2],1)` | `r approx(increments[2],1)` |
 | Proportion of People | `r approx(proportions[1])` | `r approx(proportions[2])` | `r approx(proportions[3])` | `r approx(proportions[4])` |
-:::
-::::
 
-### One Answer
+### Answers
 
-- The two are pretty close to the same. In our coarse caricature, they are the same.
+- The two summaries are pretty close to the same. In our coarse caricature, they are the same.
 - In our highly refined one, they're *still* more or less the same. 
   - The average over years is $3/4 \times (`r approx(increments[2],1)` + 1/4 \times (`r approx(increments[2],1)`$
   - The average over people is $`r approx(proportions[1])` \times (`r approx(increments[2],1)` + `r approx(proportions[2])` \times (`r approx(increments[2],1)`$.
@@ -816,6 +819,13 @@ Calculation | `r approx(sample.average.increment)`  | `r approx(average.incremen
 :::
 
 ## The Impact of Variation in Slope
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+hs.comparison.plot
+degree.comparison.plot
+```
+
 
 ::: {.panel-tabset}
 ### A Question
@@ -826,12 +836,12 @@ Calculation | `r approx(sample.average.increment)`  | `r approx(average.incremen
 ### An Answer
 - If the things you're averaging are constant, it doesn't matter how you average them. 
 - If they aren't, it does matter how you average them. Or it might. The differences might wash out, too.
-  - Sometimes we just happen to have the right weight in the right place, like in our refined caricature a minute ago.
-  - Sometimes things that are bigger and smaller than average wind up canceling out even when we don't have the perfect configuration of weights.
+  - Sometimes we happen to have the right weight in the right place, like in our refined caricature a minute ago.
+  - Sometimes things that are bigger and smaller than average wind up canceling out.
 
 ### Summary and Implications 
 
-- **Summary**. Meaningfully different estimation targets often, but not always, have roughly the same *numerical value*.
+- Meaningfully different estimation targets often, but not always, have roughly the same *numerical value*.
 - This has created a bit of a cultural problem in the sciences. 
   - Many people act as if different estimation targets were the same. 
   - They use language and notation that obscures the distinction. 
@@ -841,7 +851,7 @@ Calculation | `r approx(sample.average.increment)`  | `r approx(average.incremen
 - Next class, we'll start to see why people make the decisions they do. 
   - We'll talk about interval estimates for the targets we've discussed today.
   - We'll see that some targets are easier to estimate than others.
-    - i.e., that we get narrower intervals for some targets than for others using the same data.
+    - i.e. we'll get narrower intervals for some targets than for others using the same data.
 :::
 
 # Exercises
@@ -894,8 +904,8 @@ over.years = function(earnings) {
 
 ```{r}
 #| layout-ncol: 3
-#| fig-width: 3.5
-#| fig-asp: 1
+#| fig-width: 4.5
+#| fig-asp: .7
 #| fig-cap:
 #|  - Story A
 #|  - Story B
@@ -999,8 +1009,8 @@ over.years = function(earnings) {
 
 ```{r}
 #| layout-ncol: 3
-#| fig-width: 3.5
-#| fig-asp: 1
+#| fig-width: 4.5
+#| fig-asp: .7
 #| fig-cap:
 #|  - Story A
 #|  - Story B

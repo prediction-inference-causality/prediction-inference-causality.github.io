@@ -45,14 +45,17 @@ ca.pop.plot = ggplot(data=ca_income$info, mapping=aes(x=long, y=lat, group=group
 # 4. combine the sample and the added rows to get the population, shuffling so the sample isn't at the top
 #    we'll save the indices of the sample rows in the population as 'J' so we can refer to them later.
 
-earnings = ca_income$sample
+sam.seed = 1
+order = (\() sample(1:nrow(ca_income$sample))) |> with_seed(sam.seed)
+earnings = ca_income$sample[order, ]
+rownames(earnings) = 1:nrow(earnings)
 earnings$degree = factor(earnings$education >= 16, # we use this dichotomization a lot early on
                          levels=c(FALSE, TRUE),
                          labels=c('no 4-year degree','4-year degree')) 
 earnings$group = 1                     # we need this for mapping
 cps.sampling.ratio = 1/2500            # the actual one
 plotting.cps.sampling.ratio=1/12.5     # works well visually
-plotting.cps.sampling.ratio=1/6.25     # an unfortunate concession to github's file-size requirements
+plotting.cps.sampling.ratio=1/6.5      # an unfortunate concession to github's file-size requirements
 npop = round(nrow(earnings) / plotting.cps.sampling.ratio)
 pop.seed = 1
 
@@ -66,6 +69,11 @@ pop.earnings = rbind(earnings, newtopop)
 order = (\() sample(1:nrow(pop.earnings))) |> with_seed(pop.seed)
 J=order[1:nrow(earnings)]
 pop.earnings[order, ] = pop.earnings
+
+m = round(nrow(earnings)/cps.sampling.ratio)
+fake.row.names = 1:npop
+fake.row.names[(npop-10):npop] = (m-10):m
+rownames(pop.earnings) = fake.row.names
 ```
 
 

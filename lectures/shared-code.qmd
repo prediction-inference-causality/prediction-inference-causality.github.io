@@ -17,6 +17,9 @@ percentpoint = label_percent(accuracy=.1)
 approx  = function(x,accuracy=.01) { 
     label_number(accuracy=accuracy, scale_cut=cut_short_scale())(x) 
 }
+thousand = function(x, accuracy=.1) {
+    approx(round((x/1000) / accuracy) * 1000 * accuracy, accuracy)
+}
 ```
 
 
@@ -152,7 +155,11 @@ $$
 ```{r}
 #| label: table-styling
 ellipsis = function(df, nhead=5L, ntail=2) {
-    rownames(df) = as.character(1:nrow(df))
+    rownames(df) = if(is.null(rownames(df))) { 
+        as.character(1:nrow(df)) 
+    } else { 
+        as.character(rownames(df))
+    }
     stopifnot("data.frame" %in% class(df))
     els = rep(NA, ncol(df)) |>
         matrix(nrow=1, dimnames=list(NULL, names(df))) |>
