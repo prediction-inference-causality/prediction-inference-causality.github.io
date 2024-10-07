@@ -217,15 +217,17 @@ ggplot(pop.earnings) + geom_point(aes(x=coarsen(education, degree), y=income, co
 
 ```{r}
 
-jitter.nocolor = function(earnings, foreground=TRUE) { 
+default.color = green
+jitter = function(earnings, foreground=TRUE, color=default.color) { 
   earnings$foreground = foreground
-  ggplot(earnings) + geom_point(aes(x=education, y=income, alpha=foreground), 
-                                size=dot.size, position=position_jitter(seed=0,w=.3), color='#F7766D') +
+  earnings$color = color
+  ggplot(earnings) + geom_point(aes(x=education, y=income, alpha=foreground, color=I(color)), 
+                                size=dot.size, position=position_jitter(seed=0,w=.3)) +
                                 scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.2)) + 
                                 guides(color=FALSE, alpha=FALSE)
 } 
                    
-jitter.nocolor(pop.earnings) + 
+jitter(pop.earnings) + 
   stat_summary(aes(x=education, y=income), geom="pointrange", fun.data=mean_sd)
 ```
 
@@ -243,19 +245,19 @@ jitter.nocolor(pop.earnings) +
 ### 18 vs. 16
 ```{r}
 X = pop.earnings$education
-jitter.nocolor(pop.earnings, foreground=X %in% c(18,16)) + 
+jitter(pop.earnings, foreground=X %in% c(18,16)) + 
   stat_summary(aes(x=education, y=income), geom="pointrange", fun.data=mean_sd)
 ```
 
 ### 16 vs. 14
 ```{r}
-jitter.nocolor(pop.earnings, foreground=X %in% c(16,14)) + 
+jitter(pop.earnings, foreground=X %in% c(16,14)) + 
   stat_summary(aes(x=education, y=income), geom="pointrange", fun.data=mean_sd)
 ```
 
 ### 14 vs. 12
 ```{r}
-jitter.nocolor(pop.earnings, foreground=X %in% c(14,12)) + 
+jitter(pop.earnings, foreground=X %in% c(14,12)) + 
   stat_summary(aes(x=education, y=income), geom="pointrange", fun.data=mean_sd)
 ```
 :::
@@ -292,7 +294,7 @@ coarsened.summaries = data.frame(X=x, Y=y, G=group(x)) |>
 
 
 ggplot() + geom_point(aes(x=coarsen(x,group(x)), y=y), 
-                      color='#F7766D', position=position_jitter(w=.3, seed=0), alpha=.3) +
+                      color=default.color, position=position_jitter(w=.3, seed=0), alpha=.3) +
            geom_pointrange(aes(x=mean.X, y=mean, ymin=mean-sd, ymax=mean+sd), data=coarsened.summaries) + scale_x() + scale_y()
 ```
 
@@ -338,7 +340,7 @@ education=case_match(cps.data$a_hga,
 ```{r}
 #| fig-width: 5.5
 #| fig-asp: 1
-jitter.nocolor(pop.earnings)
+jitter(pop.earnings)
 ```
 :::
 ::::
@@ -370,14 +372,17 @@ jitter.nocolor(pop.earnings)
 ## Dichotomization
 
 ```{r}
-jitter.nocolor(pop.earnings) + stat_summary(aes(x=education, y=income), geom="pointrange", fun.data=mean_sd)
+colors = rep(default.color, nrow(pop.earnings))
+colors[pop.earnings$education > 16] = pink
+colors[pop.earnings$education <= 12] = teal
+jitter(pop.earnings, color=colors) + stat_summary(aes(x=education, y=income), geom="pointrange", fun.data=mean_sd)
 ```
 
 - Often, when we want to report a numeric summary, we do resort to dichotomization.
 - But having the more granular information allows us to choose the groups we want.
 - There are many meaningful choices.
-    - &gt;16: people with graduate degrees. 
-    - &le;12: people who haven't been to college.
+    - [&gt;16: people with graduate degrees.]{.pink} 
+    - [&le;12: people who haven't been to college.]{.teal}
 
 ## A Coarsened Comparison: &gt;16 vs. 16
 
@@ -413,8 +418,7 @@ $$
 \frac{\sum\limits_{j:x_j > 16} y_j}{\sum_{j:x_j > 16} 1} - \frac{\sum\limits_{j:x_j = 16} y_j}{\sum_{j:x_j = 16} 1} 
 $$
 
-- Option 2. A verbose version that's easier to use in probability calculations
-$$
+- Option 2. A verbose version that's easier to use in probability calculations$$
 \frac{\sum\limits_{j=1}^n \ind{18,20}(x_j) y_j}{\sum\limits_{j=1}^n \ind{18, 20}(x_j)} - \frac{\sum\limits_{j=1}^n\ind{16}(x_j)y_j}{\sum\limits_{j=1}^n \ind{16}(x_j)} 
 \ \ \text{ where } \ \ 1_{S}(x) = \begin{cases} 1 & \text{ if } x \in S \\ 0 & \text{ otherwise} \end{cases}.
 \\
@@ -538,9 +542,8 @@ What, in terms $\mu(x)$, is the mean outcome among people in our sample who did 
 
 **Strategy.** 
 
-1. Where we see a sum over the people in the aggregate group,  we rewrite it as a sum of sums.
-  a. A sum over columns ... 
-  b. ... of sums over the people in them.
+1. Where we see a sum over the people in the aggregate group,  we rewrite it as a sum of sums. \
+A [sum over columns]{.pink} of [sums over the people in them.]{.teal}
 2. We express each column's sum in terms of its mean and its size.
 3. We make sense of the result.
 
@@ -549,10 +552,10 @@ What, in terms $\mu(x)$, is the mean outcome among people in our sample who did 
  
 $$
 \begin{aligned}
-\frac{\sum_{j:x_j \in 8 \ldots 12} y_j}{\sum_{j:x_j \in 8 \ldots 12} 1} 
-&= \frac{\sum_{x \in 8 \ldots 12}\sum_{j:x_j=x} y_j}{\sum_{x \in 8 \ldots 12}\sum_{j:x_j=x} 1} 
-= \frac{\sum_{x \in 8 \ldots 12} m_x \times m_x^{-1}\sum_{j:x_j=x} y_j}{\sum_{x \in 8 \ldots 12}m_x} \\
-&= \sum_{x \in 8 \ldots 12} p_x \times \mu(x)  \quad \text{ for } \quad p_x = \frac{m_x}{\sum_{x \in 8 \ldots 12}m_x}.
+\frac{\sum\limits_{j:x_j \in 8 \ldots 12} y_j}{\sum\limits_{j:x_j \in 8 \ldots 12} 1} 
+&= \frac{\inpink{\sum\limits_{x \in 8 \ldots 12}}\inteal{\sum\limits_{j:x_j=x}} y_j}{\inpink{\sum\limits_{x \in 8 \ldots 12}}\inteal{\sum\limits_{j:x_j=x}} 1} 
+= \frac{\inpink{\sum\limits_{x \in 8 \ldots 12}} \inpink{m_x} \times \inteal{\frac{1}{m_x}}\inteal{\sum\limits_{j:x_j=x}} y_j}{\inpink\sum\limits_{x \in 8 \ldots 12}\inteal{m_x}} \\
+&= \inpink{\sum\limits_{x \in 8 \ldots 12}} p_x \times \inteal{\mu(x)}  \quad \text{ for } \quad p_x = \frac{\inpink{m_x}}{\inpink{\sum\limits_{x \in 8 \ldots 12}\inteal{m_x}}}.
 \end{aligned}
 $$
 
@@ -565,7 +568,7 @@ $$
 
 ```{r}
 earnings$foreground = earnings$education <= 12
-aggregate.comparison.plot = jitter.nocolor(pop.earnings) + 
+aggregate.comparison.plot = jitter(pop.earnings) + 
   geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 12,]) +
   geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% c(8,12),], color='blue', alpha=.4) +
   geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
@@ -700,7 +703,7 @@ Year Increment  | &rarr; 9 | &rarr; 10 | &rarr; 11 | &rarr; 12
 #| fig-width: 5
 #| fig-asp: .6
 foreground = X %in% c(11,12)
-caricatured.aggregate.comparison.plot = jitter.nocolor(pop.earnings, foreground) + 
+caricatured.aggregate.comparison.plot = jitter(pop.earnings, foreground) + 
   geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 12,]) +
   geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% c(8,12),], color='blue', alpha=.4) +
   geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
@@ -746,7 +749,7 @@ sample.average.increment = mean(mu(degree.subsample) - mu(degree.subsample-1))
 proportions = table(degree.subsample) / length(degree.subsample)
 
 foreground = pop.earnings$education %in% degree.years
-degree.comparison.plot = jitter.nocolor(pop.earnings, foreground) + 
+degree.comparison.plot = jitter(pop.earnings, foreground) + 
   geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education %in% degree.years,]) +
   scale_x(c(11.5,20.5)) + scale_y()
 degree.comparison.plot
@@ -783,7 +786,7 @@ Year Increment  | &rarr; 14 | &rarr; 16 | &rarr; 18 | &rarr; 20
 Year Increment  | &rarr; 14 | &rarr; 16 | &rarr; 18 | &rarr; 20 
 |--|--|--|--|--|
 | Mean Income Increment | `r approx(increments[2],1)` | `r approx(increments[2],1)` | `r approx(increments[2],1)` | `r approx(increments[2],1)` |
-| Proportion of People | `r approx(proportions[1])` | `r approx(proportions[2]),` | `r approx(proportions[3])` | `r approx(proportions[4])` |
+| Proportion of People | `r approx(proportions[1])` | `r approx(proportions[2])` | `r approx(proportions[3])` | `r approx(proportions[4])` |
 :::
 ::: column
 ## A Highly Refined One
@@ -814,14 +817,6 @@ Calculation | `r approx(sample.average.increment)`  | `r approx(average.incremen
 
 ## The Impact of Variation in Slope
 
-```{r}
-#| layout-ncol: 2
-#| fig-width: 5
-
-hs.comparison.plot 
-degree.comparison.plot 
-```
-
 ::: {.panel-tabset}
 ### A Question
 - In our high school example, our two summaries were pretty different.
@@ -830,80 +825,44 @@ degree.comparison.plot
 
 ### An Answer
 - If the things you're averaging are constant, it doesn't matter how you average them. 
-- If they aren't, it does. Or it might.  
+- If they aren't, it does matter how you average them. Or it might. The differences might wash out, too.
   - Sometimes we just happen to have the right weight in the right place, like in our refined caricature a minute ago.
-  - Sometimes---and this can be bit harder to see by eye---things wind up canceling out.
+  - Sometimes things that are bigger and smaller than average wind up canceling out even when we don't have the perfect configuration of weights.
 
-### A Cultural Problem
+### Summary and Implications 
 
-- But the fact that there are so many ways for different summaries to be the same  
-
+- **Summary**. Meaningfully different estimation targets often, but not always, have roughly the same *numerical value*.
+- This has created a bit of a cultural problem in the sciences. 
+  - Many people act as if different estimation targets were the same. 
+  - They use language and notation that obscures the distinction. 
+- And people wind up choosing their estimation target when they think they're only choosing an estimator.
+  - This leads to confusion when two people estimate different targets but don't know it. 
+  - And to some hard-to-make-sense-of estimation targets being very common. 
+- Next class, we'll start to see why people make the decisions they do. 
+  - We'll talk about interval estimates for the targets we've discussed today.
+  - We'll see that some targets are easier to estimate than others.
+    - i.e., that we get narrower intervals for some targets than for others using the same data.
 :::
 
-## FUCK. Just one little bit more.
-
-```{r}
-earnings2 = pop.earnings
-earnings2$income[earnings2$education==10] = earnings2$income[earnings2$education==10]*3 
-
-plot.aggregate.comparison = function(earnings2) {
-  summaries2 = earnings2 %>% group_by(education) %>% summarize(mean=mean(income), sd=sd(income), mean.X = mean(education))
-  aggregate.comparison.plot= jitter.nocolor(earnings2) + 
-    geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries2[summaries2$education <= 12,]) +
-    #geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education %in% c(8,12),], color='blue', alpha=.4) +
-    geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education<=12,], color='black', linetype='dashed') +
-    scale_y(c(0, .7e5))
-
-  aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5)) 
-}
-plot.aggregate.comparison(earnings2)
-```
-
-- While our two summaries estimates are based on very different comparisons, we got similar answers.
-- That was, fundamentally, because every comparison tells us the same thing. 
-  - If you draw the lines from $\hat\mu(8) \ldots \hat \mu(11)$ to $\hat\mu(12)$, you'd get roughly the same slope.
-- If that weren't the case, it'd be a very different story. It'd look more like this.
-- In short, sometimes the choice of summary --- among qualitatively similar ones --- matters a lot. 
-- Sometimes it doesn't. But that's not something you should bet much on.
-- We'll talk more about choosing the right summary in the coming weeks.
-- For now, let's dig into this phenomenon. We'll look at data corresponding to a few stories about what's useful.
-
-## The Impact of Variation in Slope
-
-```{r}
-#| out-height: 400px
-
-earnings2 = pop.earnings
-earnings2$income[earnings2$education==10] = earnings2$income[earnings2$education==10]*3 
-
-plot.aggregate.comparison = function(earnings2) {
-  summaries2 = earnings2 %>% group_by(education) %>% summarize(mean=mean(income), sd=sd(income), mean.X = mean(education))
-  aggregate.comparison.plot= jitter.nocolor(earnings2) + 
-    geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries2[summaries2$education <= 12,]) +
-    #geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education %in% c(8,12),], color='blue', alpha=.4) +
-    geom_line(aes(x=education, y=mean), data=summaries2[summaries2$education<=12,], color='black', linetype='dashed') +
-    scale_y(c(0, .7e5))
-
-  aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5)) 
-}
-plot.aggregate.comparison(earnings2)
-```
-
-- While our two summaries estimates are based on very different comparisons, we got similar answers.
-- That was, fundamentally, because every comparison tells us the same thing. 
-  - If you draw the lines from $\hat\mu(8) \ldots \hat \mu(11)$ to $\hat\mu(12)$, you'd get roughly the same slope.
-- If that weren't the case, it'd be a very different story. It'd look more like this.
-- In short, sometimes the choice of summary --- among qualitatively similar ones --- matters a lot. 
-- Sometimes it doesn't. But that's not something you should bet much on.
-- We'll talk more about choosing the right summary in the coming weeks.
-- For now, let's dig into this phenomenon. We'll look at data corresponding to a few stories about what's useful.
-
+# Exercises
+Storytelling, Visualization, and Estimation Targets
 
 ## Three Stories About High School {.smaller}
 
 ```{r}
+plot.aggregate.comparison = function(earnings) {
+  summaries = earnings |> group_by(education) |> summarize(mean=mean(income), sd=sd(income), mean.X = mean(education))
+  aggregate.comparison.plot= jitter(earnings) + 
+    geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 12,]) +
+    geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% c(8,12),], color='blue', alpha=.4) +
+    geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
+    scale_y(c(0, .7e5))
+  aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5)) 
+}
+```
 
-mu = map_dbl(1:12, function(x) { mean(pop.earnings$income[pop.earnings$education==x]) })
+```{r}
+mu = map_dbl(1:20, function(x) { mean(pop.earnings$income[pop.earnings$education==x]) })
 epsilon = rnorm(nrow(pop.earnings)) * .1*sd(pop.earnings$income[pop.earnings$education %in% 8:12])
 
 earnings1 = pop.earnings
@@ -914,8 +873,8 @@ earnings2$income = mu[ifelse(pop.earnings$education >= 10, 12, 8)] + epsilon
 
 mu3 = NA+mu
 mu3[8]=mu[8]
-mu3[9]=mu[10]
-mu3[10]=(mu[11]+mu[12])/2
+mu3[10]= mu[11]*(1/4) + mu[12]*(3/4)
+mu3[9] = mu3[10]*(3/4) + mu3[8]*(1/4)
 mu3[11]=mu[12]
 mu3[12]=mu[12]
 earnings3 = pop.earnings
@@ -924,67 +883,20 @@ earnings3$income = mu3[pop.earnings$education] + epsilon
 
 over.people = function(earnings) {
   hsed = earnings$education[earnings$education %in% 9:12]
-  mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
+  mu = map_dbl(1:20, function(x) { mean(earnings$income[earnings$education==x]) })
   mean(mu[hsed] - mu[hsed-1])
 }
 over.years = function(earnings) {
-  mu = map_dbl(1:12, function(x) { mean(earnings$income[earnings$education==x]) })
+  mu = map_dbl(1:20, function(x) { mean(earnings$income[earnings$education==x]) })
   mean(mu[9:12] - mu[8:11])
 }
 ```
 
-:::: columns
-
-::: column
-
-  1. All that matters is the diploma.
-  2. All that matters is 10th grade algebra.
-  3. They teach the most important stuff first. 
-:::
-
-::: column
-
-:::: r-stack
-
-::: {.fragment .fade-out data-fragment-index="0"} 
-
-$$
-\small{
-\begin{array}{r|rrr}
-\text{Story} & 1 & 2 & 3 \\
-\hline
-\text{Average over People}  & \qquad  &  \qquad & \qquad   \\
-\text{Average over Years}   & \qquad  &  \qquad & \qquad   \\
-\end{array}
-}
-$$
-
-:::
-::: {.fragment .current-visible data-fragment-index="0"} 
-
-$$
-\small{
-\begin{array}{r|rrr}
-\text{Story} & 1 & 2 & 3 \\
-\hline
-\text{Average over People}  & `r approx(over.people(earnings1))` &  `r approx(over.people(earnings2))` & `r approx(over.people(earnings3))`  \\
-\text{Average over Years}   & `r approx(over.years(earnings1))`  &  `r approx(over.years(earnings2))` & `r approx(over.years(earnings3))`  \\
-\end{array}
-}
-$$
-
-:::
-::::
-:::
-::::
-
-### Which is Which?
-
 ```{r}
 #| layout-ncol: 3
-#| out-height: 400px
+#| fig-width: 3.5
 #| fig-asp: 1
-#| fig-subcap:
+#| fig-cap:
 #|  - Story A
 #|  - Story B
 #|  - Story C 
@@ -994,17 +906,157 @@ plot.aggregate.comparison(earnings1)
 plot.aggregate.comparison(earnings3)
 ```
 
+::: {.panel-tabset}
+### Exercise 
 
-## Summary
+Match each story to a plot above. Then, for each story, approximately calculate our two summaries. \
+&nbsp; \
+
+:::: columns
+::: column
+
+  1. All that matters is the diploma.
+  2. All that matters is 10th grade algebra.
+  3. They teach the most important stuff first. 
+
+:::
+::: column
+
+| Story | 1 | 2 | 3 |
+|-------|---|---|---|
+| Plot | [B]{.hidden} | [A]{.hidden} | [C]{.hidden} |
+| Average over Years | [`r approx(over.years(earnings1))`]{.hidden} | [`r approx(over.years(earnings2))`]{.hidden} | [`r approx(over.years(earnings3))`]{.hidden} |
+| Average over People | [`r approx(over.people(earnings1),1)`]{.hidden} | [`r approx(over.people(earnings2),1)`]{.hidden} | [`r approx(over.people(earnings3),1)`]{.hidden} |
+
+:::
+::::
+
+### Solution 
+Match each story to a plot above. Then, for each story, approximately calculate our two summaries. \
+&nbsp; \
+
+:::: columns
+::: column
+
+
+  1. All that matters is the diploma.
+  2. All that matters is 10th grade algebra.
+  3. They teach the most important stuff first. 
+
+
+:::
+::: column
+
+| Story | 1 | 2 | 3 |
+|-------|---|---|---|
+| Plot | B | A | C |
+| Average over Years | `r thousand(over.years(earnings1),.1)` | `r thousand(over.years(earnings2),.1)` | `r thousand(over.years(earnings3),.1)` |
+| Average over People | `r thousand(over.people(earnings1),.1)` | `r thousand(over.people(earnings2),.1)` | `r thousand(over.people(earnings3),.1)` |
+
+
+:::
+::::
+:::
+
+
+## Three Stories About Degrees {.smaller}
+
 ```{r}
-#| out-height: 500px
-jitter.nocolor(earnings) 
+degree.years = c(12, 14, 16, 18, 20)
+plot.aggregate.comparison = function(earnings) {
+  summaries = earnings |> group_by(education) |> summarize(mean=mean(income), sd=sd(income), mean.X = mean(education))
+  aggregate.comparison.plot= jitter(earnings, foreground=pop.earnings$education %in% degree.years) + 
+    geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education %in% degree.years,]) +
+    geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% degree.years,], color='blue', alpha=.4) +
+    geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% degree.years,], color='black', linetype='dashed') 
+  aggregate.comparison.plot + scale_x(c(11.5,20.5)) + scale_y() 
+}
 ```
 
-- Working with non-binary covariates, e.g., years of schooling, opens up a lot of possibilities.
-  - We can make and report comparisons on the finest level available, e.g. grade 12 vs grade 11.
-  - We can work with coarser groups, e.g. grade 12 vs grade < 12, to simplify what we have to report.
-  - We can make a number of fine comparisons and aggregate them into a simple summary.
-- For the most part, ultimately we'll be looking at *linear combinations* of the subsample means.
-- This will be convenient next time when we're seeing what the sample summaries tell us about our population.
-- It means that, in abstract terms, we'll only need to understand the statistical behavior of one thing.
+```{r}
+mu = map_dbl(1:20, function(x) { mean(pop.earnings$income[pop.earnings$education==x]) })
+epsilon = rnorm(nrow(pop.earnings)) * .1*sd(pop.earnings$income[pop.earnings$education %in% degree.years])
+
+earnings1 = pop.earnings
+earnings1$income = mu[ifelse(pop.earnings$education > 16, 16, pop.earnings$education)] + epsilon
+
+earnings2 = pop.earnings
+earnings2$income = mu[ifelse(pop.earnings$education > 18, 16, pop.earnings$education)] + epsilon
+
+earnings3 = pop.earnings 
+earnings3$income = mu[ifelse(pop.earnings$education==16, 14, pop.earnings$education)] + epsilon
+
+over.people = function(earnings) {
+  degreeed = earnings$education[earnings$education %in% degree.years]
+  mu = map_dbl(1:20, function(x) { mean(earnings$income[earnings$education==x]) })
+  mean(mu[degreeed] - mu[degreeed-2])
+}
+over.years = function(earnings) {
+  mu = map_dbl(1:20, function(x) { mean(earnings$income[earnings$education==x]) })
+  mean(mu[degree.years[2:5]] - mu[degree.years[1:4]])
+}
+```
+
+```{r}
+#| layout-ncol: 3
+#| fig-width: 3.5
+#| fig-asp: 1
+#| fig-cap:
+#|  - Story A
+#|  - Story B
+#|  - Story C 
+
+plot.aggregate.comparison(earnings1)
+plot.aggregate.comparison(earnings3)
+plot.aggregate.comparison(earnings2)
+```
+
+::: {.panel-tabset}
+### Exercise 
+
+Match each story to a plot above. Then, for each story, approximately calculate our two summaries. \
+&nbsp; \
+
+:::: columns
+::: column
+
+  1. Graduate degrees don't pay.
+  2. Doctorates actually hurt your earning potential.
+  3. 4-year degrees aren't worth it anymore.
+
+:::
+::: column
+
+| Story | 1 | 2 | 3 |
+|-------|---|---|---|
+| Plot | [A]{.hidden} | [C]{.hidden} | [B]{.hidden} |
+| Average over Years | [`r approx(over.years(earnings1))`]{.hidden} | [`r approx(over.years(earnings2))`]{.hidden} | [`r approx(over.years(earnings3))`]{.hidden} |
+| Average over People | [`r approx(over.people(earnings1),1)`]{.hidden} | [`r approx(over.people(earnings2),1)`]{.hidden} | [`r approx(over.people(earnings3),1)`]{.hidden} |
+
+:::
+::::
+
+### Solution 
+Match each story to a plot above. Then, for each story, approximately calculate our two summaries. \
+&nbsp; \
+
+:::: columns
+::: column
+
+  1. Graduate degrees don't pay.
+  2. Doctorates actually hurt your earning potential.
+  3. 4-year degrees aren't worth it anymore.
+
+:::
+::: column
+
+| Story | 1 | 2 | 3 |
+|-------|---|---|---|
+| Plot | A | C | B |
+| Average over Years | `r thousand(over.years(earnings1),1)` | `r thousand(over.years(earnings2),1)` | `r thousand(over.years(earnings3),1)` |
+| Average over People | `r thousand(over.people(earnings1),1)` | `r thousand(over.people(earnings2),1)` | `r thousand(over.people(earnings3),1)` |
+
+
+:::
+::::
+:::
