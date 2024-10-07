@@ -72,8 +72,7 @@ Ignore the gaps at 15 and 17 years for now. We'll come back to them.
 
 ::: column
 ```{r map-sample}
-#| fig-width: 5
-#| out-height: 500px
+#| fig-width: 7
 ca.plot + geom_point(aes(x=long, y=lat, color=degree), data=our.sample, size=.1, alpha=.5) + guides(color=FALSE)
 ```
 :::
@@ -188,8 +187,14 @@ style.tab(sample.tab, nhead=5, ntail=2)
 - Today, all we'll do is think about what we might want to know. We'll talk as if we *had* surveyed everyone.
 - Next time, we'll talk about point and interval estimation. It'll be familiar, but there'll be some new twists. 
   
+::: footnotestyle
+The population we're looking at is made up. It's just an illustration. We don't actually have all this information. 
+:::
 
 ## Summarization
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
 ```{r}
 
 binary.summaries = function(earnings) { 
@@ -200,19 +205,30 @@ binary.summaries = function(earnings) {
                     meanx.dichotomous=mean(range(education)))
 }
 
+earnings.jitter.pop 
+```
+:::
+::: {.fragment .current-visible data-fragment-index="0"}
+```{r}
 earnings.jitter.pop + geom_pointrange(aes(x=meanx, y=mean, ymin=mean-sd, ymax=mean+sd), 
                                       data=binary.summaries(pop.earnings)) 
 ```
+:::
+::::
 
 - Looking at the dots alone, we can get rough answers to some simple questions.
 - We can see that [people with four-year-degrees]{.twocolor-green} tend to earn more than [people without them.]{.twocolor-red} 
 - But it's hard to be precise just eyeballing things. It helps to look at numerical summaries.
-- I've overlaid --- in black --- the mean income $\pm$ one standard deviation for each group.
+- We've can, e.g., overlay the mean income $\pm$ one standard deviation for each group. [Do it!]{.button .navigate-next}
+  
+::: {.fragment .current-visible data-fragment-index="0"}
   - That's shown by the dot's position and its 'arms' on the y-axis.
   - Its position on the x-axis shows the *mean years of schooling* within the group.
+:::
 
 ## The Dichotomous Version
 
+:::: r-stack
 ```{r}
 
 ggplot(pop.earnings[pop.idx, ]) + geom_point(aes(x=coarsen(education, degree), y=income, color=degree), 
@@ -220,6 +236,7 @@ ggplot(pop.earnings[pop.idx, ]) + geom_point(aes(x=coarsen(education, degree), y
                    scale_x() + scale_y() + guides(color=FALSE) + 
                    geom_pointrange(aes(x=meanx.dichotomous, y=mean, ymin=mean-sd, ymax=mean+sd), data=binary.summaries(pop.earnings))
 ```
+::::
 
 - It's worth visualizing the information lost by dichotomizing education.
 - To do this, we can look at a similar plot without that information. This one.
@@ -231,21 +248,23 @@ ggplot(pop.earnings[pop.idx, ]) + geom_point(aes(x=coarsen(education, degree), y
 
 ## Column Comparisons
 
+:::: r-stack
 ```{r}
 
 default.color = twocolor.red 
-jitter = function(earnings, foreground=TRUE, color=default.color) { 
+jitter = function(earnings, foreground=TRUE, color=default.color, background.alpha=.01, foreground.alpha=.2) { 
   earnings$foreground = foreground
   earnings$color = color
   ggplot(earnings[pop.idx, ]) + geom_point(aes(x=education, y=income, alpha=foreground, color=I(color)), 
                                 size=pop.dot.size, position=position_jitter(seed=0,w=.3)) +
-                                scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.2)) + 
+                                scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(background.alpha,foreground.alpha)) + 
                                 guides(color=FALSE, alpha=FALSE)
 } 
                    
 jitter(pop.earnings) + 
   with.summaries(pop.earnings) 
 ```
+::::
 
 - Let's think about what we can do with the additional information we have now.
 - One simple option is to work with the finest grouping we can: the columns in our scatter plot.
@@ -276,10 +295,17 @@ jitter(pop.earnings, foreground=X %in% c(14,12)) +
   with.summaries(pop.earnings[pop.earnings$education %in% c(14,12), ])
 ```
 :::
+::: {.fragment .current-visible data-fragment-index="2"}
+```{r}
+jitter(pop.earnings) + 
+  with.summaries(pop.earnings) 
+```
+:::
 ::::
 
 - This is essentially the same as what we did when we dichotomized education.
-  - We just 'forget' the other groups. We don't look at them. And all our pre-midterm stuff still works. 
+  - We just 'forget' the other groups. We don't look at them. 
+  - Everything we proved before the midterm still applies: unbiasedness, variance formulas, etc.
   - When we did the math on comparing two groups, we didn't assume they were the only two groups.
 - That's great if we know exactly what we're interested in---and it's a comparison like this.
 - But it's not so great if we're a bit less focused---if we want to talk about the whole population.
@@ -289,13 +315,6 @@ jitter(pop.earnings, foreground=X %in% c(14,12)) +
 ## Coarsening
 
 :::: r-stack 
-::: {.fragment .fade-out data-fragment-index="0"}
-```{r}
-jitter(pop.earnings) + 
-  with.summaries(pop.earnings) 
-```
-:::
-::: {.fragment .current-visible data-fragment-index="0"}
 ```{r}
 groups = factor(1:4, 
                levels=1:4, 
@@ -321,20 +340,33 @@ ggplot() + geom_point(aes(x=coarsen(x,group(x)), y=y),
                       color=default.color, position=position_jitter(w=.3, seed=0), alpha=.2, size=pop.dot.size) +
            geom_pointrange(aes(x=mean.X, y=mean, ymin=mean-sd, ymax=mean+sd), data=coarsened.summaries) + scale_x() + scale_y()
 ```
-:::
 ::::
 
 
 - One remedy is to go back to working with coarser groupings. 
-- We can make up own by *aggregating*---combining---the columns we have.
+- We can make up our own by *aggregating*---combining---the columns we have.
 - Here, for example, is a breakdown in 4 groups.
     - &lt; 14 years: no college degree.
     - =14 years: 2-year degree. 
     - =16 years: 4-year degree.
     - &gt; 16 years: graduate degree.
 - This is more information than a two-group comparison but perhaps little enough to be manageable.
-  - We can report the set of group-specific summaries.
-  - Or visualize them in a plot like this one.
+  - We can visualize it all in a plot like the one above.
+  - Or report the set of group-specific summaries in a table like the one below.
+
+ \
+ \
+
+::: {#fig-coarsened-summary-table}
+
+education | mean | sd | N 
+---------|----|--|--
+&lt; 12  |   `r approx(mean(y[x < 12]),1)` | `r approx(sd(y[x < 12]),1)` | `r approx(sum(x < 12) / cps.sampling.ratio,1)`
+14       | `r approx(mean(y[x == 14]),1)` | `r approx(sd(y[x == 14]),1)` | `r approx(sum(x == 14) / cps.sampling.ratio,1)`
+16       | `r approx(mean(y[x == 16]),1)` | `r approx(sd(y[x == 16]),1)` | `r approx(sum(x == 16) / cps.sampling.ratio,1)`
+&gt; 16       | `r approx(mean(y[x > 16]),1)` | `r approx(sd(y[x > 16]),1)` | `r approx(sum(x > 16) / cps.sampling.ratio,1)`
+
+:::
 
 ## Coarsening is Always Happening
 
@@ -399,17 +431,23 @@ jitter(pop.earnings)
 ## Dichotomization
 
 ```{r}
+dichotomous.summaries = pop.earnings |>
+  filter(education <= 12 | education > 16) |>
+  group_by(education > 16) |>
+  summarize(meanx = mean(education), meany = mean(income), sd=sd(income))
 colors = rep(default.color, nrow(pop.earnings))
-colors[pop.earnings$education > 16] = pink
-colors[pop.earnings$education <= 12] = teal
-jitter(pop.earnings, color=colors) + stat_summary(aes(x=education, y=income), geom="pointrange", fun.data=mean_sd)
+colors[pop.earnings$education > 16] = pollb 
+colors[pop.earnings$education <= 12] = pollc
+foreground = (pop.earnings$education > 16) | (pop.earnings$education <= 12)
+jitter(pop.earnings, color=colors, foreground=foreground, background.alpha=.05) + 
+  geom_pointrange(aes(x=meanx, y=meany, ymin=meany-sd, ymax=meany+sd), data=dichotomous.summaries, color='black')
 ```
 
 - Often, when we want to report a numeric summary, we do resort to dichotomization.
 - But having the more granular information allows us to choose the groups we want.
 - There are many meaningful choices.
-    - [&gt;16: people with graduate degrees.]{.mustard} 
-    - [&le;12: people who haven't been to college.]{.teal}
+    - [&gt;16: people with graduate degrees.]{.pollb} 
+    - [&le;12: people who haven't been to college.]{.pollc}
 
 ## A Coarsened Comparison: &gt;16 vs. 16
 
@@ -445,10 +483,11 @@ $$
 \frac{\sum\limits_{j:x_j > 16} y_j}{\sum_{j:x_j > 16} 1} - \frac{\sum\limits_{j:x_j = 16} y_j}{\sum_{j:x_j = 16} 1} 
 $$
 
-- Option 2. A verbose version that's easier to use in probability calculations$$
+- Option 2. A verbose version that's easier to use in probability calculations.
+$$
 \frac{\sum\limits_{j=1}^n \ind{18,20}(x_j) y_j}{\sum\limits_{j=1}^n \ind{18, 20}(x_j)} - \frac{\sum\limits_{j=1}^n\ind{16}(x_j)y_j}{\sum\limits_{j=1}^n \ind{16}(x_j)} 
 \ \ \text{ where } \ \ 1_{S}(x) = \begin{cases} 1 & \text{ if } x \in S \\ 0 & \text{ otherwise} \end{cases}.
-\\
+$$
 
 ### In code
 
@@ -500,12 +539,12 @@ People with 2-year degrees (only) vs. people who haven't completed a year of col
 ### In math
 - A compact, readable version
 $$
-\frac{\sum_{j:x_j = 14} y_j}{\sum_{j:x_j = 14} 1} - \frac{\sum_{j:x_j \le 12} y_j}{\sum_{j:x_j \le 12} 1} \\
+\frac{\sum\limits_{j:x_j = 14} y_j}{\sum\limits_{j:x_j = 14} 1} - \frac{\sum\limits_{j:x_j \le 12} y_j}{\sum\limits_{j:x_j \le 12} 1} 
 $$
 
 - A verbose version that's easier to use in probability calculations 
 $$
-\frac{\sum_{j=1}^n \ind{14}(x_j) y_j}{\sum_{j=1}^n \ind{14}(x_j)} - \frac{\sum_{j=1}^n\ind{8 \ldots 12}(x_j)y_j}{\sum_{j=1}^n \ind{8 \ldots 12}(x_j)} 
+\frac{\sum\limits_{j=1}^n \ind{14}(x_j) y_j}{\sum\limits_{j=1}^n \ind{14}(x_j)} - \frac{\sum\limits_{j=1}^n\ind{8 \ldots 12}(x_j)y_j}{\sum\limits_{j=1}^n \ind{8 \ldots 12}(x_j)} 
 \ \ \text{ where } \ \ 1_S(x) = \begin{cases} 1 & \text{ if } x \in S \\ 0 & \text{ otherwise} \end{cases}.
 $$
 
@@ -722,7 +761,7 @@ summaries$alpha = ifelse(summaries$education %in% c(11,12), 1, .02)
 caricatured.aggregate.comparison.plot = jitter(pop.earnings, foreground) + 
   geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd, alpha=I(alpha)), data=summaries[summaries$education <= 12,]) +
   geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% c(8,12),], color='blue', alpha=.4) +
-  geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
+  geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% c(11,12),], color='black', linetype='dashed') +
   scale_y(c(0, .7e5))
 caricatured.aggregate.comparison.plot + scale_x(c(7.5, 12.5)) + scale_y(c(0, .7e5))
 ```
@@ -753,7 +792,8 @@ degree.years  = c(12, 14, 16, 18, 20)
 increments = mu(degree.years[2:5])-mu(degree.years[1:4])
 
 degree.subsample = pop.earnings |> filter(education %in% degree.years[2:5]) |> pull(education)
-sample.average.increment = mean(mu(degree.subsample) - mu(degree.subsample-1))
+sample.average.increment = mean(mu(degree.subsample) - mu(degree.subsample-2))
+average.increment = mean(increments)
 proportions = table(degree.subsample) / length(degree.subsample)
 
 foreground = pop.earnings$education %in% degree.years
@@ -806,8 +846,8 @@ Year Increment  | &rarr; 14 | &rarr; 16 | &rarr; 18 | &rarr; 20
 
 - The two summaries are pretty close to the same. In our coarse caricature, they are the same.
 - In our highly refined one, they're *still* more or less the same. 
-  - The average over years is $3/4 \times (`r approx(increments[2],1)` + 1/4 \times (`r approx(increments[2],1)`$
-  - The average over people is $`r approx(proportions[1])` \times (`r approx(increments[2],1)` + `r approx(proportions[2])` \times (`r approx(increments[2],1)`$.
+  - The average over years is $ 1/4 \times `r approx(increments[1],1)` + 3/4 \times `r approx(increments[2],1)`$
+  - The average over people is $`r approx(proportions[1])` \times `r approx(increments[1],1)` + `r approx(1-proportions[1])` \times `r approx(increments[2],1)`$.
 - The one income difference we do acknowledge --- the one for 2-year degrees --- gets washed out.
   - Why? Because the column it's in has almost the same weight in both averages: 1/4.
   - Roughly 1 in 4 people have 2-year degrees and that's 1 of 4 degrees we're talking about.
@@ -869,7 +909,8 @@ plot.aggregate.comparison = function(earnings) {
     geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% c(8,12),], color='blue', alpha=.4) +
     geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') +
     scale_y(c(0, .7e5))
-  aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(12.5e3, 37.5e3)) 
+  aggregate.comparison.plot + scale_x(c(7.5,12.5)) + 
+    scale_y(limits=c(12.5e3, 37.5e3), breaks=c(12.5e3, 25e3, 37.5e3))
 }
 ```
 
