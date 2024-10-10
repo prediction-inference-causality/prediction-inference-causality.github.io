@@ -78,5 +78,69 @@
   - Use the mean w/prior obs as an example. 
 - Do Brewery problem from Practice Exam 1 as a case study in class. Maybe a Friday.
   - Introduce 1-sided CIs there, as done in extended soln on practice exam. 
-- All this means Midterm 1 will be pushed back a week or maybe two. 
+- Do a day on non-uniform sampling after Lecture 6.
+  - Revisit bias + variance calculations. 
+  - Talk about improved / optimal allocation.
+- All this means Midterm 1 will be pushed back a bit. A least a week and probably two. 
 
+## Lecture 8
+
+- This went poorly. Too much complexity at once.
+- Reorganize to be a little more sectioned / focused on one thing at a time.
+- I think this needs two days. One on unbiasedness, one on variance.
+- Also: the 'forgetting' heuristic should come up earlier, in Lecture 6.
+- Maybe this organization? 
+  - Intro
+    - Recall two high school summaries of the population.
+    - Point out that we can estimate them using analogous summaries of the sample.
+    - And bootstrap them to estimate their sampling distributions widths.
+    - Two questions.
+     - About coverage: Bias would be a problem. Are they biased? If so, how much?
+     - About precision: Why is one so much narrower than the other? 
+  - Quiz: which summary is the secant slope?
+  - Unbiasedness 
+   - Abstraction v1.
+    - target: linear combination of subpopulation means.
+    - estimator: linear combination of subsample means. 
+    - unbiasedness picture + proof.
+    - Examples w/ coefs. Board exercise.
+      - column mean
+      - difference of column means 
+      - average over years / secant slope 
+    - Not an Example: average over people.
+   - Abstraction v2 (acknowledge as a generalization)
+    - target: linear combination w/ coefficients that depend on covariates x_1 ... x_m
+    - estimator: linear combination w/ coefficients that depend on the sample X_1 ... X_n
+    - Examples. Probably state coefficient formulas but defer to homework/end of class. Or have done it already. Lab?
+      - Multi-column mean. Including the whole population.
+      - Average over people. 
+    - Unbiasedness.
+      - What do you think? Go example by example.
+        - The whole population mean? It better be. We already showed it is in Lecture 4.
+        - Multi-column means? Sure. 'Forgetting' argument.
+        - Average over people. Go ahead and guess, but we'll revisit after doing a calculation.
+      - Calculate the expectation in abstract, reducing question to *unbiasedness of coefficients*.  
+        - The whole pop mean: coefficients are proportions. We know these are unbiased.
+        - Multi-column means: coefficients are proportions within subsample. 
+          - They should be. If we 'forget' the disused columns, these are just proportions. 
+          - Formalization via conditioning. 2 stage sampling argument. Give it a slide with the stages.
+        - Average over people. 
+          - Put up unrolled formula. 
+          - Q1. Are these coefficients unbiased? (Yes)
+          - Q2. How do you know? (Linearity + Unbiasedness of proportions w/in subsample.) 
+    - Resolving Question 1
+      - 'The Recipe' gives us an unbiased estimator if the coefficients are unbiased.
+      - Which happens if ...
+        - The coefficients don't depend on the population/sample
+        - The coefficients are sample proportions or differences of them
+      - That'll cover basically everything we talk about in this class
+  - Variance 
+    - We'll do this in abstraction v2. Form + examples
+    - Recall total variance and how it's come up before, e.g. in subsample mean variance calc.
+    - Calculation, insofar as we want to include it
+    - Interpretation for our two summaries
+      - what is and isn't hard to estimate?
+      - what's a lower bound good for?
+    - Concluding discussion of (bad) common practice.
+      - testing for differences and then using whichever.
+      - minimal variance convex combinations?
