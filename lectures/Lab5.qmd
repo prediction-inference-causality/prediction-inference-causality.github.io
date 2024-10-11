@@ -1,0 +1,504 @@
+---
+title: "Lab 5"
+subtitle: "A Game of Telephone"
+resources:
+  - data
+webr:
+  resources:
+    - data/tinypop.csv
+    - data/mht-pop.csv
+    - data/mht-sam.csv
+    - data/earnings.csv
+    - data/pop-earnings.csv
+---
+
+
+## Data {visibility="hidden"}
+
+{{< include ../_extensions/r-wasm/live/_knitr.qmd >}}
+{{< include shared-code.qmd >}}
+{{< include ca-income.qmd >}}
+
+```{r}
+#| label: tiny-pop-data
+pop = data.frame(
+  names = c('Alice', 'Bob', 'Charlie', 'Dana', 'Ed', 'Frank', 'Grace', 'Heidi'),
+  x = c(12,12,14,14,16,16,16,16),
+  y = c(40,50,50,60,75,65,90,70),
+  j = .03*c(-1,1,-1,1,-1,1,-1,1)) 
+pop$jx = pop$x + pop$j
+write.csv(pop, 'data/tinypop.csv')
+```
+
+
+```{r}
+#| label: income-data
+write.csv(pop.earnings, 'data/pop-earnings.csv')
+write.csv(earnings, 'data/earnings.csv')
+```
+
+```{r}
+#| label: mht-data
+set.seed(1) 
+m = 1e4 
+pi = function(x) { 1/(1+exp(-(x-60)/8 )) }
+mu = function(w, x) { 1 - (x-50)/10 + w*((x-50)/10)^2/2 }  
+
+X = 50+2*round(5*runif(m))
+W = 0 + (runif(m) <= pi(X))
+epsilon0 = rnorm(m)
+epsilon1 = rnorm(m)
+Y0 = mu(0,X) + .25*epsilon0
+Y1 = mu(1,X) + .25*epsilon1
+
+pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
+
+n = 5000
+sam = pop[sample(nrow(pop), n, replace=TRUE),]
+write.csv(pop, 'data/mht-pop.csv')
+write.csv(sam, 'data/mht-sam.csv')
+```
+
+```{r}
+mean_sd = function(x) {
+  data.frame(y=mean(x), ymin=mean(x)-sd(x), ymax=mean(x)+sd(x))
+}
+
+triangle =  'x25B2'
+circle = 'x25CF'
+square = 'x25A0'
+diamond = 'x25C6'
+```
+
+## A Small Population 
+
+```{=html}
+<style>
+.reveal { background: #ffffff; }
+</style>
+```
+
+```{r}
+#| echo: false
+#| layout-ncol: 2
+#| fig-asp: .4 
+
+pop = read.csv('data/tinypop.csv')
+scales =   list(scale_x_continuous(
+                  breaks=c(12,14,16), 
+                  labels=c('High School Diploma', '2-Year Degree', '4-Year Degree'), 
+                  limits=c(11.5,16.5)),
+                scale_y_continuous(
+                  breaks=c(40,50,60,70,80,90), 
+                  labels=c('40k', '50k', '60k', '70k', '80k', '90k')), 
+                coord_cartesian(ylim=c(35,95)))  
+plot.tiny.increments = function(pop) {
+  summaries = pop |> group_by(x) |> summarize(mu=mean(y), sigma=sd(y), n=n())
+  ggplot(pop) + 
+    geom_point(aes(x=jx, y=y, color=factor(names)), size=3) + 
+    geom_text(aes(x=jx + .03, y=y, label=names, color=factor(names)), hjust=0,vjust=0, size=5) +
+    geom_pointrange(aes(x=x, y=mu, ymin=mu-sigma, ymax=mu+sigma, shape=factor(x)), data=summaries, alpha=.4, size=1.5) +
+    geom_line(aes(x=x, y=mu), data=summaries, linetype='dashed', alpha=.3) + 
+    scales + guides(color='none', shape='none')
+}
+theme_set(whitebw.theme())
+```
+
+```{r}
+plot.tiny.increments(pop)
+```
+
+$$
+\begin{aligned}
+\theta_{\text{degrees}} 
+&= \text{average in our population, over 2 and 4-year degrees, of the incremental value of the degree} \\
+&=\frac{(\unicode{`r square`} - \unicode{`r triangle`}) + \class{fragment}{(\unicode{`r triangle`} - \unicode{`r circle`})}}{2} \\ 
+&=\sum_x \alpha(x) \mu(x) \qfor  \alpha(x) = \begin{cases}  
+& \qqtext{if} x=\text{\unicode{`r circle`} \ high school diploma} \\
+&\qqtext{if} x=\text{\unicode{`r triangle`} \ 2-year degree} \\
+&\qqtext{if} x=\text{\unicode{`r square`} \ 4-year degree} 
+\end{cases} \\
+& \\
+& \\ 
+\theta_{\text{people}}
+&= \text{average in our population, over people with 2 and 4-year degrees, of the incremental value of their last degree} \\
+&= \frac{4 \times (\unicode{`r square`} - \unicode{`r triangle`}) + \class{fragment}{2 \times (\unicode{`r triangle`} - \unicode{`r circle`})}}{6} \\ 
+&=\sum_x \alpha(x) \mu(x) \qfor  \alpha(x) = \begin{cases}  
+& \qqtext{if} x=\text{\unicode{`r circle`} \ high school diploma} \\
+&\qqtext{if} x=\text{\unicode{`r triangle`} \ 2-year degree} \\
+&\qqtext{if} x=\text{\unicode{`r square`} \ 4-year degree} 
+\end{cases} \\
+\end{aligned}
+$$  
+  
+
+## A Small Population, Sampled
+
+```{r}
+#| echo: false
+#| layout-ncol: 2 
+#| fig-width: 7
+#| fig-asp: .4
+
+J1 = c(1,3,5,7,8)
+sam = pop[J1, ]
+plot.tiny.increments(pop)
+plot.tiny.increments(sam)
+```
+
+$$
+\begin{aligned}
+\hat\theta_{\text{degrees}} 
+&= \text{average in our sample, over 2 and 4-year degrees, of the incremental value of the degree} \\
+&=\frac{(\unicode{`r square`} - \unicode{`r triangle`}) + \class{fragment}{(\unicode{`r triangle`} - \unicode{`r circle`})}}{2} \\ 
+&=\sum_x \hat\alpha(x) \hat\mu(x) \qfor  \hat\alpha(x) = \begin{cases}  
+& \qqtext{if} x=\text{\unicode{`r circle`} \ high school diploma} \\
+&\qqtext{if} x=\text{\unicode{`r triangle`} \ 2-year degree} \\
+&\qqtext{if} x=\text{\unicode{`r square`} \ 4-year degree} 
+\end{cases} \\
+& \\
+& \\ 
+\hat\theta_{\text{people}}
+&= \text{average in our sample, over people with 2 and 4-year degrees, of the incremental value of their last degree} \\
+&= \frac{3 \times (\unicode{`r square`} - \unicode{`r triangle`}) + \class{fragment}{(\unicode{`r triangle`} - \unicode{`r circle`})}} {4} \\ 
+&=\sum_x \hat\alpha(x) \hat\mu(x) \qfor  \hat\alpha(x) = \begin{cases}  
+& \qqtext{if} x=\text{\unicode{`r circle`} \ high school diploma} \\
+&\qqtext{if} x=\text{\unicode{`r triangle`} \ 2-year degree} \\
+&\qqtext{if} x=\text{\unicode{`r square`} \ 4-year degree} 
+\end{cases} \\
+\end{aligned}
+$$  
+  
+
+ 
+## A Small Population, Sampled Again
+
+```{r}
+#| echo: false
+#| layout-ncol: 2 
+#| fig-width: 7
+#| fig-asp: .4
+
+J2 = c(1,2,3,4,6,8)
+sam = pop[J2, ]
+plot.tiny.increments(pop)
+plot.tiny.increments(sam)
+```
+
+$$
+\begin{aligned}
+\hat\theta_{\text{degrees}} 
+&= \text{average in our sample, over 2 and 4-year degrees, of the incremental value of the degree} \\
+&=\frac{(\unicode{`r square`} - \unicode{`r triangle`}) + \class{fragment}{(\unicode{`r triangle`} - \unicode{`r circle`})}}{2} \\ 
+&=\sum_x \hat\alpha(x) \hat\mu(x) \qfor  \hat\alpha(x) = \begin{cases}  
+& \qqtext{if} x=\text{\unicode{`r circle`} \ high school diploma} \\
+&\qqtext{if} x=\text{\unicode{`r triangle`} \ 2-year degree} \\
+&\qqtext{if} x=\text{\unicode{`r square`} \ 4-year degree} 
+\end{cases} \\
+& \\
+& \\ 
+\hat\theta_{\text{people}}
+&= \text{average in our sample, over people with 2 and 4-year degrees, of the incremental value of their last degree} \\
+&= \frac{2 \times (\unicode{`r square`} - \unicode{`r triangle`}) + \class{fragment}{2 \times (\unicode{`r triangle`} - \unicode{`r circle`})}}{4} \\ 
+&=\sum_x \hat\alpha(x) \hat\mu(x) \qfor  \hat\alpha(x) = \begin{cases}  
+& \qqtext{if} x=\text{\unicode{`r circle`} \ high school diploma} \\
+&\qqtext{if} x=\text{\unicode{`r triangle`} \ 2-year degree} \\
+&\qqtext{if} x=\text{\unicode{`r square`} \ 4-year degree} 
+\end{cases} \\
+\end{aligned}
+$$  
+  
+
+## Setup
+```{webr}
+library(tidyverse)
+pop = read.csv('data/tinypop.csv')
+
+J1 = c(1,3,5,7,8)
+sam = pop[J1,]
+
+summary.functions = function(pop) { 
+  summaries = pop |> group_by(x) |> summarize(mean=mean(y), sd=sd(y), n=n())
+  list(mu = function(x) { summaries$mean[match(x, summaries$x)] }, 
+       sigma = function(x) { summaries$sd[match(x, summaries$x)] },
+       n = function(x) { summaries$n[match(x, summaries$x)] })
+}
+
+pop.functions = summary.functions(pop)
+sam.functions = summary.functions(sam)
+
+m  = pop.functions$n
+mu = pop.functions$mu
+sigma = pop.functions$sigma
+
+N = sam.functions$n
+muhat = sam.functions$mu
+sigmahat = sam.functions$sigma
+
+x = pop$x
+X = sam$x 
+```
+
+## Writing the Code
+```{webr}
+degree.years = c(14,16)
+theta.years = mean(mu(degree.years)) 
+theta.people = mean(mu(X[X %in% degree.years]))
+```
+
+```{webr}
+p = function(x) { m(x)/sum(m(degree.years)) }
+theta.people.table = mean(mu(degree.years) * p(degree.years))
+```
+
+## A Bigger Version
+```{r}
+pop.dot.size = .75
+n = nrow(earnings)
+m = nrow(pop.earnings)
+
+# reduce size of pop to 5x sample size to keep the browser happy
+pop.idx = c(1:4*n, (m-n+1):m) 
+
+jitter = function(earnings, idx=pop.idx, foreground=TRUE, color=default.color, background.alpha=.01, foreground.alpha=.2) { 
+  earnings$foreground = foreground
+  earnings$color = color
+  ggplot(earnings[idx,]) + geom_point(aes(x=education, y=income, alpha=foreground, color=I(color)), 
+                                size=pop.dot.size, position=position_jitter(seed=0,w=.3)) +
+                                scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(background.alpha,foreground.alpha)) + 
+                                guides(color=FALSE, alpha=FALSE)
+} 
+degree.years = c(12, 14, 16, 18, 20)
+plot.aggregate.comparison = function(earnings, idx=pop.idx) {
+  summaries = earnings |> group_by(education) |> summarize(mean=mean(income), sd=sd(income), mean.X = mean(education))
+  aggregate.comparison.plot= jitter(earnings, idx) + 
+    geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), 
+      data=summaries[summaries$education %in% degree.years,]) +
+    geom_line(aes(x=education, y=mean), color='blue', alpha=.4,
+      data=summaries[summaries$education %in% range(degree.years),]) + 
+    geom_line(aes(x=education, y=mean), color='black', linetype='dashed',
+      data=summaries[summaries$education %in% degree.years,]) 
+  aggregate.comparison.plot + scale_x(c(11.5,20.5)) + scale_y(c(0, 2e5)) 
+}
+
+default.color = twocolor.red
+epsilon = rnorm(m)*sd(pop.earnings$income)/2
+mu = map_dbl(1:20, function(x) { mean(pop.earnings$income[pop.earnings$education==x]) })
+earnings3 = pop.earnings 
+earnings3$income = mu[ifelse(pop.earnings$education==16, 14, pop.earnings$education)] + epsilon
+
+over.people = function(earnings) {
+  degreeed = earnings$education[earnings$education %in% degree.years]
+  mu = map_dbl(1:20, function(x) { mean(earnings$income[earnings$education==x]) })
+  mean(mu[degreeed] - mu[degreeed-2])
+}
+over.years = function(earnings) {
+  mu = map_dbl(1:20, function(x) { mean(earnings$income[earnings$education==x]) })
+  mean(mu[degree.years[2:5]] - mu[degree.years[1:4]])
+}
+```
+
+::: {.panel-tabset}
+### Plots
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+
+pe = earnings3
+J = sample(1:nrow(pe), 2000)
+sam = pe[J, ]
+plot.aggregate.comparison(pe, idx=1:(10*nrow(sam)))
+plot.aggregate.comparison(sam, idx=1:nrow(sam))
+```
+
+```{r}
+mu = map_dbl(1:20, function(x) { mean(pe$income[pe$education==x]) })
+mx = map_dbl(1:20, function(x) { sum(pe$education==x) })
+px = mx/sum(mx[degree.years])
+
+muhat = map_dbl(1:20, function(x) { mean(sam$income[sam$education==x]) })
+mxhat = map_dbl(1:20, function(x) { sum(sam$education==x) })
+pxhat = mxhat/sum(mxhat[degree.years[2:5]])
+```
+
+```{webr}
+pop.earnings = read.csv('data/pop-earnings.csv')
+earnings = read.csv()
+```
+
+### Summary Tables
+:::: {.columns}
+::: {.column}
+
+$x$ | $m_x$ | $\mu(x)$  
+---|--|--
+`r degree.years[1]` | `r approx(mx[degree.years[1]])` | `r thousand(mu[degree.years[1]], 1)`
+`r degree.years[2]` | `r approx(mx[degree.years[2]])` | `r thousand(mu[degree.years[2]], 1)`
+`r degree.years[3]` | `r approx(mx[degree.years[3]])` | `r thousand(mu[degree.years[3]], 1)`
+`r degree.years[4]` | `r approx(mx[degree.years[4]])` | `r thousand(mu[degree.years[4]], 1)`
+`r degree.years[5]` | `r approx(mx[degree.years[5]])` | `r thousand(mu[degree.years[5]], 1)`
+
+:::
+::: {.column}
+$x$ | $N_x$ | $\hat\mu(x)$  
+---|--|--
+`r degree.years[1]` | `r approx(mxhat[degree.years[1]])` | `r thousand(muhat[degree.years[1]], 1)`
+`r degree.years[2]` | `r approx(mxhat[degree.years[2]])` | `r thousand(muhat[degree.years[2]], 1)`
+`r degree.years[3]` | `r approx(mxhat[degree.years[3]])` | `r thousand(muhat[degree.years[3]], 1)`
+`r degree.years[4]` | `r approx(mxhat[degree.years[4]])` | `r thousand(muhat[degree.years[4]], 1)`
+`r degree.years[5]` | `r approx(mxhat[degree.years[5]])` | `r thousand(muhat[degree.years[5]], 1)`
+:::
+:::: 
+:::
+
+::: {.panel-tabset}
+### R Setup
+```{webr}
+pop = read.csv('data/pop-earnings.csv')
+sam = read.csv('data/earnings.csv')
+pop$x = pop$education
+sam$x = sam$education
+pop$y = pop$income
+sam$y = sam$income
+
+pop.functions = summary.functions(pop)
+sam.functions = summary.functions(sam)
+
+m  = pop.functions$n
+mu = pop.functions$mu
+sigma = pop.functions$sigma
+
+N = sam.functions$n
+muhat = sam.functions$mu
+sigmahat = sam.functions$sigma
+
+x = pop$education
+X = sam$education
+```
+
+
+### Exercise 1
+- What is the average in our population, over the four degree types shown, of the incremental value of the degree? 
+- How do we estimate it using our sample? 
+
+```{webr}
+degree.years = c(14,16,18,20)
+mean(mu(degree.years) - mu(degree.years-2))
+mean(muhat(degree.years) - muhat(degree.years-2))
+```
+
+
+
+### Exercise 2
+- What is the average in our population, over people with these 4 degrees, of the incremental value of their last degree? 
+- How do we estimate it using our sample?
+
+:::
+
+## A New Dataset
+
+```{r}
+set.seed(1) 
+m = 1e4 
+pi = function(x) { 1/(1+exp(-(x-60)/8 )) }
+mu = function(w, x) { 1 - (x-50)/10 + w*((x-50)/10)^2/2 }  
+
+X = 50+2*round(5*runif(m))
+W = 0 + (runif(m) <= pi(X))
+epsilon0 = rnorm(m)
+epsilon1 = rnorm(m)
+Y0 = mu(0,X) + .25*epsilon0
+Y1 = mu(1,X) + .25*epsilon1
+
+pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
+
+n = 5000
+sam = pop[sample(nrow(pop), n, replace=TRUE),]
+```
+
+```{r}
+scatter = ggplot(sam[sam$W==1,]) + 
+  geom_point(aes(x=X, y=Y), alpha=.1, position=position_jitter(w=.15, h=0), color=twocolor.red) + 
+  guides(color='none')
+
+annotated.scatter = scatter +  
+  stat_summary(aes(x=X, y=Y), geom="pointrange", alpha=.8,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - sd(x), 
+                 fun.max = function(x) mean(x) + sd(x))
+annotated.scatter + scale_x_continuous(breaks=seq(50,60,2)) 
+```
+
+```{r}
+X = sam$X[sam$W==1]
+Y = sam$Y[sam$W==1]
+```
+
+:::: columns 
+::: {.column width="25%"}
+x | $N_x$ | $\hat\mu(x)$
+---|---|---
+50 | `r sum(X==50)` | `r round(mean(Y[X==50]),2)`
+52 | `r sum(X==52)` | `r round(mean(Y[X==52]),2)`
+54 | `r sum(X==54)` | `r round(mean(Y[X==54]),2)`
+56 | `r sum(X==56)` | `r round(mean(Y[X==56]),2)`
+58 | `r sum(X==58)` | `r round(mean(Y[X==58]),2)`
+60 | `r sum(X==60)` | `r round(mean(Y[X==60]),2)`
+
+:::
+::: {.column width="75%"}
+::: {.panel-tabset}
+### About the Data
+- Menopausal Hormone Therapy, or MHT, is a treatment for the symptoms of menopause. 
+  - It's said that it improves bone density. 
+  - But its effect does seem to depend on when it's started.
+- What we see here is a plot of $y$ vs $x$ in a sample of people who receive MHT.
+  - y: bone density at age 65 
+  - x: age at which MHT was started
+
+### Exercise 
+- You will be given something to estimate. 
+ - You will describe it as precisely as possible and hand your description back.
+ - Then you'll compute it, either by hand or using R in the **R** tab.
+- Row 1. I'll give you an iPad. In your description, you may want to mark up the plot above.
+- Row 2. Write your description in mathematical notation.
+- Row 3. Write your description in plain English. And hold on to it. 
+
+### R Setup (ignore)
+```{webr}
+set.seed(1) 
+m = 1e4 
+pi = function(x) { 1/(1+exp(-(x-60)/8 )) }
+mu = function(w, x) { 1 - (x-50)/10 + w*((x-50)/10)^2/2 }  
+
+X = 50+2*round(5*runif(m))
+W = 0 + (runif(m) <= pi(X))
+epsilon0 = rnorm(m)
+epsilon1 = rnorm(m)
+Y0 = mu(0,X) + .25*epsilon0
+Y1 = mu(1,X) + .25*epsilon1
+
+pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
+
+n = 5000
+sam = pop[sample(nrow(pop), n, replace=TRUE),]
+Y = sam$Y[sam$W==1]
+X = sam$X[sam$W==1]
+```
+
+```{webr}
+N = Vectorize(function(x) { sum(X==x) })
+muhat = Vectorize(function(x) { mean(Y[X==x]) }) 
+```
+### R 
+```{webr}
+ages = c(50,52,54,56,58,60)
+X[1:5]
+Y[1:5]
+N(ages)
+muhat(ages)
+```
+
+:::
+:::
+::::
