@@ -229,13 +229,19 @@ X = sam$x
 ## Writing the Code
 ```{webr}
 degree.years = c(14,16)
-theta.years = mean(mu(degree.years)) 
-theta.people = mean(mu(X[X %in% degree.years]))
+Xdegree = X[X %in% degree.years]
+
+theta.years = mean(mu(degree.years) - mu(degree.years-2)) 
+theta.people = mean(mu(Xdegree) - mu(Xdegree-2))
+
+c(theta.years, theta.people)
 ```
 
 ```{webr}
 p = function(x) { m(x)/sum(m(degree.years)) }
 theta.people.table = mean(mu(degree.years) * p(degree.years))
+
+c(theta.people, theta.people.table)
 ```
 
 ## A Bigger Version
@@ -308,11 +314,6 @@ mxhat = map_dbl(1:20, function(x) { sum(sam$education==x) })
 pxhat = mxhat/sum(mxhat[degree.years[2:5]])
 ```
 
-```{webr}
-pop.earnings = read.csv('data/pop-earnings.csv')
-earnings = read.csv()
-```
-
 ### Summary Tables
 :::: {.columns}
 ::: {.column}
@@ -375,10 +376,15 @@ mean(muhat(degree.years) - muhat(degree.years-2))
 ```
 
 
-
 ### Exercise 2
 - What is the average in our population, over people with these 4 degrees, of the incremental value of their last degree? 
 - How do we estimate it using our sample?
+
+```{webr}
+Xdegree = X[X %in% degree.years]
+mean(mu(Xdegree) - mu(Xdegree - 2)) 
+mean(muhat(Xdegree) - muhat(Xdegree - 2))
+```
 
 :::
 
@@ -443,13 +449,36 @@ x | $N_x$ | $\hat\mu(x)$
   - y: bone density at age 65 
   - x: age at which MHT was started
 
-### Exercise 
-- You will be given something to estimate. 
- - You will describe it as precisely as possible and hand your description back.
- - Then you'll compute it, either by hand or using R in the **R** tab.
-- Row 1. I'll give you an iPad. In your description, you may want to mark up the plot above.
-- Row 2. Write your description in mathematical notation.
-- Row 3. Write your description in plain English. And hold on to it. 
+### Exercise Instructions: Row 1
+- Below, I've written out a few things you might estimate. Choose one. 
+ - Write it out in mathematical notation.
+ - Pass your description to the person in the next row.
+ - And then switch over the the **R** tab and compute an estimate yourself.
+- *Warning*. Some of these descriptions are vague. Part of your job is to come up with a sensible 
+
+- Estimation targets.
+  - The change in bone density you'd expect if everyone in your population who started treatment after 50 instead started *at* 50.
+  - The change in bone density you'd expect if everyone in your population started treatment two years earlier than they did.
+  - The change in bone density you'd expect if everyone in your population started treatment two years later than they did.
+
+### Exercise Instructions: Row 2
+- You'll be passed a description of an estimation target.
+  - Translate it into plain English.
+  - Pass it to the person in the next row.
+  - And then switch over the the **R** tab and compute an estimate yourself.
+- While you're waiting on Row 1, here's a warm up. Compute this.
+$$
+\sum_{i : X_i < 60} \hat \mu(X_i+2) 
+$$
+
+### Exercise Instructions: Row 3
+- Take the description passed to you.
+  - Translate it into mathematical notation and hang on to it. 
+  - Then switch over to the **R** tab and compute an estimate yourself.
+- While you're waiting on Row 2, here's a warm up.
+  - Translate this into mathematical notation. 
+  - *The predicted average bone density if everyone in the population started treatment two years later than they did.*
+  - Then switch over the *R* tab and compute an estimate. 
 
 ### R Setup (ignore)
 ```{webr}
@@ -477,6 +506,7 @@ X = sam$X[sam$W==1]
 N = Vectorize(function(x) { sum(X==x) })
 muhat = Vectorize(function(x) { mean(Y[X==x]) }) 
 ```
+
 ### R 
 ```{webr}
 ages = c(50,52,54,56,58,60)
