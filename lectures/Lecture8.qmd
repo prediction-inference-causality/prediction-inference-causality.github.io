@@ -3,8 +3,9 @@ title: "Lecture 8"
 subtitle: "Inference for Complicated Summaries"
 ---
 
-## Last Week
+# Introduction 
 
+## 
 {{< include shared-code.qmd >}}
 {{< include ca-income.qmd >}}
 
@@ -22,26 +23,60 @@ sample.scatter = ggplot(sample.tab) +
 
 
 ```{r}
-#| out-height: 400px
+#| layout-ncol: 2
+#| fig-width: 7
+#| fig-asp: .4
+pop.scatter
 sample.scatter
 ```
 
-- We talked summaries of the relationship between income and education *in a sample*.
-- We talked about a number of types of summaries. 
-- What you'd use depends on what you're interested in.
 
+:::: columns
+::: column
+### Population
+$$
+\small{
+\begin{array}{ccccccc}
+x_1 & y_1 & x_2 & y_2 &  \ldots & x_m & y_m \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
+$$
+:::
+::: column
+### Sample
+$$
+\small{
+\begin{array}{ccccccc}
+X_1 & Y_1 & X_2 & Y_2 &  \ldots & X_n & Y_n \\
+\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
+\end{array}
+}
+$$
+:::
+::::
 
-## Three Types
+- Last class, we talked about summaries of the relationship between income and education in a population. 
+- Today, we'll talk about estimating them by summarizing a sample drawn from it exactly the same way.
+- This is a recipe we've been using since the start of the semester.
+  - We've used sample means estimate population means.
+$$
+\frac1n\sum_{i=1}^n Y_i \qqtext{ estimates } \frac1m\sum_{j=1}^m y_j 
+$$
+  - We've used subsample means to estimate subpopulation means.
+$$
+\frac{1}{N_x}\sum_{i:X_i=x}Y_i \qqtext{ estimates } \frac{1}{m_x}\sum_{j:x_j=x}y_j \qfor N_x=\sum_{i:X_i=x} 1 \qand m_x = \sum_{j:x_j=x}1
+$$
 
+- What'll be new is that the summaries we'll be estimating will be more complex. 
+  - For many of them, we already have the tools to understand estimation and inference.
+  - For others, we'll need new tools that we'll cover today. 
+  - Let's review a few examples.
+  
+## 
+::: {.panel-tabset}
+### Column Comparisons 
 ```{r}
-#| layout-ncol: 3
-#| out-height: 400px
-#| fig-asp: 1
-#| fig-subcap:
-#|  - A Fine Group Comparison $$\hat\mu(16) - \hat\mu(12)$$
-#|  - An Aggregate Group Comparison $$\hat\mu(16) - \hat\mu(\le 12)$$
-#|  - An Aggregated Comparison $$\frac{1}{4}\sum_{x= 9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) } $$
-
 summaries = sample.tab |> group_by(education) |>
   summarize(mean=mean(income), sd=sd(income), N=length(income))
 coarsened.summaries = sample.tab[sample.tab$education %in% c(16,8:12),] |>
@@ -50,391 +85,234 @@ coarsened.summaries = sample.tab[sample.tab$education %in% c(16,8:12),] |>
             sd=sd(income),
             mean.X = mean(education))
 
-# Plot the fine-group comparison
 ggplot(sample.tab) + geom_point(aes(x=education, y=income, alpha=education %in% c(16,12), color=education > 12), 
                                   size=dot.size, position=position_jitter(seed=0,w=.3)) + 
                    geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education %in% c(16,12), ]) +
                    scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.3)) + guides(color=FALSE, alpha=FALSE) 
+```
 
-# Plot the aggregate comparison
+$$
+\hat\theta = \hat\mu(16) - \hat\mu(12) 
+$$
+
+- Everything from our [Lecture on Comparing Two Groups](https://qtm285-1.github.io/assets/lectures/Lecture6.html) applies. 
+- We can 'forget' we have the columns we don't want.
+
+### Comparison of Aggregates
+```{r}
 ggplot(sample.tab) + geom_point(aes(x=education, y=income, alpha=education %in% c(16,8:12), color=education > 12), 
                                   size=dot.size, position=position_jitter(seed=0,w=.3)) + 
                    geom_pointrange(aes(x=mean.X, y=mean, ymin=mean-sd, ymax=mean+sd), data=coarsened.summaries) +
                    scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.3)) + guides(color=FALSE, alpha=FALSE) 
+```
+$$
+\begin{aligned}
+\hat\theta &= \hat\mu(16) - \hat\mu(\le 12) && \qfor \hat\mu(\le 12) = \frac{\sum_{i:X_i \le 12} \hat\mu(X_i)}{\sum_{i:X_i \le 12} 1}
+\end{aligned}
+$$
 
-# Plot the comparison of aggregates
+- Same thing. We can 'forget' that we have the *resolution* we don't want. 
+- If our data had come to us dichotomized already, the tools we have would apply.
+- The math doesn't care *who* dichotomized the data, so we can use the same tools.
+
+###  Aggregated Comparisons
+```{r}
 earnings.jitter.hs = ggplot(sample.tab) + geom_point(aes(x=education, y=income, alpha=education <= 12), color='#F7766D',
                               size=dot.size, position=position_jitter(seed=0,w=.3)) +
                    scale_x() + scale_y() + scale_alpha_manual(breaks=c(FALSE, TRUE), values=c(.01,.3)) + guides(color=FALSE, alpha=FALSE)
 
+                 
 aggregate.comparison.plot = earnings.jitter.hs +
   geom_pointrange(aes(x=education, y=mean, ymin=mean-sd, ymax=mean+sd), data=summaries[summaries$education <= 12,]) +
-  geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') 
+  geom_line(aes(x=education, y=mean), data=summaries[summaries$education<=12,], color='black', linetype='dashed') + 
+  geom_line(aes(x=education, y=mean), data=summaries[summaries$education %in% c(8,12),], color='blue', alpha=.5)
 
-aggregate.comparison.plot
+aggregate.comparison.plot 
 ```
 
-
-## Today
-
-```{r}
-#| out-height: 250px
-#| layout-ncol: 2
-#| cache: true
-
-sample.scatter
-pop.scatter
-```
-
-
-:::: columns
-::: column
-### Sample
 $$
-\small{
-\begin{array}{ccccccc}
-X_1 & Y_1 & X_2 & Y_2 &  \ldots & X_n & Y_n \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\end{array}
-}
-$$
-:::
-::: column
-### Population
-$$
-\small{
-\begin{array}{ccccccc}
-x_1 & y_1 & x_2 & y_2 &  \ldots & x_m & y_m \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\end{array}
-}
-$$
-:::
-::::
-
-- We'll talk about *statistical inference* based on these sample summaries.
-- That is, we'll talk about what they tell us about the population our sample was drawn from.
-  - A population like we illustrate on the right. Small dots, small letters, etc.
-  - A sample like we illustrate on the left. Big dots, big letters, etc.
-- To keep us focused, we'll talk mostly about two different *aggregated comparisons*.
-  - Both are summaries of the value of a year of high school. 
-  - They're different averages of the year-on-year increments in mean income.
-
-## Our Comparisons
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .3
-aggregate.comparison.plot + xlim(c(7.5,12.5))
-```
-
-1. The average, over the four years of high school, of the increments.
-$$
-\frac{1}{4}\sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) } = \frac{\hat\mu(12) - \hat\mu(8)}{4}
+\begin{aligned}
+\hat\theta &= \frac{\sum\limits_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) }}{4}  && \qqtext{ the average over years} \\
+\hat\theta &= \frac{\sum\limits_{i:X_i \in 9 \ldots 12} \qty{ \hat\mu(X_i) - \hat\mu(X_i-1) }}{\sum_\limits{i:X_i \in 9 \ldots 12} 1} && \qqtext{ the average over people}
+\end{aligned}
 $$
 
-2. The average, over people with &ge;1 year of high school, of the increments *affecting them* in their last year. 
-$$
-\frac{\sum_{i:X_i \in 9 \ldots 12} \qty{ \hat\mu(X_i) - \hat\mu(X_i-1) }}{\sum_{i:X_i \in 9 \ldots 12} 1} 
-=  \sum_{x \in 9 \ldots 12} P_x \ \qty{ \hat\mu(x) - \hat\mu(x-1) } \quad \text{ for } \quad P_x = \frac{N_x}{\sum_{x \in 9 \ldots 12}N_x}.
-$$
+- These are different. There's no way to 'forget' into a situation we've already addressed.
+- We'll need some new tools to deal with these. That's what we'll work on today.
 
-
-## Why This is Enough
-
-- These aren't the only summaries we might be interested in. We've talked about many others.
-- But every one was a linear combination --- coefficient weighted sum --- of the subsample means.
-- Some, like the average over years, involved coefficients that didn't depend on the covariates.
-
-$$
-\small{
-\frac14\sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1)} = \sum_x \alpha(x) \hat \mu(x)  \qfor \alpha(x) 
-= \begin{cases} 
-\hphantom{-}\frac14 & \text{ if } x = 12 \\ 
-          -\frac14  & \text{ if } x = 8 \\ 
-          0 & \text{ otherwise} \end{cases}
-}
-$$
-
-- Others, like the average over people with &ge;1 year of high school, involved coefficients that did.
-
-$$
-\small{
-\sum_{x=9}^{12} P_x \qty{ \hat\mu(x) - \hat\mu(x-1)} = \sum_x \hat \alpha(x) \hat \mu(x) \qfor
-\hat\alpha(x) = \begin{cases}
-  P_{12} & \text{ if } x = 12 \\
-  P_{x} - P_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
-  -P_9 & \text{ if } x = 8 
-\end{cases}
-}
-$$
-
-- We'll tackle these two general cases, using our two examples as illustrations.
-
-
-# What We're Doing
-
-## Our Data
-
-```{r}
-#| out-height: 700px
-#| fig-ncol: 2
-sample.plot
-pop.plot
-```
-
-
-
-- As before, we'll work with data from the 2022 Current Population Survey.
-- We'll look at California residents age 25-35 with at least an 8th-grade education.
-  - This sample includes `r nrow(earnings)` people. 
-  - We'll think of them as having been sampled with replacement from a population.
-  - That is, from the population of all California residents meeting these criteria.
-  - That's an approximation---the CPS is a complex survey---but it's not too bad.
-
-::: aside
-As discussed earlier in the course, these locations are fictitious. The maps are just an illustration of the relationship between sample and population.
 :::
 
-## What We're Estimating {.smaller}
+## Quiz {#quiz}
 
 ```{r}
-#| out-height: 250px
-#| layout-ncol: 2
-#| cache: true
-
-sample.scatter
-pop.scatter
+#| fig-asp: .4
+aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5))
 ```
-
-
-:::: columns
-::: column
-### Sample
 $$
-\small{
-\begin{array}{ccccccc}
-X_1 & Y_1 & X_2 & Y_2 &  \ldots & X_n & Y_n \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\end{array}
-}
-$$
-:::
-::: column
-### Population
-$$
-\small{
-\begin{array}{ccccccc}
-x_1 & y_1 & x_2 & y_2 &  \ldots & x_m & y_m \\
-\vdots & \vdots & \vdots & \vdots & \vdots & \vdots & \vdots \\
-\end{array}
-}
-$$
-:::
-::::
-
-- Qualitatively, the sample and the population are the same kind of thing. 
-- They're both collections of people with incomes and education levels. 
-- That means we can summarize them in the same ways.  
-- It's natural to think of sample summaries as *estimates* of the corresponding population summaries.
-
-$$
-\small{
 \begin{aligned}
-&\hat \mu(x) = \frac{1}{N_x}\ \sum_{i:X_i=x} Y_i \qfor N_x = \sum_{i:X_i=x} 1 
-&& \text{ estimates } \quad \mu(x) = \frac{1}{m_x}\ \sum_{j:x_j=x} y_j \qfor m_x = \sum_{j:x_j=x} 1 \\
-&\frac{1}{4}\sum_{x=9}^{12} \qty{ \hat \mu(x) - \hat\mu(x-1) }                       
-&& \text{ estimates } \quad \frac{1}{4}\sum_{x=9}^{12} \qty{ \mu(x) - \mu(x-1) }   \\
-&\sum_{x=9}^{12} P_x \qty{ \hat \mu(x) - \hat\mu(x-1) } \qfor P_x = \frac{N_x}{\sum_{x=9}^{12} N_x}                       
-&& \text{ estimates } \quad \sum_{x=9}^{12} p_x \qty{ \mu(x) - \mu(x-1) }   \qfor p_x = \frac{m_x}{\sum_{x=9}^{12} m_x} \\
+\hat\theta_A &= \frac{\sum\limits_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) }}{4}  && \qqtext{ the average over years} \\
+\hat\theta_B &= \frac{\sum\limits_{i:X_i \in 9 \ldots 12} \qty{ \hat\mu(X_i) - \hat\mu(X_i-1) }}{\sum_\limits{i:X_i \in 9 \ldots 12} 1} && \qqtext{ the average over people}
 \end{aligned}
-}
 $$
 
-## Unbiasedness
+
+1. One of these two estimators can be 'unrolled' into a simple comparison of two column means. 
+$$
+\inteal{\hat \theta = \frac{\hat \mu(12) - \hat \mu(8)}{4}} 
+$$
+Which is it?
+
+
+2. What is the variance of this estimator $\inteal{\hat\theta}$? 
+  - You may express your answer in terms of anything that appears in previous lectures. 
+  - e.g., $\Var[\hat \mu(7)]$ can appear in your answer if you want it to. 
+
+
+## Quiz Solution {#quiz-answers}
+
 ```{r}
-#| out-height: 200px
-#| fig-asp: .2 
-
-biasdata = data.frame(x=seq(-3,3,length.out=1000), fx=dnorm(seq(-3,3,length.out=1000)))
-ggplot() + geom_area(aes(x=x,y=fx), alpha=.2, color='gray', data=biasdata) + 
-           geom_vline(aes(xintercept=0), color='green', linewidth=2, alpha=.5)
+aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5))
 ```
 
-
-- These estimates are *unbiased*.
-  - That is, their expected value is the population summary they're meant to estimate.
-  - So, loosely speaking, their sampling distribution is centered at the right **location**.
-- We've seen this before in the binary-covariate case.
-  - Subsample means are unbiased for subpopulation means---even conditional on $X_1 \ldots X_n$.
-  - This extends, via linearity of expectations, to combinations like the differences of subsample means.
-- All this still generalizes, via linearity, to the non-binary covariate case.
-  - It's true for combinations with non-random coeffificents, like the average over years.
-  - It's true for combinations with random, but *unbiased* coefficients, like the average over people.
-
-$$
-\small{
-\begin{aligned}
-&\E\qty[\hat \mu(x)] = \E\qty[\frac{1}{N_x}\ \sum_{i:X_i=x} Y_i] \qfor N_x = \sum_{i:X_i=x} 1 
-&& \quad \textbf{is equal to}  \quad \mu(x) = \frac{1}{m_x}\ \sum_{j:x_j=x} y_j \qfor m_x = \sum_{j:x_j=x} 1 \\
-&\E\qty[\frac{1}{4}\sum_{x=9}^{12} \qty{ \hat \mu(x) - \hat\mu(x-1) }]                       
-&& \quad \textbf{is equal to} \quad \frac{1}{4}\sum_{x=9}^{12} \qty{ \mu(x) - \mu(x-1) }   \\
-&\E\qty[\sum_{x=9}^{12} P_x \qty{ \hat \mu(x) - \hat\mu(x-1) }] \qfor P_x = \frac{N_x}{\sum_{x=9}^{12} N_x}                       
-&& \quad \textbf{is equal to} \quad \sum_{x=9}^{12} p_x \qty{ \mu(x) - \mu(x-1) }   \qfor p_x = \frac{m_x}{\sum_{x=9}^{12} m_x} \\
-\end{aligned}
-}
-$$
-
-## The Average Over Years
-
-1. To show unbiasedness, we expand our estimator into a linear combination of subsample means.
-$$
-\frac{1}{4}\sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) } 
-= \frac{\hat\mu(12) - \hat\mu(8)}{4} \\
-= \sum_x \alpha(x) \hat \mu(x)  \qfor \alpha(x) = \begin{cases} 
-\hphantom{-}\frac14 & \text{ if } x = 12 \\ 
-          -\frac14  & \text{ if } x = 8 \\ 
-          0 & \text{ otherwise} \end{cases}
-$$
-
-2. Then we calculate its expectation in this general form.
-
+::: {.panel-tabset}
+### Part 1
+It's the average over years that unrolls like this.
 $$
 \begin{aligned}
-\E\qty[\sum_x \alpha(x) \hat \mu(x)] 
-&= \sum_x \alpha(x) \E\qty[\hat\mu(x)] && \text{ via linearity } \\
-&= \sum_x \alpha(x) \mu(x)         && \text{ because $\hat\mu(x)$ is unbiased } \\
+\frac{\sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) }}{4} 
+&= \frac{ \qty{\mu(12) - \mu(11)} + \qty{ \mu(11) - \mu(10) } + \qty{ \mu(10) - \mu(9) } + \qty{ \mu(9) - \mu(8) } }{4} \\
+&= \frac{\mu(12) - \mu(8)}{4}
 \end{aligned}
 $$
 
-3. Then we reverse our expansion to get something more familiar-looking.
+### Part 2
+It's $1/4^2 = 1/16$ times the variance of the difference of these two column means.
 
+ - For any random variable $X$ and constant $a$ ...
+$$
+ \Var[aX] 
+ \explain{=}{definition} \E[(aX-\E[aX])^2] 
+ \explain{=}{linearity of expectation + arithmetic} a^2\E[(X-\E[X])^2] 
+ \explain{=}{definition} a^2\Var[X].
+$$
+
+- In the special case $a=1/4$ and $X=\hat\mu(12) - \hat\mu(8)$ ...
 $$
 \begin{aligned}
-\sum_x \alpha(x) \mu(x)
-&= \frac{\mu(12) - \mu(8)}{4} && \text{plugging in specific coefficients} \\
-&= \frac{1}{4}\sum_{x=9}^{12} \qty{ \mu(x) - \mu(x-1) } && \text{'untelescoping'}
+\Var\qty[\frac{\hat\mu(12) - \hat\mu(8)}{4}] 
+&= \frac{1}{4^2}\Var[\hat\mu(12) - \hat\mu(8)]  
+&& \text{ is the answer I was looking for } \\
+&= \frac{1}{16} \times \E\qty[ \frac{\sigma^2(12)}{N_12} + \frac{\sigma^2(8)}{N_8} ]         
+&& \text{ using a formula from our lecture on comparing two groups.} 
 \end{aligned}
 $$
 
-- In the middle, we have the general case.
-    - A linear combination of subsample means with non-random coefficients is an unbiased estimator ...
-    - of the same linear combination of subpopulation means.
-- At the top and bottom, we translate between this general form and a more familiar-looking one.
-
-
-## The Average Over Years, Faster
-- We could, in fact, have done the whole thing without translation.
-
+### More Along Those Lines
+We know this estimator is unbiased. We can think about the difference in means for this, too. 
 $$
 \begin{aligned}
-\E\qty[\frac{1}{4}\sum_{x=9}^{12} \qty{ \hat\mu(x) - \hat\mu(x-1) }] 
-&= \frac{1}{4}\sum_{x=9}^{12} \qty{ \E[\hat\mu(x)] - \E[\hat\mu(x-1)] } && \text{via linearity }\\
-&= \frac{1}{4}\sum_{x=9}^{12} \qty{ \mu(x) - \mu(x-1) } && \text{via unbiasedness of subsample means }\\
+\E\qty[\frac{\hat\mu(12) - \hat\mu(8)}{4}] 
+&\explain{=}{via linearity} 
+\frac{\E[\hat\mu(12)] - \E[\hat\mu(8)]]}{4} 
+\\ 
+&\explain{=}{via unbiasedness of subsample means} 
+\frac{\mu(12) - \mu(8)}{4}\\
+&\explain{=}{'rolling it back up'} 
+\frac{1}{4}\sum_{x=9}^{12}\qty{\mu(x) - \mu(x-1)}{4}.
 \end{aligned}
-$$
-
-- But we'll need the general form later, for variance calculation, so we took this opportunity to introduce it.
-
-
-## The Average Over People
-
-1. Again, we expand our estimator into a linear combination of subsample means.
-$$
-\begin{aligned}
-\frac{\sum_{i:X_i \in 9 \ldots 12} \qty{ \hat\mu(X_i) - \hat\mu(X_i-1) }}{\sum_{i:X_i \in 9 \ldots 12} 1}  
-&=  \sum_{x \in 9 \ldots 12} P_x \ \qty{ \hat\mu(x) - \hat\mu(x-1) } \quad \text{ for } \quad P_x = \frac{N_x}{\sum_{x \in 9 \ldots 12}N_x} \\
-&= \sum_x \hat \alpha(x) \hat \mu(x) \qfor
-\hat\alpha(x) = \begin{cases}
-  P_{12} & \text{ if } x = 12 \\
-  P_{x} - P_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
-  -P_9 & \text{ if } x = 8 
-\end{cases}
-\end{aligned}
-$$
-
-2. We calculate is expectation in this general form. There's a new wrinkle: our coefficients are random.
-$$
-\begin{aligned}
-\E\qty[\sum_x \hat\alpha(x) \hat \mu(x)]    
-&= \sum_x \E\qty[\hat\alpha(x) \hat\mu(x)] && \text{ linearity of expectations } \\
-&= \sum_x \E\qty{ \E\qty[\hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n] } && \text{ law of iterated expectations } \\
-&= \sum_x \E\qty{ \hat \alpha(x) \E[\hat \mu(x) \mid X_1 \ldots X_n] } && \text{ linearity of cond. expectations }\\
-&= \sum_x \E\qty{ \hat \alpha(x) \mu(x) }                              && \text{ conditional unbiasedness of sample means} \\
-&= \sum_x \E\qty{ \hat \alpha(x) } \mu(x)                              && \text{ linearity of expectations }.
-\end{aligned}
-$$
-
-3. If our coefficients are 'unbiased' ...
-  - i.e. if their expectations are the coefficients $\alpha(x)$ in the population summary
-  - then we can reverse the expansion to get the population summary in familiar form.
-
-$$
-\begin{aligned}
-\sum_x \E \qty{\hat\alpha(x)}\mu(x) 
-      &= \sum_x \alpha(x) \mu(x)   
-&& \qqtext{if}  \E\qty{ \hat \alpha(x) } = \alpha(x) \\
-      &= \sum_{x=9}^{12} p_x \qty{ \mu(x) - \mu(x-1) } \qfor p_x = \frac{m_x}{\sum_{x=9}^{12} m_x} 
-&& \qfor \alpha(x) = \begin{cases}
-  p_{12} & \text{ if } x = 12 \\
-  p_{x} - p_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
-  -p_9 & \text{ if } x = 8
-\end{cases} 
-\end{aligned}
-$$
-
-## Does This Work Out?
-
 $$ 
-\begin{aligned}
-&\text{Does} \quad \E\qty{ \hat \alpha(x) } = \alpha(x) \qfor 
-\hat\alpha(x) = \begin{cases}
-  P_{12} & \text{ if } x = 12 \\
-  P_{x} - P_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
-  -P_9 & \text{ if } x = 8 
-\end{cases} \qqtext{and} 
-\alpha(x) = \begin{cases}
-  p_{12} & \text{ if } x = 12 \\
-  p_{x} - p_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
-  -p_9 & \text{ if } x = 8
-\end{cases}
-\end{aligned} \qqtext{?}
-$$
 
-- Yes, it does. We can show that $\E[P_x]=p_x$ for all $x$ via a sort of 'two-stage sampling argument'.
-  - First flip a coin to decide if $X \in \{9 \ldots 12\}$ or not.
-  - Then roll a die to decide which value you take within the group. 
-  - $P_x$ is, conditional on the coin flip, a sample proportion. 
-  - So, it's unbiased for the population proportion $p_x$.
-- This last part isn't something I'd expect you to be able to do on an exam.
-- But it is important to get a satisfying conclusion in this example.
+:::
 
-## Summarizing Unbiasedness 
-
+## What This Tells Us About Inference 
 ```{r}
-#| out-height: 200px
-#| fig-asp: .2 
+#| layout-ncol: 2
+#| fig-width: 7
+#| fig-cap:
+#|  - Our estimator's actual sampling distribution 
+#|  - Our estimate of that sampling distribution
 
-biasdata = data.frame(x=seq(-3,3,length.out=1000), fx=dnorm(seq(-3,3,length.out=1000)))
-ggplot() + geom_area(aes(x=x,y=fx), alpha=.2, color='gray', data=biasdata) + 
-           geom_vline(aes(xintercept=0), color='green', linewidth=2, alpha=.5)
+Y = earnings$income
+X = earnings$education
+point.estimate = (mean(Y[X==12]) - mean(Y[X==8]))/4 
+variance.estimate = (1/16) * (sd(Y[X==12])^2/sum(X==12) + sd(Y[X==8])^2/sum(X==8))
+interval.estimate = point.estimate + c(-1,1)*1.96*sqrt(variance.estimate)
+
+xx = seq(point.estimate-4*sqrt(variance.estimate), point.estimate+4*sqrt(variance.estimate), length.out=1000)
+sampling.dist.estimate = dnorm(xx, mean=point.estimate, sd=sqrt(variance.estimate)) 
+height = max(sampling.dist.estimate)
+sampling.dist.draws = data.frame(x=rnorm(100,point.estimate,sqrt(variance.estimate)), 
+                                 y=height*(1:100)/100, 
+                                 w=1.96*sqrt(variance.estimate))
+
+ggplot() + 
+  annotate('rect', xmin=min(interval.estimate), xmax=max(interval.estimate), ymin=-Inf, ymax=Inf, fill='blue', alpha=.1) +
+  geom_area(aes(x=xx, y=sampling.dist.estimate), color='blue', alpha=.1) +  
+  geom_vline(aes(xintercept=point.estimate), color='green', linewidth=2, alpha=.5) + 
+  geom_pointrange(aes(x=x, xmax=x+w/2, xmin=x-w/2, y=y), color='purple', alpha=.3, data=sampling.dist.draws) + 
+  scale_x_continuous(breaks=c()) + coord_cartesian(xlim=range(xx))
+
+ggplot() + 
+  annotate('rect', xmin=min(interval.estimate), xmax=max(interval.estimate), ymin=-Inf, ymax=Inf, fill='blue', alpha=.1) +
+  geom_area(aes(x=xx, y=sampling.dist.estimate), color='blue', alpha=.1) + 
+  geom_pointrange(aes(x=point.estimate, y=height/3, xmin=min(interval.estimate), xmax=max(interval.estimate)), 
+                      color='blue')  +
+  scale_x_continuous(breaks=point.estimate + sqrt(variance.estimate)*c(-2,0,2)) + 
+  coord_cartesian(xlim=range(xx))  
 ```
 
-- We've shown that our two specific estimators are unbiased.
-- More generally, we've shown that a linear combination of subsample means is unbiased ...
-  - for the same linear combination of subpopulation means, if the coefficients are non-random.
-  - for an analogous linear combination of subpopulation means, using the **expected coefficients**, if they are random.
+::: {.panel-tabset}
+### What We Need for Calibration
 
+To turn a point estimator into a confidence interval, we need to know two things about its sampling distribution.
+
+- Where it's centered---relative to the estimation target.
+  - In this case, it's exactly were we want it to be. 
+  - Our estimator is unbiased, so it's centered at the target.
+- How wide it is, i.e. how far out from center we need to go to cover 95% of draws. [`r circle`]{.purple}s
+  - For this, we can use an estimate of the sampling distribution.
+  - Using one based on *normal approximation*, that's $\pm 1.96 \ \text{estimated standard deviations}$
+
+### Visualizing Calibration
+- To illustrate what's going on, we can draw the picture on the left above. We ...
+  - Place our estimated sampling distribution right at the target. It'll have roughly the same shape.
+  - Think of our estimate as one of many draws [`r circle`]{.purple} from it and draw arms on each.
+  - See that, for 95% of these draws, the arms touch the [target]{.target} at the distribution's center.
+- We don't know where this center $\theta$ is. Otherwise we wouldn't bother estimating it.
+  - That's why I haven't labeled the ticks on the $x$-axis.
+  - But we don't need to know that to know our intervals are calibrated. 
+  - Calibration is about where our draws are *relative to* our estimation target. Unbiasedness is enough.
+
+### Anticipating Calibration
+
+- We can *understand and anticipate* the width of these intervals using our formula for the estimator's variance.
+- All we need are estimates of a few things in the formula: subpopulation standard deviations and subsample sizes.
+- We can use this knowledge to design studies that give us a desired level of precision.
+  - We can use a *pilot study* to estimate these things.
+  - And use those estimates to choose an appropriate sample size for a second wave.
+  - This is what we imagined doing when we talked about [the NSW Demonstration](https://qtm285-1.github.io/assets/lectures/Lecture6.html#the-national-supported-work-demonstration) a few weeks back.
+  
+:::: columns 
+::: column 
 $$
 \begin{aligned}
-\E\qty[\sum_x \alpha(x) \hat \mu(x) ] &= \sum_x \alpha(x) \mu(x) \\
-\E\qty[\sum_x \hat\alpha(x) \hat \mu(x) ] &= \sum_x \E[\hat\alpha(x)] \mu(x) \\
+\Var[\hat\theta] 
+&= \frac{1}{16} \times \E\qty[ \frac{\sigma^2(12)}{N_{12}} + \frac{\sigma^2(8)} {N_8} ] \\
+&\approx \frac{1}{16} \times \qty[\frac{\hat\sigma^2(12)}{N_{12}} + \frac{\hat\sigma^2(8)}{N_8} ] 
 \end{aligned}
 $$
+:::
+::: column
+$x$ | $N_x$ |  $\hat \mu(x)$ | $\hat \sigma(x)$
+--- | --- | --- | ---
+8  | `r sum(X==8)` | `r thousand(mean(Y[X==8]), .1)` | `r thousand(sd(Y[X==8]), .1)`
+12  | `r sum(X==12)` | `r thousand(mean(Y[X==12]), .1)` | `r thousand(sd(Y[X==12]), .1)`
+:::
+::::
 
+:::
 
-## Interval Estimation
-
+## Calibration for the Average over People
 ```{r}
 #| cache: true
 
@@ -472,20 +350,18 @@ summaries = data[data$education <= 12, ] %>% group_by(education) %>%
 
 ```{r}
 #| layout-ncol: 2
-#| out-height: 300px
-#| fig-asp: .3 
+#| fig-width: 7
 #| fig-subcap:
-#|  - Interval Estimate for the Average over Years
-#|  - Interval Estimate for the Average over People 
+#|  - Bootstrap Sampling Distribution and Interval Estimate for the Average over Years
+#|  - Bootstrap Sampling Distribution and Interval Estimate for the Average over People 
 
 distribution.plot = function(boot.samples, point.estimate, w=width(boot.samples), interval.replications=0, point.replications=0) { 
   drange = c(0, dnorm(0, mean=0, sd=sd(boot.samples)))
   p = ggplot(data.frame(samples=boot.samples)) + 
-    geom_histogram(aes(x=samples, y=after_stat(density)), alpha=.3, bins=50)  +
-    geom_pointrange(aes(y=dnorm(2*sd(samples), mean=0, sd=sd(samples)), 
-      x=point.estimate, xmin=point.estimate - w/2, xmax=point.estimate + w/2)) + 
-      geom_vline(xintercept=mean(boot.samples), color='blue') + 
-      geom_vline(xintercept=quantile(boot.samples, c(.025,.975)), color='blue', linetype='dotted') 
+    annotate('rect', xmin=mean(boot.samples) - w/2, xmax = mean(boot.samples) + w/2, ymin=-Inf, ymax=Inf, fill='blue', alpha=.1) +
+    geom_histogram(aes(x=samples, y=after_stat(density)), alpha=.1, bins=50)  +
+    geom_pointrange(aes(x=point.estimate, xmin=point.estimate - w/2, xmax=point.estimate + w/2, y=max(drange)/3), color='blue') + 
+    geom_vline(xintercept=mean(boot.samples), color='blue')
   if(interval.replications > 0) { 
     K = interval.replications
     p = p + geom_pointrange(aes(y=y, x=x, xmin=xmin, xmax=xmax), 
@@ -501,51 +377,205 @@ distribution.plot = function(boot.samples, point.estimate, w=width(boot.samples)
   p
 }
 
-distribution.plot(boots$years, average.over.years(summaries), point.replications=100) + xlim(-10000,15000)
-distribution.plot(boots$people, average.over.people(summaries), point.replications=100) + xlim(-10000,15000)
+distribution.plot(boots$years, average.over.years(summaries), point.replications=0) + 
+  geom_line(aes(x=xx, y=sampling.dist.estimate), color='blue', alpha=.1) + 
+  coord_cartesian(xlim=c(-1000, 15000), ylim=c(0, 3e-4))
+
+distribution.plot(boots$people, average.over.people(summaries), point.replications=0) +
+  coord_cartesian(xlim=c(-1000, 15000), ylim=c(0, 3e-4))
 ```
 
-- It's nice to know that our estimators are unbiased. That's a start. But we want to know more.
-- We want to know what an individual sample actually tells us about a population summary.
-- To do this, we'll use a calibrated interval estimate, i.e. a **confidence interval**.
-- This looks exactly like it did in the binary-covariate case we discussed earlier in the semester.
-  1. We estimate the sampling distribution of our estimator.
-  2. We draw arms on our point estimate wide enough to cover 95% of this distribution---95/100 [purple dots]{.fg style="color:purple"}.
-- And, as before, we can use the bootstrap sampling distribution as our sampling distribution estimate.
-- But then, looking at our two summaries of the average value of a year of high school, we see something.
-- Our estimate of the average over years is much more precise. Its arms are much shorter. Let's understand why.
+- We don't yet know these things about our other summary: the average over people.
+- Our first step will be to show that it, too, is unbiased.
+  - That's really enough for calibration. 
+  - We can use the bootstrap sampling distribution to get the right width.
+- Our second step will be to work out a formula for its variance.
+  - This'll allow us to understand our estimator better, design properly sized-studies, etc.
+  - And it'll be the key to understanding a phenomenon we can see in the plots above.
+- The average over people is *harder to estimate* than the average over years. At least using this data.
+  - We can see its bootstrap sampling distribution is at least twice as wide.
+  - What's behind this? We'll find out. 
 
-## Understanding Sources of Error
+# Unbiasedness
+
+## Warm-Up
+
+```{r}
+#| fig-asp: .4
+aggregate.comparison.plot + scale_x(c(7.5,12.5)) + scale_y(c(0, .7e5))
+```
+
+- When analyzing estimators like this, it's helpful to rewrite them as a [linear combination of column means]{.teal}.
+- That's what we were doing when we 'unrolled' our average over years to see that it was the [secant slope]{.blue}.
+- And it's helpful, if possible, to work out formulas for its coefficients with as few cases as possible.
+  - Why? Because when we do calculations, we have to analyze each case.
+  - In this example, 3 cases is enough. It often is.
+- Give it a shot. Fill in the cases below.
+
+$$
+\begin{aligned}
+\frac{1}{4}\sum_{x\in 9 \ldots 12} \qty{ \hat \mu(x) - \hat \mu(x-1)} 
+&= \frac{\hat\mu(12) -\hat\mu(8)}{4}
+&= \inteal{\sum_{x}\hat\alpha(x)\hat\mu(x)} 
+ \qfor \hat\alpha(x) = 
+\begin{cases} 
+  & \qqtext{if}   \\
+  & \qqtext{if}   \\
+  & \qqtext{if}  \\
+\end{cases}
+\end{aligned}
+$$
+
+
+
+## Step 1. Rewriting the Average over People in Standard Form
+
+$$
+\frac{\sum_{i:X_i \in 9 \ldots 12} \qty{ \hat \mu(X_i) - \hat \mu(X_i-1)}}{\sum_{i:X_i \in 9 \ldots 12} 1} = 
+\sum_{x}\hat\alpha(x)\hat\mu(x) 
+\qfor \hat\alpha(x)=
+$$
+
+::: {.panel-tabset}
+### Exercise
+- We'll do this in three steps. 
+  - We'll rewrite it as a linear combination of *differences in subsample means*. 
+    - This'll be a lot like what we did for aggregate means last class.
+  - We'll 'unroll' that sum and group terms multiplying each subsample mean.
+    - We did this for the average over years and got something very simple. 
+    - All but two coefficients $\hat\alpha(x)$ were zero.
+    - This one will be messier.
+  - We'll try to recognize a pattern in the coefficients so we don't have to analyze every term by itself.
+
+### Solution
+
+$$
+\begin{aligned}
+\frac{\sum_{i:X_i \in 9 \ldots 12} \qty{ \hat\mu(X_i) - \hat\mu(X_i-1) }}{\sum_{i:X_i \in 9 \ldots 12} 1}  
+&=  \sum_{x \in 9 \ldots 12} P_x \ \qty{ \hat\mu(x) - \hat\mu(x-1) } \quad \text{ for } \quad P_x = \frac{N_x}{\sum_{x \in 9 \ldots 12}N_x} \\
+&= \sum_x \hat \alpha(x) \hat \mu(x) \qfor
+\hat\alpha(x) = \begin{cases}
+  P_{12} & \text{ if } x = 12 \\
+  P_{x} - P_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
+  -P_9 & \text{ if } x = 8 
+\end{cases}
+\end{aligned}
+$$
+
+:::
+
+## Step 2. Estimator's Expectation in Standard Form
+
+
+::: fragment
+$$
+\begin{aligned}
+\E\qty[\sum_x \hat\alpha(x) \hat \mu(x)] 
+&\explain{=}{linearity of expectations}
+\sum_x \E\qty[\hat\alpha(x) \hat\mu(x)] \\
+&\explain{=}{law of iterated expectations} 
+\sum_x \E\qty{ \E\qty[\hat\alpha(x) \hat \mu(x) \mid X_1 \ldots X_n] } \\
+&\explain{=}{linearity of conditional expectations} 
+\sum_x \E\qty{ \hat \alpha(x) \E[\hat \mu(x) \mid X_1 \ldots X_n] } \\
+&\explain{=}{conditional unbiasedness of subsample means} 
+\sum_x \E\qty{ \hat \alpha(x) \mu(x) }                    \\        
+&\explain{=}{linearity of expectations} 
+\sum_x \E\qty{ \hat \alpha(x) } \mu(x)                   
+\end{aligned}
+$$
+
+- This tells us we have an unbiased estimator if 
+ - the coefficients of our *estimation target* in standard form 
+ - are the expected value of our estimator's coefficients.
+
+:::
+
+## Step 3. Dealing with Specifics
+$$ 
+\begin{aligned}
+&\text{Does} \quad \E\qty{ \hat \alpha(x) } = \alpha(x) \qfor 
+&&\hat\alpha(x) = \begin{cases}
+  P_{12} & \text{ if } x = 12 \\
+  P_{x} - P_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
+  -P_9 & \text{ if } x = 8 
+\end{cases} \\ 
+\qqtext{and}
+&&&\alpha(x) = \begin{cases}
+  p_{12} & \text{ if } x = 12 \\
+  p_{x} - p_{x+1} & \text{ if } x \in \{9 \ldots 11\} \\
+  -p_9 & \text{ if } x = 8
+\end{cases}
+\end{aligned}
+$$
+
+- For this estimator, that question boils down to the unbiasedness of *sample proportions*. Almost. 
+- These aren't proportions of our whole sample. They're proportions of the 'high school subsample'.
+- But we we can show that $\E[P_x]=p_x$ for all $x$ via a sort of 'two-stage sampling argument'.
+  - First flip a coin to decide if $X \in \{9 \ldots 12\}$ or not.
+  - Then roll a die to decide which value you take within the group. 
+  - $P_x$ is, conditional on the coin flip, a sample proportion. 
+  - So, it's unbiased for the population proportion $p_x$.
+
+
+## Beyond these two summaries 
+
+```{r}
+#| out-height: 200px
+#| fig-asp: .2 
+
+biasdata = data.frame(x=seq(-3,3,length.out=1000), fx=dnorm(seq(-3,3,length.out=1000)))
+ggplot() + geom_area(aes(x=x,y=fx), alpha=.2, color='gray', data=biasdata) + 
+           geom_vline(aes(xintercept=0), color='green', linewidth=2, alpha=.5) + 
+           geom_point(aes(x=rnorm(100), y=(1:100)/(100*(sqrt(2*pi)))), color='purple', alpha=.3)
+```
+
+- We've shown that our two specific estimators are unbiased.
+- More generally, we've shown that a linear combination of subsample means is unbiased ...
+  - if our estimation target is a linear combination of subpopulation means ...
+  - ... in which our estimator's coefficients are replaced by their expected values.
+
+$$
+\begin{aligned}
+\E\qty[\sum_x \hat\alpha(x) \hat \mu(x) ] &= \sum_x \E[\hat\alpha(x)] \mu(x) \\
+\end{aligned}
+$$
+
+- This can be used for all kinds of summaries. 
+  - Almost every target we'll talk about this semester is a linear combination like this.
+  - And the ones that aren't, like ratios, can be *approximated* by linear combinations. 
+
+# Variance 
+
+## Review: The Law of Total Variance
 
 ```{r}
 #| layout-ncol: 2
-#| out-height: 300px
-#| fig-asp: .3 
-#| fig-subcap:
-#|  - Interval Estimate for the Average over Years
-#|  - Interval Estimate for the Average over People 
+#| fig-width: 7
 
-x = seq(-20000,20000, length.out=1000)
-distribution.plot(boots$years, average.over.years(summaries), point.replications=100) + 
-  geom_area(aes(x=x, y=fx), fill='green', alpha=.2, color='black',
-                data=data.frame(x=x, fx=dnorm(x, mean=average.over.years(summaries), sd=sd(boots$years)))) + 
-  xlim(-10000,15000)
+Y = c(.75,1,1.25, 1,1.25,1.5)
+X = 0 + (1:6 > 3)
+Xdodge = X + rep(.02*c(-1,0,1),2)
 
-distribution.plot(boots$people, average.over.people(summaries), point.replications=100) + 
-  geom_area(aes(x=x, y=fx), fill='green', alpha=.2, color='black',
-                data=data.frame(x=x, fx=dnorm(x, mean=average.over.people(summaries), sd=sd(boots$people)))) + 
-  xlim(-10000,15000)
+mu = Vectorize(function(x) mean(Y[X==x]))
+Y.wider = mu(X) + 3*(Y - mu(X))
+
+ggplot() + geom_point(aes(x=Xdodge, y=Y.wider, color=factor(X)), alpha=.7, size=4) + 
+  scale_y_continuous(breaks=seq(0,3,by=.5), limits=c(0,3)) + guides(color='none') 
+ggplot() + geom_point(aes(x=Xdodge, y=Y+X, color=factor(X)), alpha=.7, size=4) + 
+  scale_y_continuous(breaks=seq(0,3,by=.5), limits=c(0,3)) + guides(color='none') 
 ```
 
-
-- To understand why our intervals look like they do, we think about an interval based on normal approximation.
-- The interval's width is determined by the estimator's **standard error**, i.e the square root of its variance.
-
 $$
-\text{population summary} \in \text{point estimate} \pm 1.96 \times \text{standard error}
+\Var[Y] = \E\qty{\Var( Y \mid X ) } + \Var\qty{\E( Y \mid X ) }  
 $$
 
-- To make sense of this, what we need is a variance formula. Here it is.
+- The Law of Total Variance breaks Variance into within-group and between-group terms.
+- It's like the Law of Iterated Expectations, but for Variance.
+- It's a useful way to decompose the variance of a random variable.
+- Think about where most of the variance in $Y$ is coming from in the two populations shown above.
+
+
+## A Variance Decomposition for our Estimator
 
 $$
 \Var\qty[\sum_x \hat\alpha(x) \hat\mu(x)]
@@ -553,10 +583,10 @@ $$
 \sigma^2(x) = \Var[Y_i \mid X_i=x] 
 $$
 
-- This breaks the variance of our estimator down into two parts.
+- We can use the *law of total variance* to decompose our estimator's variance into two parts.
   - [The first]{.fg style="color:blue"} reflects the randomness of our subsample means.
   - [The second]{.fg style="color:red"} reflects the randomness of our coefficients $\hat\alpha(x)$.
-- Note that if our coefficients aren't random, i.e. $\hat\alpha(x)=\alpha(x)$, the second term is zero.
+- Note that if our coefficients aren't random, i.e. $\hat\alpha(x)=\E[\hat\alpha(x)]$, the second term is zero.
 - And often, even if they are random, the first term is much bigger.
 - As a result, we can usually get away with thinking about the first part only.
   - Note that the second part is positive---it's the variance of something.
@@ -564,9 +594,8 @@ $$
 
 ## The Formula
 
-- This two-part structure arises from the law of total variance.
-  - We won't get deep into the calculations here. 
-  - That's 'appendix stuff' as far as this class is concerned.
+We won't get deep into the derivation now. I'll guide you through it in the homework.
+
 
 $$
 \small{
@@ -590,10 +619,9 @@ $$
 \Var\qty[\sum_x \alpha(x) \hat \mu(x)] \ge \textcolor{blue}{\sum_x \sigma^2(x) \times \E\qty[ \frac{\hat\alpha(x)^2}{N_x} ] \quad \text{ where } \quad \sigma^2(x) = \Var[Y_i \mid X_i=x]}
 $$
 
-- The lower bound has two quantities we don't know.
+- LThe lower bound has two quantities we don't know, but can estimate easily.
   - The subpopulation variances $\sigma^2(x)$.
   - The expected value of the ratio of the coefficient squared and the sample size, $\hat\alpha(x)^2 / N_x$.
-- But we can estimate both easily.
 - The subsample variances are good esimates of the subpopulation variances
 $$
 \sigma^2(x) \approx \hat\sigma^2(x) := \frac{1}{N_x} \sum_{i:X_i=x} \qty{Y_i - \hat\mu(x)}^2
@@ -603,10 +631,10 @@ $$
 
 $$ \frac{\hat\alpha(x)^2}{N_x} \approx \E\qty[\frac{\hat\alpha(x)^2}{N_x}] $$
 
-- Plugging them in gives us an estimate of our summary's variance.
+- Plugging them in gives us an estimate of our summary's variance lower bound.
 
 $$
-\widehat{\text{standard error}}^2 = \sum_x \ \frac{\hat\sigma^2(x)\hat\alpha(x)^2}{N_x}
+\Var[\hat\theta] \ge \sum_x \ \frac{\hat\sigma^2(x)\hat\alpha(x)^2}{N_x}
 $$
 
 
@@ -628,14 +656,14 @@ N        = function(x) { sum(earnings$education==x) }
 ```
 
 $$
-\hat\sigma_{\hat\theta}^2 = \sum_x  \frac{\alpha^2(x) \ \hat\sigma^2(x)}{N_x}
+\hat\sigma_{\hat\theta}^2 = \sum_x  \frac{\hat\alpha^2(x) \ \hat\sigma^2(x)}{N_x}
 $$
 
 where
 
 $$
 \begin{array}{l|lll} x & 8 & 9 & 10 & 11 & 12 & 13 & \ldots & 20 \\ \hline
-\alpha^2(x)    & `r approx(alpha(8)^2)` & `r approx(alpha(9)^2)` & `r approx(alpha(10)^2)` &
+\hat\alpha^2(x)    & `r approx(alpha(8)^2)` & `r approx(alpha(9)^2)` & `r approx(alpha(10)^2)` &
 `r approx(alpha(11)^2)` & `r approx(alpha(12)^2)` & `r approx(alpha(13)^2)` &
 \ldots & `r approx(alpha(20)^2)` \\
 \hat\sigma^2(x) &    
@@ -653,11 +681,13 @@ N_x  &
 \end{array}
 $$
 
+**Exercise**. Use a caricature of this table to approximate our estimator's variance.
+
 
 ## Comparing Our Two Summaries
 ```{r}
 #| layout-ncol: 2
-#| out-height: 300px
+#| fig-width: 7
 #| fig-asp: .3
 #| fig-subcap:
 #|  - Interval Estimate for the Average over Years
@@ -724,8 +754,8 @@ $$
 }
 $$
 
-- We've seen that our estimate of the average-over-years summary of the value of a year of high school has large variance.
-- The problem was that it paired a relatively large weight--$\alpha(x)=-1/4$---with a very small sample size $N_8=`r sum(earnings$education==8)`$.
+- We've seen that the variance of our estimate of the average-over-years summary has large variance.
+- The problem was that it paired a relatively large weight, $\alpha(x)=-1/4$, with a very small subsample size $N_8=`r sum(earnings$education==8)`$.
 - And we know the average-over-people summary has an even larger variance. Let's compare.
 
 ## A Comparison
@@ -742,20 +772,25 @@ $$
 & `r approx(sum(sapply(8:12, function(x) { sigmahat(x)^2 * alphahat(x)^2 / N(x) })),.1)` \\
 \hline \\
 \text{for}\ \ \hat\theta_{\text{years}} 
-&\alpha^2(x) & `r approx(alpha(8)^2)` & `r approx(alpha(9)^2)` & `r approx(alpha(10)^2)` & `r approx(alpha(11)^2)` & `r approx(alpha(12)^2)` &  \\
+&\hat\alpha^2(x) & `r approx(alpha(8)^2)` & `r approx(alpha(9)^2)` & `r approx(alpha(10)^2)` & `r approx(alpha(11)^2)` & `r approx(alpha(12)^2)` &  \\
 &\frac{\hat\sigma^2(x) \alpha^2(x)}{N_x} & \textcolor{blue}{`r approx(sigmahat(8)^2*alpha(8)^2/N(8),1)`} & `r approx(sigmahat(9)^2*alpha(9)^2/N(9),1)` & `r approx(sigmahat(10)^2*alpha(10)^2/N(10),1)` & `r approx(sigmahat(11)^2*alpha(11)^2/N(11),1)` & `r approx(sigmahat(12)^2*alpha(12)^2/N(12),1)` & `r approx(sum(sapply(8:12, function(x) { sigmahat(x)^2 * alpha(x)^2 / N(x) })),1)` \\
 \\
 \end{array}
 $$
 
-- For both summaries, *most* of the variance comes from [one term]{.fg style="color:blue"}---from the variance of one subsample mean.
-- For the average over years, it's the $x=8$ subsample, with a sample size of $N_x=`r N(8)`$ and a coefficient of $-1/4$.
-- For the average over people, it's the $x=11$ subsample, with ...
-  - a sample size $N_x=`r N(11)`$ that's roughly 4x bigger.
-  - but a coefficient of $`r round(alphahat(11),3)`$ that's roughly `r round(alphahat(11)/alpha(8))`x bigger, too.
-- Variance grows with the *square* of the coefficient divided by the sample size ... 
-- So this suggests variance would be roughly $3^2  / 4 \approx 2.25x$ bigger.
-- That's not far off what we get when we compare bootstrap variance estimates. That's `r approx(sd(boots$people)^2/sd(boots$years)^2, .1)`x bigger.
+- For both summaries, *most* of the variance comes from [one term]{.fg style="color:blue"}.
+- Let's try to compare their variances ignoring all but the biggest term in each. 
+  - For the average over years, it's the $x=8$ subsample, with a sample size of $N_x=`r N(8)`$ and a coefficient of $-1/4$.
+  - For the average over people, it's the $x=11$ subsample, with ...
+    - a sample size $N_x=`r N(11)`$ that's roughly 4x bigger.
+    - but a coefficient of $`r round(alphahat(11),3)`$ that's roughly `r round(alphahat(11)/alpha(8))`x bigger, too.
+- Variance grows with the *square* of the coefficient divided by the sample size.
+- So this approximation suggests variance would be roughly $3^2  / 4 \approx 2.25x$ bigger for the average over people.
+  - That's not far off what we get when we compare bootstrap variance estimates. 
+  - That's `r approx(sd(boots$people)^2/sd(boots$years)^2, .1)`x bigger.
+- *Intuitive Conclusion*. 
+  - Summaries that involve the means of small groups are hard to estimate.
+  - But that's not all that matters. It matters *how much* they're used.
 
 ## What About The Other Part?
 
@@ -767,43 +802,55 @@ $$
 - What we've been thinking about so far is the first part of the variance.
   - That's zero when the coefficients are constants, but not when they're random.
   - Because this part was *larger* for the summary with random coefficients, that implied its variance would be larger.
-  - But are we missing something? Are we underestimating how much larger it'll be by ignoring the second part?
-- Basically no. 
-  - We can estimate the variance of our summary---the whole thing---by the variance of bootstrap sampling distribution. It's `r approx(sd(boots$people)^2,.1)`.
-  - Our estimate for the first part only --- based on our table --- was `r approx(se.people.EV^2,.1)`.
-  - That suggests that the second part should be roughly $`r approx(sd(boots$people)^2,.1)` - `r approx(se.people.EV^2,.1)` \approx `r approx(sd(boots$people)^2 - se.people.EV^2,100)`$.
-  - That's impossible---the part is the variance of something, so it can't be negative---but it suggests it's not very big.
+  - If it had been *smaller*, that wouldn't have done much for us.  
+- But to gain intuition about the term we left out, let's approximate it.  
+  - We can use the bootstrap to estimate the variance of our summary---the whole thing.
+  - We'll use the variance (draws from) the bootstrap sampling distribution. It's `r approx(sd(boots$people)^2,.01)`.
+  - Our estimate for the first part only --- based on our table --- was `r approx(se.people.EV^2,.01)`.
+  - That suggests that the second part should be roughly $`r approx(sd(boots$people)^2,.01)` - `r approx(se.people.EV^2,.01)` \approx `r approx(sd(boots$people)^2 - se.people.EV^2,100)`$.
   
 
 
 
 ## Summary
 
-- If what we're estimating is a linear combination of the *subpopulation means*, with non-random coefficients
-$$ 
-\small{
-\theta = \sum_x \alpha(x) \mu(x)
-}
-$$
-- Then the same linear combination of *subsample means* is unbiased.
+- When we're estimating is a linear combination of the *subpopulation means*,
+the sample version is unbiased ... 
+- *if* the sample coefficients are unbiased estimates of the population ones.
+
 $$
 \small{
 \hat \theta = \sum_x \alpha(x) \hat\mu(x) \quad \text{ satisfies } \E[\hat\theta] = \theta
 }
 $$
-- Its variance is determined by the variance in the subpopulation, the coefficients, and the subsample sizes. And we can estimate it.
+
+- That's something you have to think about case-by-case. 
+- But proportions---even proportions of subsamples---are, in fact, unbiased.
+
+- Its variance is determined by the variance in each subpopulation, the coefficients, and the subsample sizes. 
+- And we can estimate it. Or, at least, a lower bound.
 $$
 \small{
-\Var[ \hat\theta ] = \sum_x \sigma^2(x) \alpha^2(x) \times \E\qty[ \frac{1}{N_x} ] \approx  \sum_x \hat\sigma^2(x)\alpha^2(x) \times \frac{1}{N_x}  =: \hat\sigma_{\hat\theta}^2
+\Var[ \hat\theta ] \ge \sum_x \sigma^2(x) \alpha^2(x) \times \E\qty[ \frac{1}{N_x} ] \approx  \sum_x \hat\sigma^2(x)\alpha^2(x) \times \frac{1}{N_x}  =: \hat\sigma_{\hat\theta}^2
 }
 $$
-- We can use this to construct a confidence interval based on normal approximation.
+- Fundamentally, we're going to get an imprecise estimate *if a small subsample has a large weight*. 
+- By imprecise, we mean a large standard error and a wide confidence interval.
+
+## Formula vs. Bootstrap
+
 $$
 \small{
-\theta \in \qty[ \hat \theta - 1.96\hat\sigma_{\hat\theta}, \ \hat \theta + 1.96\hat\sigma_{\hat\theta}] \quad \text{ with probability } \approx .95 \qfor \hat\sigma_{\hat\theta}^2 = \sum_x \hat\sigma^2(x)\alpha^2(x) \times \frac{1}{N_x}  
+\Var[ \hat\theta ] \ge \sum_x \sigma^2(x) \times \E\qty[\frac{\hat\alpha^2(x)}{N_x} ] \approx  \sum_x \hat\sigma^2(x) \times \frac{\alpha^2(x)}{N_x}  =: \hat\sigma_{\hat\theta}^2
 }
 $$
 
-- Fundamentally, we're going to get an imprecise estimate *if a small subsample has a large weight*. 
-- By imprecise, we mean a large standard error and a wide confidence interval.
-- If we have random coefficients, the same is true: the formula estimates a lower bound on our estimator's variance.
+- We can use this formula construct a confidence interval based on normal approximation.
+
+$$
+\small{
+\theta \in \qty[ \hat \theta - 1.96\hat\sigma_{\hat\theta}, \ \hat \theta + 1.96\hat\sigma_{\hat\theta}] \quad \text{ with probability } \approx .95 \qfor \hat\sigma_{\hat\theta}^2 = \sum_x \hat\sigma^2(x)\times \frac{\hat\alpha^2(x)}{N_x}  
+}
+$$
+
+- Or we could use the bootstrap. Which do you prefer? And why?
