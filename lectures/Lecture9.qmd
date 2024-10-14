@@ -24,6 +24,7 @@ pop.dot = list(size=.25,    alpha=.05)
 scatter.by.group = function(data, dot=sam.dot, width=sd, 
                             highlight=NULL, 
                             highlight.color='yellow', highlight.alpha=.25,
+                            line.alpha = NULL,
                             group.means.alpha=NULL)
                             { 
   p = ggplot(data)
@@ -36,14 +37,15 @@ scatter.by.group = function(data, dot=sam.dot, width=sd,
   } 
   if(!is.null(group.means.alpha)) {
     summaries = data |> group_by(group) |> summarize(income=mean(income))
-    p = p + geom_hline(aes(yintercept=income, color=group), alpha=group.means.alpha, data=summaries) 
+    p = p + geom_hline(aes(yintercept=income, color=group), alpha=group.means.alpha, data=summaries, linetype='dashed') 
   }
+  if(!is.null(line.alpha)) { 
+    p = p + stat_summary(aes(x=xco(group, education), y=income, color=group), geom=line, alpha=line.alpha, fun=mean, linetype='solid') 
+  }
+
   p + geom_point(aes(x=xco(group, education),  y=income, color=group), 
                size=dot$size, position=position_jitter(seed=0,w=.15), alpha=dot$alpha) +
-      stat_summary(aes(x=xco(group, education), y=income, color=group), geom="pointrange", alpha=.7,
-                 fun=mean, 
-                 fun.min = function(x) mean(x) - width(x), 
-                 fun.max = function(x) mean(x) + width(x))  +
+      stat_summary(aes(x=xco(group, education), y=income, color=group), geom="pointrange", alpha=.7, fun.data=mean_sd)  +
     scale_x() + scale_y() + scale_alpha(range=c(0,1)) + guides(color='none')
 }
 
@@ -58,7 +60,7 @@ scatter.by.sex.only = function(data, dot=sam.dot, width=sd) {
     scale_y() + guides(color='none')
 }
 
-money = function(x) { sprintf('%2.1fk', round(x/1000, digits=1)) }  
+money = function(x) { sprintf('%1.0fk', round(x/1000, digits=0)) }  
 ```
 
 ## Multivariate Analysis
@@ -83,26 +85,304 @@ muhat.female = mean(sam$income[sam$sex=='female'])
 - As usual, we've drawn in each group's income mean and standard deviation too.
 - We'll write $\ingroupa{\hat\mu(0,x)}$ and $\ingroupb{\hat\mu(1,x)}$ for the mean income of male and female respondents with $x$ years of education. 
 
-## Plan for Today. This is rough.
+## Plan for Today
 
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
-scatter.by.group(sam)
+#| fig-cap: 
+#| - Imaginary Population of California Residents
+#| - Real Sample of California Residents from CPS
 scatter.by.group(pop, dot=pop.dot)
+scatter.by.group(sam)
 ```
 
 - From a calculational and inferential perspective, this is nothing new.
-  - We're going to be looking at ways to summarize a sample (e.g. female CPS respondents in California)
-  - And we can use what we get to estimate the corresponding summary of the population it's drawn from (e.g. female residents of California).
+  - We're still talking about ways of summarizing a sample that's broken down into columns.
+  - That our columns are determined by two variables rather than one makes no difference.
 - The part that is new will be interpretation and communication.
   - We'll see that there are a variety of ways to look at differences in a multivariate setting.
-  - And that, if we're not careful, we can find ourselves talking about different summaries as if they were the same.
+  - If we're not careful, we can find ourselves talking about different summaries as if they were the same.
 - That'll be our focus today.
   - Thinking and communicating precisely about what we're talking about.
   - Understanding how we get different answers to 'the same question' if we're imprecise.
   - Thinking about the implications of what we choose to report.
 
+## Our Data and Approach
+
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+#| fig-cap: 
+#| - Imaginary Population of California Residents
+#| - Real Sample of California Residents from CPS
+scatter.by.group(pop, dot=pop.dot)
+scatter.by.group(sam)
+```
+
+- Our main example will be income disparities that we can see in the CPS. 
+- But we'll start by looking at something else: disparities in grad-school admissions.
+- We're not going to talk about statistical inference today. 
+  - But we're not going to be working with a made-up population either. 
+  - Instead, we'll just work with our sample a little recklessly.
+- We'll talk as if our summaries of the sample are reasonable descriptions of the population.
+  - Even though we know that they're just point estimates.
+  - And that point estimates can be pretty far off-target. 
+
+## Where We're Headed 
+
+```{r}
+Y = sam$income
+X = sam$education
+W = sam$sex == 'female'
+N1 = sum(W==1)
+N0 = sum(W==0)
+muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
+
+muhat.male = mean(Y[W==0])
+muhat.female = mean(Y[W==1])
+muhat.male.adjusted = mean(muhat(0,X[W==0]))
+
+raw.gap = muhat.female - muhat.male
+raw.ratio = muhat.female/muhat.male
+adjusted.gap = muhat.female - muhat.male.adjusted
+adjusted.ratio = muhat.female / muhat.male.adjusted
+```
+
+```{r}
+#| fig-width: 7
+#| layout-ncol: 2
+#| fig-cap:
+#|  - income vs. sex (aggregated)
+#|  - income vs. education and sex (disaggregated)
+
+scatter.by.sex.only(sam)
+scatter.by.group(sam, group.means.alpha=.2)
+```
+
+
+:::: columns
+::: {.column width="50%"}
+
+Female residents of CA earn \$`r money(-raw.gap)` less, on average, than male ones.
+$$
+\color{gray}
+\begin{aligned}
+\ingroupb{\hat\mu(1)} \ - \  \ingroupa{\hat\mu(0)}  
+&\approx \ingroupb{`r money(muhat.female)`} \ - \ \ingroupa{`r money(muhat.male)`} \\
+&\approx `r money(raw.gap)` 
+\end{aligned}
+$$
+And `r 100*round(raw.ratio, 2)` cents for every dollar a male one does.
+$$
+\color{gray}
+\begin{aligned}
+\ingroupb{\hat\mu(1)} \ / \ \ingroupa{\hat\mu(0)} 
+&\approx \ingroupb{`r money(muhat.female)`} \ / \  \ingroupa{`r money(muhat.male)`} \\
+&\approx {`r round(muhat.female/muhat.male, 2)`} \\
+\end{aligned}
+$$
+:::
+::: {.column width="50%"}
+
+Female residents earn $`r -adjusted.gap` less than similarly-educated male ones.
+$$
+\color{gray}
+\begin{aligned}
+\ingroupb{\frac{1}{N_1}\sum_{i:W_i=1}Y_i} \ - \  \ingroupb{\frac{1}{N_1}\sum_{i:W_i=1}}\ingroupa{\hat\mu(0, X_i)}  
+&\approx \ingroupb{`r money(muhat.female)`} \ - \ \ingroupa{`r money(muhat.male.adjusted)`} \\
+&\approx `r money(adjusted.gap)`
+\end{aligned}
+$$
+
+And `r 100*round(adjusted.ratio, 2)` cents for every dollar a similarly-educated male one does.
+$$
+\color{gray}
+\begin{aligned}
+\ingroupb{\frac{1}{N_1}\sum_{i:W_i=1}Y_i } \ / \ \ingroupb{\frac{1}{N_1}\sum_{i:W_i=1}}\ingroupa{\hat\mu(0, X_i)}  
+&\approx \ingroupb{`r money(muhat.female)`} \ / \  \ingroupa{`r money(muhat.male.adjusted)`} \\
+&\approx {`r round(adjusted.ratio, 2)`} \\
+\end{aligned}
+$$
+:::
+::::
+
+::: aside
+Don't worry about all the math here. We'll get there. This is just a preview.
+:::
+
+# Berkeley Admissions and Simpson's Paradox
+
+## A Famously Paradoxical Example
+```{r}
+Y = c(rep(c(0,1), c(4704, 3738)), 
+      rep(c(0,1), c(2827, 1494)))
+W = c(rep(0, 4704+3738), rep(1, 2827+1494))
+
+berkeley = data.frame(admit=Y, sex=factor(c('male', 'female'), levels=c('male','female'))[W+1])
+
+dot = pop.dot
+ggplot(berkeley) + 
+      geom_point(aes(x=sex,  y=admit, color=sex), 
+                 size=dot$size, position=position_jitter(seed=0,w=.15,h=.075), alpha=dot$alpha) +
+    stat_summary(aes(x=sex, y=admit, color=sex), geom="pointrange", alpha=.7,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - width(x), 
+                 fun.max = function(x) mean(x) + width(x)) + guides(color='none') + 
+                 coord_cartesian(ylim=c(-.1,1.1)) + 
+                 scale_y_continuous(breaks=seq(0,1,by=.2))
+```
+
+
+- Let's shift our attention from income today to graduate school admissions in the 1970s.
+- Berkeley graduate programs were admitting a much higher proportion of [male applicants]{.groupa} than [female ones]{.groupb}.
+  - $\ingroupa{`r sum(Y[W==0])`/`r sum(W==0)`\approx `r round(100*mean(Y[W==0]))`}$% of male applicants were admitted
+  vs.  $\ingroupb{`r sum(Y[W==1])`/`r sum(W==1)`\approx `r round(100*mean(Y[W==1]))`}$% of female ones. 
+  - People were concerned that this difference was evidence of discrimination against female applicants.
+$$
+\color{gray}
+\text{admission rate gap} = \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1} Y_i} - \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0} Y_i} \approx `r round(mean(Y[W==1]) - mean(Y[W==0]), 2)`
+$$
+
+- But, on closer examination, most departments were admitting a larger proportion of \
+   their female applicants than of their male ones.
+- What's going on?  Let's see if we can figure it out by working with some stylized data.
+
+## 
+
+
+```{r}
+x = c(1,1,1,0,0,0,  0,1,0)
+y = 1-c(1,1,1,0,0,0,  1,0,0)
+w = 1-c(0,0,1,0,1,1,1,0,1)   
+jitter.y = .075*c(0,0,0,0,0,0,    0,0,-1)
+jitter.x = .05*c(-1,0,1,-1,0,1,  0,0,0)  
+data = data.frame(x=x, jitter.x=jitter.x, y=y, jitter.y=jitter.y, w=w)
+
+exercise.grid = function(data) { 
+  ggplot(data) + geom_point(aes(x=x+jitter.x, y=y+jitter.y), shape=1, size=8) +
+    scale_y_continuous(breaks=c(0, 1/3, 2/3, 1), labels=c('0', '1/3', '2/3', '1')) + scale_x_continuous(breaks=c(0,1)) +
+    coord_cartesian(ylim=c(-.1,1.1))
+}
+
+solution.grid = function(data) { 
+  exercise.grid(data) +
+    geom_point(aes(x=x+jitter.x, y=y+jitter.y, color=factor(w)), size=8, alpha=.5, data=data) + 
+    stat_summary(aes(x=x+.002*(2*w-1), y=y+.002*(2*w-1), color=factor(w)), geom="point", size=12, shape=0, data=data) +
+    geom_hline(aes(yintercept=mean.y, color=factor(w)), 
+      data=data |> group_by(w) |> summarize(mean.y=mean(y))) + 
+    guides(color='none')
+}
+```
+
+::: {.panel-tabset}
+### No Solution
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7 
+exercise.grid(data[1:6,])
+ggplot() + geom_blank()
+```
+### Warm-Up Solution
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7 
+exercise.grid(data[1:6,])
+solution.grid(data[1:6,])
+```
+### Paradox Solution
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7 
+exercise.grid(data[1:6,])
+solution.grid(data)
+```
+:::
+
+
+- Above is a stylized version of the Berkeley data in which we have two departments.
+  - At the department on the left ($x=0$),  getting in is easy.
+  - At the department on the right ($x=1$), getting in is hard.
+- We'll draw dots for each applicant. 
+  - The $y$-coordinate indicates whether they were admitted ($y=1$) or not ($y=0$).
+
+::: {.panel-tabset}
+
+### Warm-up Exercise
+- Color three dots red and three green so that ...
+  1. Within each column, the mean of the green dots is *equal to* the mean of the red dots.
+  2. The mean of all the green dots is *lower* than the mean of the red ones. 
+- In red and green ...
+  1. Draw squares to show the within-column means of that color's dots.
+  2. Draw a horizontal line to show the mean of all the dots of that color.
+    
+### Paradox Exercise
+- Add three more dots --- two red and one green --- so that ...
+  1. Within each column, the mean of the green dots is *now higher* the mean of the red ones. 
+  2. The mean of all the red dots is *still lower* than the mean of the red ones. 
+- Move the squares and lines so these new dots are included.
+
+:::
+
+
+## The Stylized-Data Story 
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+#| fig-cap:
+#|  - Warm-up Story
+#|  - Follow-up Story
+solution.grid(data[1:6,])
+solution.grid(data)
+```
+
+::: {.panel-tabset}
+
+### Warm-up Story
+- The story, in this simple example, is that ... 
+  - more men apply to the department everybody gets in to. 
+  - more women apply to the department nobody gets in to. 
+- So men are admitted at a higher rate to the university as a whole.
+- Even though men and women are admitted at the same rate within each department.
+- **Lesson.** Even when there is no disparity within groups, there can be a disparity in aggregate.
+
+### Paradox Story
+
+- The story in this follow-up, is that ...
+  - some woman miraculously get admitted to the department nobody gets in to.
+  - some man, equally miraculously, is rejected by the department everybody gets in to.
+  - and one more man, less miraculously, gets is admitted to that department too.
+- The university as a whole still admits men at a higher rate than women.
+- But on a departmental level, that's reversed. Every department admits women at a higher rate than men.
+- **Lesson.** Within-group and aggregate disparities can be in *opposite directions*.
+  
+:::
+
+## The Real Berkeley Data
+:::: columns 
+::: column
+![The Real Berkeley Data](figs/bickel-simpsons-paradox-plot.png){height=4.5in}
+:::
+::: column 
+ \
+```{r}
+#| fig-width: 7
+#| fig-cap: "Our Paradox Story"
+solution.grid(data)
+```
+:::
+::::
+
+- The real data is a bit more complicated than our simple caricature. 
+  - Berkeley has more than two departments.
+  - And they tend to have more than 4 or 5 applicants.
+- To relate our caricature to the real Berkeley data, lets do a quick drawing exercise.
+- **Exercise**. Draw our two little departments into the plot of the real data.
+  - How do you calculate the x-coordinates? 
+  - What about the y-coordinates?
+- **Discuss**. Is the observed difference evidence of discrimination?
+
+# Breaking Down Disparities 
 
 ## A Few Summaries 
 
@@ -267,7 +547,6 @@ $$
 ## Reinterpreting Solution 2
 
 ```{r}
-#| out-width: 100%
 scatter.by.group(sam)
 ```
 
@@ -285,27 +564,19 @@ $$
 $$
 
 - These two expressions will always be equal, no matter what the actual values of $W_i,X_i,Y_i$ are.
-- **Q.** Why are the equal?
-- *Hint*. We've seen something like this this earlier in the semester.
-  - Think about what happens when we change the second into the first. 
-  - In our average over [female respondents]{.groupb}, ...
-  - we replace each respondents' income $\ingroupb{Y_i}$ with their column's mean income $\ingroupb{\hat \mu(1, X_i)}$.
-
-::: fragment
-
-- **A.** We can think of the first one as a version of the second where we sum in a certain order. \
+- We can think of the first one as a version of the second where we sum in a certain order. 
 
 :::: columns
 
-::: {.column width="50%"}
+::: {.column width="40%"}
 ```{r}
-#| fig-width: 7
+#| fig-width: 5
 scatter.by.group(sam)
 ```
 
 [The same plot as above, for convenience.]{.fg style="color:gray"}
 :::
-::: {.column width="50%"}
+::: {.column width="60%"}
 $$
 \color{gray}
 \begin{aligned}
@@ -325,15 +596,59 @@ $$
 
 :::
 ::::
-:::
 
-## Two or Three Ways to Write an Average
+## Visualizing Averages using Histograms
 
-Move the calculation stuff up here ...
+```{r}
+proportion.scale = 300000
+scaled.interleaved.bars = list(geom_bar(aes(x=xco(group, education), y=proportion.scale*after_stat(prop), fill=group, color=group), 
+                               position='identity', alpha=.03, linewidth=.2), 
+                               scale_y(c(0,150000), sec.axis=sec_axis(~./proportion.scale, name='Proportion')),
+                               guides(color='none', fill='none'))
+bars= list(geom_bar(aes(x=education, y=after_stat(prop), fill=group, color=group), 
+                     position='identity', alpha=.05, linewidth=.4), 
+            guides(color='none', fill='none'))
 
-## Statistical Inference
 
-Move the interval stuff up here...
+scatter.by.group(sam) + scaled.interleaved.bars 
+```
+
+- To make sense of our summary, it's helpful to revisit a counting trick we use now and then.
+  - When we want to average over the people in a sample, we can use a histogram to help us count.
+  - This reduces a sum over hundreds or thousands of people to a sum over a few bins.
+- The average of function of $x$ over the education levels of our female respondents  ...
+  - is a weighted average of the function's values at each education level ...
+  - where an education level's weight is its *frequency*  among female respondents. 
+$$
+\faded
+\ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} f(X_i) = \sum_{x} f(x) \ingroupb{P_{x\mid 1}} \qfor 
+\underset{\faded\text{height of the green bar at $x$}}{\ingroupb{P_{x\mid 1} = \frac{N_{1,x}}{N_1}}}
+$$
+
+- Here the function of $x$ we're looking at is $f(x) = \ingroupb{\hat\mu(1,x)} - \ingroupa{\hat \mu(0,x)}$.
+  - That's the difference in mean income between female respondents and male ones at education level $x$.
+  - In visual terms, it's the difference in the height of the [green]{.groupb} and [red]{.groupa} lines. 
+- And we're averaging that difference with the weights shown by the [green bars]{.groupb}.
+
+### Proof 
+
+To prove it, we can trace the argument from our last slide backward, stopping in the middle. 
+
+$$
+\begin{aligned}
+\sum_{i: W_i=w} f(X_i)  
+&\explain{=}{We sum first over dots in a column, then over columns.}
+\sum_{x} \sum_{\substack{i: W_i=w, \  X_i=x}} f(X_i) \\ 
+&\mathexplain{=}{f(x)=f(X_i) \text{ within a column}.} 
+\sum_{x} \sum_{\substack{i: W_i=w, \ X_i=x}} f(x) \\
+&\explain{=}{The column sum is the column's mean times its number of dots.}
+\sum_{x}f(x) \times N_{w,x} \qfor N_{w,x} = \sum_{\substack{i: W_i=w, \ X_i=x}} 1  \\
+& \qqtext{ so } \\
+\frac{1}{N_w} \sum_{i: W_i=w} \hat \mu(w', X_i) 
+&= \sum_{x} f(x) \times \frac{N_{w,x}}{N_w} 
+\end{aligned}
+$$
+
 
 ## Variations
 
@@ -354,7 +669,7 @@ Move the interval stuff up here...
 ::: column
 ```{r}
 #| fig-width: 7
-scatter.by.group(sam)
+scatter.by.group(sam) + scaled.interleaved.bars 
 ```
 
 :::
@@ -393,6 +708,8 @@ $$
   - Today, when we talk about the adjusted difference, that'll mean the average over [female respondents]{.groupb}.
 
 # Covariate Shift
+
+The thing behind the paradox.
 
 ## Comparisons with and without Adjustment
 
@@ -440,14 +757,10 @@ $$
     - What group is being averaged over?
   2. How the things *they could report* might differ.
   3. Why they're reporting what they're reporting.
-- 1 & 3 are very important skills, but you really need to practice them in context.
-- Today we're going to focus on 2.
-  - i.e., developing skills to help us understand and communicate about different comparisons ... 
-  - that seem like they're answers to the same question but may not be.
 
 ::: aside
 The averages shown in the plot on the left ---  the average incomes of all [male]{.groupa} and [female]{.groupb}
-respondents --- are included as faint horizontal lines in the plot on the right.
+respondents --- are included as faint dashed horizontal lines in the plot on the right.
 :::
 
 
@@ -494,62 +807,81 @@ is what we get when we ...
 :::
 ::::
 
-
- - **Q**. Why is the adjusted difference is bigger in magnitude (i.e. smaller, being negative)?
- - *Hint*. $\color{gray} \text{same} - \text{bigger} = \text{smaller}$
-   
-::: fragment
- - **A.** For most [female respondents]{.groupa}, the average [male]{.groupb} income *at their education level* \
- is bigger than the average for *all male respondents*. Let's see if we can work out why.
-:::
-
-## Covariate Shift
-
-:::: r-stack
-::: {.fragment .fade-out data-fragment-index="0"} 
+## The Raw Gap and Covariate Shift 
 ```{r}
-scatter.by.group(sam) 
+scatter.by.group(sam, group.means.alpha=.2, line.alpha=.2)
 ```
-:::
-::: {.fragment .current-visible data-fragment-index="0"}
-```{r}
-scaled.interleaved.bars = list(geom_bar(aes(x=xco(group, education), y=300000*after_stat(prop), fill=group, color=group), 
-                        position='identity', alpha=.05, linewidth=.4), 
-                        guides(color='none', fill='none'))
-interleaved.bars = list(geom_bar(aes(x=xco(group, education), y=after_stat(prop), fill=group, color=group), 
-                        position='identity', alpha=.05, linewidth=.4), 
-                        guides(color='none', fill='none'))
-bars= list(geom_bar(aes(x=education, y=after_stat(prop), fill=group, color=group), 
-                     position='identity', alpha=.05, linewidth=.4), 
-            guides(color='none', fill='none'))
 
-scatter.by.group(sam) + scaled.interleaved.bars
-```
-:::
-::::
+- When we look at the raw gap in 'histogram form', we can see how it differs from the adjusted one very clearly.
+$$
+\color{gray}
+\begin{aligned}
+\text{raw gap} 
+&= \ingreen{\sum_{i:W_i=1} \hat\mu(1,X_i)} - \inred{\sum_{i:W_i=0} \hat\mu(0,X_i)} 
+&& \text{sum over people form} \\
+&= \sum_{x} \ingreen{P_{x\mid 1} \ \hat\mu(1,x)} - \sum_{x} \inred{P_{x\mid 0} \  \hat\mu(0,x)} 
+&& \text{histogram form} \\
+&=
+\sum_{x} \ingreen{P_{x\mid 1} \ \hat\mu(1,x)} + \sum_{x} (\ingreen{P_{x\mid 1}} - \ingreen{P_{x|1}} - \inred{P_{x\mid 0}}) \ \inred{\hat\mu(0,x)} 
+&& \text{adding a fancy version of zero} \\
+&= \underset{\text{adjusted gap}}{\sum_{x} \ingreen{P_{x\mid 1}} \ \{\ingreen{\hat\mu(1,x)} - \inred{\hat\mu(0,x)}\} } 
+   + \underset{\text{covariate shift term}}{\sum_x \{\ingreen{P_{x\mid 1}} - \inred{P_{x\mid 0}}\} \ \inred{\hat\mu(0,x)}}
+&& 
+\end{aligned}
+$$
 
-- This happens because the [male respondents]{.groupa} tend to be less educated than the [female ones]{.groupb}.
-  - We call this phenomenon **covariate shift**. 
-  - The distribution of $X$ *shifts* when we go from looking at one group (i.e. sex) to another.
-- We can see this shift --- with a lot of effort --- by counting the dots in each column.
-- But it's easier to see if we draw that information into the plot. &nbsp; [Do it!]{.button .navigate-next} 
-- We draw in bars showing the proportion of people, within a group, that have each level of education. 
-    - The bars' absolute height is meaningless---they're scaled to fit into the plot.
-    - But the relative height tells us how education is distributed within each group.
-    - The [red]{.groupa} and [green]{.groupb} bars show how education is distributed among [male]{.groupa} and [female]{.groupb} respondents.
-    - *Notation.* We write $\ingroupa{\hat p_{0}(x)}$ and $\ingroupb{\hat p_{1}(x)}$ for these proportions at education level $x$.
-- And we see that the [green bars]{.groupb} tend to be higher than the [red bars]{.groupa} on the right side of the plot, esp. for $x > 12$.
-  - *Interpretation*. Higher levels of education are more common for female respondents.
-  - This can be easier to see in different visualizations of the covariate distributions.
-  
-### Another Visualization of Covariate Shift
+::: {.panel-tabset}
+### The Covariate Shift Term
+- It differs by a 'covariate shift term'. 
+  - This term that has nothing to do with the income disparity at a given education level.
+  - It's about the shift in the distribution of education --- our covariate --- from one group to another.
+- In this case, this term is positive. 
+  - The raw gap is bigger than the adjusted one. 
+  - `r money(muhat.female - muhat.male)`  vs. `r money(mean(Y[W==1] - muhat(0,X[W==1])))`.
+- Let's try to develop some visual intuition about what's going on.
+
+### Visualing Covariate Shift 
+
+- To keep things simple, let's try to forget about the context. 
+- Let's think about the covariate shift term ...
+- It's the difference of two averages of the same function of x.
+  - The function---the red one---
+within-column mean male income [`r pointrange`]{.groupa}.
+It's the difference of two averages of the same function of x: within-column mean male income [`r pointrange`]{.groupa}.
+- This function is increasing with $x$. Income increases with education.
+- 
+  - The average over the distribution of female education levels: [green bars]{.groupb}
+  - The average over the distribution of male education levels: [red bars]{.groupa}
+- The
+- This is *upward shift* in the distribution of education levels. 
+- And the function we're averaging increases from left to right.
+
+### Covariate Shift in Context
+
+
+ Income increases with education.
+- The result is that the *positive*
+---is what makes the raw gap bigger than the adjusted one.
+
+an *upward shift* because fe
+  - The function we're averaging increases from left to right. Income increases with education.
+  - The distribution we're averaging over *shifts* from left to right. 
+    - From the distribution of education among [male residents. Red bars.]{.groupa}.
+    - To the distribution of education among [female respondents (green bars)]{.groupb}.
+  - And 
+  - So the [green bars]{.groupb} tend to be higher than the [red bars]{.groupa} on the left side of the plot.
+
+:::
+
+
+## Another Visualization of Covariate Shift
 
 ```{r}
 facet.by.group = list(facet_grid(row=vars(group)), theme(strip.background=element_blank(), strip.text=element_blank()))
 ggplot(sam) + bars + facet.by.group
 ``` 
 
-- This is exactly the same information we had overlaid on the previous plot. They're exactly the same bars.
+- These are exactly the same histograms we had overlaid on the previous plot. They're exactly the same bars.
 - What's changed is *layout*. Our groups are shown one above the other rather than interleaved as before.
 - This makes it easier to see that the [red one]{.groupa} has more mass *on the left* side than the [green one]{.groupb}.
 
@@ -575,21 +907,6 @@ ggplot(sam) + bars + facet.by.group
   1. *A Downward Shift*. Male respondents tend to have less education than female ones.
   2. *An Upward Trend*.   Income tends be higher at higher levels of education.
 - The relationship between the raw and adjusted difference depends on both. 
-
-## It's Not Just A Sample Thing.
-```{r}
-#| layout-ncol: 3
-#| fig-width: 5
-#| fig-cap:
-#| - Sample
-#| - Population
-#| - Interval Estimate and Bootstrap Sampling Distribution 
-scatter.by.group(sam) + scaled.interleaved.bars
-scatter.by.group(pop, dot=pop.dot) + scaled.interleaved.bars
-ggplot()
-```
-
-
 
 # More Income Examples 
 
@@ -744,536 +1061,3 @@ scatter.by.group(this.sam) + scaled.interleaved.bars
 2. You're going to include one summary in your headline---either the raw or the adjusted difference. Decide which.
 
 3. Write down, in a sentence or two, why you chose what you did.
-
-## Thoughts on the Exercise
-
-::: {.panel-tabset}
-### California
-```{r}
-scatter.by.group(sam) + scaled.interleaved.bars
-```
-### Georgia
-```{r}
-scatter.by.group(this.sam) + scaled.interleaved.bars
-```
-:::
-
-
-- There's no right answer---either in general or in any particular case.
-- And  reasons may be context-specific, e.g.  
-- Theory beyond ...; stats is about measurement, whereas your decision might be about ...
-- fsdf
-
-
-
-
-# Testing the Limits
-## A Famously Paradoxical Example
-```{r}
-Y = c(rep(c(0,1), c(4704, 3738)), 
-      rep(c(0,1), c(2827, 1494)))
-W = c(rep(0, 4704+3738), rep(1, 2827+1494))
-
-berkeley = data.frame(admit=Y, sex=factor(c('male', 'female'), levels=c('male','female'))[W+1])
-
-dot = pop.dot
-ggplot(berkeley) + 
-      geom_point(aes(x=sex,  y=admit, color=sex), 
-                 size=dot$size, position=position_jitter(seed=0,w=.15,h=.075), alpha=dot$alpha) +
-    stat_summary(aes(x=sex, y=admit, color=sex), geom="pointrange", alpha=.7,
-                 fun=mean, 
-                 fun.min = function(x) mean(x) - width(x), 
-                 fun.max = function(x) mean(x) + width(x)) + guides(color='none') + 
-                 coord_cartesian(ylim=c(-.1,1.1)) + 
-                 scale_y_discrete(breaks=c(0,1), labels=c('Rejected', 'Admitted'))
-```
-
-
-- Let's shift our attention from income today to graduate school admissions in the 1970s.
-- Berkeley graduate programs were admitting a much higher proportion of [male applicants]{.groupa} than [female ones]{.groupb}.
-  - $\ingroupa{`r sum(Y[W==0])`/`r sum(W==0)`\approx `r round(100*mean(Y[W==0]))`}$% of male applicants were admitted
-  vs.  $\ingroupb{`r sum(Y[W==1])`/`r sum(W==1)`\approx `r round(100*mean(Y[W==1]))`}$% of female ones. 
-  - People were concerned that this difference was evidence of discrimination against female applicants.
-$$
-\color{gray}
-\text{raw difference} = \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1} Y_i} - \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0} Y_i} \approx `r round(mean(Y[W==1]) - mean(Y[W==0]), 2)`
-$$
-
-- But, on closer examination, most departments were admitting a larger proportion of their female applicants than of their male ones.
-- What's going on?  Let's see if we can figure it out by working with some stylized data.
-
-
-## 
-
-```{r}
-x = c(1,1,1,0,0,0,  0,1,1)
-y = c(1,1,1,0,0,0,  1,0,1)
-w = c(0,0,1,0,1,1,  1,0,0)   
-jitter.y = .07*c(0,0,0,0,0,0,    0,0,-1)
-jitter.x = .035*c(-1,0,1,-1,0,1,  0,0,0)  
-data = data.frame(x=x, jitter.x=jitter.x, y=y, jitter.y=jitter.y, w=w)
-
-exercise.grid = function(data) { 
-  ggplot(data) + geom_point(aes(x=x+jitter.x, y=y+jitter.y), shape=1, size=8) +
-    scale_y_continuous(breaks=c(0, 1/3, 2/3, 1), labels=c('0', '1/3', '2/3', '1')) + scale_x_continuous(breaks=c(0,1))
-}
-
-solution.grid = function(data) { 
-  exercise.grid(data) +
-    geom_point(aes(x=x+jitter.x, y=y+jitter.y, color=factor(w)), size=8, alpha=.5, data=data) + 
-    stat_summary(aes(x=x, y=y, color=factor(w)), geom="point", size=12, shape=0, data=data) +
-    geom_hline(aes(yintercept=mean.y, color=factor(w)), 
-      data=data |> group_by(w) |> summarize(mean.y=mean(y))) + 
-    guides(color='none')
-}
-```
-
-:::: free-zoom 
-
-```{r}
-#| fig-asp: .5
-#| fig-width: 10
-
-exercise.grid(data[1:6,])
-```
-
-- Above is a stylized version of the Berkeley data in which we have two departments.
-  - At the department on the left ($x=0$),  getting in is hard.
-  - At the department on the right ($x=1$), getting in is easy.
-- We'll draw dots for each applicant. 
-  - The $y$-coordinate indicates whether they were admitted ($y=1$) or not ($y=0$).
-
-::: {.panel-tabset}
-
-### Warm-up Exercise
-- Color three dots red and three green so that ...
-  1. Within each column, the mean of the green dots is *equal to* the mean of the red dots.
-  2. The mean of all the green dots is *lower* than the mean of the red ones. 
-- In red and green ...
-  1. Draw squares to show the within-column means of that color's dots.
-  2. Draw a horizontal line to show the mean of all the dots of that color.
-    
-### Follow-up Exercise
-- Add three more dots --- two red and one green --- so that ...
-  1. Within each column, the mean of the green dots is *now higher* the mean of the red ones. 
-  2. The mean of all the red dots is *still lower* than the mean of the red ones. 
-- Move the squares and lines so these new dots are included.
-
-### Warm-up Solution
-
-```{r}
-#| fig-asp: .5
-#| fig-width: 10
-solution.grid(data[1:6,])
-```
-
-### Follow-up Solution
-
-```{r}
-#| fig-asp: .5
-#| fig-width: 10
-solution.grid(data)
-```
-
-
-:::
-::::
-
-
-## Simpson's Paradox Warm-Up 
-```{r}
-#| layout-ncol: 2
-#| fig-width: 7
-solution.grid(data[1:6,])
-ggplot(data[1:6,]) + geom_bar(aes(x=x, y=after_stat(prop), fill=factor(w), color=factor(w)), 
-                     position='identity', alpha=.05, linewidth=.4) +
-              guides(color='none', fill='none') +
-              facet_grid(rows=vars(factor(w))) +
-              theme(strip.background=element_blank(), strip.text=element_blank())
-```
-
-- What we see in our warm-up is that, even when there is no disparity within groups (e.g. applications to departments) ...
-- ... covariate shift can create a disparity when we look at the population as a whole (e.g. applicants to the university).
-
-## Simpson's Paradox
-```{r}
-#| layout-ncol: 2
-#| fig-width: 7
-
-solution.grid(data)
-ggplot(data) + geom_bar(aes(x=x, y=after_stat(prop), fill=factor(w), color=factor(w)), 
-                     position='identity', alpha=.05, linewidth=.4) +
-              guides(color='none', fill='none') +
-              facet_grid(rows=vars(factor(w))) +
-              theme(strip.background=element_blank(), strip.text=element_blank())
-```
-
-
-- What we see in our follow up is a bit more dramatic.
-- Even when there is disparity in one direction within groups ...
-  - e.g. female applicants are admitted at a higher rate within each department 
-- ... covariate shift can result in a disparity *in the opposite direction* when we look at the population as a whole.
-  - e.g. female applicants are admitted at a lower rate to the university as a whole.
-- This isn't a qualitatively different phenomenon. It's just a more extreme version of the same thing.
-
-# What to Adjust For
-
-
-
-# Old Stuff 
-
-```{r}
-filtered = \(rows) rows[rows$income < 5e5 & rows$race %in% c('White only', 'Black only'),]
-  
-pop = pop.earnings |> filtered()
-sam = earnings |> filtered()
-```
-
-```{r}
-xco = function(w,x) {
-  w=as.numeric(w)
-  x + .15*(2*w-1)
-}
-
-sam.dot = list(size=1,    alpha=.2)
-pop.dot = list(size=.25,    alpha=.05)
-
-scatter.by.race = function(rows, 
-                           dot=sam.dot,
-                           width=sd) { 
-  ggplot(rows[rows$race %in% c('Black only', 'White only'), ]) + 
-    geom_point(aes(x=xco(race=='White only',education), y=income, color=race), 
-               size=dot$size, position=position_jitter(seed=0,w=.15), alpha=dot$alpha) + 
-    stat_summary(aes(x=xco(race=='White only',education), y=income, color=race), geom="pointrange", alpha=.7,
-                 fun=mean, 
-                 fun.min = function(x) mean(x) - width(x), 
-                 fun.max = function(x) mean(x) + width(x))  +
-    scale_x() + scale_y() + guides(color='none')
-}
-```
-
-```{r}
-#| out-height: 350px
-#| fig-asp: .4
-
-W = as.numeric(sam$race == 'White only')
-X = sam$education
-Y = sam$income 
-muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
-
-a = money
-scatter.by.race(sam)
-```
-
-- Let's take a look at at income ($y$) broken down in terms of two variables.
-  1. Education ($x$), in years of schooling, is indicated by column in the plot.
-  2. Race ($w$) is indicated by color in the plot.  [$w=0$ for Black people]{.twocolor-red}  and [$w=1$ for white people]{.twocolor-green} in our sample.
-- To keep things simple, we'll look at the subset of CPS recipients who identify as either [Black only]{.twocolor-red} or [white only]{.twocolor-green}.
-- At most education levels, the [white people]{.twocolor-green} in our sample make more money than the [Black people]{.twocolor-red}.
-- We know that's a thing. If we want, we can report a summary or two.
-
-::: {#def-conditional-proportion}
-$$
-\hat p_{w}(x) = \frac{N_{w,x}}{N_w} \qqtext{ where }  \frac{N_{w,x}}{N_w} = \frac{\sum_{i: W_i=w, X_i=x} 1}{\sum_{i: W_i=w} 1}.
-$$ 
-:::
-
-$
-\begin{array}{lll}
-\text{raw income gap} \quad & \quad \text{adjusted income gap} & \\
-\displaystyle \hat \Delta = \ingreen{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} 
-\quad& \displaystyle \hat \tau = \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \inred{Y_i}
-\quad& \text{symbolically} \\
-        `{r} money(mean(Y[W==1]) - mean(Y[W==0]))`  
-        = \ingreen{`{r} a(mean(Y[W==1]))`} - \inred{`{r} a(mean(Y[W==0]))`}   
-\quad&  `{r} a(mean(muhat(1, X[W==0]) - muhat(0, X[W==0])))` 
-       = \ingreen{`{r} a(mean(muhat(1, X[W==0])))`} - \inred{`{r} a(mean(muhat(0, X[W==0])))`}   
-\quad& \text{numerically}
-\end{array} 
-$$
-
-
-## Statistical Inference
-
-```{r}
-W = as.numeric(sam$race == 'White only')
-X = sam$education
-Y = sam$income 
-muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
-the.adjusted.gap = mean(muhat(1, X[W==0]) - mean(muhat(0, X[W==0])))
-the.raw.gap = mean(Y[W==1]) - mean(Y[W==0])
-
-adjusted.gap = \(people) people |> group_by(education, race) |> 
-                    summarize(muhat=mean(income), N=n(), .groups='drop') |> 
-                  group_by(race) |>
-                    mutate(P = N/sum(N)) |>
-                   group_by(education) |>
-                    group_map(\(s,e) s$P[s$race=='Black only'] * 
-                    (s$muhat[s$race=='White only'] - s$muhat[s$race=='Black only'])) |>
-                  unlist() |> sum()
-raw.gap = \(people) mean(people$income[people$race=='White only']) - 
-                    mean(people$income[people$race=='Black only'])
-                    
-stopifnot(abs(the.adjusted.gap - adjusted.gap(sam)) < 1e-6)
-stopifnot(abs(the.raw.gap - raw.gap(sam)) < 1e-6)
-
-set.seed(0)
-B = 200
-bootstrap.gaps = \(sam) 1:B |> map(\(B) {
-  bootsam = sam[sample(1:nrow(sam), replace=TRUE), ]
-  list(raw=raw.gap(bootsam), adjusted=adjusted.gap(bootsam))
-}) |> bind_rows()
-```
-
-```{r}
-#| cache: true
-ca.bootstrap.gaps = bootstrap.gaps(sam)
-```
-
-```{r}
-#| out-height: 350px
-#| fig-asp: .5
-#| layout-ncol: 2 
-#| fig-cap: 
-#|  - "Sample"
-#|  - "Imagined Population" 
-scatter.by.race(sam)
-scatter.by.race(pop, dot=pop.dot)
-```
-
-- As usual, we can interpret these sample summaries as estimates of corresponding population summaries. 
-- And we can construct 95% confidence intervals as usual---by bootstrapping. Nothing new here.
-- What I want to talk about today is what these summaries mean and how they differ.
-  - Incidentally, in California the raw and adjusted gaps are very similar.
-  - But they are conceptually different and can be very different elsewhere. Let's look at Georgia.
-
-$$
-\begin{array}{lll}
-\text{raw income gap} \quad & \quad \text{adjusted income gap} & \\
-\displaystyle \hat \Delta = \ingreen{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} 
-\quad& \displaystyle \hat \tau = \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \inred{Y_i}
-\quad& \text{in sample} \\
-\displaystyle \Delta = \ingreen{\frac{1}{m_1}\sum_{j:w_j=1} y_j} - \inred{\frac{1}{m_0}\sum_{j:w_j=0} y_j} 
-\quad&\displaystyle \tau = \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \ingreen{\mu(1, x_j)} - \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \inred{y_j}
-\quad& \text{in population} \\
-        `{r} a(mean(Y[W==1]) - mean(Y[W==0]))` \pm `r a(2*sd(ca.bootstrap.gaps$raw))`
-\quad&  `{r} a(mean(muhat(1, X[W==0]) - muhat(0, X[W==0])))` \pm `r a(2*sd(ca.bootstrap.gaps$adjusted))` 
-\quad& \text{in 95\% of surveys}
-\end{array} 
-$$
-
-
-## What Happens in Georgia 
-```{r}
-#| cache: true
-georgia.state.code = 13
-ga.sam = income(georgia.state.code)$sample
-ga.bootstrap.gaps = bootstrap.gaps(ga.sam)
-```
-
-```{r}
-#| out-height: 350px
-#| fig-asp: .4
-scatter.by.race(ga.sam)
-```
-
-- In Georgia, they're different. What are these two summaries?
-  1. **Raw**. How much more the average white person makes than the average Black person.
-  2. **Adjusted**. How much more, *for the average Black person*, a similarly-educated white person tends to make.
-- The adjusted gap explains *part of* the raw gap. But not all of it.
-- What's left over is, conceptually, about differences in the distribution of education.
-
-$$
-\begin{array}{lll}
-\text{raw income gap} \quad & \quad \text{adjusted income gap} & \\
-\displaystyle \hat \Delta = \ingreen{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} 
-\quad& \displaystyle \hat \tau = \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \inred{Y_i}
-\quad& \text{in sample} \\
-\displaystyle \Delta = \ingreen{\frac{1}{m_1}\sum_{j:w_j=1} y_j} - \inred{\frac{1}{m_0}\sum_{j:w_j=0} y_j} 
-\quad&\displaystyle \tau = \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \ingreen{\mu(1, x_j)} - \inred{\frac{1}{m_0}\sum_{j:w_j=0}} \inred{y_j}
-\quad& \text{in population} \\
-        `{r} a(raw.gap(ga.sam))` \pm `r a(2*sd(ga.bootstrap.gaps$raw))`
-\quad&  `{r} a(adjusted.gap(ga.sam))` \pm `r a(2*sd(ga.bootstrap.gaps$adjusted))` 
-\quad& \text{in 95\% of surveys}
-\end{array} 
-$$
-
-
-## Revisiting A Computational Trick
-
-```{r}
-#| out-height: 350px
-#| fig-asp: .4
-#| layout-ncol: 2 
-#| fig-cap:
-#|  - "Georgia"
-#|  - "California"
-
-scatter.with.hist = scatter.by.race(ga.sam) +
-  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
-scatter.with.hist
-scatter.by.race(sam) +
-  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
-```
-
-- To make sense of our two summaries, it's helpful to revisit a counting trick we used before.
-  - When we want to average over the people in a sample, we can use a histogram to help us count.
-  - This reduces a sum over hundreds or thousands of people to a sum over a few bins.
-
-$$
-\begin{aligned}
-\hat \Delta &= \sum_{x} \qty{ \ingreen{P_{1,x} \hat\mu(1,x)} \quad - \quad \inred{P_{0,x} \ \hat\mu(0,x)} }            && \qqtext{where} \ P_{w,x} = \frac{N_{w,x}}{N_w} \\
-\hat \tau   &= \sum_{x} \qty{ \inred{P_{0,x}} \ \ingreen{\hat\mu(1,x)} \quad - \quad \inred{P_{0,x} \ \hat\mu(0,x)} }    && \qqtext{for} \ \ \ N_w = \sum_{i:W_i=w} 1 \\ 
-\hat \Delta - \hat \tau &= \sum_{x} \qty{\ingreen{P_{1,x}} - \inred{P_{0,x}}} \ingreen{\hat\mu(1,x)}                         && \qqtext{and} \ \ \ N_{w,x} = \sum_{i:W_i=w, X_i=x} 1
-\end{aligned}
-$$
-
-- Looking at what happens in each bin can help us understand what's going on.
-- Why were our raw and adjusted gaps similar in California but different in Georgia?
-  
-
-## Derivation: The Raw Gap
-```{r}
-#| out-height: 350px
-#| fig-asp: .4
-scatter.with.hist
-```
-
-$$
-\begin{aligned}
-\hat \Delta &= \frac{1}{N_1}\sum_{i:W_i=1} Y_i \quad -  \quad \frac{1}{N_0}\sum_{i:W_i=0} Y_i  && \qfor  N_{w} = \sum_{i:W_i=w} 1\\
-            &= \sum_{x} \frac{1}{N_1}\sum_{i:W_i=1, X_i=x} Y_i   \quad - \quad \sum_{x}\frac{1}{N_0}\sum_{i:W_i=0, X_i=x} Y_i && \qqtext{summing within then over bins} \\
-            &= \sum_{x} \frac{1}{N_1} \ N_{1,x} \ \hat\mu(1,x)  \quad - \quad \sum_{x} \frac{1}{N_0} \ N_{0,x} \ \hat\mu(0,x)     && \qfor N_{w,x} = \sum_{i:W_i=w, X_i=x} 1  \\
-            &= \sum_{x} \ingreen{P_{1,x} \ \hat\mu(1,x)} \quad - \quad \sum_x \inred{P_{0,x} \ \hat\mu(0,x)}  && \qfor P_{w,x} = \frac{N_{w,x}}{N_w} \\
-\end{aligned}
-$$
-
-## Derivation: The Adjusted Gap
-
-```{r}
-#| out-height: 350px
-#| fig-asp: .4
-scatter.with.hist
-```
-
-
-## Derivation: The Adjusted Gap
-```{r}
-#| out-height: 350px
-#| fig-asp: .4
-scatter.with.hist
-```
-
-$$
-\begin{aligned}
-\hat \tau &= \inred{\frac{1}{N_0}\sum_{i:W_i=0}} \ingreen{\hat \mu(1, X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} \\
-          &= \sum_{x} \frac{1}{N_0}\sum_{i:W_i=1, X_i=x} \hat\mu(1,x)   - \sum_{x}\frac{1}{N_0}\sum_{i:W_i=0, X_i=x} Y_i && \qqtext{summing within then over bins} \\
-          &= \sum_{x} \frac{1}{N_0} \ N_{0,x} \ \hat\mu(1,x)  - \sum_{x} \frac{1}{N_0} \ N_{0,x} \ \hat\mu(0,x)             && \qfor N_{w,x} = \sum_{i:W_i=w, X_i=x} 1  \\
-          &= \sum_{x} \ingreen{P_{1,x} \ \hat\mu(1,x)} \quad - \quad \sum_x \inred{P_{0,x} \ \hat\mu(0,x)}  && \qfor P_{w,x} = \frac{N_{w,x}}{N_w} \\ \\
-\end{aligned}
-$$
-
-## What To Adjust For?
-
-```{r}
-#| out-height: 350px
-#| fig-asp: .4
-#| layout-ncol: 2 
-#| fig-cap:
-#|  - "Georgia"
-#|  - "California"
-
-scatter.with.hist = scatter.by.race(ga.sam) +
-  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
-scatter.with.hist
-scatter.by.race(sam) +
-  geom_bar(aes(x=xco(race=='White only', education), y=400000*after_stat(prop), fill=race, color=race), 
-                 position='identity', alpha=.05, linewidth=.4) + guides(fill='none') + scale_y(c(0,150000))
-```
-
-- If we're trying to think about discrimination, it's not entirely clear what we should adjust for.
-  - By looking at the adjusted gap, we're trying to make the people we compare 'similarly qualified'
-  - But discrimination also *causes* differences in education.
-  - So we're *adjusting away* some of the effect we might want to measure.
-- We can try to formalize our comparisons in terms of potential outcomes. 
-- We'll imagine that for each person in our population ... 
-  -  there's one income they'd have if they were 'treated' by being raced white.
-  -  and another income they'd have if they were 'treated' by being raced Black.
-
-$$
-\begin{aligned}
-y_j(1) & \text{ income person $j$ would have if they were 'treated' by being raced white} \\
-y_j(0) & \text{ income person $j$ would have if they were 'treated' by being raced Black}
-\end{aligned}
-$$
-
-
-## What Do We Do With These Potential Outcomes?
-
-$$
-\begin{aligned}
-y_j(1) & \text{ income person $j$ would have if they were 'treated' by being raced white} \\
-y_j(0) & \text{ income person $j$ would have if they were 'treated' by being raced Black}
-\end{aligned}
-$$
-
-- The individual effect of this treatment is the difference between these two.
-- We can summarize this by the average of these differences for the Black people in our population.
-
-$$
-\begin{aligned}
-\text{individual effect}_j 
-&= y_j(1) - y_j(0) \\
-\text{average effect} 
-&= \frac{1}{m_0}\sum_{j:w_j=0} \qty{ y_j(1) - y_j(0) }  = \frac{1}{m_0}\sum_{j:w_j=0} y_j(1) - \frac{1}{m_0}\sum_{j:w_j=0} y_j(0) 
-\end{aligned}
-$$
-
-- And $y_j(1)$ being unobservable for the people in this average, we try to find some proxy for it.
-  - The adjusted-gap approach is to use the average income of white people with the same education level.
-  - But what's the justification for this? Or something like this? There really isn't one. 
-  - We've just disguised a fundamental problem in mathematical notation that works in other contexts. 
-- You could argue that the problem is this 'treatment' isn't something you can assign, e.g., by randomization.
-- But that's not really the problem. The problem is that the potential outcomes don't make sense.
-- What does it mean to be person $j$,  except raced differently? It's meaningless.
-
-## A Non-Solution --- Audit Studies
-
-- People try to work around this by reframing the question in terms of *perception* of race. 
-  - Because that's manipulable. You can, for example, choose the name on a job application.
-  - You can randomize job applications to be 'Black' or 'white' by flipping a coin...
-  - and then, on the basis of that, selecting the name of a Black or white census respondent at random.
-- You can then mail these out and see who gets called back for an interview.
-
-$$
-\begin{aligned}
-y_j(1) & \text{ whether application $j$ would get an interview when using a `random white name'} \\
-y_j(0) & \text{ whether application $j$ would get an interview when using a `random Black name'}
-\end{aligned}
-$$
-
-- Fundamentally, this is a version of our adjusted gap, but with more levels of $X$---one per application.
-- The difference in interview rates is the called the 'effect of race' on *the decision-maker's actions*.
-- But really, it's just the effect of a specific race signifier on the decision-maker's actions. 
-  - If the idea of person $j$ except raced differently means nothing in the actual world...
-  - ... then why do we imagine that it means something in the decision-maker's head?
-- That doesn't mean that studies like this are useless. 
-  - But we shouldn't act as if they get around the fundamental problem.
-  - i.e., as if it works to think about discrimination using statistical tools alone.
-
-## A Reference
-
-::: {style="z-index:1000"}
-{{< video  https://www.youtube.com/watch?v=l_LeJfn_qW0 width="854px" height="480px">}}
-:::
-
-- This critique of potential outcomes for thinking about discrimination is paraphrased
- from \
- a paper by [Issa Kohler-Hausmann](https://law.yale.edu/issa-kohler-hausmann). Roughly paraphased. I encourage you to read it yourself.
-- The title refers to a 1984 SNL sketch in which Eddie Murphy conducts a revealing audit study. 
-
-[Eddie Murphy and the Dangers of Counterfactual Causal Thinking About Detecting Racial Discrimination](https://openyls.law.yale.edu/bitstream/handle/20.500.13051/18009/Kohler-Hausmann,%20Eddie%20Murphy%20and%20the%20Dangers%20of%20Counterfactual%20Causal%20Thinking%20about%20Detecting%20Racial%20Discrimination.pdf?sequence=1) \
-[Kohler-Hausmann](https://law.yale.edu/issa-kohler-hausmann), 2018
