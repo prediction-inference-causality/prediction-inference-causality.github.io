@@ -5,6 +5,7 @@ subtitle: "Multivariate Analysis and Adjustment"
 
 # Multivariate Analysis
 
+
 {{< include shared-code.qmd >}}
 {{< include ca-income.qmd >}}
 
@@ -14,9 +15,9 @@ sam = earnings
 pop$group = pop$sex == 'female'
 sam$group = sam$sex == 'female'
 
-xco = function(w,x) {
+xco = function(w,x, shift=.15) {
   w=as.numeric(w)
-  x + .15*(2*w-1)
+  x + shift*(2*w-1)
 }
 
 sam.dot = list(size=1,    alpha=.15)
@@ -40,13 +41,13 @@ scatter.by.group = function(data, dot=sam.dot, width=sd,
     p = p + geom_hline(aes(yintercept=income, color=group), alpha=group.means.alpha, data=summaries, linetype='dashed') 
   }
   if(!is.null(line.alpha)) { 
-    p = p + stat_summary(aes(x=xco(group, education), y=income, color=group), 
+    p = p + stat_summary(aes(x=education, y=income, color=group), 
     geom='line', alpha=line.alpha, fun=mean, linetype='solid') 
   }
 
   p + geom_point(aes(x=xco(group, education),  y=income, color=group), 
                size=dot$size, position=position_jitter(seed=0,w=.15), alpha=dot$alpha) +
-      stat_summary(aes(x=xco(group, education), y=income, color=group), geom="pointrange", alpha=.7, fun.data=mean_sd)  +
+      stat_summary(aes(x=xco(group, education,shift=.025), y=income, color=group), geom="pointrange", alpha=.7, fun.data=mean_sd)  +
     scale_x() + scale_y() + scale_alpha(range=c(0,1)) + guides(color='none')
 }
 
@@ -127,98 +128,19 @@ scatter.by.group(sam)
   - Even though we know that they're just point estimates.
   - And that point estimates can be pretty far off-target. 
 
-## Where We're Headed {.hidden} 
-
-```{r}
-Y = sam$income
-X = sam$education
-W = sam$sex == 'female'
-N1 = sum(W==1)
-N0 = sum(W==0)
-muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
-
-muhat.male = mean(Y[W==0])
-muhat.female = mean(Y[W==1])
-muhat.male.adjusted = mean(muhat(0,X[W==0]))
-
-raw.gap = muhat.female - muhat.male
-raw.ratio = muhat.female/muhat.male
-adjusted.gap = muhat.female - muhat.male.adjusted
-adjusted.ratio = muhat.female / muhat.male.adjusted
-```
-
-```{r}
-#| fig-width: 7
-#| layout-ncol: 2
-#| fig-cap:
-#|  - income vs. sex (aggregated)
-#|  - income vs. education and sex (disaggregated)
-
-scatter.by.sex.only(sam)
-scatter.by.group(sam, group.means.alpha=.2)
-```
-
-
-:::: columns
-::: {.column width="50%"}
-
-Female residents of CA earn \$`r money(-raw.gap)` less, on average, than male ones.
-$$
-\color{gray}
-\begin{aligned}
-\ingroupb{\hat\mu(1)} \ - \  \ingroupa{\hat\mu(0)}  
-&\approx \ingroupb{`r money(muhat.female)`} \ - \ \ingroupa{`r money(muhat.male)`} \\
-&\approx `r money(raw.gap)` 
-\end{aligned}
-$$
-And `r 100*round(raw.ratio, 2)` cents for every dollar a male one does.
-$$
-\color{gray}
-\begin{aligned}
-\ingroupb{\hat\mu(1)} \ / \ \ingroupa{\hat\mu(0)} 
-&\approx \ingroupb{`r money(muhat.female)`} \ / \  \ingroupa{`r money(muhat.male)`} \\
-&\approx {`r round(muhat.female/muhat.male, 2)`} \\
-\end{aligned}
-$$
-:::
-::: {.column width="50%"}
-
-Female residents earn $`r -adjusted.gap` less than similarly-educated male ones.
-$$
-\color{gray}
-\begin{aligned}
-\ingroupb{\frac{1}{N_1}\sum_{i:W_i=1}Y_i} \ - \  \ingroupb{\frac{1}{N_1}\sum_{i:W_i=1}}\ingroupa{\hat\mu(0, X_i)}  
-&\approx \ingroupb{`r money(muhat.female)`} \ - \ \ingroupa{`r money(muhat.male.adjusted)`} \\
-&\approx `r money(adjusted.gap)`
-\end{aligned}
-$$
-
-And `r 100*round(adjusted.ratio, 2)` cents for every dollar a similarly-educated male one does.
-$$
-\color{gray}
-\begin{aligned}
-\ingroupb{\frac{1}{N_1}\sum_{i:W_i=1}Y_i } \ / \ \ingroupb{\frac{1}{N_1}\sum_{i:W_i=1}}\ingroupa{\hat\mu(0, X_i)}  
-&\approx \ingroupb{`r money(muhat.female)`} \ / \  \ingroupa{`r money(muhat.male.adjusted)`} \\
-&\approx {`r round(adjusted.ratio, 2)`} \\
-\end{aligned}
-$$
-:::
-::::
-
-::: aside
-Don't worry about all the math here. We'll get there. This is just a preview.
-:::
-
 # Berkeley Admissions and Simpson's Paradox
 
 ## A Famously Paradoxical Example
 ```{r}
-#| fig-asp: .5
+#| fig-asp: .4
 Y = c(rep(c(0,1), c(4704, 3738)), 
       rep(c(0,1), c(2827, 1494)))
 W = c(rep(0, 4704+3738), rep(1, 2827+1494))
 
-berkeley = data.frame(admit=Y, gender=factor(c('men', 'women'), levels=c('men','women'))[W+1])
+berkeley = data.frame(
+  admit=Y, 
+  gender=factor(c('men', 'women'), 
+  levels=c('men','women'))[W+1])
 
 dot = pop.dot
 ggplot(berkeley) + 
@@ -234,7 +156,7 @@ ggplot(berkeley) +
 - In the 1970s, Berkeley graduate programs were admitting a much higher proportion of [men]{.groupa} than [women]{.groupb}.
   - $\ingroupa{`r sum(Y[W==0])`/`r sum(W==0)`\approx `r round(100*mean(Y[W==0]))`}$% of men who applied were admitted.
   - $\ingroupb{`r sum(Y[W==1])`/`r sum(W==1)`\approx `r round(100*mean(Y[W==1]))`}$% of women who applied were admitted. 
-  - People were concerned that this difference was evidence of discrimination against women.^[We've shifted our focus from  discrimination on the basis of sex to discrimination on the basis of gender. That would've been my preference for the discussion of income disparities too, but the CPS doesn't currently ask about gender identity. You analyze the data you have, not the data you wish you had.]]
+  - People were concerned that this difference was evidence of discrimination against women.^[We've shifted our focus from  discrimination on the basis of sex to discrimination on the basis of gender. That would've been my preference for the discussion of income disparities too, but the CPS doesn't currently ask about gender identity. You analyze the data you have, not the data you wish you had.]
 $$
 \color{gray}
 \text{admission rate gap} = \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1} Y_i} - \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0} Y_i} \approx `r round(mean(Y[W==1]) - mean(Y[W==0]), 2)`
@@ -265,7 +187,7 @@ exercise.grid = function(data) {
   ggplot(data) + geom_point(aes(x=x+jitter.x, y=y+jitter.y), shape=1, size=8) + berkeley.scales
 }
 
-solution.grid = function(data, numbered=FALSE) {
+solution.grid = function(data, numbered=FALSE, mean.size=1) {
   p = exercise.grid(data) 
   if(numbered) { 
     p = p + geom_text(aes(x=x+jitter.x, y=y+jitter.y, label=1:nrow(data)), alpha=.6) 
@@ -273,10 +195,10 @@ solution.grid = function(data, numbered=FALSE) {
   p +
     geom_point(aes(x=x+jitter.x, y=y+jitter.y, color=factor(w)), size=8, alpha=.5, 
       data=data) + 
-    geom_pointrange(aes(x=x+.01*(2*w-1), y=y, ymin=y-.05, ymax=y+.05, color=factor(w)),  
-      data=data |> group_by(w,x) |> summarize(y=mean(y))) +
+    geom_pointrange(aes(x=x+.02*(2*w-1), y=y, ymin=y-.08, ymax=y+.08, color=factor(w)),  
+      data=data |> group_by(w,x) |> summarize(y=mean(y)), size=mean.size, alpha=.8) +
     geom_hline(aes(yintercept=mean.y, color=factor(w)), 
-      data=data |> group_by(w) |> summarize(mean.y=mean(y))) 
+      data=data |> group_by(w) |> summarize(mean.y=mean(y)), linetype='dashed', alpha=.4) 
 }
 ```
 
@@ -397,23 +319,24 @@ solution.grid(data)
 # Breaking Down Disparities in Admission Rates
 Analyzing our caricature of the Berkeley data 
 
-## A Few Summaries of Admission Rates
+## Summaries of Admission Rates
 
 :::: free-zoom
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
-
-#y = c(0,0,0,1,1,1,  0,1,1)
-#w = c(1,1,0,1,0,0,  0,1,0)
+#| fig-cap: 
+#|  - An aggregated-over-departments version of the 'paradox data'. 
+#|  - The disaggregated 'paradox data'.
 jw = c(-1,1,-1,-1,-1,1, 1,1,0)
 berkeley.data$jitter.w = .05*jw
 ggplot(berkeley.data) + 
     geom_point(aes(x=w+jitter.w, y=y, color=factor(w)), size=8, alpha=.5) +
-    geom_pointrange(aes(x=w, y=y, ymin=y-.05, ymax=y+.05, color=factor(w)), 
+    geom_pointrange(aes(x=w, y=y, ymin=y-.08, ymax=y+.08, color=factor(w)), 
       alpha=.7, 
       data=berkeley.data |> group_by(w) |> summarize(y=mean(y))) +
-      guides(color='none') + berkeley.scales.nox + scale_x_continuous(breaks=c(0,1), labels=c('Men', 'Women')) +
+      guides(color='none') + berkeley.scales.nox + 
+      scale_x_continuous(breaks=c(0,1), labels=c('Men', 'Women')) +
     geom_hline(aes(yintercept=mean.y, color=factor(w)), alpha=.2, 
       data=berkeley.data |> group_by(w) |> summarize(mean.y=mean(y)))
 solution.grid(berkeley.data)
@@ -444,16 +367,6 @@ $$
 \end{aligned}
 $$
 
-The rate for women is `r round(muhat.female/muhat.male, 2)` times the rate for men.
-$$
-\color{gray}
-\begin{aligned}
-\ingroupb{\hat\mu(1)} \ / \ \ingroupa{\hat\mu(0)} 
-&\approx \ingroupb{`r round2(muhat.female)`} \ / \  \ingroupa{`r round2(muhat.male)`} \\
-&\approx {`r round(muhat.female/muhat.male, 2)`} \\
-\end{aligned}
-$$
-
 :::
 ::: {.column}
 ### In Department 0
@@ -467,41 +380,19 @@ $$
 \end{aligned}
 $$
 
-The rate for women is `r round(muhat(1,0)/muhat(0,0), 2)` times the rate for men. 
-$$
-\color{gray}
-\begin{aligned}
-\ingroupb{\hat\mu(1, 0)} \ / \ \ingroupa{\hat\mu(0, 0)} 
-&\approx \ingroupb{`r round2(muhat(1, 0))`} \ / \  \ingroupa{`r round2(muhat(0, 0))`} \\
-&\approx {`r round2(muhat(1, 0)/muhat(0, 0))`} \\
-\end{aligned}
-$$
-
 :::
 ::::
 
-
-- Here we see the paradox we talked about before in quantitative terms.
+- This is just a review of the paradox we talked about before.
   - When we compare within departments, it looks like women are better-off than men. 
   - But when we look at the university as a whole, this discrepency is reversed.
 - These comparisons are relatively simple in that we're just reading two numbers off a plot.
-  
-:::: {.columns}
-::: {.column} 
-### On the Left
-
-- We compared means in our plot of the aggregated data.
-- This is nice because the result is simple. It's one number.
-  
-:::
-::: {.column}
-### On the Right
-
-- We compared columns in the disaggregated data.
-- This is nice because it's a 'like-with-like' comparison.
-
-:::
-::::
+- On the left:
+  - We compared means in our plot of the aggregated data.
+  - This is nice because the result is simple. It's one number.
+- On the right:
+  - We compared columns in the disaggregated data.
+  - This is nice because it's a 'like-with-like' comparison.
 
 ##  What If We Want Simplicity *and* Comparability?
 
@@ -515,155 +406,150 @@ solution.grid(berkeley.data[1:6,])
 solution.grid(berkeley.data)
 ```
 
-- **Exercise.** Summarize the typical difference in admission rate ...
-  - between [female applicants]{.groupb} and [male applicants]{.groupa} **to the same department**
-  - using only one number
-- *Step 1*. Do this for both samples above: the 'warm up version' and the 'paradox version'.  
-- *Step 2*. Do it in abstract terms using mathematical notation. 
+- **Exercise.** Using only one number, summarize the typical difference in acceptance rates ...
+- ... for [women]{.groupb} and [men]{.groupa} applying **to the same department**.
+- *Step 1*. Calculate a number for both samples above: the 'warm up version' and the 'paradox version'.  
+- *Step 2*. Write out a formula in abstract terms using mathematical notation. 
   - Write ${\faded W_i,X_i,Y_i}$ for the values of *gender*, *department*, and *admission status* in our sample.
   - Write $\ingroupa{\hat\mu(0, x)}$ and $\ingroupb{\hat\mu(1, x)}$ for within-group means.
   - Check that when you plug in the numbers for your two samples, you get your answers from Step 1.
-- *Step 3*. Do it in terms that make sense when you have more than two departments.
-  - That is, generalize your answer to Step 2 so it does what you think it should when $X$ is non-binary.
+- *Step 3*. Generalize your formula so it works when you have more than two departments (i.e. non-binary $X$).
   - If your answer to Step 2 already worked for non-binary $X$, you have nothing to do here. You're done.
   
 
-## Solution 1. An Average over Departments
 
+## Solution 1. An Average over Departments 
 ```{r}
-#| layout-ncol: 2
-#| fig-width: 7
-#| fig-cap: 
-#|  - The warm-up version 
-#|  - The paradox version
-
 muhat.frac = Vectorize(function(w,x) { 
   sprintf('\\frac{%d}{%d}', sum(Y[W==w & X==x]), sum(W==w & X==x))
 })
-solution.grid(berkeley.data[1:6,])
-solution.grid(berkeley.data)
 ```
 
-::: {.panel-tabset}
-
+::: {.panel-tabset} 
 ### Warm-up Version
+```{r}
+solution.grid(berkeley.data[1:6,])
+```
+
 $$
 \color{gray}
 \begin{aligned}
 \text{summary} 
-&= \frac{1}{D}\sum_{x=1}^D 
-\qty{ \ingroupb{\hat\mu(1,x)} - \ingroupa{\hat \mu(0, x)} } && \qqtext{ for departments } 1 \ldots D \\
-&\frac{1}{2}\qty[ \{\ingroupb{\hat\mu(1, 0)} - \ingroupa{\hat\mu(0, 0)}\} + \{\ingroupb{\hat\mu(1, 1)} - \ingroupa{\hat\mu(0, 1)}\} ] &&\qqtext{ in our examples } \\
-&= \frac{1}{2}\qty[ \{ \ingroupb{1} - \ingroupa{1} \} + \{ \ingroupb{0} - \ingroupa{0} \} ] = 0 \\
+&=\frac{1}{\# \text{departments}}
+\sum_{x \in \text{departments}}\qty{ \ingroupb{\hat\mu(\wone,x)} - \ingroupa{\hat \mu(\wzero, x)} } \\
+&=\frac{1}{2}\qty[ {\{\ingroupb{\hat\mu(\wone, \xzero)} - \ingroupa{\hat\mu(\wzero, \xzero)}\} + \{\ingroupb{\hat\mu(\wone, \xone)} - \ingroupa{\hat\mu(\wzero, \xone)}\}} ] \\
+&= \frac{1}{2}\qty[ \{ \ingroupb{1} - \ingroupa{1} \} + \{ \ingroupb{0} - \ingroupa{0} \} ] \\
+&= \frac{1}{2}\qty[ \{ 0 \} + \{ 0 \} ] \\
+&= 0 
 \end{aligned}
 $$
 
+
 ### Paradox Version
+```{r}
+solution.grid(berkeley.data)
+```
+
 $$
 \color{gray}
 \begin{aligned}
 \text{summary} 
-&= \frac{1}{D}\sum_{x=1}^D 
-\qty{ \ingroupb{\hat\mu(1,x)} - \ingroupa{\hat \mu(0, x)} } && \qqtext{ for departments } 1 \ldots D \\
-&= \frac{1}{2}\qty[ \{\ingroupb{\hat\mu(1, 0)} - \ingroupa{\hat\mu(0, 0)}\} + \{\ingroupb{\hat\mu(1, 1)} - \ingroupa{\hat\mu(0, 1)}\} ] &&\qqtext{ in our examples } \\
-&= \frac{1}{2}\qty[ \{\ingroupb{`r muhat.frac(1, 0)`} - \ingroupa{`r muhat.frac(0, 0)`}\} \ + \ \{\ingroupb{`r muhat.frac(1, 1)`}-\ingroupa{`r muhat.frac(0, 1)`} \} ] 
+&=\frac{1}{\# \text{departments}}
+\sum_{x \in \text{departments}}\qty{ \ingroupb{\hat\mu(\wone,x)} - \ingroupa{\hat \mu(\wzero, x)} } \\
+&=\frac{1}{2}\qty[ {\{\ingroupb{\hat\mu(\wone, \xzero)} - \ingroupa{\hat\mu(\wzero, \xzero)}\} + \{\ingroupb{\hat\mu(\wone, \xone)} - \ingroupa{\hat\mu(\wzero, \xone)}\}} ] \\
+&= \frac{1}{2}\qty[ \qty{\ingroupb{`r muhat.frac(1, 0)`} - \ingroupa{`r muhat.frac(0, 0)`}} \ + \ \qty{\ingroupb{`r muhat.frac(1, 1)`}-\ingroupa{`r muhat.frac(0, 1)`} } ] \\
 &\approx \frac{1}{2}\qty[ \qty{`r round(muhat(1,0) - muhat(0,0), 2)`} + \qty{`r round(muhat(1, 1) - muhat(0, 1), 2)`} ] \\
 &\approx `r round(mean(muhat(1,0:1) - muhat(0,0:1)), 2)`
 \end{aligned}
 $$
 
-:::
-
 - This is telling us the direction of the disparity within departments.
   - In the warm-up version, it's zero because there is no disparity in acceptance rates within departments.
-  - In the paradox version, it's positive because [women]{.groupb} are accepted to both more often than [men]{.groupa}.
+  - In the paradox version, it's positive because bot departments accept [women]{.groupb} at a higher rate than [men]{.groupa}.
 - But is it a good summary of the experience of the women applying to them? Probably not. 
-  - Only 1 applies to Department 0.
-  - More---3 in the paradox version---apply to Department 1.
+  - Only 1 applies to Department 0. Several times more---3 in the paradox version---apply to Department 1.
   - And we're giving the same weight to the rate difference in each departments.
-- What we get isn't really typical *for women who apply*. 
-- We've counted the one who applied to Department 0 ${\faded 3 \times}  more than the ones who applied to Department 1.
+- We've counted the one who applied to Department 0 $\faint{3 \times}$  as much as the ones who applied to Department 1.
+
+:::
 
 ## Solution 2. An Average over Applicants
 ```{r}
-#| layout-ncol: 2
-#| fig-width: 7
-
 N1 = sum(W==1)
 X1 = X[W==1]
 stopifnot(N1==4)
-solution.grid(berkeley.data[1:6,], numbered=TRUE)
-solution.grid(berkeley.data, numbered=TRUE)
 ```
 
 ::: {.panel-tabset}
-
 ### Warm-up Version
+```{r}
+solution.grid(berkeley.data[1:6,], numbered=TRUE)
+```
 
 $$
 \color{gray}
 \begin{aligned}
 \text{summary} 
-&= \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} \qty{ \ingroupb{\hat \mu(1, X_i) - \ingroupa{\hat \mu(0,X_i)} } }  &&\qfor N_w = \sum_{i: W_i=w} 1 \\
-&= \ldots 
-&= \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}}  0 = 0  &&\qqtext{in the warm-up version} \\
+&= \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} \qty{ \ingroupb{\hat \mu(1, X_i) - \ingroupa{\hat \mu(0,X_i)} } }  \qfor N_w = \sum_{i: W_i=w} 1 \\
+&= \frac{1}{3} \qty[
+\underset{\veryfaint{i=1}}{ \{ \ingroupb{\hat \mu(\wone,\xone)} - \ingroupa{\hat \mu(\wzero, \xone)} \} } + 
+\underset{\veryfaint{i=2}}{ \{ \ingroupb{\hat \mu(\wone, \xone)} - \ingroupa{\hat \mu(\wzero, \xone)} \} } + 
+\underset{\veryfaint{i=4}}{ \{ \ingroupb{\hat \mu(\wone, \xzero)} - \ingroupa{\hat \mu(\wzero, \xzero)} \} } 
+] \\
+&= \frac{1}{3} \qty[\underset{\veryfaint{i=1}}{ \{ \ingroupb{0} - \ingroupa{0} \} } + 
+\underset{\veryfaint{i=2}}{ \{ \ingroupb{0} - \ingroupa{0} \} } + 
+\underset{\veryfaint{i=4}}{ \{ \ingroupb{1} - \ingroupa{1} \} } ]  \\
+&= \frac{2}{3}\qty{\ingroupb{0} - \ingroupa{0}} + \frac{1}{3}\qty{\ingroupb{1} - \ingroupa{1}} \\
+&= 0
 \end{aligned}
 $$
 
 ### Paradox Version
 
+```{r}
+solution.grid(berkeley.data, numbered=TRUE)
+```
+
 $$
 \color{gray}
 \begin{aligned}
 \text{summary} 
-&= \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} \qty{ \ingroupb{\hat \mu(1, X_i) - \ingroupa{\hat \mu(0,X_i)} } }  &&\qfor N_w = \sum_{i: W_i=w} 1 \\
-&= \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}}  0 = 0  &&\qqtext{in the warm-up version} \\
-&= \frac{1}{`r N1`} \qty[\{ \ingroupb{\hat \mu(1, `r X1[1]`)} - \ingroupa{\hat \mu(0, `r X1[1]`)} \} + 
-\{\ingroupb{\hat \mu(1, `r X1[2]`)} - \ingroupa{\hat \mu(0, `r X1[2]`)} \} + 
-\{\ingroupb{\hat \mu(1, `r X1[3]`)} - \ingroupa{\hat \mu(0, `r X1[3]`)} \} + 
-\{\ingroupb{\hat \mu(1, `r X1[4]`)} - \ingroupa{\hat \mu(0, `r X1[4]`)} \} ]  &&\qqtext{in the paradox version} \\
-&\approx 
-\frac{1}{`r N1`} \qty[\{\ingroupb{`r muhat.frac(1, X1[1])`} - \ingroupa{`r muhat.frac(0,X1[1])`}\} +
- \{\ingroupb{`r muhat.frac(1, X1[2])`} - \ingroupa{`r muhat.frac(0,X1[2])`}\} +
- \{\ingroupb{`r muhat.frac(1, X1[3])`} - \ingroupa{`r muhat.frac(0,X1[3])`}\} +
- \{\ingroupb{`r muhat.frac(1, X1[4])`} - \ingroupa{`r muhat.frac(0,X1[4])`}\}] \\
-&\approx 
-\frac{1}{`r N1`} \qty[\{`r round(muhat(1, X1[1]) - muhat(0, X1[1]), 2)`\} +
-\{`r round(muhat(1, X1[2]) - muhat(0, X1[2]), 2)`\} +
-\{`r round(muhat(1, X1[3]) - muhat(0, X1[3]), 2)`\} +
-\{`r round(muhat(1, X1[4]) - muhat(0, X1[4]), 2)`\}] \\
-& \approx `r round(mean(muhat(1,X1) - muhat(0,X1)), 2)`
+&= \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} \qty{ \ingroupb{\hat \mu(1, X_i) - \ingroupa{\hat \mu(0,X_i)} } }  \qfor N_w = \sum_{i: W_i=w} 1 \\
+&= \frac{1}{4} \qty[
+\underset{\veryfaint{i=1}}{ \{ \ingroupb{\hat \mu(\wone,\xone)} - \ingroupa{\hat \mu(\wzero, \xone)} \} } + 
+\underset{\veryfaint{i=2}}{ \{ \ingroupb{\hat \mu(\wone, \xone)} - \ingroupa{\hat \mu(\wzero, \xone)} \} } + 
+\underset{\veryfaint{i=4}}{ \{ \ingroupb{\hat \mu(\wone, \xzero)} - \ingroupa{\hat \mu(\wzero, \xzero)} \} } + 
+\underset{\veryfaint{i=7}}{ \{ \ingroupb{\hat \mu(\wone, \xone)} - \ingroupa{\hat \mu(\wzero, \xone)} \} } ]
+&= \frac{3}{4}\qty{ \ingroupb{`r muhat.frac(1, 1)`} - \ingroupa{`r muhat.frac(0,1)`}} +
+\frac{1}{4}\qty{ \ingroupb{`r muhat.frac(1, 0)`} - \ingroupa{`r muhat.frac(0,0)`}} \\
+&= \frac{3}{4}\qty{ \ingroupb{`r muhat.frac(1, 1)`} - \ingroupa{`r muhat.frac(0,1)`}} +
+\frac{1}{4}\qty{ \ingroupb{`r muhat.frac(1, 0)`} - \ingroupa{`r muhat.frac(0,0)`}} \\
+& \approx 
+\frac{3}{4}\qty{`r round(muhat(1, 1) - muhat(0, 1), 2)`} +
+\frac{1}{4}\qty{`r round(muhat(1, 0) - muhat(0, 0), 2)`} 
+\approx `r round(mean(muhat(1,X1) - muhat(0,X1)), 2)`
 \end{aligned}
 $$
-
-### Paradox Version
-$$
-\color{gray}
-\begin{aligned}
-\text{summary} 
-&= \frac{1}{N_1}\sum_{i: W_i=1} \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } 
-\end{aligned}
-$$
-
-:::
 
 - This is a comparison that focuses on what's typical for women who apply to the Graduate School. 
   - Each female applicant gets equal weight in 'deciding' what is typical. 
   - That's why ${\faded X_i=1}$ occurs in 3 of `r N1` terms. 
-- The number we get is not radically different in this case (`r round(mean(muhat(1,X1) - muhat(0,X1)), 2)` vs. `r round(mean(muhat(1,0:1) - muhat(0,0:1)), 2)`), but it can be. 
-  - What if many more women had applied to, and been rejected by, Department 1?
-  - How would these two summaries compare then?
+- The number we get is not radically different from the Solution 1 version.
+ - It's `r round(mean(muhat(1,X1) - muhat(0,X1)), 2)` vs. `r round(mean(muhat(1,0:1) - muhat(0,0:1)), 2)`
+ - But it can be. We'll see a case in which that happens soon.
+
+:::
 
 
 ## Reinterpreting Solution 2
 
 ```{r}
-scatter.by.group(sam)
+solution.grid(berkeley.data, numbered=TRUE)
 ```
 
-- We can, in fact, think of this as the average difference between the income of
-  - each female respondent's income, $\ingroupb{Y_i}$ 
-  - the mean income among males at their level of education, $\ingroupa{\hat \mu(0, X_i)}$.
+- We can, in fact, think of this as the average difference between ...
+  - each woman applicant's acceptance status, $\ingroupb{Y_i}$ 
+  - the mean acceptance status (i.e. rate) among men who applied to the same department, $\ingroupa{\hat \mu(0, X_i)}$.
 
 $$
 \color{gray}
@@ -674,7 +560,7 @@ $$
 \end{aligned}
 $$
 
-- These two expressions will always be equal, no matter what the actual values of $W_i,X_i,Y_i$ are.
+- These two expressions will always be equal, no matter what the actual values of $\faint{W_i,X_i,Y_i}$ are.
 - We can think of the first one as a version of the second where we sum in a certain order. 
 
 :::: columns
@@ -682,7 +568,7 @@ $$
 ::: {.column width="40%"}
 ```{r}
 #| fig-width: 5
-scatter.by.group(sam)
+solution.grid(berkeley.data, numbered=TRUE)
 ```
 
 [The same plot as above, for convenience.]{.fg style="color:gray"}
@@ -711,33 +597,30 @@ $$
 ## Visualizing Averages using Histograms
 
 ```{r}
-proportion.scale = 300000
-scaled.interleaved.bars = list(geom_bar(aes(x=xco(group, education), y=proportion.scale*after_stat(prop), fill=group, color=group), 
-                               position='identity', alpha=.03, linewidth=.2), 
-                               scale_y(c(0,150000), sec.axis=sec_axis(~./proportion.scale, name='Proportion')),
-                               guides(color='none', fill='none'))
-bars= list(geom_bar(aes(x=education, y=after_stat(prop), fill=group, color=group), 
-                     position='identity', alpha=.05, linewidth=.4), 
-            guides(color='none', fill='none'))
-
-
-scatter.by.group(sam) + scaled.interleaved.bars 
+berkeley.with.histograms = 
+  solution.grid(berkeley.data, numbered=TRUE) + 
+    geom_bar(aes(x=xco(w,x, shift=.1), y=after_stat(prop), fill=factor(w), color=factor(w)), position='identity', alpha=.3, linewidth=.2) + 
+    stat_summary(aes(x=x, y=y, color=factor(w)), geom='line', fun=mean, alpha=.3) +
+    guides(fill='none') 
+berkeley.with.histograms
 ```
 
 - To make sense of our summary, it's helpful to revisit a counting trick we use now and then.
   - When we want to average over the people in a sample, we can use a histogram to help us count.
-  - This reduces a sum over hundreds or thousands of people to a sum over a few bins.
-- The average of function of $x$ over the education levels of our female respondents  ...
-  - is a weighted average of the function's values at each education level ...
-  - where an education level's weight is its *frequency*  among female respondents. 
+  - This is a small sample, so it's not necessary here. Think of it as a warm-up for the next example.
+- The average of function of $x$ over the department-choices of women who applied to the graduate school  ...
+  - is a weighted average of the function's values at each department 
+  - where a department's weight is its *frequency*  among these applicants. 
 $$
-\faded
+\color{gray}
+\begin{aligned}
 \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} f(X_i) = \sum_{x} f(x) \ingroupb{P_{x\mid 1}} \qfor 
 \underset{\faded\text{height of the green bar at $x$}}{\ingroupb{P_{x\mid 1} = \frac{N_{1,x}}{N_1}}}
+\end{aligned}
 $$
 
-- Here the function of $x$ we're looking at is $f(x) = \ingroupb{\hat\mu(1,x)} - \ingroupa{\hat \mu(0,x)}$.
-  - That's the difference in mean income between female respondents and male ones at education level $x$.
+- Here the function of $x$ we're looking at is $\faint{f(x) = \ingroupb{\hat\mu(1,x)} - \ingroupa{\hat \mu(0,x)}}$.
+  - That's the difference in accepance rate for women and men in department $x$.
   - In visual terms, it's the difference in the height of the [green]{.groupb} and [red]{.groupa} lines. 
 - And we're averaging that difference with the weights shown by the [green bars]{.groupb}.
 
@@ -746,6 +629,7 @@ $$
 To prove it, we can trace the argument from our last slide backward, stopping in the middle. 
 
 $$
+\faded
 \begin{aligned}
 \sum_{i: W_i=w} f(X_i)  
 &\explain{=}{We sum first over dots in a column, then over columns.}
@@ -753,70 +637,148 @@ $$
 &\mathexplain{=}{f(x)=f(X_i) \text{ within a column}.} 
 \sum_{x} \sum_{\substack{i: W_i=w, \ X_i=x}} f(x) \\
 &\explain{=}{The column sum is the column's mean times its number of dots.}
-\sum_{x}f(x) \times N_{w,x} \qfor N_{w,x} = \sum_{\substack{i: W_i=w, \ X_i=x}} 1  \\
-& \qqtext{ so } \\
-\frac{1}{N_w} \sum_{i: W_i=w} \hat \mu(w', X_i) 
-&= \sum_{x} f(x) \times \frac{N_{w,x}}{N_w} 
+\sum_{x}f(x) \times N_{w,x} \qfor N_{w,x} = \sum_{\substack{i: W_i=w, \ X_i=x}} 1 
 \end{aligned}
 $$
 
-
 ## Variations
-
-- If we prefer, we could summarize this disparity by focusing on what's typical for *male respondents*.
-  - Or for respondents in general.
-  - Or for respondents who, e.g., have not attended college.
-    
-### Exercise
-
-  - Here are a few summaries of the income disparity between similarly-educated male and female respondents.
-  - They are all averages of the same [within-column]{.groupb} [differences]{.groupa}.
-  - But they're averages over different groups of dots (i.e. respondents).
-  - For each of these summaries, describe the group we're averaging over. Do it in two ways.
-    1. As you'd describe the people in them, e.g. 'all female respondents'.
-    2. As you'd describe the dots in the plot, e.g. 'all green dots' 
-
-:::: columns  
-::: column
 ```{r}
-#| fig-width: 7
-scatter.by.group(sam) + scaled.interleaved.bars 
+berkeley.with.histograms +
+  geom_bar(aes(x=x, y=after_stat(prop)), alpha=.1, linewidth=.1, fill='purple', color='purple')
 ```
 
+- If we prefer, we could summarize the within-department disparities $\ingroupb{\hat\mu(1,x)} - \ingroupa{\hat\mu(0,x)}$ in other ways.
+- We could focus on the disparities within departments *men* apply to. 
+  - To do this, we could weight our average using the [red bars]{.groupa}.  
+- We could focus on the disparities within departments *people* apply to. 
+  - To do this, we could weight using the height of the [purple bars]{.purple}.  
+  - This would emphasize disparities in popular departments over those in unpopular ones.
+    
+
+## Exercise
+
+:::: columns
+::: {.column width="70%"}
+```{r}
+#| fig-width: 10
+berkeley.with.histograms +
+  geom_bar(aes(x=x, y=after_stat(prop)), alpha=.1, linewidth=.1, fill='purple', color='purple')
+``` 
+
 :::
-::: column
+::: {.column width="30%"}
 $$
 \color{gray}
 \begin{aligned}
 \Delta_1 
-&\explain{=}{All male respondents. All red dots} 
+&\explain{=}{All men who applied to the Graduate School. All red dots. Red bars.} 
 \ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}} \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } \\
 \Delta_2 
-&\explain{=}{All female respondents. All green dots} 
+&\explain{=}{All women who applied to the Graduate School. All green dots. Green bars.} 
 \ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } \\
 \Delta_3 
-&\explain{=}{All respondents who didn't attend college. All dots in the leftmost 4 (pairs of) columns.} 
-\frac{1}{N_{x \le 12}}\sum_{i: X_i \le 12} \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } \qfor N_{x \le 12} = \sum_{i: X_i \le 12} 1  \\
-\Delta_4 
-&\explain{=}{All respondents outright. All dots.} 
+&\explain{=}{All applicants to the Graduate School outright. All dots. Purple bars.} 
 \frac{1}{n} \sum_{i=1}^n \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } 
 \end{aligned}
 $$
-
 :::
 ::::
 
-### Terminology
+  - Above are a few summaries of the difference in within-department acceptance rates between men and women.
+    - They are all averages of the same [within-column]{.groupb} [differences]{.groupa}.
+    - But they're averages over different groups of dots (i.e. applicants).
+  - **Part 1.** For each of these summaries, describe the group we're averaging over. Do it three ways.
+    1. As you'd describe the people in them, e.g. 'all women who applied to Department 1'.
+    2. As you'd describe the dots in the plot, e.g. 'allgreen dots in the x=1 column'.
+    3. In 'histogram form' mathematical notation, i.e. as a weighted average over departments.
+      - Write $\ingroupb{P_{x\mid 1}}$, $\ingroupa{P_{x\mid 0}}$, and $\inpurple{P_x}$ for the heights of the [green]{.groupb}, [red]{.groupa}, and [purple]{.purple} bars.
 
-- It's common to use the same words to describe each of these summaries.
-  - 'The average difference in income between male and female respondents, **adjusted for education**'.
-  - Or sometimes '..., *controlling for education*'.^[This can be confusing because it has a different --- but related --- meaning when when we're talking about designing an experiment.]
+  - **Part 2.** Using the information in the plot, calculate each of them.
+
+### Terminology
+- It's common to use the same words to describe these three different summaries.
+  - 'The average difference in acceptance rate for men and women, **adjusted for department**.
+  - Or sometimes '..., *controlling for department*'.^[This can be confusing because it has a different --- but related --- meaning when when we're talking about designing an experiment.]
 - This results in a lot of confusion. 
 - There is more precise terminology out there. 
   - But it tends to be used when we're talking about differences between groups *receiving different treatments*.
   - We'll get into that more precise terminology next time. 
   - And talk briefly about how it gets used in contexts like this, where we're not talking about treatments.
   - Today, when we talk about the adjusted difference, that'll mean the average over [female respondents]{.groupb}.
+
+
+## Acceptance Rates at the Graduate School Level
+```{r}
+berkeley.with.histograms
+```
+
+When we look at the acceptance rates to the graduate school in 'histogram form', \
+we can see how it differs from our summary of within-department rates very clearly.
+
+$$
+\color{gray}
+\begin{aligned}
+\hat\Delta_{\text{raw}}
+&=\text{difference in acceptance rates for women and men for the Graduate School as a whole} \\ 
+&= \ingreen{\sum_{i:W_i=1} \hat\mu(1,X_i)} - \inred{\sum_{i:W_i=0} \hat\mu(0,X_i)} 
+&& \text{sum over people form} \\
+&= \sum_{x} \ingreen{P_{x\mid 1} \ \hat\mu(1,x)} - \sum_{x} \inred{P_{x\mid 0} \  \hat\mu(0,x)} 
+&& \text{histogram form} \\
+&=
+\sum_{x} \ingreen{P_{x\mid 1} \ \hat\mu(1,x)} + \sum_{x} (\ingreen{P_{x\mid 1}} - \ingreen{P_{x|1}} - \inred{P_{x\mid 0}}) \ \inred{\hat\mu(0,x)} 
+&& \text{adding a fancy version of zero} \\
+&= \underset{\text{within-department summary}}{\sum_{x} \ingreen{P_{x\mid 1}} \ \{\ingreen{\hat\mu(1,x)} - \inred{\hat\mu(0,x)}\} } 
+   + \underset{\text{covariate shift term}}{\sum_x \{\ingreen{P_{x\mid 1}} - \inred{P_{x\mid 0}}\} \ \inred{\hat\mu(0,x)}}
+&& 
+\end{aligned}
+$$
+
+::: {.panel-tabset}
+### The Covariate Shift Term
+- It differs by a 'covariate shift term'. 
+  - This term that has nothing to do with the disparity within departments.
+  - It's about the shift in the distribution of our covariate $x$, the applicant's department choice ...
+  - ... from [the group of men who applied to the Graduate School]{.groupa} to [the group of women who did]{.groupb}.
+- In our paradox example, this term is negative.
+  - The graduate school-level difference is smaller than our summary of the within-department ones.
+  - It's negative while the within-department differences are positive.^[Remember we're looking at [rates for women]{.groupb} - [rates for men]{.groupa}.]
+- In our warm-up example, this term was *the whole difference* we saw on the university level. 
+  - There were no within-department disparities, so the within-department term was zero.
+
+### Visualizing Covariate Shift 
+
+- The covariate shift term is the difference of two averages of the same function of x.
+    - The function---the red line---is the [acceptance rate for men]{.groupa} within departments.
+    - The term is the difference of two averages.
+      - The average over green dots or equivalently the average weighted by green bars. Women's department choices.
+      - The average over red dots or equivalently the average weighted by red bars. Men's department choices.
+- Why is it negative? 
+  - The function we're averaging *decreases from left to right*. 
+  - The distribution we're averaging over *shifts from [left]{.groupb} to [right]{.groupa}*.
+  - *Consequence*. The first average is bigger than the second.
+
+### The Multiplication Heuristic 
+
+- There's a simple heuristic that'll tell you if this term is positive or negative.
+  - It's like multiplying two numbers: $+1 \times +1 = +1, +1 \times -1 = -1, -1 \times +1 = -1, -1 \times -1 = +1$.
+  - The two factors here are our function and a distribution shift. 
+- To use this heuristic, we need to give these two factors signs. 
+  - A function is 'positive' if it increases from left to right and 'negative' if it decreases from left to right.
+  - A distribution shift is 'positive' if probability mass shifts from left to right and 'negative' if  it shifts from right to left.
+$$
+\overset{-1}{\text{decreasing function}} \times \overset{+1}{\text{rightward shift}} = \overset{-1}{\text{negative difference}}
+$$
+
+- This'll be more useful but subtler when we have more levels of $X$.
+
+### Terminology 
+
+- The word *adjustment* refers to the process of getting rid of the covariate shift term. 
+  - Or trying to. Often people do it in a way that only half-works. 
+- We call the difference without adjustment the **raw difference**. 
+  - Adjustment is, after all, a bit like cooking. There are recipes. 
+
+:::
 
 # Income Disparities 
 
@@ -859,13 +821,6 @@ $$
 ::::
 
 - When people talk about comparisons like this, they're often pretty imprecise with their language.
-- Here are a few things you might want to think about when hear about a comparison between two groups.
-  1. What's being reported.
-    - A raw difference or an adjusted one?
-    - What variable(s) are being adjusted for? 
-    - What group is being averaged over?
-  2. How the things *they could report* might differ.
-  3. Why they're reporting what they're reporting.
 
 ::: aside
 The averages shown in the plot on the left ---  the average incomes of all [male]{.groupa} and [female]{.groupb}
@@ -918,7 +873,16 @@ is what we get when we ...
 
 ## The Raw Gap and Covariate Shift 
 ```{r}
-scatter.by.group(sam, group.means.alpha=.2, line.alpha=.2)
+proportion.scale = 400000
+scaled.interleaved.bars = list(geom_bar(aes(x=xco(group, education), y=proportion.scale*after_stat(prop), fill=group, color=group), 
+                               position='identity', alpha=.03, linewidth=.1), 
+                               scale_y(c(0,150000), sec.axis=sec_axis(~./proportion.scale, name='Proportion')),
+                               guides(color='none', fill='none'))
+bars= list(geom_bar(aes(x=education, y=after_stat(prop), fill=group, color=group), 
+                     position='identity', alpha=.05, linewidth=.4), 
+            guides(color='none', fill='none'))
+
+scatter.by.group(sam, group.means.alpha=.2, line.alpha=.5) + scaled.interleaved.bars
 ```
 
 - When we look at the raw gap in 'histogram form', we can see how it differs from the adjusted one very clearly.
@@ -1180,10 +1144,7 @@ $$
 &\mathexplain{=}{f(x)=f(X_i) \text{ within a column}.} 
 \sum_{x} \sum_{\substack{i: W_i=w, \ X_i=x}} f(x) \\
 &\explain{=}{The column sum is the column's mean times its number of dots.}
-\sum_{x}f(x) \times N_{w,x} \qfor N_{w,x} = \sum_{\substack{i: W_i=w, \ X_i=x}} 1  \\
-& \qqtext{ so } \\
-\frac{1}{N_w} \sum_{i: W_i=w} \hat \mu(w', X_i) 
-&= \sum_{x} f(x) \times \frac{N_{w,x}}{N_w} 
+\sum_{x}f(x) \times N_{w,x} \qfor N_{w,x} = \sum_{\substack{i: W_i=w, \ X_i=x}} 1  
 \end{aligned}
 $$
 
@@ -1194,57 +1155,6 @@ $$
   - Or for respondents in general.
   - Or for respondents who, e.g., have not attended college.
     
-### Exercise
-
-  - Here are a few summaries of the income disparity between similarly-educated male and female respondents.
-  - They are all averages of the same [within-column]{.groupb} [differences]{.groupa}.
-  - But they're averages over different groups of dots (i.e. respondents).
-  - For each of these summaries, describe the group we're averaging over. Do it in two ways.
-    1. As you'd describe the people in them, e.g. 'all female respondents'.
-    2. As you'd describe the dots in the plot, e.g. 'all green dots' 
-
-:::: columns  
-::: column
-```{r}
-#| fig-width: 7
-scatter.by.group(sam) + scaled.interleaved.bars 
-```
-
-:::
-::: column
-$$
-\color{gray}
-\begin{aligned}
-\Delta_1 
-&\explain{=}{All male respondents. All red dots} 
-\ingroupa{\frac{1}{N_0}\sum_{i: W_i=0}} \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } \\
-\Delta_2 
-&\explain{=}{All female respondents. All green dots} 
-\ingroupb{\frac{1}{N_1}\sum_{i: W_i=1}} \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } \\
-\Delta_3 
-&\explain{=}{All respondents who didn't attend college. All dots in the leftmost 4 (pairs of) columns.} 
-\frac{1}{N_{x \le 12}}\sum_{i: X_i \le 12} \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } \qfor N_{x \le 12} = \sum_{i: X_i \le 12} 1  \\
-\Delta_4 
-&\explain{=}{All respondents outright. All dots.} 
-\frac{1}{n} \sum_{i=1}^n \qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0, X_i)} } 
-\end{aligned}
-$$
-
-:::
-::::
-
-### Terminology
-
-- It's common to use the same words to describe each of these summaries.
-  - 'The average difference in income between male and female respondents, **adjusted for education**'.
-  - Or sometimes '..., *controlling for education*'.^[This can be confusing because it has a different --- but related --- meaning when when we're talking about designing an experiment.]
-- This results in a lot of confusion. 
-- There is more precise terminology out there. 
-  - But it tends to be used when we're talking about differences between groups *receiving different treatments*.
-  - We'll get into that more precise terminology next time. 
-  - And talk briefly about how it gets used in contexts like this, where we're not talking about treatments.
-  - Today, when we talk about the adjusted difference, that'll mean the average over [female respondents]{.groupb}.
-
 # Covariate Shift
 
 The thing behind the paradox.
@@ -1478,8 +1388,8 @@ muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
-scatter.by.group(this.sam) + scaled.interleaved.bars
-ggplot(this.sam) + bars + facet.by.group
+scatter.by.group(this.sam) # + scaled.interleaved.bars
+ggplot(this.sam) #+ bars + facet.by.group
 ```
 :::
 
@@ -1513,8 +1423,8 @@ muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
-scatter.by.group(this.sam) + scaled.interleaved.bars
-ggplot(this.sam) + bars + facet.by.group
+scatter.by.group(this.sam) #+ scaled.interleaved.bars
+ggplot(this.sam) # + bars + facet.by.group
 ```
 :::
 
@@ -1547,8 +1457,8 @@ muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
-scatter.by.group(this.sam) + scaled.interleaved.bars
-ggplot(this.sam) + bars + facet.by.group
+scatter.by.group(this.sam) # + scaled.interleaved.bars
+ggplot(this.sam) + bars # + facet.by.group
 ```
 :::
 
@@ -1560,6 +1470,16 @@ ggplot(this.sam) + bars + facet.by.group
 - As a result, we don't see a big difference in the raw and adjusted differences.
   - The adjusted difference is about \$`r money(abs(mean(Y[W==1] - muhat(0,X[W==1]), na.rm=TRUE)))` 
   - The raw difference is about \$`r money(abs(mean(Y[W==1]) - mean(Y[W==0])))`.
+
+## Reading Comparisons
+
+- Here are a few things you might want to think about when hear about a comparison between two groups.
+  1. What's being reported.
+    - A raw difference or an adjusted one?
+    - What variable(s) are being adjusted for? 
+    - What group is being averaged over?
+  2. How the things *they could report* might differ.
+  3. Why they're reporting what they're reporting.
 
 ## What Would You Report?
 
@@ -1579,11 +1499,11 @@ muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
 ::: {.panel-tabset}
 ### California
 ```{r}
-scatter.by.group(sam) + scaled.interleaved.bars
+scatter.by.group(sam) #+ scaled.interleaved.bars
 ```
 ### Georgia
 ```{r}
-scatter.by.group(this.sam) + scaled.interleaved.bars
+scatter.by.group(this.sam) # + scaled.interleaved.bars
 ```
 :::
 
