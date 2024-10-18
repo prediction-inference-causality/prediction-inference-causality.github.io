@@ -1,0 +1,357 @@
+---
+title: "Week 7 Homework"
+format: html
+---
+::: hidden
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+$$
+:::
+
+# Summary
+{{< include shared-code.qmd >}}
+{{< include ca-income.qmd >}}
+```{r}
+set.seed(1)
+theme_set(whitebw.theme())
+```
+
+In this one, we're going to review some stuff that people mixed up on the exam and work on visualization and computation for complex summaries of data with multiple and multivalued covariates. 
+
+
+# Review 
+
+```{r}
+set.seed(123)
+m = 10000000 
+y = rnorm(m) + (6*rbinom(m, size=1, prob=.5)-3)
+y = y - mean(y)
+
+n = 10000
+J = sample(1:m, size=n, replace=TRUE)
+Y = y[J]
+```
+```{r}
+theta.hat.star = 1:10000 |> map_vec(function(.) { 
+  I = sample(1:n, size=n, replace=TRUE)
+  Y.star = Y[I]
+  mean(Y.star)
+}) 
+```
+
+::: {#fig-histogram-data}
+```{r}
+#| layout-ncol: 2
+#| fig-width: 5.5
+#| fig-cap:
+#|  - A histogram of the population, $y_1 \ldots y_{m}$ for $m=10,000,000$.
+#|  - A histogram of the sample, $Y_1 \ldots Y_n$ for $n=10,000$.
+ggplot() + geom_histogram(aes(x=y), bins=100, alpha=.3) + 
+  geom_vline(xintercept=mean(y), color="blue") + 
+  geom_vline(xintercept=mean(Y)-sd(Y), color="blue", linetype="dashed") + 
+  geom_vline(xintercept=mean(Y)+sd(Y), color="blue", linetype="dashed")
+ggplot() + geom_histogram(aes(x=Y), bins=100, alpha=.3) + 
+  geom_vline(xintercept=mean(Y), color="blue") + 
+  geom_vline(xintercept=mean(Y)-sd(Y), color="blue", linetype="dashed") + 
+  geom_vline(xintercept=mean(Y)+sd(Y), color="blue", linetype="dashed")
+```
+A histogram of the sample $Y_1 \ldots Y_{10000}$. The mean of each distribution is marked with a blue line
+and the mean plus and minus one standard deviation are marked with dashed blue lines.
+:::
+
+::: {#fig-histogram-theta-star}
+```{r}
+#| layout-ncol: 3
+#| fig-cap:
+#|  - The sampling distribution of estimator A.
+#|  - The sampling distribution of estimator B.
+#|  - The sampling distribution of estimator C.
+ggplot() + geom_histogram(aes(x=theta.hat.star/2), bins=100, alpha=.3) + 
+  geom_vline(xintercept=mean(theta.hat.star/2), color="blue")  
+ggplot() + geom_histogram(aes(x=Y), bins=100, alpha=.3) + 
+  geom_vline(xintercept=mean(Y), color="blue")  
+ggplot() + geom_histogram(aes(x=1+theta.hat.star/2), bins=100, alpha=.3) + 
+  geom_vline(xintercept=mean(1+theta.hat.star/2), color="blue")  
+```
+The bootstrap sampling distributions of our three estimators. 
+The mean of each distribution is marked with a blue line.
+:::
+
+In @fig-histogram-data, I've drawn two histograms. The first shows a population $y_1 \ldots y_m$ with mean $\mu = \frac1m \sum_{j=1}^m y_j$ and variance $\sigma^2 = \frac1m \sum_{j=1}^m (y_j - \mu)^2$. The second shows a sample $Y_1 \ldots Y_n$ drawn with replacement from this population---the sample that was used in Problem 1 of Midterm 1.  
+
+In @fig-histogram-theta-star, I've drawn the bootstrap sampling distributions of three estimators of the population mean. 
+
+1. $\hat\mu = \bar{Y}/2$ for $\bar{Y} = \frac1n \sum_{i=1}^n Y_i$
+2. $\hat\mu = 1 + \bar{Y}/2$.
+3. $\hat\mu = Y_2$.
+
+::: {#exr-match-theta-hat-star .callout-exercise}
+Match each estimator to the plot of its bootstrap sampling distribution. 
+That is, say something like `1:A`, `2:B`, `3:C`. But not exactly that.
+:::
+
+::: {#exr-mean .callout-exercise}
+For each of these estimators, say whether it is *unbiased* and whether it is *consistent*.
+
+*Tip*.
+Each part of this is a Yes or No question. There are estimators that are unbiased or consistent for some populations and not for others, so if I were asking about a population I'd told you nothing concrete about, the answer might be *maybe*. But I'm asking about the specific population plotted above and the plot does give you enough information to determine the answer. 
+:::
+
+::: {#exr-mean-vis .callout-exercise}
+For any estimator you described as *biased* or *inconsistent*, 
+describe what you see in the plots above that suggests this is
+the case.
+:::
+
+::: {#exr-variance .callout-exercise}
+For each of the three estimators, write a formula for its standard deviation. Your formula may involve the sample size $n$ and some summaries of the population, e.g. $m$, $\mu$, or  $\sigma$. Then, using information shown in @fig-histogram-data, calculate it approximately and report the number. Finally,
+check that your answer looks about right using @fig-histogram-theta-star and *describe how you checked*. 
+:::
+
+
+# Complex Summaries and Covariate Shift 
+
+## Comparing Raw and Adjusted Differences
+
+In this section, we'll work with a subset of the California income data considered in lecture. We'll look at incomes of CA residents who responded to the Current Population Survey in 2022, were in the age range 25-25, and graduated from high school. I've plotted this data below.
+
+```{r}
+ca = read.csv('../lectures/data/earnings.csv')
+```
+
+```{r}
+xco = function(w,x, shift=.15) {
+  w=as.numeric(w)
+  x + shift*(2*w-1)
+}
+
+sam.dot = list(size=1,    alpha=.15)
+pop.dot = list(size=.25,    alpha=.05)
+scatter.by.group = function(data, dot=sam.dot, width=sd, 
+                            highlight=NULL, 
+                            highlight.color='yellow', highlight.alpha=.25,
+                            line.alpha = NULL,
+                            group.means.alpha=NULL, 
+                            mean.shift=.05,
+                            jitter.height=0)
+                            { 
+  p = ggplot(data)
+  if(!is.null(highlight)) {
+    p = p + annotate('rect', 
+                      xmin=min(highlight)-.5,
+                      xmax=min(highlight)+.5,
+                      ymin=-Inf, ymax=Inf, 
+                      fill=highlight.color, alpha=highlight.alpha)
+  } 
+  if(!is.null(group.means.alpha)) {
+    summaries = data |> group_by(group) |> summarize(income=mean(income))
+    p = p + geom_hline(aes(yintercept=income, color=group), alpha=group.means.alpha, data=summaries, linetype='dashed') 
+  }
+  if(!is.null(line.alpha)) { 
+    p = p + stat_summary(aes(x=xco(group, education,shift=mean.shift), y=income, color=group), 
+    geom='line', alpha=line.alpha, fun=mean, linetype='solid') 
+  }
+
+  p + geom_point(aes(x=xco(group, education),  y=income, color=group), 
+               size=dot$size, position=position_jitter(seed=0,width=.15,height=jitter.height), alpha=dot$alpha) +
+      stat_summary(aes(x=xco(group, education,shift=mean.shift), y=income, color=group), geom="pointrange", alpha=.7, fun.data=mean_sd)  +
+    scale_x(c(11.5,20.5)) + scale_y() + scale_alpha(range=c(0,1)) + guides(color='none')
+}
+
+money = function(x) { sprintf('%1.0fk', round(x/1000, digits=0)) }  
+```
+
+
+```{r}
+proportion.scale = 200000
+scaled.interleaved.bars = list(geom_bar(aes(x=xco(group, education), y=proportion.scale*after_stat(prop), fill=group, color=group), 
+                               position='identity', alpha=.1, linewidth=.1), 
+                               scale_y(c(0,150000), sec.axis=sec_axis(~./proportion.scale, name='Proportion')),
+                               guides(color='none', fill='none'))
+scaled.purple.bars = geom_bar(aes(x=education, y=proportion.scale*after_stat(prop)), 
+                       alpha=.1, linewidth=.025, fill='purple', color='purple', width=.2)
+bars= list(geom_bar(aes(x=education, y=after_stat(prop), fill=group, color=group), 
+                     position='identity', alpha=.05, linewidth=.4))
+```
+
+::: {#fig-greenred-scatter}
+```{r}
+#| fig-width: 10
+ca$group = ca$sex == 'female'
+ca = ca[ca$education >= 12,]
+scatter.by.group(ca, group.means.alpha=.2, line.alpha=.5) + 
+  scaled.interleaved.bars + 
+  scaled.purple.bars 
+```
+Scatter plot of `education` vs `income` colored by `sex` with histograms of `education` overlaid. Note that, because incomes are on a very different scale than the proportions we're displaying in the histogram, two different scales for the y-axis are used. The scale on the left is for income. The scale on the right is for the proportions.  
+:::
+
+::: {#fig-greenred-histograms}
+```{r}
+#| fig-width: 5.5
+#| layout-ncol: 2
+facet.by.group = 
+  list(facet_grid(row=vars(group)), theme(strip.background=element_blank(), strip.text=element_blank()))
+ggplot(ca) + bars + facet.by.group + guides(color='none', fill='none')
+ggplot(ca) + bars + guides(color='none', fill='none')
+``` 
+Histograms of `education` colored by `sex` in two layouts. On the left, they're plotted one above the other. On the right, they're overlaid.
+:::
+
+
+:::: columns 
+::: {.column width="35%"}
+```{r}
+summaries = ca |> group_by(sex, education) |> 
+  summarize(mu.hat=money(mean(income)), N=n())
+```
+
+```{r}
+library(gt)
+summaries |> gt()
+```
+:::
+::: {.column width="65%"}
+
+We'll consider the following four estimators of the difference in income between the male and female CA residents in our sample.  
+$$
+\color{gray}
+\begin{aligned}
+\hat \Delta_{\text{raw}} &= \frac{1}{N_1}\sum_{i: W_i=1} Y_i - \frac{1}{N_0}\sum_{i: W_i=0} Y_i \\
+\hat\Delta_0  &=\frac{1}{N_0}\sum_{i: W_i=0} \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} \\ 
+\hat \Delta_1 &= \frac{1}{N_1}\sum_{i: W_i=1} \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} \\ 
+\hat \Delta_{\text{all}} &= \frac{1}{n} \sum_{i=1}^n \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} 
+\end{aligned}
+$$
+
+::: {#exr-calc-ca-estimator} 
+Using the data in the table to the left, calculate each of these four estimators.
+:::
+
+::::
+
+
+In Lecture 9, we decomposed the raw difference $\hat\Delta_{\text{raw}}$ as a sum of the adjusted difference $\hat\Delta_1$ and a *covariate shift term*.  And we talked about how to use plots like the ones above to understand what the covariate shift term would look like. In this next exercise, we'll get in some practice interpreting plots lik these. We'll 
+work with three samples. Each sample is shown in a tab below. 
+
+::: {.panel-tabset}
+
+### Income in LA vs SFBay 
+```{r}
+groups = c('los angeles', 'san francisco', 'alameda')
+this.sam = ca |> filter(county %in% groups)
+this.sam$group = this.sam$county != groups[1]
+scatter.by.group(this.sam, group.means.alpha=.2, line.alpha=.5) + 
+  scaled.interleaved.bars + 
+  scaled.purple.bars 
+```
+```{r}
+#| fig-width: 5.5
+#| layout-ncol: 2
+ggplot(this.sam) + bars + facet.by.group + guides(color='none', fill='none')
+ggplot(this.sam) + bars + guides(color='none', fill='none')
+```
+
+- $W_i$ is an indicator for county. 
+  - [0 for residents of Los Angeles County]{.groupa}
+  - [1 for residents of San Francisco and Alameda Counties]{.groupb}
+- $X_i$ is education in years of schooling 
+- $Y_i$ is income in dollars. 
+
+
+### Unemployment Rates in Southern California   
+
+```{r}
+groups = c('san diego', 'orange')
+this.sam = ca |> filter(county %in% groups)
+this.sam$group = this.sam$county != groups[1]
+this.sam$income = as.numeric(!this.sam$employed)
+
+proportion.scale = 2
+scatter.by.group(this.sam, group.means.alpha=.2, line.alpha=.5, jitter.height=.2) + 
+  scale_y_continuous(breaks=seq(0,1), 
+  sec.axis = sec_axis(~./proportion.scale, name='Proportion')) +    
+  coord_cartesian(ylim=c(-.2,1.2)) 
+```
+```{r}
+#| fig-width: 5.5
+#| layout-ncol: 2
+ggplot(this.sam) + bars + facet.by.group + guides(color='none', fill='none')
+ggplot(this.sam) + bars + guides(color='none', fill='none')
+```
+
+
+- $W_i$ is an indicator for county.
+  - [0 for residents of San Diego]{.groupa}
+  - [1 for residents of Orange County]{.groupb} 
+- $X_i$ is education in years of schooling 
+- $Y_i$ is unemployment status: 0 for employed and 1 for unemployed. 
+
+
+### Primary Turnout in MI 
+
+```{r}
+this.sam = read.csv('data/social-pressure-data.csv') |>
+  mutate(income = as.numeric(voted=='Yes'),
+         education = yob, 
+         group = p2004=='Yes') |>
+  filter(yob >= 1950) 
+
+proportion.scale = 10
+scatter.by.group(this.sam, group.means.alpha=.2, line.alpha=.5, jitter.height=.2, dot=pop.dot) + 
+  scale_y_continuous(breaks=seq(0,1), 
+  sec.axis = sec_axis(~./proportion.scale, name='Proportion')) +    
+  scale_x_continuous(breaks=seq(1900,2000, by=10)) +
+  coord_cartesian(ylim=c(-.2,1.2), xlim=c(min(this.sam$yob)-1, max(this.sam$yob)+1)) 
+```
+
+```{r}
+#| fig-width: 5.5
+#| layout-ncol: 2
+ggplot(this.sam) + bars + facet.by.group + guides(color='none', fill='none')
+ggplot(this.sam) + bars + guides(color='none', fill='none')
+```
+
+- $W_i$ is an indicator for voting in the 2004 primary. 
+  - [1 if they voted]{.groupb} in the last primary, 
+  - [0 if they didn't]{.groupa}. 
+- $X_i$ is birth-year.
+- $Y_i$ is an indicator for voting in the 2006 primary.
+  - 1 if they voted
+  - 0 if they didn't
+
+:::
+
+::: {#exr-shift-interp-practice .callout-exercise} 
+For each of the three sample, answer these Yes or No questions. No need to explain. 
+
+1. Is the raw difference $\hat\Delta_{\text{raw}}$ larger or smaller than the adjusted difference $\hat\Delta_1$? 
+2. Is the *magnitude* of the raw difference, $| \hat\Delta_{\text{raw}}|$ larger or smaller than the *magnitude* of the adjusted difference, $|\hat\Delta_0|$?
+
+:::
+
+We can derive similar decompositions based on our other estimators $\hat\Delta_0$ and $\hat\Delta_{\text{all}}$. We can decompose $\hat\Delta_{\text{raw}}$ as the sum of $\hat\Delta_0$ or $\hat\Delta_{\text{all}}$ and a different, but conceptually similar covariate shift term. 
+
+::: {#exr-decompose-ca-estimator .callout-exercise}
+Derive a formula for $\hat\Delta_{\text{raw}}$ as the 
+sum of $\hat\Delta_0$ and a covariate shift term. Do the same with $\hat\Delta_{\text{all}}$ in place of $\hat\Delta_0$. Show your work.
+:::
+
+Now that we have these new decompositions, let's put them to work. 
+
+::: {#exr-using-decompositions .callout-exercise} 
+Forget the calculations you did in @exr-calc-ca-estimator for a moment.
+Explain how, using only @fig-greenred-scatter and @fig-greenred-histograms, 
+you could predict whether $\hat\Delta_{\text{raw}}$ or $\hat\Delta_0$ would be larger. 
+Do the same for $\hat\Delta_{\text{raw}}$ and $\hat\Delta_{\text{all}}$. 
+
+Are your answers here are consistent with what you calculated in @exr-calc-ca-estimator? 
+:::
+
+## Comparing *Different* Adjusted Differences 
+
+
+
