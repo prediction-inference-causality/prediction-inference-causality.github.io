@@ -1,0 +1,1189 @@
+---
+title: "Lecture 10"
+subtitle: "Potential Outcomes and Causality"
+---
+
+## A Campaign Finance Example
+
+{{< include shared-code.qmd >}}
+
+```{r}
+#| label: ggw-donations-data 
+
+
+set.seed(1) 
+m = 12000 
+pi = function(x) { rep(1/2,length(x)) }
+pi2 = function(x) { 1/(1+exp(-(x-60)/8 )) }
+mu = function(w, x) { 10*((x-50)/30 + w*((x-50)/30)^2/2) }  
+
+X = 50+round(30*runif(m))
+W = 0 + (runif(m) <= pi(X))
+epsilon0 = runif(m, min=-1, max=1)*mu(0,X) 
+epsilon1 = runif(m, min=-1, max=1)*mu(1,X)
+Y0 = mu(0,X) + epsilon0
+Y1 = mu(1,X) + epsilon1
+
+pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
+counterfactual.pop = data.frame(X=X, W=W, Y=Y0*W + Y1*(1-W))  
+
+n = 1000
+data = pop[sample(nrow(pop), n, replace=TRUE),]
+```
+
+```{r}
+#| label: ggw-dontations-scatter-plots
+plotX = function(X,W,sep=.15) { X + sep*(2*W-1) }
+pop.scatter = ggplot(pop) + 
+  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.1, h=0), size=.2) + 
+  guides(color='none')
+counterfactual.pop.scatter = ggplot(counterfactual.pop) +
+  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.025, position=position_jitter(w=.1, h=0), size=.2) + 
+  guides(color='none')
+scatter = ggplot(data) + 
+  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.3, size=.5, position=position_jitter(w=.1, h=0)) + 
+  guides(color='none')
+
+big.coords = coord_cartesian(xlim=c(50,80), ylim=c(-1.5,2.5))
+narrow.coords = coord_cartesian(xlim=c(60,70), ylim=c(-1.5,2.5))
+tight.coords = coord_cartesian(xlim=c(50,80), ylim=c(0,1.5))
+
+annotated.pop.scatter = pop.scatter +  
+  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), geom="pointrange", alpha=.8,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - sd(x), 
+                 fun.max = function(x) mean(x) + sd(x))
+
+annotated.counterfactual.pop.scatter = counterfactual.pop.scatter +  
+  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), geom="pointrange", alpha=.8,
+                 fun=mean, 
+                 fun.min = function(x) mean(x) - sd(x), 
+                 fun.max = function(x) mean(x) + sd(x))
+
+
+proportion.scale = 200
+scale = list(scale_y_continuous(breaks = c(0, 10, 20), 
+                           labels=scales::dollar_format(),
+                           sec.axis=sec_axis(~./proportion.scale, name='Proportion')),
+               scale_x_continuous(breaks=seq(50,80,by=10), labels=function(x) sprintf('19%d', x)))
+
+annotated.scatter = scatter + 
+  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), 
+               geom="pointrange", alpha=.5, size=.35, fun.data=mean_sd) + 
+  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), 
+               geom="line", alpha=.8, linewidth=.5, fun.data=mean_sd) +
+  guides(color='none', fill='none')
+
+annotated.scatter.with.bars = annotated.scatter + 
+  geom_bar(aes(x=X, y=20000*after_stat(prop), fill=factor(W)), 
+           alpha=.2, linewidth=.1, position="identity") 
+```
+
+
+```{r}
+annotated.scatter + scale
+```
+
+
+- Let's think back to the 2006 Michigan Primary we discussed in our first lecture. 
+- But instead of mailing letters to increase turnout, we're trying to get donations. 
+- We have a population of potential donors: a list of people who donated in 2004. 
+- We're considering two ways of contacting them. 
+  - [an email]{.groupb}. That's what we always do, so we'll call it the 'control'.
+  - [a phone call]{.groupa}. That's a new approach, so we'll call it the 'treatment.'
+- We run a pilot study in which we ...
+  - Sample without replacement to select `r n` potential donors from our list
+  - Flip a coin for each one to choose between an email or call. 
+  - Contact them as dictated by the coin and record their donation.
+- The results, broken down by the donor's age, are shown above.
+
+## What We Want to Know
+```{r}
+annotated.scatter + scale
+```
+
+- Calling costs more. We want to know whether it's worth it.
+  - We want to know how much higher our average donation would be ... 
+  - ... if we called everyone vs. if we emailed everyone.
+- One simple thing we could do is look at the raw difference in mean donations in our study.
+
+$$
+\ingroupb{\frac{1}{N_1} \sum_{i:W_i=1} Y_i} - \ingroupa{\frac{1}{N_0} \sum_{i:W_i=0} Y_i}  
+\approx \ingroupb{`r round(mean(data$Y[data$W==1]), 2)`} - \ingroupa{`r round(mean(data$Y[data$W==0]), 2)`} \approx `r round(mean(data$Y[data$W==1]) - mean(data$Y[data$W==0]), 2)`
+$$
+
+- Do you think this works? Why or why not?
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="1"}
+```{r}
+ggplot(data[data$W==0,]) + geom_bar(aes(x=X, y=after_stat(prop)), alpha=.3, linewidth=.1, fill=groupa, color=groupa)
+```
+:::
+::: {.fragment .fade-in data-fragment-index="1"}
+```{r}
+ggplot(data[data$W==1,]) + geom_bar(aes(x=X, y=after_stat(prop)), alpha=.3, linewidth=.1, fill=groupb, color=groupb)
+```
+:::
+::: {.fragment .fade-in data-fragment-index="1"}
+```{r}
+ggplot(data) + geom_bar(aes(x=X, y=after_stat(prop), color=factor(W), fill=factor(W)), 
+  alpha=.3, linewidth=.1, position='identity') +
+  guides(color='none', fill='none')
+```
+:::
+::::
+
+
+## Formalizing the Estimation Target
+
+
+
+
+
+## The Idea
+
+```{r}
+# plotting options
+# the colors are given css definitions in class.scss. If you change them here, change them there.
+default.dot.size = 3
+default.mean.size  = 1.5
+mean.shape = 23
+filled.circ = 19
+empty.circ = 1
+x.circ = 13
+gray = '#808080'
+counterfactual.color = '#FF00FF'
+sampled.color = '#0000FF'
+randomized.color = '#000000'
+aggregate.mean.shape = 24
+
+
+# give each member of the population jittered coordinates
+set.seed(1)
+jitter.width = 2 
+plotX2 = function(W,X) { X + 1.1*jitter.width*(2*W-1) }
+default.shift = function(d,multiplier=1) { 
+  jitter.width*multiplier
+}
+
+po.means = function(d, shift=default.shift(d, .5), color=counterfactual.color, realized=FALSE, size=default.mean.size) { 
+  list(stat_summary(aes(x=plotX2(0,X)-shift, y=Y0), fill=groupa, 
+        geom="pointrange", fun.data=mean_sd, size=size, shape=mean.shape, color=color, 
+        data=if(realized) d[d$W==0,] else d),
+      stat_summary(aes(x=plotX2(1,X)+shift, y=Y1), fill=groupb, 
+        geom="pointrange", fun.data=mean_sd, size=size, shape=mean.shape, color=color, 
+        data=if(realized) d[d$W==1,] else d))
+}
+sampled.po.means = function(d,shift=default.shift(d,.25), color=sampled.color, size=default.mean.size) { 
+  po.means(d[d$sampled==1,], shift, color, realized=FALSE, size=size) 
+}
+randomized.means = function(d,shift=default.shift(d,0), color=randomized.color, size=default.mean.size) { 
+  po.means(d[d$sampled==1,], shift, color, realized=TRUE, size=size) 
+}
+
+aggregate.po.means = function(d, shift=default.shift(d,.75), color=counterfactual.color, realized=FALSE, size=default.mean.size) { 
+  d0 = if(realized) { d[d$W==0,] } else d
+  d1 = if(realized) { d[d$W==1,] } else d
+  list(geom_pointrange(aes(x=x, y=y, ymax=y+sd, ymin=y-sd), fill=groupa, 
+        shape=aggregate.mean.shape, size=size, color=color,
+        data=data.frame(x=mean(d0$meanX)-shift, y=mean(d0$Y0), sd=sd(d0$Y0))),
+      geom_pointrange(aes(x=x, y=y, ymax=y+sd, ymin=y-sd), fill=groupb, 
+        shape=aggregate.mean.shape, size=size, color=color,
+        data=data.frame(x=mean(d1$meanX)+shift, y=mean(d1$Y1), sd=sd(d1$Y1))))
+}
+sampled.aggregate.po.means = function(d,shift=default.shift(d,.5), color=sampled.color, size=default.mean.size) { 
+  aggregate.po.means(d[d$sampled==1,], shift, color, realized=FALSE, size=size) 
+}
+randomized.aggregate.means = function(d,shift=default.shift(d,.25), color=randomized.color, size=default.mean.size) { 
+  aggregate.po.means(d[d$sampled==1,], shift, color, realized=TRUE, size=size) 
+} 
+
+potential.outcome.plot = function(pop, size=default.dot.size) { 
+  p = ggplot(pop) + 
+    geom_point(aes(x=plotX2(0,jX), y=Y0), color=groupa, alpha=.7, size=size) + 
+    geom_point(aes(x=plotX2(1,jX), y=Y1), color=groupb, alpha=.7, size=size) + 
+    geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1), 
+    alpha=.05, linewidth=.5, color=gray) +
+    guides(color='none', fill='none') 
+  p 
+}
+
+sampled.potential.outcome.plot = function(pop, size=default.dot.size) {
+  pop$shape     = ifelse(pop$sampled, filled.circ, empty.circ)
+  pop$linewidth = ifelse(pop$sampled, .5, .1)
+  pop$alpha = ifelse(pop$sampled, .7, .1)
+  p = ggplot(pop) + 
+    geom_point(aes(x=plotX2(0,jX), y=Y0, shape=I(shape), alpha=I(alpha)), color=groupa,size=size) + 
+    geom_point(aes(x=plotX2(1,jX), y=Y1, shape=I(shape), alpha=I(alpha)), color=groupb, size=size) + 
+    geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1, alpha=I(alpha), linewidth=I(linewidth)), 
+      alpha=.05, color=gray) +
+    guides(color='none', fill='none', shape='none', linewidth='none', alpha='none')
+  #+ scale_linewidth(range=c(0,.5)) 
+  p 
+}
+
+sw.choice = function(pop, a, b, c) {
+  ifelse(pop$sampled, 
+    ifelse(pop$W, a, b), 
+    c)
+}
+randomized.plot = function(pop, size=default.dot.size) {
+  pop$shape0    = sw.choice(pop, x.circ, filled.circ, empty.circ)
+  pop$alpha0    = sw.choice(pop, .3, .7, .1)
+  pop$shape1    = sw.choice(pop, filled.circ, x.circ, empty.circ)
+  pop$alpha1    = sw.choice(pop, .7, .3, .1)
+  pop$color     = sw.choice(pop, twocolor.green, twocolor.red, gray)
+  pop$linewidth = sw.choice(pop, .5, .5, .1)
+  p = ggplot(pop) + 
+    geom_point(aes(x=plotX2(0,jX), y=Y0, shape=I(shape0), alpha=I(alpha0)), color=groupa, size=size) + 
+    geom_point(aes(x=plotX2(1,jX), y=Y1, shape=I(shape1), alpha=I(alpha1)), color=groupb, size=size) + 
+    geom_segment(aes(x=plotX2(0,jX), xend=plotX2(1,jX), y=Y0, yend=Y1, 
+    color=I(color), linewidth=I(linewidth)), alpha=.05) +
+    guides(color='none', fill='none', shape='none', linewidth='none', alpha='none') 
+  #+ scale_linewidth(range=c(0,.5)) 
+
+  p 
+}
+
+po.and.means = function(pop, dot.size=default.dot.size, mean.size=default.mean.size) { 
+  potential.outcome.plot(pop, size=dot.size) + 
+    po.means(pop, size=mean.size)
+}
+sampled.and.means = function(pop, dot.size=default.dot.size, mean.size=default.mean.size) { 
+  sampled.potential.outcome.plot(pop, size=dot.size) + 
+    po.means(pop, size=mean.size) +
+    sampled.po.means(pop, size=mean.size)
+}
+randomized.and.means = function(pop, dot.size=default.dot.size, mean.size=default.mean.size) { 
+  randomized.plot(pop, size=dot.size) + 
+    po.means(pop, size=mean.size) +
+    sampled.po.means(pop, size=mean.size) +
+    randomized.means(pop, size=mean.size)
+}
+```
+
+```{r}
+#| label: onegroup-randomized
+n = 50
+the.pop = pop[pop$X == 65,] 
+the.pop = the.pop[1:400,]
+the.pop$jX = the.pop$X + jitter.width*runif(nrow(the.pop), -1,1)
+sampled.1 = the.pop; sampled.1$sampled = (\() sample(1:nrow(the.pop)) <= n) |> with_seed(1)
+sampled.2 = the.pop; sampled.2$sampled = (\() sample(1:nrow(the.pop)) <= n) |> with_seed(2)
+sampled.3 = the.pop; sampled.3$sampled = (\() sample(1:nrow(the.pop)) <= n) |> with_seed(3)
+randomized.1 = sampled.3; randomized.1$W = (\() rbinom(nrow(the.pop), 1, pi(the.pop$X))) |> with_seed(1)
+randomized.2 = sampled.3; randomized.2$W = (\() rbinom(nrow(the.pop), 1, pi(the.pop$X))) |> with_seed(2)
+randomized.3 = sampled.3; randomized.3$W = (\() rbinom(nrow(the.pop), 1, pi(the.pop$X))) |> with_seed(3)
+scale_x = list(scale_x_continuous(breaks=c(65)), coord_cartesian(xlim=c(60,70)))
+```
+
+:::: {.columns}
+::: {.column width="50%"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5
+potential.outcome.plot(the.pop) + scale_x
+```
+
+:::
+::: {.column width="50%"}
+
+- Let's start by looking at a subset of our population.
+- Everyone has two potential outcomes: the amount they donate if untreated (red) and the amount they donate if treated (blue)
+
+:::
+::::
+
+## Randomization and Sampling
+:::: {.columns}
+::: {.column width="50%"} 
+
+:::: r-stack
+::: {.fragment .fade-out fragment-index="0"}
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+potential.outcome.plot(the.pop) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="0"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+sampled.potential.outcome.plot(sampled.1) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="1"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.potential.outcome.plot(sampled.2) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="2"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.potential.outcome.plot(sampled.3) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="3"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5
+randomized.plot(randomized.1) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="4"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+randomized.plot(randomized.2) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="5"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+randomized.plot(randomized.3) + scale_x
+```
+
+:::  
+:::: 
+::: 
+
+::: {.column width="50%"}
+
+::: {.fragment .semi-fade-out fragment-index="0"}
+1. We start with two potential outcomes for each person in our population.
+   - Those are the connected dots we see in the plot.
+:::
+::: {.fragment .fade-in fragment-index="0"}
+::: {.fragment .semi-fade-out fragment-index="3"}
+2. Then we sample from our population. 
+   - The people who aren't sampled fade out in the plot.
+   - This is **random**. So different things happen each time we do it.
+:::
+:::
+::: {.fragment .fade-in fragment-index="3"}
+3. Each person in our sample flips a coin to determine whether they're treated. 
+   - &olcross; marks the potential outcomes that don't happen.
+   - This is random, too. 
+:::
+:::
+:::: 
+
+
+
+## What Happens to the Means
+
+
+:::: {.columns}
+::: {.column width="50%"}
+
+:::: r-stack
+::: {.fragment .fade-out fragment-index="0"}
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+po.and.means(the.pop) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="0"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.and.means(sampled.1) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="1"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.and.means(sampled.2) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="2"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.and.means(sampled.3) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="3"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5
+
+randomized.and.means(randomized.1) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="4"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+randomized.and.means(randomized.2) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="5"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+randomized.and.means(randomized.3) + scale_x
+```
+
+:::
+::::
+
+:::
+::: {.column width="50%"}
+
+::: {.fragment .semi-fade-out fragment-index="0"}
+1. We start with two potential outcomes for each person in our population.
+   - Those are the connected dots we see in the plot.
+   - These have [a mean]{.counterfactual}. Often, that's what we're interested in. 
+   - Can we observe this? 
+::::
+::: {.fragment .fade-in fragment-index="0"}
+::: {.fragment .semi-fade-out fragment-index="3"}
+2. Then we sample from our population.
+   - The people who aren't sampled fade out in the plot.
+   - And we can look at the [the means]{.population} of the potential outcomes in the *sample*. They're random.
+   - Can we observe this? 
+:::
+:::
+::: {.fragment .fade-in fragment-index="3"}
+3. Each person in the sample flips a coin to determine whether they're treated. 
+   - &olcross; marks the potential outcomes that don't happen.
+   - We can look at [the means]{.sample} of people who actually flip '[heads]{.groupb}' and '[tails]{.groupa}', too. More randomness. 
+   - Can we observe this? 
+:::
+
+::: {.fragment .fade-in fragment-index="4"}
+How different are these means? 
+:::
+::: {.fragment .fade-in fragment-index="5"}
+Not very different. Why? 
+:::
+
+:::
+::::
+
+
+
+## Causal **Inference**
+
+- We can use the same techniques we have used for population inference for the difference in sub-population means 
+  - For example, a bootstrap estimated sampling distribution for the difference in means and an approximately 95\% confidence interval 
+- But the causal estimand is not just the difference between the assignments, it is the average treatment effect for **everyone** 
+
+## Causal **Inference**
+
+- How much would the fundraising call to everyone **increase** campaign donations?
+- That is, what would the difference in donations be in two circumstances.
+  - Circumstance 1: Everyone gets the call.
+  - Circumstance 2: No one gets the call.
+- Neither of these circumstances actually happened, but this is the estimand. 
+
+![](figs/CvAnomath.png){height=500px}
+
+
+# Conditionally Randomized Experiments 
+
+## What is conditional randomization? 
+
+- So far, we have considered treatment assignment to be a coin flip-- everyone has the same probability of being assigned to treatment 
+  - This is sometimes referred to as marginal randomization or a marginally randomized experiment 
+- This is not the only way to randomize! 
+
+. . . 
+
+- I suspect the treatment effect of the fundraising call will be really different depending on the **age** of the person being called 
+  - Older people have more money to spend on campaigns, for example, and don't get as annoyed about getting phone calls as young people 
+- I want to *condition* treatment assignment on age group 
+
+## Conditional Randomization? 
+
+A couple ways to think about this: 
+
+- I want to investigate sub-group treatment effects (for example, the ATE among older people). To ensure I have enough treated and control units in these sub-groups, I am going block (or stratify) on age group before randomizing 
+- The campaign that is paying for my research suspects older people will have a larger treatment effect than young people and, because the whole point is to raise donations, they insist that a greater proportion of older people be assigned to treatment than young people 
+- I didn't actually randomize who gets fundraising calls; I have observational data about calls and donations and want to make an argument that, when I condition on enough covariates, the fundraising call is as-if random 
+
+. . . 
+
+Why are these different? 
+
+- If I am doing the randomization, I set the probability of being assigned to treatment, $\pi(X_i)$ for some feature $x$ (like age group). That means the probability of treatment is known and stable 
+- If I am not doing the randomization, I can calculate the proportion of people in my sample within age group $X$ to estimate the probability of being assigned to treatment for that group, $\hat{\pi}(X_i)$, but it depends on my sample and is therefore a random variable 
+
+## Conditional ATE Identification
+
+$$\frac{1}{m_x}\sum_{j:x_j=x}^m \{ y_j(1) - y_j(0)\} $$
+
+. . . 
+
+- We draw a random sample (without replacement) from the population
+- Each $i$ in our sample has potential outcomes $Y_i(1)$ and $Y_i(0)$ as well as covariate $X_i$ 
+
+$$E[Y_i(1)-Y_i(0)|X_i]$$ 
+$$ = E[Y_i(1)| X_i] - E[Y_i(0)|X_i]$$ 
+$$ = E[Y_i|W_i=1, X_i] - E[Y_i|W_i=0,X_i]$$ 
+- Why does this work? 
+
+. . . 
+
+- If treatment is randomized within levels of $X$, potential outcomes are still independent of treatment *when we condition on X* 
+  - This is sometimes called strong ignorability -- $W$ is strongly ignorable **conditional on $X$** 
+ 
+$$ 
+E[Y_i(1)| X_i]= E[Y_i(1)|W_i=0, X_i] = E[Y_i(1)|W_i=1, X_i] = E[Y_i|W_i=1, X_i] 
+$$ 
+and 
+$$ 
+E[Y_i(0)| X_i]= E[Y_i(0)|W_i=1, X_i]= E[Y_i(0)|W_i=0, X_i] = E[Y_i|W_i=0, X_i] 
+$$
+
+. . . 
+
+- Moving between our potential outcomes and observable outcomes, such that $E[Y_i|W_i=1,X_i] = E[Y_i(1)|X_i]$ and $E[Y_i|W_i=0,X_i] = E[Y_i(0)| X_i]$ is our causal identification 
+- We can say $E[Y_i|W_i=1,X_i] - E[Y_i|W_i=0,X_i]$ is causally identified because $W$ is conditionally randomized (on $X$)
+  - Note that $E[Y_i|W_i=1] - E[Y_i|W_i=0$ is **not** causally identified because $W$ is not random! 
+  
+## Difference in Sub-Sample Means?
+
+$$
+E[Y_i|W_i=1, X_i] - E[Y_i|W_i=0,X_i] 
+$$
+These are just sub-sample means 
+
+. . . 
+
+$$
+\hat{CATE_x} = \frac{\sum_{i:X_i=x}^n Y_i W_i}{\sum_{i:X_i=x}^n W_i} - \frac{\sum_{i:X_i=x}^n Y_i  (1-W_i)}{\sum_{i:X_i=x}^n (1-W_i)} 
+$$
+
+$$
+= \hat{\mu}(1,X_i) - \hat{\mu}(0,X_i)
+$$ 
+
+## Difference in Sub-Sample Means?
+
+- Is our estimator $\hat{CATE_x}$ unbiased for the population $CATE_x$? After all, its just another difference in sub-sample means, just conditioning on both treatment assignment and $x$ 
+
+. . . 
+
+- We have all the pieces, we just need a longer argument: 
+  - $\hat{\mu}(1,X_i) - \hat{\mu}(0,X_i)$ estimates $E[Y_i|W_i=1,X_i] - E[Y_i|W_i=0,X_i]$ 
+  - $E[Y_i|W_i=1,X_i] - E[Y_i|W_i=0,X_i] = E[Y_i(1) - Y_i(0)|X_i]$ (causal identification conditional on $X$)
+  - $E[Y_i(1) - Y_i(0)|X_i]$ in our sample estimates $\frac{1}{m_x}\sum_{j:x_j=x}^m \{y_j(1) - y_j(0)\}$, our estimand 
+
+- With our random sample and if $W$ is randomized conditional on $X$, the difference in means estimator $\hat{CATE_X}$ is unbiased for the population conditional average treatment effect $CATE_x = \frac{1}{m_x}\sum_{j:x_j=x}^m \{y_j(1) - y_j(0)\}$
+
+
+## Conditional Randomization Practice 
+
+We have two groups in our population defined by $x_j$ where $x=1$ for old eligible donors and $x=0$ for young eligible donors. In our sample, $X_i = 1$ for old eligible donors and $X_i=0$ for young eligible donors 
+
+$$
+\begin{array}{cccc|ccc}
+i & X_i & W_i & Y_i & Y_i(1) & Y_i(0) & \hat{\tau_i} \\
+\hline
+1 & 0 & 1 & 700  & 700 & \alert{700} & \alert{0} \\
+2 & 1 & 1 & 800  & 800 & \alert{400} & \alert{400} \\
+3 & 0 & 0 & 0  & \alert{200} & 0 & \alert{200} \\
+4 & 1 & 0 & 200  & \alert{600} & 200 & \alert{400} \\
+5 & 0 & 0 & 0  & \alert{0} & 0 & \alert{0} \\
+6 & 0 & 0 & 400  & \alert{400} & 400 & \alert{0} \\
+\end{array}
+$$
+
+
+
+Calculate the Conditional ATE ($\hat{CATE}_{X=0}$) 
+
+$$ 
+\frac{\sum_{i:X_i=0}^n Y_i W_i}{\sum_{i:X_i=0}^n W_i} - 
+\frac{\sum_{i:X_i=0}^n Y_i (1-W_i)}{\sum_{i:X_i=0}^n (1-W_i)}
+$$
+
+What is $\hat{\pi}(X=0)$ , the conditional probability of treatment assignment? 
+
+![PollEv.com/allisoncuttner220](figs/QRpollAC.png){fig-align="left"} 
+
+## Conditional Randomization Practice 
+
+We have two groups in our population defined by $x_j$ where $x=1$ for old eligible donors and $x=0$ for young eligible donors. In our sample, $X_i = 1$ for old eligible donors and $X_i=0$ for young eligible donors 
+
+$$
+\begin{array}{cccc|ccc}
+i & X_i & W_i & Y_i & Y_i(1) & Y_i(0) & \hat{\tau_i} \\
+\hline
+1 & 0 & 1 & 700  & 700 & \alert{700} & \alert{0} \\
+2 & 1 & 1 & 800  & 800 & \alert{400} & \alert{400} \\
+3 & 0 & 0 & 0  & \alert{200} & 0 & \alert{200} \\
+4 & 1 & 0 & 200  & \alert{600} & 200 & \alert{400} \\
+5 & 0 & 0 & 0  & \alert{0} & 0 & \alert{0} \\
+6 & 0 & 0 & 400  & \alert{400} & 400 & \alert{0} \\
+\end{array}
+$$
+
+
+
+Calculate the Conditional ATE ($\hat{CATE}_{X=1}$) 
+$$ 
+\frac{\sum_{i:X_i=1}^n Y_i W_i}{\sum_{i:X_i=1}^n W_i} - \frac{\sum_{i:X_i=1}^n Y_i (1-W_i)}{\sum_{i:X_i=1}^n (1-W_i)}
+$$
+
+What is $\hat{\pi}(X=1)$, the conditional probability of treatment assignment? 
+
+![PollEv.com/allisoncuttner220](figs/QRpollAC.png){fig-align="left"}
+
+
+
+## The Idea
+```{r}
+#| label: two-groups-randomized
+n = 100
+ages = c(55,75)
+
+the.pop = pop[pop$X %in% ages, ] 
+the.pop = the.pop[1:400,]
+the.pop$jX = the.pop$X + jitter.width*runif(nrow(the.pop), -1,1)
+the.pop$meanX = mean(the.pop$X)
+
+sampled.1 = the.pop; sampled.1$sampled = (\() sample(1:nrow(the.pop)) <= n) |> with_seed(1)
+sampled.2 = the.pop; sampled.2$sampled = (\() sample(1:nrow(the.pop)) <= n) |> with_seed(2)
+sampled.3 = the.pop; sampled.3$sampled = (\() sample(1:nrow(the.pop)) <= n) |> with_seed(3)
+randomized.1 = sampled.3; randomized.1$W = (\() rbinom(nrow(the.pop), 1, pi(the.pop$X))) |> with_seed(1)
+randomized.2 = sampled.3; randomized.2$W = (\() rbinom(nrow(the.pop), 1, pi(the.pop$X))) |> with_seed(2)
+randomized.3 = sampled.3; randomized.3$W = (\() rbinom(nrow(the.pop), 1, pi(the.pop$X))) |> with_seed(3)
+scale_x = list(scale_x_continuous(breaks=c(55,75)), coord_cartesian(xlim=c(50,80)))
+```
+
+:::: {.columns}
+::: {.column width="50%"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5
+#| 
+potential.outcome.plot(the.pop) + scale_x
+```
+
+:::
+::: {.column width="50%"}
+
+- To make things simple, let's look at a subset of our population.
+  - We have grouped everyone by age to give us two age groups---a binary covariate.
+- As before, everyone has two potential outcomes--- treated and untreated 
+
+:::
+::::
+
+## Randomization and Sampling
+
+
+:::: {.columns}
+::: {.column width="50%"} 
+
+:::: r-stack
+::: {.fragment .fade-out fragment-index="0"}
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+potential.outcome.plot(the.pop) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="0"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+sampled.potential.outcome.plot(sampled.1) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="1"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.potential.outcome.plot(sampled.2) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="2"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.potential.outcome.plot(sampled.3) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="3"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5
+
+randomized.plot(randomized.1) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="4"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+randomized.plot(randomized.2) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="5"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+randomized.plot(randomized.3) + scale_x
+```
+
+:::  
+:::: 
+::: 
+
+::: {.column width="50%"}
+
+::: {.fragment .semi-fade-out fragment-index="0"}
+1. We start with two potential outcomes for each person in our population.
+   - Those are the connected dots we see in the plot.
+:::
+::: {.fragment .fade-in fragment-index="0"}
+::: {.fragment .semi-fade-out fragment-index="3"}
+2. Then we sample from our population. 
+    - This is random, too.
+    
+:::
+:::
+::: {.fragment .fade-in fragment-index="3"}
+3.  Each one flips a coin --- one with weight depending on their age --- to determine whether they're treated. 
+   - That's why different proportions of people get the fundraising call in the two groups.
+   - The winning outcomes --- the ones that actually happen --- are the ones that don't fade out.
+    - This is, of course, random. So different this happen each time we do it.
+
+:::
+
+:::
+:::: 
+
+
+
+## What Happens to Within-Group Means
+
+:::: {.columns}
+::: {.column width="50%"}
+
+:::: r-stack
+::: {.fragment .fade-out fragment-index="0"}
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5
+
+po.and.means(the.pop) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="0"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.and.means(sampled.1) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="1"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.and.means(sampled.2) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="2"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.and.means(sampled.3) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="3"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+randomized.and.means(randomized.1) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="4"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+randomized.and.means(randomized.2) + scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="5"}
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+randomized.and.means(randomized.3) + scale_x
+```
+
+:::
+::::
+
+:::
+::: {.column width="50%"}
+
+::: {.fragment .semi-fade-out fragment-index="0"}
+1. We start with two potential outcomes for each person in our population.
+   - Those are the connected dots we see in the plot.
+   - At each level of $X$, these potential outcomes have [a mean]{.counterfactual}.
+::::
+::: {.fragment .fade-in fragment-index="0"}
+::: {.fragment .semi-fade-out fragment-index="3"}
+2. Then we sample from our population. 
+    - This is random, too.
+   - These have [a mean]{.population}, too. And it is, of course, random. It changes if our sample changes.
+:::
+:::
+::: {.fragment .fade-in fragment-index="3"}
+3. Each person in the sample flips a **weighted** coin to determine whether they're treated.
+   - &olcross; marks the potential outcomes that don't happen.
+   - We can look at [the means]{.sample} of people who actually flip '[heads]{.groupb}' and '[tails]{.groupa}', too. More randomness. 
+   - Can we observe this? 
+    - Our sample has [a mean]{.sample} within in group, too. A random one.
+:::
+
+::: {.fragment .fade-in fragment-index="4"}
+How different are these means? 
+:::
+::: {.fragment .fade-in fragment-index="5"}
+Not very different. Why?
+:::
+
+:::
+::::
+
+## Summarizing CATEs 
+
+- With conditional randomization, we can identify the average treatment effect within levels of $x$ as long as we have treated and untreated units in each level of $X$ in our sample 
+
+- Sometimes we still want one number to summarize the CATEs. How can we summarize across levels of $x$? 
+
+. . . 
+
+$$
+E[Y_i(1) - Y_i(0)] = E[E[\{Y_i(1)-Y_i(0)\}|X_i]]
+$$ 
+law of iterated expectations 
+
+$$ 
+\sum_x  E[\{Y_i(1)-Y_i(0)\}|X_i] P(X_i=x)
+$$ 
+apply definition to outer expectation 
+
+$$
+\sum_x  \{E[Y_i|W_i=1,X_i=x]-E[Y_i|W_i=0,X_i]\} P(X_i=x) 
+$$ 
+
+linearity of expectations and $W$ randomized conditional on $X$ (identification)
+
+Note we have to weight by each level of $x$ 
+
+. . . 
+
+The estimation of this summary (also known as *standardization*) is 
+
+$$ 
+\sum_x P_x \{\hat{\mu}(1, X_i) - \hat{\mu}(0,X_i)\} 
+$$ 
+
+where $P_x = \frac{N_x}{N}$ the proportion of units in each level of $X$ 
+
+## Summarizing CATEs
+
+
+$$
+\begin{array}{cccc|ccc}
+i & X_i & W_i & Y_i & Y_i(1) & Y_i(0) & \hat{\tau_i} \\
+\hline
+1 & 0 & 1 & 700  & 700 & \alert{700} & \alert{0} \\
+2 & 1 & 1 & 800  & 800 & \alert{400} & \alert{400} \\
+3 & 0 & 0 & 0  & \alert{200} & 0 & \alert{200} \\
+4 & 1 & 0 & 200  & \alert{600} & 200 & \alert{400} \\
+5 & 0 & 0 & 0  & \alert{0} & 0 & \alert{0} \\
+6 & 0 & 0 & 400  & \alert{400} & 400 & \alert{0} \\
+\end{array}
+$$
+
+
+Calculate a standardized CATE across $X$ 
+
+![PollEv.com/allisoncuttner220](figs/QRpollAC.png){fig-align="left"}
+
+## What would happen if we ignored the conditioning? 
+
+$$
+\begin{array}{cccc|ccc}
+i & X_i & W_i & Y_i & Y_i(1) & Y_i(0) & \hat{\tau_i} \\
+\hline
+1 & 0 & 1 & 700  & 700 & \alert{700} & \alert{0} \\
+2 & 1 & 1 & 800  & 800 & \alert{400} & \alert{400} \\
+3 & 0 & 0 & 0  & \alert{200} & 0 & \alert{200} \\
+4 & 1 & 0 & 200  & \alert{600} & 200 & \alert{400} \\
+5 & 0 & 0 & 0  & \alert{0} & 0 & \alert{0} \\
+6 & 0 & 0 & 400  & \alert{400} & 400 & \alert{0} \\
+\end{array}
+$$
+
+Calculate $\hat{\mu}(1) - \hat{\mu}(0)$ ignoring $X$ 
+
+![PollEv.com/allisoncuttner220](figs/QRpollAC.png){fig-align="left"}
+
+## What Happens to (Not Within-Group) Means
+
+:::: {.columns}
+::: {.column width="50%"}
+
+:::: r-stack
+::: {.fragment .fade-out fragment-index="0"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5
+
+po.and.means(the.pop) + 
+  aggregate.po.means(the.pop) + 
+  scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="0"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.and.means(sampled.1) + 
+  aggregate.po.means(sampled.1) + 
+  sampled.aggregate.po.means(sampled.1) + 
+  scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="1"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.and.means(sampled.2) + 
+  aggregate.po.means(sampled.2) + 
+  sampled.aggregate.po.means(sampled.2) +
+  scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="2"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+sampled.and.means(sampled.3) + 
+  aggregate.po.means(sampled.3) + 
+  sampled.aggregate.po.means(sampled.3) +
+  scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="3"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+randomized.and.means(randomized.1) + 
+  aggregate.po.means(randomized.1) + 
+  sampled.aggregate.po.means(randomized.1) +
+  randomized.aggregate.means(randomized.1) +
+  scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="4"}
+
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+randomized.and.means(randomized.2) + 
+  aggregate.po.means(randomized.2) + 
+  sampled.aggregate.po.means(randomized.2) +
+  randomized.aggregate.means(randomized.2) +
+  scale_x
+```
+
+:::
+::: {.fragment .current-visible fragment-index="5"}
+```{r}
+#| fig-width: 7
+#| fig-asp: 1.5 
+
+randomized.and.means(randomized.3) + 
+  aggregate.po.means(randomized.3) + 
+  sampled.aggregate.po.means(randomized.3) +
+  randomized.aggregate.means(randomized.3) +
+  scale_x
+```
+
+:::
+::::
+
+:::
+::: {.column width="50%"}
+
+::: {.fragment .semi-fade-out fragment-index="0"}
+1. We start with two potential outcomes for each person in our population.
+   - Those are the connected dots we see in the plot.
+   - These have [a mean]{.counterfactual} outright---ignoring $X$. Often, that's what we're interested in.
+   
+::::
+
+::: {.fragment .fade-in fragment-index="0"}
+::: {.fragment .semi-fade-out fragment-index="3"}
+2. Then we sample from our population. 
+    - This is random, too.
+   - These have [a mean]{.population}, too. And it is, of course, random. It changes if our sample changes.
+   
+:::
+:::
+::: {.fragment .fade-in fragment-index="3"}
+3. Each person in the sample flips a **weighted** coin to determine whether they're treated.
+   - &olcross; marks the potential outcomes that don't happen.
+   - We can look at [the means]{.sample} of people who actually flip '[heads]{.groupb}' and '[tails]{.groupa}', too. More randomness. 
+    
+:::
+
+::: {.fragment .fade-in fragment-index="4"}
+How different are these means? 
+:::
+::: {.fragment .fade-in fragment-index="5"}
+The counterfactual and population means are very different. Why?
+:::
+
+:::
+::::
+
+## More Levels of $x$
+
+- We grouped all our eligible donors into young and old to have two groups, but we can conditionally randomize with more than two levels of $x$ 
+
+```{r}
+#| fig-width: 14
+annotated.scatter.with.bars 
+```
+
+## Different Causal Estimands 
+- ATE: average treatment effect 
+- CATE: conditional average treatment effect 
+- ATT? 
+- ATC? 
+
+![PollEv.com/allisoncuttner220](figs/QRpollAC.png){fig-align="left"}
+
+. . . 
+
+- ATT: average treatment effect on the treated 
+  - Is who is assigned to treatment a sub-population? 
+- ATC: average treatment effect on the control 
+  - Is who is assigned to control a sub-population? 
+  
+. . . 
+
+- ATT and ATC depend on treatment assignment. Treatment is assigned to our sample, not our population. 
+
+- ATT and ATC are more relevant when we are *not conducting an experiment*-- which units are treated and untreated are not actually random, so the estimands are defined in the population-- but we want to act like they are random (or conditionally random) to make causal inferences 
+
+## Summary 
+
+- With a randomized (or conditionally randomized) treatment, we can interpret differences in sub-sample means, and linear combinations thereof, causally 
+- If treatment is conditionally randomized, we can summarize the conditional ATEs (CATES) with a linear combination of CATEs weighted by the proportion of units in each level of $X$ 
+
+
+- What's different? 
+  - The causal estimand (ATE) is about the effect of treatment on **everyone** even if only a portion of the population actually receives treatment 
+  - We can't technically sample with replacement, since a unit can't be both treated and untreated 
+
+- What's the same? 
+  - We can use the difference in sub-sample means (or a linear combination of differences in sub-sample means) as our estimator 
+  - We can use bootstrapping to created an estimated sampling distribution and calibrate an approximately 95\% confidence interval 
+
+
+
+
+
+
+
+
