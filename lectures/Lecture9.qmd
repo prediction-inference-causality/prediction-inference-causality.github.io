@@ -254,7 +254,7 @@ solution.grid(data)
 ### Paradox Exercise
 - Add three more dots --- two red and one green --- so that ...
   1. Within each column, the mean of the green dots is *now higher* the mean of the red ones. 
-  2. The mean of all the red dots is *still lower* than the mean of the red ones. 
+  2. The mean of all the red dots is *still lower* than the mean of green ones. 
 - Fix your annotations to account for these new dots. 
 
 :::
@@ -470,7 +470,7 @@ $$
 - But is it a good summary of the experience of the women applying to them? Probably not. 
   - Only 1 applies to Department 0. Several times more---3 in the paradox version---apply to Department 1.
   - And we're giving the same weight to the rate difference in each departments.
-- We've counted the one who applied to Department 0 $\faint{3 \times}$  as much as the ones who applied to Department 1.
+- We've counted the one woman who applied to Department 0 three times as much as the ones who applied to Dept. 1.
 
 :::
 
@@ -726,7 +726,7 @@ $$
 \hat\Delta_{\text{raw}}
 &=\text{difference in womens' and mens' acceptance rates at the Graduate School} \\ 
 &\explain{=}{summing over people} 
-\ingreen{\sum_{i:W_i=1} \hat\mu(1,X_i)} - \inred{\sum_{i:W_i=0} \hat\mu(0,X_i)} \\
+\ingreen{\frac{1}{N_1}\sum_{i:W_i=1} \hat\mu(1,X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} \hat\mu(0,X_i)} \\
 &\explain{=}{rewriting inhistogram form} 
 \sum_{x} \ingreen{P_{x\mid 1} \ \hat\mu(1,x)} - \sum_{x} \inred{P_{x\mid 0} \  \hat\mu(0,x)}  \\
 &\explain{=}{adding a fancy version of zero} 
@@ -778,7 +778,7 @@ $$
       - The average over the distribution of departments [women]{.groupb} applied to. Green dots/bars. 
 - Why is it negative? 
   - The function we're averaging *decreases from left to right*. 
-  - The distribution we're averaging over *shifts from [left]{.groupb} to [right]{.groupa}*.
+  - The distribution we're averaging over *shifts from [left]{.groupa} to [right]{.groupb}*.
   - *Consequence*. The first average is bigger than the second.
 
 ### The Multiplication Heuristic 
@@ -806,7 +806,9 @@ $$
 
 :::
 
-# Income Disparities 
+# Income Disparities {#continued} 
+
+**We'll continue from here.**
 
 ## A Few Comparisons You Might Hear 
 ```{r}
@@ -942,11 +944,11 @@ is what we get when we ...
 ```{r}
 proportion.scale = 400000
 scaled.interleaved.bars = list(geom_bar(aes(x=xco(group, education), y=proportion.scale*after_stat(prop), fill=group, color=group), 
-                               position='identity', alpha=.03, linewidth=.1), 
+                               position='identity', alpha=.1, linewidth=.1), 
                                scale_y(c(0,150000), sec.axis=sec_axis(~./proportion.scale, name='Proportion')),
                                guides(color='none', fill='none'))
 purple.bars = geom_bar(aes(x=education, y=proportion.scale*after_stat(prop)), 
-                       alpha=.025, linewidth=.025, fill='purple', color='purple', width=.2)
+                       alpha=.05, linewidth=.025, fill='purple', color='purple', width=.2)
 bars= list(geom_bar(aes(x=education, y=after_stat(prop), fill=group, color=group), 
                      position='identity', alpha=.05, linewidth=.4), 
             guides(color='none', fill='none'))
@@ -970,7 +972,7 @@ $$
   - The sum we get is still negative, but it's closer to zero. 
 - You can think of covariate shift as 'hiding' part of the disparity that's there within education levels.
 
-### Visualizing Covariate Shift 
+### Breaking Down the Covariate Shift Term
 
 - We do the same thing we did in our last example, but now we've got many more levels of the covariate.
 - The covariate shift term is the difference of two averages of the same function of x.
@@ -978,23 +980,75 @@ $$
   - The distribution shift is from [left]{.groupa} to [right]{.groupb}. Women tend to have more years of education. 
 - The *multiplication heuristic* tells us the shift term is positive: $\faint{+1 \times +1 = +1}$.
 
-### Other Visualizations of Covariate Shift
-
+### Other Visualizations of Covariate Shift 
 ```{r}
 #| fig-width: 7
 #| layout-ncol: 2
+ 
 facet.by.group = list(facet_grid(row=vars(group)), theme(strip.background=element_blank(), strip.text=element_blank()))
 ggplot(sam) + bars + facet.by.group
 ggplot(sam) + bars   
 ``` 
-
+ 
 - These are exactly the same histograms we had overlaid on the previous plot. They're exactly the same bars.
 - What's changed is *layout*. 
   - Our groups are shown one above the other or one on top of the other rather than interleaved as before.
   - This can make it easier to see the direction of the shift---that it's from [left]{.groupa} to [right]{.groupb}.
-  - The [red histogram]{.groupa} has more mass on the left side than the [green one]{.groupb} does.
+- The [red histogram]{.groupa} has more mass on the left side than the [green one]{.groupb} does
 
 ::: 
+
+## An Animated Visualization of Covariate Shift {#sec-animated-shifts} 
+
+
+```{r}
+plot.group = function(sam, color=groupa) { 
+  ggplot(sam) + 
+    geom_point(aes(x=education,  y=income), color=color, 
+               size=dot$size, position=position_jitter(seed=0,w=.15), alpha=dot$alpha) +
+      stat_summary(aes(x=education, y=income), color=color, 
+                   geom="pointrange", alpha=.7, fun.data=mean_sd)  +
+    scale_x() + scale_y() + scale_alpha(range=c(0,1)) + guides(color='none') 
+}
+
+hist.group = function(sam, color=groupa) { 
+  ggplot(sam) + 
+  geom_bar(aes(x=education, y=after_stat(prop)), fill=color, color=color, 
+           position='identity', alpha=.1, linewidth=.1) +
+           scale_x() + scale_y_continuous(breaks=seq(0,.4,.1)) + 
+           coord_cartesian(xlim=c(7.5,20.5), ylim=c(0,.4)) + 
+           guides(color='none', fill='none') 
+}
+```
+
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+
+```{r}
+#| fig-width: 7 
+#| layout-ncol: 2
+plot.group(sam |> filter(sex=='male'), color=groupa) 
+hist.group(sam |> filter(sex=='male'), color=groupa)  
+```
+:::
+::: {.fragment .fade-in data-fragment-index="0"}
+```{r}
+#| fig-width: 7
+#| layout-ncol: 2
+
+plot.group(sam |> filter(sex=='female'), color=groupb) 
+hist.group(sam |> filter(sex=='female'), color=groupb)  
+```
+:::
+::::
+
+- Animated visualizations are great at showing shifts. Flip back and forward a slide here. 
+  - You'll see the shifts in the column means on the left. 
+  - And the shift in the covariate distribution on the right. 
+- The downside is that you can't use them everywhere. e.g., on a board or in a book.  
+- But you can try to see the animation in your head when you look at static ones. 
+  - The one-above-the-other histogram plot on the last slide is pretty good for this. 
+  - Scan up and down from one histogram to the other. You can sort of see the animation.
 
 ## Covariate Shift *attenuates* the Disparity^[*Attenuates* is a word that means *reduces* but tends to refer to *magnitude* rather than a *signed number*.]
 ::: free-zoom
@@ -1071,6 +1125,26 @@ muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
 ```
 
 ::: free-zoom
+:::: r-stack
+::: {.fragment .fade-out data-fragment-index="0"}
+```{r}
+#| fig-width: 7 
+#| layout-ncol: 2
+#| 
+plot.group(this.sam |> filter(race=='White only'), color=groupa) 
+hist.group(this.sam |> filter(race=='White only'), color=groupa)  
+```
+:::
+::: {.fragment .fade-in-then-out data-fragment-index="0"}
+```{r}
+#| fig-width: 7
+#| layout-ncol: 2
+
+plot.group(this.sam |> filter(race=='Black only'), color=groupb) 
+hist.group(this.sam |> filter(race=='Black only'), color=groupb)  
+```
+:::
+::: {.fragment .fade-in data-fragment-index="1"}
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
@@ -1078,7 +1152,8 @@ scatter.by.group(this.sam)  + scaled.interleaved.bars
 ggplot(this.sam) + bars + facet.by.group
 ```
 :::
-
+::::
+:::
 
 - Here we're making the same comparison, but for [Black]{.groupb} and [white]{.groupa} respondents in Georgia.
 - The within-group means are qualitatively similar (using the same dot colors) to the ones we've just looked at.
@@ -1161,23 +1236,63 @@ this.sam = ga.sam |>
   mutate(group = race == 'Black only') |>
   filter(race %in% c('Black only', 'White only'))
 
-W = this.sam$group
-X = this.sam$education
-Y = this.sam$income
-N1 = sum(W==1)
-N0 = sum(W==0)
-muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
+differences = function(sam) {
+  W = sam$group
+  X = sam$education
+  Y = sam$income
+  N1 = sum(W==1)
+  N0 = sum(W==0)
+  muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
+  data.frame(raw = mean(Y[W==1]) - mean(Y[W==0]),
+             adjusted = mean(Y[W==1] - muhat(0,X[W==1])))
+}
 ```
 
 ::: {.panel-tabset}
 ### California
+:::: free-zoom
 ```{r}
+#| layout-ncol: 2
+#| fig-width: 7
 scatter.by.group(sam) + scaled.interleaved.bars 
+ggplot(sam) + bars + facet.by.group
 ```
+:::: 
+
+$$
+\color{gray}
+\begin{aligned}
+\hat\Delta_{\text{raw}} &= 
+\ingroupb{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} - \ingroupa{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} 
+\approx  `r money(differences(sam)$raw)` \\ 
+\hat\Delta_{\text{adjusted}} &= 
+\ingroupb{\frac{1}{N_1}\sum_{i:W_i=1}} \qty{ \ingroupb{Y_i} - \ingroupa{\hat \mu(0, X_i)} }
+\approx `r money(differences(sam)$adjusted)` 
+\end{aligned}
+$$
+
 ### Georgia
+:::: free-zoom
 ```{r}
+#| layout-ncol: 2
+#| fig-width: 7
 scatter.by.group(this.sam) + scaled.interleaved.bars 
+ggplot(this.sam) + bars + facet.by.group
 ```
+:::: 
+
+$$
+\color{gray}
+\begin{aligned}
+\hat\Delta_{\text{raw}} &= 
+\ingroupb{\frac{1}{N_1}\sum_{i:W_i=1} Y_i} - \ingroupa{\frac{1}{N_0}\sum_{i:W_i=0} Y_i} 
+\approx `r money(differences(this.sam)$raw)` \\ 
+\hat\Delta_{\text{adjusted}} &= 
+\ingroupb{\frac{1}{N_1}\sum_{i:W_i=1}} \qty{ \ingroupb{Y_i} - \ingroupa{\hat \mu(0, X_i)} }
+\approx `r money(differences(this.sam)$adjusted)` 
+\end{aligned}
+$$
+
 :::
 
 ### Exercise
@@ -1189,3 +1304,4 @@ scatter.by.group(this.sam) + scaled.interleaved.bars
   - **Heads**. It's on the disparity between [Black]{.groupb} and [white]{.groupa} residents of Georgia.
 2. You're going to include one summary in your headline---either the raw or the adjusted difference. Decide which.
 3. Write down, in a sentence or two, why you chose what you did.
+

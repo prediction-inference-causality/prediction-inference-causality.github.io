@@ -52,11 +52,13 @@ theta.hat.star = 1:10000 |> map_vec(function(.) {
 ggplot() + geom_histogram(aes(x=y), bins=100, alpha=.3) + 
   geom_vline(xintercept=mean(y), color="blue") + 
   geom_vline(xintercept=mean(Y)-sd(Y), color="blue", linetype="dashed") + 
-  geom_vline(xintercept=mean(Y)+sd(Y), color="blue", linetype="dashed")
+  geom_vline(xintercept=mean(Y)+sd(Y), color="blue", linetype="dashed") + 
+  scale_x_continuous(limits=c(-8,8), breaks=seq(-8,8,by=2))
 ggplot() + geom_histogram(aes(x=Y), bins=100, alpha=.3) + 
   geom_vline(xintercept=mean(Y), color="blue") + 
   geom_vline(xintercept=mean(Y)-sd(Y), color="blue", linetype="dashed") + 
-  geom_vline(xintercept=mean(Y)+sd(Y), color="blue", linetype="dashed")
+  geom_vline(xintercept=mean(Y)+sd(Y), color="blue", linetype="dashed") + 
+  scale_x_continuous(limits=c(-8,8), breaks=seq(-8,8,by=2))
 ```
 A histogram of the sample $Y_1 \ldots Y_{10000}$. The mean of each distribution is marked with a blue line
 and the mean plus and minus one standard deviation are marked with dashed blue lines.
@@ -107,16 +109,21 @@ the case.
 :::
 
 ::: {#exr-variance .callout-exercise}
-For each of the three estimators, write a formula for its standard deviation. Your formula may involve the sample size $n$ and some summaries of the population, e.g. $m$, $\mu$, or  $\sigma$. Then, using information shown in @fig-histogram-data, calculate it approximately and report the number. Finally,
-check that your answer looks about right using @fig-histogram-theta-star and *describe how you checked*. 
+For each of the three estimators, do the following.
+
+1. Write a formula for its standard deviation. Your formula may involve the sample size $n$ and some summaries of the population, e.g. $m$, $\mu$, or  $\sigma$. 
+2. Using information shown in @fig-histogram-data, calculate it approximately and report the number. 
+3. Check that your answer looks about right using @fig-histogram-theta-star and *describe how you checked*. 
 :::
 
 
 # Complex Summaries and Covariate Shift 
 
-## Comparing Raw and Adjusted Differences
+In this section, we'll work with a subset of the California income data considered in lecture. We'll look at incomes of CA residents who responded to the Current Population Survey in 2022, were in the age range 25-25, and graduated from high school. I've plotted this data below. As in lecture: 
 
-In this section, we'll work with a subset of the California income data considered in lecture. We'll look at incomes of CA residents who responded to the Current Population Survey in 2022, were in the age range 25-25, and graduated from high school. I've plotted this data below.
+ - [$W_i=0$ for male residents]{.groupa} and [$W_i=1$ for female residents]{.groupb}; 
+ - $X_i$ is years of schooling.
+ - $Y_i$ is income in dollars.
 
 ```{r}
 ca = read.csv('../lectures/data/earnings.csv')
@@ -205,13 +212,15 @@ Histograms of `education` colored by `sex` in two layouts. On the left, they're 
 :::: columns 
 ::: {.column width="35%"}
 ```{r}
-summaries = ca |> group_by(sex, education) |> 
-  summarize(mu.hat=money(mean(income)), N=n())
+ca$W = as.numeric(ca$sex == 'female')
+ca$X = ca$education
+summaries = ca |> group_by(W,X) |> 
+  summarize(mu.hat=money(mean(income)), N.wx=n())
 ```
 
 ```{r}
 library(gt)
-summaries |> gt()
+summaries |> ungroup() |> gt()
 ```
 :::
 ::: {.column width="65%"}
@@ -227,20 +236,21 @@ $$
 \end{aligned}
 $$
 
-::: {#exr-calc-ca-estimator} 
+::: {#exr-calc-ca-estimator .callout-exercise} 
 Using the data in the table to the left, calculate each of these four estimators.
 :::
 
+:::
 ::::
 
 
-In Lecture 9, we decomposed the raw difference $\hat\Delta_{\text{raw}}$ as a sum of the adjusted difference $\hat\Delta_1$ and a *covariate shift term*.  And we talked about how to use plots like the ones above to understand what the covariate shift term would look like. In this next exercise, we'll get in some practice interpreting plots lik these. We'll 
-work with three samples. Each sample is shown in a tab below. 
+In Lecture 9, we decomposed the raw difference $\hat\Delta_{\text{raw}}$ as a sum of the adjusted difference $\hat\Delta_1$ and a *covariate shift term*.  And we talked about how to use plots like the ones above to understand what the covariate shift term would look like. In this next exercise, we'll get in some practice interpreting plots like these. We'll work with three samples. Each sample is shown in a tab below. 
 
 ::: {.panel-tabset}
 
 ### Income in LA vs SFBay 
 ```{r}
+#| fig-width: 10
 groups = c('los angeles', 'san francisco', 'alameda')
 this.sam = ca |> filter(county %in% groups)
 this.sam$group = this.sam$county != groups[1]
@@ -265,6 +275,7 @@ ggplot(this.sam) + bars + guides(color='none', fill='none')
 ### Unemployment Rates in Southern California   
 
 ```{r}
+#| fig-width: 10
 groups = c('san diego', 'orange')
 this.sam = ca |> filter(county %in% groups)
 this.sam$group = this.sam$county != groups[1]
@@ -273,7 +284,7 @@ this.sam$income = as.numeric(!this.sam$employed)
 proportion.scale = 2
 scatter.by.group(this.sam, group.means.alpha=.2, line.alpha=.5, jitter.height=.2) + 
   scale_y_continuous(breaks=seq(0,1), 
-  sec.axis = sec_axis(~./proportion.scale, name='Proportion')) +    
+    sec.axis = sec_axis(~./proportion.scale, name='Proportion')) +    
   coord_cartesian(ylim=c(-.2,1.2)) 
 ```
 ```{r}
@@ -294,18 +305,25 @@ ggplot(this.sam) + bars + guides(color='none', fill='none')
 ### Primary Turnout in MI 
 
 ```{r}
+#| fig-width: 10
 this.sam = read.csv('data/social-pressure-data.csv') |>
   mutate(income = as.numeric(voted=='Yes'),
          education = yob, 
          group = p2004=='Yes') |>
   filter(yob >= 1950) 
 
-proportion.scale = 10
-scatter.by.group(this.sam, group.means.alpha=.2, line.alpha=.5, jitter.height=.2, dot=pop.dot) + 
+set.seed(1)
+this.sam = this.sam[sample(1:nrow(this.sam), size=100000),]
+
+pop.dot = list(size=.2,    alpha=.05)
+proportion.scale = 1
+p=scatter.by.group(this.sam, group.means.alpha=.2, line.alpha=.5, jitter.height=.2, dot=pop.dot) +
   scale_y_continuous(breaks=seq(0,1), 
-  sec.axis = sec_axis(~./proportion.scale, name='Proportion')) +    
+                      sec.axis = sec_axis(~./proportion.scale, name='Proportion')) +    
   scale_x_continuous(breaks=seq(1900,2000, by=10)) +
   coord_cartesian(ylim=c(-.2,1.2), xlim=c(min(this.sam$yob)-1, max(this.sam$yob)+1)) 
+
+p
 ```
 
 ```{r}
@@ -326,32 +344,76 @@ ggplot(this.sam) + bars + guides(color='none', fill='none')
 :::
 
 ::: {#exr-shift-interp-practice .callout-exercise} 
-For each of the three sample, answer these Yes or No questions. No need to explain. 
+For each of the three samples, answer these Yes or No questions. No need to explain. 
 
 1. Is the raw difference $\hat\Delta_{\text{raw}}$ larger or smaller than the adjusted difference $\hat\Delta_1$? 
-2. Is the *magnitude* of the raw difference, $| \hat\Delta_{\text{raw}}|$ larger or smaller than the *magnitude* of the adjusted difference, $|\hat\Delta_0|$?
-
+2. Is the magnitude of the raw difference, $| \hat\Delta_{\text{raw}}|$, larger or smaller than the magnitude of the adjusted difference, $|\hat\Delta_1|$?
+   
+*Tip*. The second question is a bit hard. You should be able to use the plot to know the sign (+/-) of the adjusted difference and covariate shift term. If the signs are the same, you know the magnitude of the raw difference is larger. But if the signs are opposite, it's a bit more subtle. What happens depends on the relative magnitudes of the adjusted difference and covariate shift term. Usually, the magnitude of the covariate shift is less than twice the magnitude of the adjusted difference, which makes the raw difference smaller in magnitude than the adjusted one.  But if the magnitude of the covariate shift term is more than twice the magnitude of the adjusted difference, we have an extreme case of Simpson's paradox: the raw difference is larger in magnitude but opposite in sign to the adjusted difference. For the purpose of this assignment, don't worry about this happening. 
 :::
 
-We can derive similar decompositions based on our other estimators $\hat\Delta_0$ and $\hat\Delta_{\text{all}}$. We can decompose $\hat\Delta_{\text{raw}}$ as the sum of $\hat\Delta_0$ or $\hat\Delta_{\text{all}}$ and a different, but conceptually similar covariate shift term. 
+We can derive similar decompositions for our other adjusted differences $\hat\Delta_0$ and $\hat\Delta_{\text{all}}$. That is, we can decompose $\hat\Delta_{\text{raw}}$ as the sum of $\hat\Delta_0$ or $\hat\Delta_{\text{all}}$ and a different, but conceptually similar covariate shift term. 
 
 ::: {#exr-decompose-ca-estimator .callout-exercise}
 Derive a formula for $\hat\Delta_{\text{raw}}$ as the 
-sum of $\hat\Delta_0$ and a covariate shift term. Do the same with $\hat\Delta_{\text{all}}$ in place of $\hat\Delta_0$. Show your work.
+sum of $\hat\Delta_0$ and a covariate shift term.  Show your work.
 :::
 
-Now that we have these new decompositions, let's put them to work. 
+::: {#nte-decompose-ca-estimator .callout-note}
+### A correction.
+In a previously posted version of this assignment, @exr-decompose-ca-estimator asked you to do the same with $\hat\Delta_{\text{all}}$ in place of $\hat\Delta_0$. That's a bad exercise because there isn't a two-term decomposition of $\hat\Delta_{\text{raw}}$ as the sum of $\hat\Delta_{\text{all}}$ and a single covariate shift term. You can, however, get a useful *three-term* decomposition.
+
+
+To do this, start with your formula for $\hat\Delta_{\text{raw}}$ in terms of $\hat\Delta_1$.
+Then think of the difference $\hat\Delta_1 - \hat\Delta_{\text{all}}$ as *another* covariate shift term---only this time, the function we're averaging over our two histograms is $\hat\mu(1,x) - \hat\mu(0,x)$ instead of $\hat\mu(0,x)$.
+
+$$
+\begin{aligned}
+\hat\Delta_{\text{raw}} 
+&= \hat\Delta_1 + (\hat\Delta_{\text{raw}} - \hat\Delta_1) \\
+&= \hat\Delta_{\text{all}} 
++ \underset{\text{new covariate shift term}}{\qty(\hat\Delta_{1} - \hat\Delta_{\text{all}})}
++ \underset{\text{$\hat\Delta_1$'s covariate shift term}}{(\hat\Delta_{\text{raw}} - \hat\Delta_1)}
+\end{aligned}
+$$
+
+I've added an Extra Credit version of this exercise, @exr-decompose-ca-estimator-ec, on deriving and using this three-term decomposition.
+
+:::
+
+
+Now that we have these new decompositions, let's use them.
 
 ::: {#exr-using-decompositions .callout-exercise} 
 Forget the calculations you did in @exr-calc-ca-estimator for a moment.
 Explain how, using only @fig-greenred-scatter and @fig-greenred-histograms, 
-you could predict whether $\hat\Delta_{\text{raw}}$ or $\hat\Delta_0$ would be larger. 
-Do the same for $\hat\Delta_{\text{raw}}$ and $\hat\Delta_{\text{all}}$. 
+you could predict whether $\hat\Delta_{\text{raw}}$ or $\hat\Delta_0$ would be larger. Do the same for $\hat\Delta_{\text{raw}}$ and $\hat\Delta_{\text{all}}$. 
 
 Are your answers here are consistent with what you calculated in @exr-calc-ca-estimator? 
 :::
 
-## Comparing *Different* Adjusted Differences 
+Covariate shift isn't just the phenomenon behind the difference between raw and adjusted differences. It shows up wherever we're comparing averages over different groups. One example is comparing different adjusted differences, e.g. $\hat \Delta_1$ and $\hat \Delta_0$. The following exercises will explore that. These are extra credit exercises, but I encourage you to look them over and think about them at least for a minute or two. There's a good chance that, having made it this far, you'll find them pretty easy. 
 
+::: {#exr-shift-between-adjusted .callout-exercise} 
+*Extra Credit*. Explain how, using only @fig-greenred-scatter and @fig-greenred-histograms, you could predict whether $\hat\Delta_{1}$ or $\hat\Delta_0$ would be larger. 
 
+*Hint*. Compare the 'histogram form' formulas for $\hat\Delta_1$ and $\hat\Delta_0$.
+:::
+
+::: {#exr-shift-between-adjusted .callout-exercise} 
+*Extra Credit*. 
+
+1. Write the simplest formula you can expressing 
+$\hat\Delta_{\text{all}}$ in terms of $\hat\Delta_0$ and $\hat\Delta_1$ and other numbers you can compute from the sample. It should be very simple.
+2. Referring to the formula, explain why, if you know which of $\hat\Delta_0$ or $\hat\Delta_1$ is larger, you also know whether $\hat\Delta_0$ or $\hat\Delta_{\text{all}}$ is larger and whether $\hat\Delta_1$ or $\hat\Delta_{\text{all}}$ is larger. 
+3. Explain why in visual terms, too. 
+
+*Hint*. How does the purple histogram in @fig-greenred-scatter relate to the green and red ones? This is not just relevant to the in-visual-terms part; if you don't already have a formula, what you see may guide you toward one. 
+:::
+
+::: {#exr-decompose-ca-estimator-ec .callout-exercise} 
+*Extra Credit*. Write out the three-term decomposition 
+for $\hat\Delta_{\text{raw}}$ described above in @nte-decompose-ca-estimator.
+And, with reference to the California income data shown in @fig-greenred-scatter and @fig-greenred-histograms, explain how to use this to see whether $\hat\Delta_{\text{raw}}$ or $\hat\Delta_{\text{all}}$ is larger.
+:::
 

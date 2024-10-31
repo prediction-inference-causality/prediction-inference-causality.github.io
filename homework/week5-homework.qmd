@@ -162,9 +162,69 @@ $$
 
 :::
 
+::: {.callout-solution}
+We'll want to know the derivative of $f(x) = \sqrt{x(1-x)}$, so let's start by calculating that.
+$$
+\begin{aligned}
+f'(x) 
+&= \frac{d}{dx} \qty{x(1-x)}^{1/2} = \frac{1}{2} \qty{x(1-x)}^{-1/2} \frac{d}{dx} x (1-x) && \text{by the power rule and chain rule}
+&= \frac{1}{2} \qty{x(1-x)}^{-1/2} \qty{1 \times (1-x) + x \times (-1)} && \text{by the product rule}
+&= \frac{1}{2} \qty{x(1-x)}^{-1/2} \qty{1 - 2x} = \frac{1 - 2x}{2\sqrt{x(1-x)}}
+\end{aligned}
+$$
+
+Now we can use this to approximate the difference $|\hat w - w|$. 
+$$
+\begin{aligned}
+\hat w - w 
+&= 2 \times 1.96 \times \frac{\hat\sigma-\sigma}{\sqrt{n}} 
+&= \frac{2 \times 1.96}{\sqrt{n}} \times f(\hat\theta) - f(\theta) \qfor f(x) = \sqrt{x(1-x)} 
+&\approx \frac{2 \times 1.96}{\sqrt{n}} \times f'(\theta) (\hat\theta - \theta) 
+&= \frac{2 \times 1.96}{\sqrt{n}} \times \frac{1 - 2\theta}{2\sqrt{\theta(1-\theta)}} (\hat\theta - \theta) 
+\end{aligned}
+$$
+Now let's use our assumption that $\hat\theta \in \theta \pm 1.96\sigma / \sqrt{n}$ for $\sigma^2=\theta(1-\theta)$.
+We can rephase this as $\hat\theta - \theta \in \pm 1.96\sigma / \sqrt{n}$ and equivalently $\abs{\hat\theta - \theta} \leq 1.96\sigma / \sqrt{n}$.
+Combining this with our approximation above, we get the following approximate upper bound on the difference $\abs{\hat w - w}$.
+$$
+\begin{aligned}
+\abs{\hat w - w} 
+&\approx \frac{2 \times 1.96}{\sqrt{n}} \times \frac{1 - 2\theta}{2\sqrt{\theta(1-\theta)}} \times \textcolor{blue}{\abs{\hat\theta - \theta}} 
+&& \text{as calculated above} 
+&\leq \frac{2 \times 1.96}{\sqrt{n}} \times \frac{1 - 2\theta}{2\sqrt{\theta(1-\theta)}} \times \textcolor{blue}{1.96 \frac{\sigma}{\sqrt{n}}}  \qfor \sigma = \sqrt{\theta(1-\theta)}  &&\text{using our rephrased assumption}
+&=  \frac{2 \times 1.96}{\sqrt{n}} \times \frac{1 - 2\theta}{2\sqrt{\theta(1-\theta)}} \times \textcolor{blue}{1.96 \frac{\sqrt{\theta(1-\theta)}}{\sqrt{n}}} 
+&= 1.96^2 \frac{1-2\theta}{n} && \text{simplifying}
+\end{aligned}
+$$ 
+Let's work out what fraction of the ideal width $w$ this is. 
+$$
+\begin{aligned}
+\frac{\abs{\hat w - w}}{w} 
+&\lessapprox\footnote{The notation $a \lessapprox b$ means that $a$ is approximately less than $b$. What's happening here is that $a$ is approximately equal to
+its linear approximation $a_{\text{lin}}$ and $a_{\text{lin}}$ is less than or equal to $b$: $a\lessapprox b$ because $a \approx \tilde{a} \le b$.} 
+\frac{1.96^2 \frac{1-2\theta}{n}}{2 \times 1.96 \frac{\sqrt{\theta(1-\theta)}}{\sqrt{n}}} 
+&= \frac{1.96}{2} \times \frac{\abs{1-2\theta}}{\sqrt{\theta(1-\theta)}} \times \frac{1/n}{1/\sqrt{n}}
+&= \frac{1.96}{2} \times \times \frac{\abs{1-2\theta}}{\sqrt{\theta(1-\theta)}} \frac{1}{\sqrt{n}} \\
+&\approx \frac{1}{\sqrt{n}} \times \frac{\abs{1-2\theta}}{\sqrt{\theta(1-\theta)}} 
+\end{aligned}
+$$  
+:::
+
 ::: {#exr-width-error-interp .callout-exercise}
 Are there values of $\theta$ where this difference $\hat w - w$ is a large fraction of the ideal width $w$?
 If so, how large? Use @fig-width-curves to explain what's going on in intuitive terms.
+:::
+
+::: {.callout-solution}
+
+Yes. Arbitrarily large, in fact. The function $g(\theta) = \frac{\abs{1-2\theta}}{\sqrt{\theta(1-\theta)}}$ goes to infinity as $\theta$ goes to 0 or 1.
+```{r}
+library(ggplot2)
+g = function(theta) abs(1-2*theta) / sqrt(theta*(1-theta))
+thetas = seq(0,1,length.out=1000)
+ggplot() + geom_line(aes(x=thetas, y=g(thetas)))
+```
+What's going on in terms of @fig-width-curves? The problem is that the slope of the width curve gets large where the width curve gets small---near $\theta=0$ and $\theta=1$---so when we have an estimate $\hat\theta \approx \theta$ for such $\theta$, the error $w(\hat\theta) - w(\theta) \approx w'(\theta) \times (\hat\theta - \theta)$ of our estimated width gets large relative to the width $w(\theta)$ itself. 
 :::
 
 ::: {#fig-width-curves}
@@ -236,6 +296,10 @@ We showed that an individual subsample mean $\hat\mu(x)$ is an unbiased estimato
 Explain why the first implies the second. A sentence or even a couple words should do.
 :::
 
+::: {.callout-solution}
+Expectation is linear.
+:::
+
 We also calculated a formula for the variance of a subsample mean $\hat\mu(x)$.
 $$
 \Var[\hat\mu(x)] = \frac{\sigma^2(x)}{N_x} \text{ for } N_x = \sum_{i}1_{=x}(X_i) \qand \sigma^2(x) = \Var[Y_i \mid X_i=x]
@@ -273,6 +337,43 @@ $$
 Look over the calculation we used for one subsample mean $\hat{\mu}(x)$
 [here](https://qtm285-1.github.io/assets/lectures/Lecture6.html#/the-variance-of-the-subsample-mean).
 You'll want to use a lot of the same ideas: writing sums over our subsamples as sums over $1 \ldots n$ by putting in group indicators $1_{=x}(X_i)$, conditioning on $X_1 \ldots X_n$, the indicator trick, thinking about what happens when $j=i$ and $j\neq i$ in the double sum we get when we expand the product, etc. In the subsample mean calculation, the $j=i$ terms gave us some stuff that was nonzero. Why isn't that happening here?
+:::
+
+::: {.callout-solution}
+We'll show that the expectation conditional on $X_1 \ldots X_n$ is zero. By the law of iterated expectations, this will imply that the unconditional expectation is also zero. 
+
+Let's start by just expanding $\hat{\mu}(1)$ and $\hat{\mu}(0)$ in the cross term, 
+doing a little arithmetic, and then using the *indicator trick*.
+$$
+\begin{aligned}
+\{\hat{\mu}(1) - \mu(1)\}\{\hat{\mu}(0) -\mu(0)\} 
+&= \frac{1}{N_1}\sum_{i=1}^n 1_{=1}(X_i) \{ Y_i-\mu(1) \} \frac{1}{N_0}\sum_{j=1}^n 1_{=0}(X_j) \{Y_j-\mu(0)\} \\
+&= \frac{1}{N_1 N_0} \sum_{i=1}^n \sum_{j=1}^n 1_{=1}(X_i) 1_{=0}(X_j) \{ Y_i-\mu(1) \} \{Y_j-\mu(0)\} \\
+&= \frac{1}{N_1 N_0} \sum_{i=1}^n \sum_{j=1}^n 1_{=1}(X_i) 1_{=0}(X_j) \{ Y_i-\mu(X_i) \} \{Y_j-\mu(X_j)\} 
+\end{aligned}
+$$
+Now let's look at the conditional expectation. Using linearity of conditional expectations, we can push the expectation all the way into the double sum. 
+$$
+\E\qty[\{\hat{\mu}(1) - \mu(1)\}\{\hat{\mu}(0) -\mu(0)\} \mid X_1 \ldots X_n ] 
+= \frac{1}{N_1 N_0} \sum_{i=1}^n \sum_{j=1}^n 1_{=1}(X_i) 1_{=0}(X_j) \E\qty[\{Y_i-\mu(X_i)\}\{Y_j-\mu(X_j)\} \mid X_1 \ldots X_n ] 
+$$
+Every term in this double sum is zero. Why? Suppose $i=j$. Then it's not possible that $X_i=1$ and $X_j=0$, so the product of indicators is zero.
+
+
+
+
+
+each term* here is zero. 
+
+
+
+The cross term is the expected value of a product. We can think about what happens when $i=j$ and when $i\neq j$. When $i=j$, we have $1_{=1}(X_i) 1_{=0}(X_j) = 0$. When $i\neq j$, we have $1_{=1}(X_i) 1_{=0}(X_j) = 1_{=1}(X_i) 1_{=0}(X_j)$. So the cross term is
+
+$$
+\frac{1}{N_1 N_0} \E\qty[\sum_{i=1}^n \sum_{j=1}^n 1_{=1}(X_i) 1_{=0}(X_j) (Y_i-\mu(1))(Y_j-\mu(0))] = 0
+$$
+
+
 :::
 
 ## Ratios of Means
