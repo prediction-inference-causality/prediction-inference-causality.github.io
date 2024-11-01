@@ -1,0 +1,419 @@
+---
+title: "Week 9 Homework"
+format: html
+---
+::: hidden
+$$
+\DeclareMathOperator{\E}{E}
+\DeclareMathOperator{\Var}{V}
+\DeclareMathOperator{\hVar}{\widehat{V}}
+\DeclareMathOperator{\bias}{bias}
+$$
+:::
+
+# Summary
+{{< include shared-code.qmd >}}
+{{< include ca-income.qmd >}}
+```{r}
+set.seed(1)
+theme_set(whitebw.theme())
+```
+
+This one is about interval estimation for estimation targets that are complex summaries of a population. In particular, we'll look at like the ones we talked about in our lectures on [Summarizing Trends involving Many Groups](`r lecture(7)`) and [Multivariate Analysis and Covariate Shift](`r lecture(9)`). For the most part, we'll use subsample means to estimate the means of corresponding subpopulations, which---as discussed in our lecture in our lecture on [Least Squares in Linear Models](`r lecture(11)`)---is the least squares predictor in the 'all functions' regression model. But we'll take a moment at the end to look at what changes when we use other regression models.  
+
+
+# California Income Data
+
+We'll start by working with the same California income data we used in our last homework. But this time, instead of doing everything by hand using summaries and tables, we'll write code that works with the raw data. You can get it like this.
+
+```{r}
+#| echo: true
+ca = read.csv('https://qtm285-1.github.io/assets/data/ca-income.csv')
+sam = data.frame(
+  w = ca$sex == 'female',
+  x = ca$education,
+  y = ca$income)
+```
+
+## Calculating Point Estimates
+
+As a warm-up, we'll repeat [Exercise 5](https://davidahirshberg.bitbucket.io/static/homework4.html/#exr-calc-ca-estimator)
+from our last homework. We'll calculate the following four summaries of the income discrepency between male and female residents of California. 
+$$
+\color{gray}
+\begin{aligned}
+\hat \Delta_{\text{raw}} &= \frac{1}{N_1}\sum_{i: W_i=1} Y_i - \frac{1}{N_0}\sum_{i: W_i=0} Y_i \\
+\hat \Delta_0  &=\frac{1}{N_0}\sum_{i: W_i=0} \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} \\ 
+\hat \Delta_1 &= \frac{1}{N_1}\sum_{i: W_i=1} \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} \\ 
+\hat \Delta_{\text{all}} &= \frac{1}{n} \sum_{i=1}^n \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} 
+\end{aligned}
+$$
+But, instead of doing it by hand using a table, we'll do it with code. We'll calculate each three ways.
+
+1. Using code that looks like the formulas above, i.e., code that sums over people.
+2. With code that looks like the equivalent 'histogram form' formulas. You needed these for last week's [Exercise 5](https://qtm285-1.github.io/assets/homework/week7-homework.html#exr-calc-ca-estimator). 
+3. With code that looks like the 'general form', $\sum_{w,x} \hat\alpha(w,x) \hat\mu(w,x)$, that we talked about in our [lecture on inference for complex summaries](`r lecture(8)`).
+
+Ultimately, we don't really need three implementations of the same thing. What we really want is the 'general form' code,
+as it packages all the estimation-target-specific stuff nicely into one function---$\hat\alpha$---and it's what we'll need to do variance calculations. We'll think of the other two as steps along the way. 
+
+I'll get you started by doing $\hat\Delta_{\text{raw}}$ and $\hat\Delta_1$. I like to write code that looks almost exactly like what I've written in mathematical notation. From what I've seen, when people do that, they tend to introduce fewer bugs when they go from math to code. And the code tends to be easier to understand, too. 
+
+I'll start by defining three functions: $\hat\mu(w,x)$, $\hat\sigma(w,x)$, and $N_{w,x}$. 
+Everything else I need, e.g. the histogram height $P_{x \mid 1}(x)$ that appears in the 
+equivalent 'histogram form' expression for $\hat\Delta_1$, can be computed from these.
+```{r}
+#| echo: true
+summaries = sam |> 
+    group_by(w,x) |> 
+    summarize(muhat = mean(y), sigmahat = sd(y), Nwx = n())
+  
+summary.lookup = function(field, summaries) { #<1>
+  function(w,x) { 
+    inner_join(data.frame(w=w,x=x), summaries, by=c('w','x')) |> 
+      pull(field) 
+  }
+}
+
+muhat    = summary.lookup('muhat',    summaries)
+sigmahat = summary.lookup('sigmahat', summaries)
+Nwx      = summary.lookup('Nwx',      summaries)
+
+W = sam$w
+X = sam$x
+Y = sam$y
+x = unique(X)
+n = length(Y)
+```
+1. This isn't specific to our sample. It's reusable as long as your groups are defined by the variables 'w' and 'x'.
+
+This is everything I need to do calculations that look like the formulas above.
+```{r}
+#| echo: true
+Deltahat.raw = mean(Y[W==1]) - mean(Y[W==0])
+Deltahat.1 = mean(muhat(1,X[W==1]) - muhat(0,X[W==1]))
+```
+
+To do calculations that look like the 'histogram form' formulas, I need $P_{x \mid 0}$ (`Px.0` in the code below),
+$P_{x \mid 1}$ (`Px.1` in the code below), and $P_x$ (`Px` in the code below). I can define these in terms of the function 
+$N_{w,x}$ implemented above.
+
+```{r}
+#| echo: true
+Nw   = function(w) { sum(Nwx(w, x)) }
+Px.1 = function(x) { Nwx(1,x)/Nw(1) } 
+Px.0 = function(x) { Nwx(0,x)/Nw(0) } 
+Px   = function(x) { (Nw(0,x)+Nw(1,x)) / n }
+```
+
+Here's how I calculate $\hat\Delta_{\text{raw}}$ and $\hat\Delta_1$ using the 'histogram form' formulas.
+```{r}
+#| echo: true
+Deltahat.raw.histform = sum(Px.1(x)*muhat(1,x)) - sum(Px.0(x)*muhat(0,x))
+Deltahat.1.histform   = sum(Px.1(x)*(muhat(1,x) - muhat(0,x)))
+```
+
+To do calculations that look like the 'general form', $\sum_{w,x} \hat\alpha(w,x) \hat\mu(w,x)$, I need two new things.
+First, I need a function $\hat\alpha(w,x)$ for each estimation target. I'll start by writing them out in mathematical notation. To do this, I take a look at the 'histogram form' formulas and pull out the coefficients on each instance of $\hat\mu(w,x)$.
+
+$$
+\begin{aligned}
+
+\hat\Delta_\text{raw} 
+&= \sum_{x} P_{x \mid 1}(x) \ \hat\mu(1,x) - \sum_{x} P_{x \mid 0} \ \hat\mu(0,x) \\
+&= \sum_{w,x} \hat\alpha_\text{raw}(w,x) \ \hat\mu(w,x) \qfor \begin{cases} 
+\hat\alpha_\text{raw}(w,x) = P_{x \mid 1}(x) & \text{if } w=1 \\
+\hat\alpha_\text{raw}(w,x) = -P_{x \mid 0}(x) & \text{if } w=0 
+\end{cases} \\
+
+\hat\Delta_1 
+&= \sum_{x} P_{x \mid 1}(x) \qty{ \hat\mu(1,x) -\hat\mu(0,x)} \\
+&= \sum_{w,x} \hat\alpha_1(w,x) \ \hat\mu(w,x) \qfor \begin{cases} 
+\hat\alpha_1(w,x) = P_{x \mid 1}(x) & \text{if } w=1 \\
+\hat\alpha_1(w,x) = -P_{x \mid 1}(x) & \text{if } w=0 
+\end{cases} 
+
+\end{aligned}
+$$
+
+Now, having done this, I can implement functions that look like that in `R`.
+
+```{r}
+#| echo: true
+alphahat.raw = function(w,x) { ifelse(w==1, Px.1(x), -Px.0(x)) } 
+alphahat.1   = function(w,x) { ifelse(w==1, Px.1(x), -Px.1(x)) } 
+```
+
+Now that I have these, I can calculate $\hat\Delta_\text{raw}$ and $\hat\Delta_1$ by plugging them into the function 
+`general.form.estimate` defined below, which sums the product $\hat\alpha(w,x) \hat\mu(w,x)$ over all pairs $(w,x)$. 
+```{r}
+#| echo: true
+general.form.estimate = function(alphahat, muhat, w, x) { #<1>
+  grid = expand_grid(w=w, x=x) 
+  ww = grid$w
+  xx = grid$x
+  sum(alphahat(ww,xx)*muhat(ww,xx))
+}
+
+Deltahat.raw.generalform = general.form.estimate(alphahat.raw, muhat, w=c(0,1), x=x)
+Deltahat.1.generalform = general.form.estimate(alphahat.1,     muhat, w=c(0,1), x=x) 
+```
+1. This is reusable. Just make sure you pass all levels of $w$ and $x$ to the function.
+
+And to check for mistakes, we can look to see if all three methods give the same answer.^[If you see a tiny difference, like $10^{-10}$ or so, don't worry about it. Computer arithmetic is imperfect, so those happen when you use different mathematically equivalent formulas.]
+```{r}
+#| echo: true
+c(Deltahat.raw, Deltahat.raw.histform, Deltahat.raw.generalform)
+c(Deltahat.1, Deltahat.1.histform, Deltahat.1.generalform)
+```
+
+Now it's your turn. 
+
+::: {#exr-calc .callout-exercise}
+Modify the code above to calculate $\hat\Delta_0$ and $\hat\Delta_\text{all}$ three ways:
+by summing over people, using the 'histogram form' formulas, and using the 'general form' formulas.
+Check that the answers agree and, if you like, that they agree with the answers you got in [Exercise 5](https://davidahirshberg.bitbucket.io/static/homework4.html/#exr-calc-ca-estimator) from our last homework. 
+
+All you should turn in for this one is the two functions `alpha.0` and `alpha.all` you define to do the 'general form' calculations.
+:::
+
+## Calibrating Interval Estimates 
+
+Now that we've got all this machinery in place, we're ready to calibrate some interval estimates around them.
+We'll start by bootstrapping the point estimates we just calculated.  As in the previous exercise, I'll do it for $\hat\Delta_\text{raw}$ and $\hat\Delta_1$ and you'll do it for $\hat\Delta_0$ and $\hat\Delta_\text{all}$. You can re-use a lot of my code, so all you'll need to do is add a few lines. 
+
+```{r}
+#| echo: true
+#| cache: true
+bootstrap.estimates = 1:10000 |> map(function(.) {
+  I.star = sample(1:n, n, replace=TRUE)                                             #<1>
+  Wstar = W[I.star]                                                                 #<1>
+  Xstar = X[I.star]                                                                 #<1>
+  Ystar = Y[I.star]                                                                 #<1>    
+
+  summaries.star = sam[I.star,] |>                                                  #<2>
+                group_by(w,x) |>                                                    #<2>   
+                summarize(muhat = mean(y), sigmahat = sd(y), Nwx = n())             #<2>
+  muhat.star = summary.lookup('muhat', summaries.star)                              #<2>
+  
+  data.frame(                                                                               #<3>
+    Deltahat.raw = mean(Ystar[Wstar==1]) - mean(Ystar[Wstar==0]),                      #<3>
+    Deltahat.1   = mean(muhat.star(1,Xstar[Wstar==1]) - muhat.star(0,Xstar[Wstar==1])) #<3>
+  )
+}) |> bind_rows()
+```
+1. Sample with replacement from the sample to get a bootstrap sample.
+2. Summarize the bootstrap sample to get a bootstrap-sample version of the function $\hat\mu(w,x)$.
+3. Calculate the estimation target using the bootstrap-sample stuff. All you'll need to do is add a few lines here.
+
+Here are histograms showing, for $\hat\Delta_\text{raw}$ and $\hat\Delta_1$, its bootstrap sampling distribution. 
+I've used the function `width` to calculate the width of the middle 95% of each distribution and draw that, as
+well as the distribution's mean, in as vertical lines. And I've added my point estimate as a blue dot, too.
+
+::: {.callout-tip}
+### Code You'll Want 
+Here's the function `width` we've used throughout the semester. 
+```{r}
+#| label: width-code
+#| echo: true
+width = function(draws, center = mean(draws), alpha = .05) {
+    covg.dif = function(w) {
+        actual = mean(center - w / 2 <= draws & draws <= center + w / 2)
+        nominal = 1 - alpha
+        actual - nominal
+    }
+    uniroot(covg.dif, interval = c(0, 2 * max(abs(draws - center))))$root
+}
+```
+And here's some code to help you display this in the plot. 
+```{r}
+#| echo: true
+width_annotations = function(draws, center=mean(draws), alpha = 0.05, color='blue') {
+  w = width(draws, center, alpha) 
+  list(geom_vline(xintercept = center - w/2, linetype='dashed', color=color),
+       geom_vline(xintercept = center + w/2, linetype='dashed', color=color),
+       geom_vline(xintercept = center, linetype='solid', color=color))
+}
+```
+
+:::
+
+```{r}
+#| layout-ncol: 2
+#| echo: true 
+
+scales = list(scale_y = scale_y_continuous(breaks=seq(0, .0002, by=.00002)), 
+              scale_x = scale_x_continuous(breaks=seq(-40000, 10000, by=10000)),
+              coord_cartesian(xlim=c(-40000, 10000), ylim=c(0, .0002))) 
+
+bootstrap.plot.raw = ggplot() + 
+  geom_histogram(aes(x=Deltahat.raw, y=after_stat(density)), 
+    bins=50, alpha=.2, data=bootstrap.estimates) + 
+  geom_point(x=Deltahat.raw, y=.0001, color='blue') +
+  width_annotations(bootstrap.estimates$Deltahat.raw)  
+
+bootstrap.plot.1 = ggplot() + 
+  geom_histogram(aes(x=Deltahat.1, y=after_stat(density)), 
+    bins=50, alpha=.2, data=bootstrap.estimates) + 
+  geom_point(x=Deltahat.1, y=.0001, color='blue') +
+  width_annotations(bootstrap.estimates$Deltahat.1)  
+
+bootstrap.plot.raw + scales
+bootstrap.plot.1 + scales
+```
+
+And here are 95% intervals around my point estimates, calibrated using the bootstrap.
+```{r}
+#| echo: true
+bootstrap.interval.raw = Deltahat.raw + c(-1,1)*width(bootstrap.estimates$Deltahat.raw)/2
+bootstrap.interval.1   = Deltahat.1 + c(-1,1)*width(bootstrap.estimates$Deltahat.1)/2
+
+bootstrap.interval.raw
+bootstrap.interval.1
+```
+
+Here's a review exercise on connecting what we see in the plot to the intervals we've reported.
+
+::: {#exr-calibration-review .callout-exercise}
+Draw these intervals into the plots above. Or, if you prefer, describe how you would draw them.
+:::
+
+Now it's your turn to do all this for $\hat\Delta_0$ and $\hat\Delta_\text{all}$.
+
+::: {#exr-calibrate-intervals .callout-exercise}
+Draw the bootstrap sampling distributions of $\hat\Delta_0$ and $\hat\Delta_\text{all}$. Include that same annotations used above: vertical lines
+indicating the mean and middle 95% of each distribution and a blue dot for each point estimate. Then report bootstrap-calibrated 95% confidence intervals around your point estimates from @exr-calc.
+:::
+
+
+Let's check that these are pretty similar to what we get using normal approximation. 
+We'll use our variance formula from our [lecture on Inference for Complicated Summaries](`r lecture(8)`)#a-variance-decomposition-for-our-estimator). And, as in lecture, we'll ignore [the term that reflects the randomness of our coefficients]{.fg style="color:red"}.
+
+```{r}
+#| layout-ncol: 2
+#| echo: false
+
+grid = expand_grid(w=c(0,1), x=x) 
+ww = grid$w
+xx = grid$x
+
+Vhat.raw = sum(alphahat.raw(ww,xx)^2 * sigmahat(ww,xx)^2/Nwx(ww,xx))
+Vhat.1 = sum(alphahat.1(ww,xx)^2 * sigmahat(ww,xx)^2/Nwx(ww,xx))
+
+plotx = seq(-40000, 10000, by=10)
+normal.approx = data.frame(
+  x = plotx,
+  raw = dnorm(plotx, mean=Deltahat.raw, sd=sqrt(Vhat.raw)),
+  one = dnorm(plotx, mean=Deltahat.1, sd=sqrt(Vhat.1)))
+
+bootstrap.plot.raw + geom_line(aes(x=x, y=raw), data=normal.approx) 
+bootstrap.plot.1   + geom_line(aes(x=x, y=one), data=normal.approx) 
+```
+
+```{r}
+#| echo: true
+normal.interval.raw = Deltahat.raw + 1.96*c(-1,1)*sqrt(Vhat.raw)
+normal.interval.1   = Deltahat.1 + 1.96*c(-1,1)*sqrt(Vhat.1) 
+
+normal.interval.raw
+normal.interval.1
+```
+
+::: {#exr-normal-intervals .callout-exercise}
+As discussed in our lecture on [lecture on Inference for Complicated Summaries](`r lecture(8)`)#a-variance-decomposition-for-our-estimator), the variance formula we're using here is a lower bound.
+We've ignored a (non-negative) that reflects the randomness of our coefficients. Based on the plots above, does it look like ignoring this term is a problem? That is, are we significantly underestimating the variance of our estimators when we use this formula? 
+
+Answer Yes or No. Then briefly explain how you know---a sentence or two should do.
+:::
+
+## Checking Coverage using Fake Data
+
+At this point, we have confidence intervals. But this is our first time doing inference for complicated summaries like this, so it's worth checking that they have the coverage we want.
+We can't do that directly because coverage is about the relationship between our estimation
+target and our estimator's sampling distribution and we don't know either---those are functions
+of our population and we only have a sample. What we can do is try all this out using fake data.
+
+To get a fake population that looks about right, we'll use a two-step process. 
+
+1. To get pairs $(w_1,x_1), \ldots, (w_m,x_m)$ with a distribution that looks like the one in our sample, we'll just draw them (with replacement) from our sample.
+2. To get corresponding outcomes $y_1 \ldots y_n$ that look like the ones in our sample, we'll
+add some normally-distributed fuzz to the column means within the sample. We'll choose the amount of fuzz so that the column standard deviations in our population match those in the sample.
+
+```{r}
+#| echo: true
+set.seed(1)
+m = n*10
+I = sample(1:n, m, replace=TRUE)
+pop = sam[I,]
+
+fuzz = rnorm(m)*sigmahat(pop$w, pop$x)
+pop$y = muhat(pop$w, pop$x) + fuzz 
+```
+
+And now that we have a population, we can sample with replacement from it.
+```{r}
+#| echo: true
+J = sample(1:m, n, replace=TRUE)
+fake.sam = pop[J,]
+```
+
+Here's the actual sample, the fake population, and the sample we just drew from it. Not bad! 
+```{r}
+#| layout-nrow: 2
+#| layout-ncol: 2
+#| fig-width: 5.5
+#| echo: false 
+#| fig-cap: 
+#|  - "the real sample"
+#|  - "the sample we drew from the fake population"
+#|  - "the fake population itself"
+
+plotX = function(w,x, shift=.15) { x + shift*(2*w-1) }
+plot.summaries = stat_summary(aes(x=plotX(w,x), y=y), 
+  fun.data=mean_sd, geom='pointrange', alpha=.5)
+
+ggplot(sam) + geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
+  position=position_jitter(width=.15, seed=1), alpha=.2) + 
+  scale_x() + scale_y() + plot.summaries + guides(color=FALSE)
+ggplot(fake.sam) + geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
+  position=position_jitter(width=.15, seed=1), alpha=.2) + 
+  scale_x() + scale_y() + plot.summaries + guides(color=FALSE)
+ggplot(pop) + geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
+  position=position_jitter(width=.15, seed=1), alpha=.2, size=.2) + 
+  scale_x() + scale_y() + plot.summaries + guides(color=FALSE)
+```
+
+
+I'll need a couple hours to write up the rest of the assignment in detail. 
+But if you want to get started, here are vague instructions for the next few exercises.
+
+::: {#exr-fake-data .callout-exercise}
+Plot the sampling distributions of your estimators $\hat\Delta_0$ and $\hat\Delta_\text{all}$ 
+when you draw samples of size $n=`r n`$ with replacement from the fake population. Annotate
+your plots with vertical lines indicating the sampling distribution's mean and middle 95% 
+as above. And add a new annotation: a green vertical line indicating your estimation target. 
+:::
+
+::: {#exr-fake-data-coverage .callout-exercise}
+Calculate the coverage of the 95% confidence intervals you used in the previous section---the ones based on the bootstrap and the normal approximation---when you draw samples of size $n=`r n`$ with replacement from the fake population.
+:::
+
+::: {#exr-fake-data-bias .callout-exercise}
+Repeat the last two exercises with one change: estimate the column means $\mu(w,x)$ in the population via least squares with the 'not-necessarily-parallel lines model'. Like this.
+
+$$
+\hat\mu(w,x) = \argmin_{m \in \model} \sum_i \qty{ Y_i - m(W_i,X_i) }^2 
+\qfor \model = \qty{ a(w) + b(w) x  \ \text{ for functions } a(w) \text{ and } b(w) }
+$$
+
+```{r}
+#| echo: true
+#| eval: false
+
+fitted.model = lm(y ~ w*x, data=sam)
+muhat = function(w,x) { predict(fitted.model, newdata=data.frame(w=w,x=x)) }
+```
+
+
+::: 
+
