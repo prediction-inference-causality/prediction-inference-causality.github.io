@@ -11,7 +11,7 @@ $$
 $$
 :::
 
-# Summary
+
 {{< include shared-code.qmd >}}
 {{< include ca-income.qmd >}}
 ```{r}
@@ -19,12 +19,110 @@ set.seed(1)
 theme_set(whitebw.theme())
 ```
 
-This one is about interval estimation for estimation targets that are complex summaries of a population. In particular, we'll look at like the ones we talked about in our lectures on [Summarizing Trends involving Many Groups](`r lecture(7)`) and [Multivariate Analysis and Covariate Shift](`r lecture(9)`). For the most part, we'll use subsample means to estimate the means of corresponding subpopulations, which---as discussed in our lecture in our lecture on [Least Squares in Linear Models](`r lecture(11)`)---is the least squares predictor in the 'all functions' regression model. But we'll take a moment at the end to look at what changes when we use other regression models.  
+# Summary
+
+This one is about interval estimation for estimation targets that are complex summaries of a population. We'll focus on the summaries we discussed in our lecture on [Multivariate Analysis and Covariate Shift](`r lecture(9)`). The lesson here is that calibration works exactly the same way it did when we were just estimating simpler summaries like means. Because of that, parts of this assignment will be very similar to things you did in the Week 2 and 3 Homeworks.^[If you get stuck on one of those parts, reviewing the solutions for those assignments may help.] 
+
+I think working through some of those same problems in this more general context can help make these steps feel a bit more meaningful. For example, in @sec-checking-with-fake-data below, we'll be checking that our interval estimates are properly calibrated when we use them on fake data. When you do this for a really simple summary, the process is almost too transparent. It doesn't feel like you're really making up a fake population, checking that it looks right, and seeing what happens when you're sampling from it. You can see through the whole process from start to finish. In this more complex setting, you have to go step by step a bit more.
+
+Because coverage calculations involve a fair amount of code and just calculating these estimators involves some too, this is a pretty code-heavy assignment. And when you're new to that kind of programming, it can feel really overwhelming trying to get two pieces like this to fit together. Organizing your code well really helps. Unfortunately, some of the organizational principles you may have learned in other programming class --- e.g. the kind of Object Oriented Programming where all the examples are about bank accounts --- tend to be counterproductive for this kind of work. In my experience, the best way to organize your code when you're doing something like this is to make it look as much like the math as you can. I'll demonstrate that for you by doing versions of a lot of the same calculations I'm asking you to do. 
+
+Please don't hesitate to reach out if you're having trouble with any part of this. 
+Learning new programming styles and new mathematical ideas at the same time can be a lot.
+And Google and ChatGPT may not be as helpful as you'd like. There's a lot of content on the web about this programming style and these mathematical ideas, but there's not much that talks about both at the same time.  
+
+# Review
+
+Let's review the summaries we'll be working with. We'll stick with the same California income data we've used in lecture. Here are plots to think about while we review.
+
+::: {#fig-ca-income-plots}  
+```{r}
+#| layout-ncol: 2
+#| fig-width: 5.5
+#| fig-cap: 
+#| - "A sample"
+#| - "An illustration of the population it's drawn from."
+
+sam = data.frame(w=earnings$sex == 'female', x=earnings$education, y=earnings$income) 
+pop = data.frame(w=pop.earnings$sex == 'female', x=pop.earnings$education, y=pop.earnings$income) 
+
+plotX = function(w,x, shift=.15) { x + shift*(2*w-1) }
+plot.summaries = stat_summary(aes(x=plotX(w,x), y=y), 
+  fun.data=mean_sd, geom='pointrange', alpha=.5)
+proportion.scale = 400000
+scaled.interleaved.bars = list(geom_bar(aes(x=plotX(w, x), y=proportion.scale*after_stat(prop), fill=w, color=w), 
+                               position='identity', alpha=.1, linewidth=.1), 
+                               scale_y(c(0,150000), sec.axis=sec_axis(~./proportion.scale, name='Proportion')),
+                               guides(color='none', fill='none'))
+purple.bars = geom_bar(aes(x=x, y=proportion.scale*after_stat(prop)), 
+                       alpha=.05, linewidth=.025, fill='purple', color='purple', width=.2)
 
 
-# California Income Data
+ca.sam.plot = ggplot(sam) + geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
+  position=position_jitter(width=.15, seed=1), alpha=.2) + 
+  scale_x() + scale_y() + plot.summaries + scaled.interleaved.bars + purple.bars
 
-We'll start by working with the same California income data we used in our last homework. But this time, instead of doing everything by hand using summaries and tables, we'll write code that works with the raw data. You can get it like this.
+ca.pop.plot = ggplot(pop) + geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
+  position=position_jitter(width=.15, seed=1), alpha=.05, size=.5) + 
+  scale_x() + scale_y() + plot.summaries + scaled.interleaved.bars + purple.bars
+
+ca.sam.plot
+ca.pop.plot
+```
+:::
+
+Consider the population $(w_1,x_1,y_1), \ldots, (w_m,x_m,y_m)$ you see above on the right. 
+To summarize it, we might talk about mean $\mu(w,x)$ in each column, the number of dots $m_{wx}$ in each column, and the number of red (w=0) and green (w=1) dots $m_w$ outright. That is, the mean income among people with a given education level and sex, the number of people with a given education level and sex, and the number of male and female people in our sample respectively. In mathematical notation, these.
+$$
+\begin{aligned}
+\mu(w,x)&=\frac{1}{m_{wx}}\sum_{j:w_j=w,x_j=x} y_j && \text{ column means } \\ 
+m_{wx} &= \sum_{j:w_j=w,x_j=x} 1 && \text{number of dots in column} \\ 
+m_w   &= \sum_{j:w_j=w} 1 && \text{total number of red (w=0) or green (w=1) dots} 
+\end{aligned}
+$$
+In the plot, we see these means $\mu(w,x)$ represented as pointranges (`r pointrange`) and
+the *proportion* of people of a given sex with a given level of education, $m_{wx}/m_w$, 
+represented by the heights of red and green bars. The total number of red and green dots, $m_w$, don't appear in the plot. 
+
+In terms of these, we can summarize the income disparity between the male and female people in our population a few pretty reasonable ways. We call the first one below the *raw* difference in means and the remaining three, which are all weighted averages of the within-education-level means $\mu(1,x)-\mu(0,x)$, differences that are *adjusted* for education level.
+$$
+\begin{aligned}
+\Delta_{\text{raw}} &= \frac{1}{m_1}\sum_{j:w_j=1} y_j - \frac{1}{m_0}\sum_{j:w_j=0} y_j \\
+\Delta_0  &=\frac{1}{m_0}\sum_{j:w_j=0} \qty{\mu(1,x_j) - \mu(0, x_j)} \\ 
+\Delta_1 &= \frac{1}{m_1}\sum_{j:w_j=1} \qty{\mu(1,x_j) - \mu(0, x_j)} \\ 
+\Delta_{\text{all}} &= \frac{1}{m}\sum_{j=1}^m \qty{\mu(1,x_j) - \mu(0, x_j)} 
+\end{aligned}
+$$
+
+To estimate them, we can do exactly the same thing with the sample. Letting $\hat\mu$, $N_{wx}$, and $N_w$ be sample versions of $\mu$, $m_{wx}$, and $m_w$, we can calculate our estimators like this.  
+$$
+\begin{aligned}
+\hat \Delta_{\text{raw}} &= \frac{1}{N_1}\sum_{i: W_i=1} Y_i - \frac{1}{N_0}\sum_{i: W_i=0} Y_i \\
+\hat \Delta_0  &=\frac{1}{N_0}\sum_{i: W_i=0} \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} \\ 
+\hat \Delta_1 &= \frac{1}{N_1}\sum_{i: W_i=1} \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} \\ 
+\hat \Delta_{\text{all}} &= \frac{1}{n} \sum_{i=1}^n \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} 
+\end{aligned}
+$$
+
+As discussed in our lecture on [Least Squares in Linear Models](`r lecture(11)`),
+the column means in the sample are really just one estimate of the mean of the 
+corresponding column in the population. We can estimate our adjusted differences
+by plugging any estimate $\hat\mu$ of the function $\mu$ into the formulas above.
+The column means are the least squares estimate in the 'all functions' regression model, i.e., 
+$$
+\begin{aligned}
+\hat\mu(w,x) = \frac{1}{N_{wx}} \sum_{i:W_i=w,X_i=x} Y_i \qqtext{ minimizes } 
+& \frac{1}{n}\sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2 \\
+&\qqtext{ over the set of all functions $m(w,x)$}.
+\end{aligned}
+$$
+We get other estimates $\hat\mu$ by minimizing the sum of squared errors over other (smaller) sets of functions
+of $w$ and $x$. For example, the ones discussed [here](`r lecture(11)`/#multivariate-regression-models) in that lecture.
+In this assignment, we'll hold off on that until our last exercise.
+
+# Estimation 
+
+We're going to work with the same California income data we used in our last homework. But this time, instead of doing everything by hand using summaries and tables, we'll write code that works with the raw data. You can get it like this.
 
 ```{r}
 #| echo: true
@@ -37,10 +135,9 @@ sam = data.frame(
 
 ## Calculating Point Estimates
 
-As a warm-up, we'll repeat [Exercise 5](https://davidahirshberg.bitbucket.io/static/homework4.html/#exr-calc-ca-estimator)
+As a warm-up, we'll repeat [Exercise 5](https://qtm285-1.github.io/assets/homework/week7-homework.html#exr-calc-ca-estimator)
 from our last homework. We'll calculate the following four summaries of the income discrepency between male and female residents of California. 
 $$
-\color{gray}
 \begin{aligned}
 \hat \Delta_{\text{raw}} &= \frac{1}{N_1}\sum_{i: W_i=1} Y_i - \frac{1}{N_0}\sum_{i: W_i=0} Y_i \\
 \hat \Delta_0  &=\frac{1}{N_0}\sum_{i: W_i=0} \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} \\ 
@@ -54,8 +151,8 @@ But, instead of doing it by hand using a table, we'll do it with code. We'll cal
 2. With code that looks like the equivalent 'histogram form' formulas. You needed these for last week's [Exercise 5](https://qtm285-1.github.io/assets/homework/week7-homework.html#exr-calc-ca-estimator). 
 3. With code that looks like the 'general form', $\sum_{w,x} \hat\alpha(w,x) \hat\mu(w,x)$, that we talked about in our [lecture on inference for complex summaries](`r lecture(8)`).
 
-Ultimately, we don't really need three implementations of the same thing. What we really want is the 'general form' code,
-as it packages all the estimation-target-specific stuff nicely into one function---$\hat\alpha$---and it's what we'll need to do variance calculations. We'll think of the other two as steps along the way. 
+Ultimately, we don't really need three implementations of the same thing. We could get by with just the 'general form' code.
+We can use it to calculate point estimates and it's what we'll ultimately need to do variance calculations. If you like, you can think of the other two as steps along the way. 
 
 I'll get you started by doing $\hat\Delta_{\text{raw}}$ and $\hat\Delta_1$. I like to write code that looks almost exactly like what I've written in mathematical notation. From what I've seen, when people do that, they tend to introduce fewer bugs when they go from math to code. And the code tends to be easier to understand, too. 
 
@@ -68,10 +165,10 @@ summaries = sam |>
     group_by(w,x) |> 
     summarize(muhat = mean(y), sigmahat = sd(y), Nwx = n())
   
-summary.lookup = function(field, summaries) { #<1>
+summary.lookup = function(column.name, summaries) { #<1>
   function(w,x) { 
     inner_join(data.frame(w=w,x=x), summaries, by=c('w','x')) |> 
-      pull(field) 
+      pull(column.name) 
   }
 }
 
@@ -85,7 +182,8 @@ Y = sam$y
 x = unique(X)
 n = length(Y)
 ```
-1. This isn't specific to our sample. It's reusable as long as your groups are defined by the variables 'w' and 'x'.
+1. If you're unfamiliar with code that looks like this, it helps to think about the types of `summary.lookup`'s input and output. The input is the easy part. Its arguments as a column name and a data frame---one that should have columns named 'w', 'x', and column.name. Its output is a function. It's a function that takes as input two vectors of the same length---a vector of values for 'w' and a vector of values for 'x'---and returns the corresponding values from the column.name column of the data frame. This basic pattern---writing functions that return other functions---is a big part of what makes [functional programming](https://en.wikipedia.org/wiki/Functional_programming) effective in the right hands.
+
 
 This is everything I need to do calculations that look like the formulas above.
 ```{r}
@@ -185,32 +283,35 @@ We'll start by bootstrapping the point estimates we just calculated.  As in the 
 ```{r}
 #| echo: true
 #| cache: true
-bootstrap.estimates = 1:10000 |> map(function(.) {
-  I.star = sample(1:n, n, replace=TRUE)                                             #<1>
-  Wstar = W[I.star]                                                                 #<1>
-  Xstar = X[I.star]                                                                 #<1>
-  Ystar = Y[I.star]                                                                 #<1>    
+bootstrap.estimates = 1:10000 |> map(function(.) { #<1>
+  I.star = sample(1:n, n, replace=TRUE)                                             #<2>
+  Wstar = W[I.star]                                                                 #<2>
+  Xstar = X[I.star]                                                                 #<2>
+  Ystar = Y[I.star]                                                                 #<2>    
 
-  summaries.star = sam[I.star,] |>                                                  #<2>
-                group_by(w,x) |>                                                    #<2>   
-                summarize(muhat = mean(y), sigmahat = sd(y), Nwx = n())             #<2>
-  muhat.star = summary.lookup('muhat', summaries.star)                              #<2>
+  summaries.star = sam[I.star,] |>                                                  #<3>
+                group_by(w,x) |>                                                    #<3>   
+                summarize(muhat = mean(y))                                          #<3>
+  muhat.star = summary.lookup('muhat', summaries.star)                              #<3>
   
-  data.frame(                                                                               #<3>
-    Deltahat.raw = mean(Ystar[Wstar==1]) - mean(Ystar[Wstar==0]),                      #<3>
-    Deltahat.1   = mean(muhat.star(1,Xstar[Wstar==1]) - muhat.star(0,Xstar[Wstar==1])) #<3>
+  data.frame(                                                                           #<4>
+    Deltahat.raw = mean(Ystar[Wstar==1]) - mean(Ystar[Wstar==0]),                       #<4>
+    Deltahat.1   = mean(muhat.star(1,Xstar[Wstar==1]) -   #<4>
+                        muhat.star(0,Xstar[Wstar==1]))    #<4>
   )
-}) |> bind_rows()
+}) |> bind_rows() #<5>
 ```
-1. Sample with replacement from the sample to get a bootstrap sample.
-2. Summarize the bootstrap sample to get a bootstrap-sample version of the function $\hat\mu(w,x)$.
-3. Calculate the estimation target using the bootstrap-sample stuff. All you'll need to do is add a few lines here.
+1. Do what follows 10,000 times. 
+2. Sample with replacement from the sample to get a bootstrap sample.
+3. Summarize the bootstrap sample to get a bootstrap-sample version of the function $\hat\mu(w,x)$.
+4. Calculate the estimation target using the bootstrap-sample stuff. All you'll need to do is add a few lines here.
+5. This is how we get a data frame with 10,000 rows and two columns, 'Deltahat.raw' and 'Deltahat.1'. What map gives us is a list of 10,000 data frames with one row each (and the right two columns). `bind_rows` will combine them into one data frame.
 
 Here are histograms showing, for $\hat\Delta_\text{raw}$ and $\hat\Delta_1$, its bootstrap sampling distribution. 
 I've used the function `width` to calculate the width of the middle 95% of each distribution and draw that, as
 well as the distribution's mean, in as vertical lines. And I've added my point estimate as a blue dot, too.
 
-::: {.callout-tip}
+::: {.callout-tip collapse="true"}
 ### Code You'll Want 
 Here's the function `width` we've used throughout the semester. 
 ```{r}
@@ -249,13 +350,13 @@ scales = list(scale_y = scale_y_continuous(breaks=seq(0, .0002, by=.00002)),
 bootstrap.plot.raw = ggplot() + 
   geom_histogram(aes(x=Deltahat.raw, y=after_stat(density)), 
     bins=50, alpha=.2, data=bootstrap.estimates) + 
-  geom_point(x=Deltahat.raw, y=.0001, color='blue') +
+  geom_point(aes(x=Deltahat.raw, y=.00005), color='blue') +
   width_annotations(bootstrap.estimates$Deltahat.raw)  
 
 bootstrap.plot.1 = ggplot() + 
   geom_histogram(aes(x=Deltahat.1, y=after_stat(density)), 
     bins=50, alpha=.2, data=bootstrap.estimates) + 
-  geom_point(x=Deltahat.1, y=.0001, color='blue') +
+  geom_point(aes(x=Deltahat.1, y=.00005), color='blue') +
   width_annotations(bootstrap.estimates$Deltahat.1)  
 
 bootstrap.plot.raw + scales
@@ -265,9 +366,14 @@ bootstrap.plot.1 + scales
 And here are 95% intervals around my point estimates, calibrated using the bootstrap.
 ```{r}
 #| echo: true
-bootstrap.interval.raw = Deltahat.raw + c(-1,1)*width(bootstrap.estimates$Deltahat.raw)/2
-bootstrap.interval.1   = Deltahat.1 + c(-1,1)*width(bootstrap.estimates$Deltahat.1)/2
+bootstrap.interval.raw = Deltahat.raw + 
+  c(-1,1)*width(bootstrap.estimates$Deltahat.raw)/2
+bootstrap.interval.1   = Deltahat.1 +
+  c(-1,1)*width(bootstrap.estimates$Deltahat.1)/2
+```
 
+```{r}
+#| echo: true
 bootstrap.interval.raw
 bootstrap.interval.1
 ```
@@ -275,22 +381,20 @@ bootstrap.interval.1
 Here's a review exercise on connecting what we see in the plot to the intervals we've reported.
 
 ::: {#exr-calibration-review .callout-exercise}
-Draw these intervals into the plots above. Or, if you prefer, describe how you would draw them.
+Draw these intervals (by hand) on top of the plots above. Or, if you prefer, describe how you would draw them.
 :::
 
 Now it's your turn to do all this for $\hat\Delta_0$ and $\hat\Delta_\text{all}$.
 
 ::: {#exr-calibrate-intervals .callout-exercise}
-Draw the bootstrap sampling distributions of $\hat\Delta_0$ and $\hat\Delta_\text{all}$. Include that same annotations used above: vertical lines
-indicating the mean and middle 95% of each distribution and a blue dot for each point estimate. Then report bootstrap-calibrated 95% confidence intervals around your point estimates from @exr-calc.
+Draw the bootstrap sampling distributions of $\hat\Delta_0$ and $\hat\Delta_\text{all}$. Include that same annotations used above: vertical lines indicating the mean and middle 95% of each distribution and a blue dot for each point estimate. Then report bootstrap-calibrated 95% confidence intervals around your point estimates from @exr-calc.
 :::
 
 
 Let's check that these are pretty similar to what we get using normal approximation. 
-We'll use our variance formula from our [lecture on Inference for Complicated Summaries](`r lecture(8)`)#a-variance-decomposition-for-our-estimator). And, as in lecture, we'll ignore [the term that reflects the randomness of our coefficients]{.fg style="color:red"}.
+We'll use our variance formula from our lecture on [Inference for Complicated Summaries](`r lecture(8)`#a-variance-decomposition-for-our-estimator). And, as in lecture, we'll ignore the term that reflects the randomness of our coefficients. The one written in [red]{.fg style="color:red"} in that lecture.
 
 ```{r}
-#| layout-ncol: 2
 #| echo: false
 
 grid = expand_grid(w=c(0,1), x=x) 
@@ -299,15 +403,20 @@ xx = grid$x
 
 Vhat.raw = sum(alphahat.raw(ww,xx)^2 * sigmahat(ww,xx)^2/Nwx(ww,xx))
 Vhat.1 = sum(alphahat.1(ww,xx)^2 * sigmahat(ww,xx)^2/Nwx(ww,xx))
+```
 
+Here are the plots above with our normal-approximation-based estimates of the sampling distribution draw on top of the bootstrap ones.
+```{r}
+#| layout-ncol: 2
+#| echo: false
 plotx = seq(-40000, 10000, by=10)
 normal.approx = data.frame(
   x = plotx,
   raw = dnorm(plotx, mean=Deltahat.raw, sd=sqrt(Vhat.raw)),
   one = dnorm(plotx, mean=Deltahat.1, sd=sqrt(Vhat.1)))
 
-bootstrap.plot.raw + geom_line(aes(x=x, y=raw), data=normal.approx) 
-bootstrap.plot.1   + geom_line(aes(x=x, y=one), data=normal.approx) 
+bootstrap.plot.raw + geom_line(aes(x=x, y=raw), data=normal.approx) + scales 
+bootstrap.plot.1   + geom_line(aes(x=x, y=one), data=normal.approx) + scales
 ```
 
 ```{r}
@@ -320,23 +429,21 @@ normal.interval.1
 ```
 
 ::: {#exr-normal-intervals .callout-exercise}
-As discussed in our lecture on [lecture on Inference for Complicated Summaries](`r lecture(8)`)#a-variance-decomposition-for-our-estimator), the variance formula we're using here is a lower bound.
-We've ignored a (non-negative) that reflects the randomness of our coefficients. Based on the plots above, does it look like ignoring this term is a problem? That is, are we significantly underestimating the variance of our estimators when we use this formula? 
+As discussed in our lecture on [Inference for Complicated Summaries](`r lecture(8)`#a-variance-decomposition-for-our-estimator), the variance formula we're using here is a lower bound.
+We've ignored a (non-negative) term that reflects the randomness of our coefficients. Based on the plots above, does it look like ignoring this term is a problem? That is, are we significantly underestimating the variance of our estimators when we use this formula? 
 
-Answer Yes or No. Then briefly explain how you know---a sentence or two should do.
+Answer Yes or No. Then briefly explain how you know. A sentence or two should do.
 :::
 
-## Checking Coverage using Fake Data
+# Checking Your Estimates using Fake Data {#sec-checking-with-fake-data}
 
-At this point, we have confidence intervals. But this is our first time doing inference for complicated summaries like this, so it's worth checking that they have the coverage we want.
-We can't do that directly because coverage is about the relationship between our estimation
-target and our estimator's sampling distribution and we don't know either---those are functions
-of our population and we only have a sample. What we can do is try all this out using fake data.
+At this point, we have confidence intervals. But this is our first time doing inference for complicated summaries like this, so it's worth checking that they have the coverage we want. We can't do that directly because coverage is about the relationship between our estimation target and our estimator's sampling distribution and we don't know either---those are functions of our population and we only have a sample. What we can do is try all this out using fake data.
 
-To get a fake population that looks about right, we'll use a two-step process. 
+## Simulating Fake Data
+To get a fake population that looks about right, we'll use a two-step process.^[This is basically what I did to get the fake population we've been looking at in lecture and @fig-ca-income-plots. I did something a bit fancier than adding gaussian noise in step 2, but not that much fancier.]
 
 1. To get pairs $(w_1,x_1), \ldots, (w_m,x_m)$ with a distribution that looks like the one in our sample, we'll just draw them (with replacement) from our sample.
-2. To get corresponding outcomes $y_1 \ldots y_n$ that look like the ones in our sample, we'll
+2. To get corresponding outcomes $y_1 \ldots y_m$ that look like the ones in our sample, we'll
 add some normally-distributed fuzz to the column means within the sample. We'll choose the amount of fuzz so that the column standard deviations in our population match those in the sample.
 
 ```{r}
@@ -348,6 +455,13 @@ pop = sam[I,]
 
 fuzz = rnorm(m)*sigmahat(pop$w, pop$x)
 pop$y = muhat(pop$w, pop$x) + fuzz 
+```
+
+```{r}
+#| echo: true
+pop.summaries = pop |> 
+  group_by(w,x) |> 
+  summarize(mu = mean(y), sigma = sd(y), Nwx = n())
 ```
 
 And now that we have a population, we can sample with replacement from it.
@@ -372,33 +486,110 @@ plotX = function(w,x, shift=.15) { x + shift*(2*w-1) }
 plot.summaries = stat_summary(aes(x=plotX(w,x), y=y), 
   fun.data=mean_sd, geom='pointrange', alpha=.5)
 
-ggplot(sam) + geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
-  position=position_jitter(width=.15, seed=1), alpha=.2) + 
-  scale_x() + scale_y() + plot.summaries + guides(color=FALSE)
-ggplot(fake.sam) + geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
-  position=position_jitter(width=.15, seed=1), alpha=.2) + 
-  scale_x() + scale_y() + plot.summaries + guides(color=FALSE)
-ggplot(pop) + geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
-  position=position_jitter(width=.15, seed=1), alpha=.2, size=.2) + 
-  scale_x() + scale_y() + plot.summaries + guides(color=FALSE)
+scatterplot = function(sam, dot.size=1, dot.alpha=.2, shift=.15) {
+  ggplot(sam) + 
+    geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
+      position=position_jitter(width=shift, seed=1), alpha=dot.alpha, size=dot.size) + 
+      plot.summaries + scaled.interleaved.bars + purple.bars + 
+      guides(color='none', fill='none')
+}
+
+scatterplot(sam)
+scatterplot(fake.sam)
+scatterplot(pop, dot.size=.2, dot.alpha=.05)
 ```
 
+## Calculating Sampling Distributions
 
-I'll need a couple hours to write up the rest of the assignment in detail. 
-But if you want to get started, here are vague instructions for the next few exercises.
+Now we're going to do something a lot like what we did in the 'we have a population' questions we looked at in the Week 1 and Week 3 Homeworks, where we were working with our NBA data. In particular, [Exercise 2](https://qtm285-1.github.io/assets/homework/week1-homework.html#exr-sampling-distribution) and [Exercise 4](https://qtm285-1.github.io/assets/homework/week1-homework.html#exr-calculate-coverage) from Week 1 and [Exercise 11](https://qtm285-1.github.io/assets/homework/week3-homework.html#exr-interval-comparison) from Week 3. All that's really changed is the way we calculate our estimator $\hat\theta$ and our estimation target $\theta$. If we're talking about estimating the raw difference in means, $\theta=\Delta_\text{raw}$ and $\hat\theta=\hat\Delta_\text{raw}$; if we're talking about estimating the average-over-green-dots adjusted difference, $\theta=\Delta_1$ and $\hat\theta=\hat\Delta_1$; etc.
+
+Let's take a look at the sampling distributions of our estimators $\hat\Delta_\text{raw}$ and $\hat\Delta_1$ when we draw samples of size $n=`r n`$ with replacement from the fake population. For context, we'll draw in our estimation targets $\Delta_\text{raw}$ and $\Delta_1$ as green vertical lines. This code will calculate those targets.
+
+```{r}
+#| echo: true
+w = pop$w
+x = pop$x
+y = pop$y
+mu = summary.lookup('mu', pop.summaries)
+target = data.frame(Delta.raw = mean(y[w==1]) - mean(y[w==0]), 
+                    Delta.1 = mean(mu(1,x[w==1]) - mu(0,x[w==1])))
+```
+
+This code will calculate our the sampling distributions of our estimators.
+```{r}
+#| echo: true
+#| cache: true
+library(purrr)
+sampling.distribution = 1:10000 |> map(function(.) { #<1>
+  J = sample(1:m, n, replace=TRUE)  #<2>
+  fake.sam = pop[J,]                 #<2>
+  W = fake.sam$w                     #<2>
+  X = fake.sam$x                     #<2>
+  Y = fake.sam$y                     #<2>
+
+  summaries = fake.sam |> group_by(w,x) |> summarize(muhat = mean(y)) #<3>
+  muhat = summary.lookup('muhat', summaries)                          #<3>
+
+  data.frame(Deltahat.raw = mean(Y[W==1]) - mean(Y[W==0]),  #<4>
+             Deltahat.1   = mean(muhat(1,X[W==1]) - muhat(0,X[W==1]))) #<4>
+}) |> bind_rows() #<5>
+```
+1. Do what follows 10,000 times. 
+2. Draw a sample of size $n=`r n`$ with replacement from the fake population.
+3. Calculate the column mean function $\hat\mu$.
+4. Use it to calculate our estimates $\hat\Delta_\text{raw}$ and $\hat\Delta_1$.
+5. This is how we get a data frame with 10,000 rows and two columns, 'Deltahat.raw' and 'Deltahat.1'. What `map` gives us is a list of 10,000 data frames with one row each (and the right two columns). `bind_rows` will combine them into one data frame.
+
+Here are those sampling distributions plotted.
+```{r}
+#| echo: true
+#| layout-ncol: 2
+#| fig-width: 5.5
+
+plot.sampling.distribution = function(estimates, target) { 
+  w=width(estimates)
+  ggplot() + 
+     geom_vline(xintercept = target, color='green', linewidth=2, alpha=.5) +
+     geom_histogram(aes(x=estimates, y=after_stat(density)), bins=50, alpha=.2) +
+     width_annotations(estimates) + 
+     scales 
+}
+
+plot.sampling.distribution(sampling.distribution$Deltahat.raw, target$Delta.raw)
+plot.sampling.distribution(sampling.distribution$Deltahat.1,   target$Delta.1)
+```
+
+Now it's your turn to do this for $\hat\Delta_0$ and $\hat\Delta_\text{all}$.
 
 ::: {#exr-fake-data .callout-exercise}
 Plot the sampling distributions of your estimators $\hat\Delta_0$ and $\hat\Delta_\text{all}$ 
 when you draw samples of size $n=`r n`$ with replacement from the fake population. Annotate
-your plots with vertical lines indicating the sampling distribution's mean and middle 95% 
-as above. And add a new annotation: a green vertical line indicating your estimation target. 
+your plots with vertical lines indicating the sampling distribution's mean and middle 95%. 
+And add a green vertical line indicating your estimation targets, $\Delta_0$ and $\Delta_\text{all}$, in each plot.
 :::
+
+Here's a follow-up. You're going to calculate the coverage of the confidence intervals you used in the previous section. This one I'm leaving to you. I'm not going to do for $\hat\Delta_{\text{all}}$ and $\hat\Delta_1$ myself. 
 
 ::: {#exr-fake-data-coverage .callout-exercise}
-Calculate the coverage of the 95% confidence intervals you used in the previous section---the ones based on the bootstrap and the normal approximation---when you draw samples of size $n=`r n`$ with replacement from the fake population.
+For $\hat\Delta_0$ and $\hat\Delta_\text{all}$, calculate the coverage of the 95% confidence intervals you used in the previous section---the ones based on the bootstrap and the normal approximation---when you draw samples of size $n=`r n`$ with replacement from the fake population.
 :::
 
-::: {#exr-fake-data-bias .callout-exercise}
+::: {.callout-tip}
+### Tips.
+This is exactly like the the coverage calculation you did in [Exercise 11 from the Week 3 Homework](https://davidahirshberg.bitbucket.io/static/week3-homework.html/#exr-interval-comparison). All that's changed is the way your estimator $\hat\theta$ (i.e. $\hat\Delta_0$ and $\hat\Delta_\text{all}$) and estimation target $\theta$ ($\Delta_0$ and $\Delta_\text{all}$) are calculated. 
+
+Make sure that when you bootstrap, you use a version of $\hat\mu$ that's based on your bootstrap sample $(W_1^\star,X_1^\star,Y_1^\star) \ldots (W_n^\star,X_n^\star,Y_n^\star)$. 
+$$
+\hat\mu^\star(w,x) = \frac{1}{N_{wx}^\star} \sum_{i:W_i^\star=w,X_i^\star=x} Y_i^\star \qfor N_{wx}^\star = \sum_{i:W_i^\star=w,X_i^\star=x} 1  
+$$
+
+And you may want want to use fewer than 10,000 samples from the fake population and fewer than 10,000 bootstrap samples from each sample, as this'd result in your calculating you estimators 100 million ($10,000^2$) times. In my solution to Week 3's Exercise 11, I used 1000 of each for a total of a million. You can do that here too, but it'd take a little longer because our estimators are a bit more complicated. Maybe a few hours. Start with 100 of each to see that your code is working first and get a sense of how long it takes to run. When you increase both 100s to 1000s, it'll take about $10^2=100$ times longer. If that's too long for you, go with 200 or 400 of each.
+:::
+
+Now it's time to do something a little different. For the first time in the semester, you'd going to estimate the 
+population column means $\mu(w,x)$ using least squares.^[If you want, you could argue it's not really the first time. You've been estimating $\mu(w,x)$ by least squares all along, since column means are the least squares estimator in the 'all functions' model. But this is the first time you're going to do it with a *different* model.]
+
+::: {#exr-fake-data-lsq .callout-exercise}
 Repeat the last two exercises with one change: estimate the column means $\mu(w,x)$ in the population via least squares with the 'not-necessarily-parallel lines model'. Like this.
 
 $$
@@ -414,6 +605,53 @@ fitted.model = lm(y ~ w*x, data=sam)
 muhat = function(w,x) { predict(fitted.model, newdata=data.frame(w=w,x=x)) }
 ```
 
+:::
 
-::: 
+::: callout-tip 
+### Tip. 
+As in @exr-fake-data-coverage, make sure that when you bootstrap you use a version of $\hat\mu$ fit to the bootstrap sample.
+$$
+\hat\mu^\star(w,x) = \argmin_{m \in \model} \frac{1}{n} \sum_{i=1}^n \qty{ Y_i^\star - m(W_i^\star,X_i^\star) }^2 
+$$
+:::
 
+::: callout-tip 
+### Tip.
+If you want, you can check that you haven't introduced a problem when you modify your code from the previous exercises to 
+do least squares pretty easily. All you have to do is try your new code out using the 'all functions' model instead of the 'not-necessarily-parallel lines' model. Because the least squares estimator of $\mu(w,x)$ in this model is just a column mean,
+this should give you the same thing you got in the previous exercises. To do that, you just need to change the *formula* you use when you call `lm`. To use the all functions model, you can say `y ~ w*factor(x)` instead of `y ~ w*x`.
+:::
+
+
+Here's an extra-credit follow-up that looks back to our last exercise from Practice Midterm 1.
+
+::: {#exr-practice-midterm-1 .callout-exercise}
+*Extra Credit*. 
+Suppose you want to report an interval estimate centered on the same point estimator you used @exr-fake-data-lsq. The one involving the not-necessarily-parallel lines model. But you want it to have 95% coverage. 
+That means you'll have to use a wider interval.^[You'll have to use a wider interval unless you got 95% coverage in @exr-fake-data-coverage. You shouldn't have. If you did, go back and try to figure out what went wrong.] 
+
+Here's an idea for how to do this using the bootstrap. Choose a width $w$ so that for 95% of 
+draws $\hat\theta^\star$ from your estimator's bootstrap sampling distribution, the interval $\hat\theta^\star \pm w/2$
+contains a 'sample version' $\theta^\star$ of your estimation target. Do this and report three things.
+
+1. A description of $\theta^\star$ in mathematical notation.
+2. The coverage probability of this interval estimator. 
+3. The average width of this interval estimator and the bootstrap-calibrated interval estimator from @exr-fake-data-coverage.
+
+I've been a little vague about what $\theta^\star$ is. That's intentional. Try to figure it out. 
+This approach to calibration does work, so you'll know you've got it right when you get close to 95% coverage.^[To avoid any confusion: Yes, I did just gave you one of the three things I asked you to report.]
+
+:::
+
+::: {.callout-tip}
+You can use the function `width` to calculate the width you're looking for.
+If you've got bootstrap samples $\hat\theta^\star_1, \hat\theta^\star_2, \ldots$ in an `R` vector called `thetahat.star`
+and your sample version of the estimation target in a variable called `theta.star`, this should do it.
+
+```{r}
+#| echo: true
+#| eval: false
+w=width(thetahat.star, center=theta.star)
+```
+
+:::
