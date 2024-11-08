@@ -81,6 +81,7 @@
 - Do a day on non-uniform sampling after Lecture 6.
   - Revisit bias + variance calculations. 
   - Talk about improved / optimal allocation.
+- Have a discussion (a Friday?) on the need for priors when we might have empty columns. That is, pull out the stuff from the note 'A quirk' in the week 9 hw and do it before, as a class discussion. Whether to do it before or after midterm 1, who knows? To get there in the simplest form possible, maybe do it before, with a small sample version of the difference in means thing. 
 - All this means Midterm 1 will be pushed back a bit. A least a week and probably two. 
 
 ## Lecture 8

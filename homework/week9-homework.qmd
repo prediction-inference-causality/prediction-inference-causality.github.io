@@ -135,6 +135,12 @@ sam = data.frame(
   y = ca$income)
 ```
 
+We'll use some tidyverse stuff in the calculations below.
+```{r}
+#| echo: true
+library(tidyverse)
+```
+
 ## Calculating Point Estimates
 
 As a warm-up, we'll repeat [Exercise 5](https://qtm285-1.github.io/assets/homework/week7-homework.html#exr-calc-ca-estimator)
@@ -167,10 +173,14 @@ summaries = sam |>
     group_by(w,x) |> 
     summarize(muhat = mean(y), sigmahat = sd(y), Nwx = n(), .groups='drop')
   
-summary.lookup = function(column.name, summaries) { #<1>
+summary.lookup = function(column.name, summaries, default=NA) { #<1>
   function(w,x) { 
-    inner_join(data.frame(w=w,x=x), summaries, by=c('w','x')) |> 
-      pull(column.name) 
+    out = left_join(data.frame(w=w,x=x),                              #<2>
+                    summaries[, c('w','x',column.name)],              #<2>
+                    by=c('w','x')) |>                                 #<2>
+      pull(column.name)                                               #<2>
+    out[is.na(out)] = default                                         #<3>
+    out
   }
 }
 
@@ -185,7 +195,8 @@ x = unique(X)
 n = length(Y)
 ```
 1. If you're unfamiliar with code that looks like this, it helps to think about the types of `summary.lookup`'s input and output. The input is the easy part. Its arguments as a column name and a data frame---one that should have columns named 'w', 'x', and column.name. Its output is a function. It's a function that takes as input two vectors of the same length---a vector of values for 'w' and a vector of values for 'x'---and returns the corresponding values from the column.name column of the data frame. This basic pattern---writing functions that return other functions---is a big part of what makes [functional programming](https://en.wikipedia.org/wiki/Functional_programming) effective in the right hands.
-
+2. What we're doing here is taking each row in the table `data.frame(w=w,x=x)` and adding to it a column `column.name` with values taken from the data frame `summaries` where the 'w' and 'x' match. If there is no row in `summaries` corresponding to some pair 'w' and 'x' we've asked for---i.e. some row in `data.frame(w=w,x=x)`---this puts `NA` in that column. 
+3. If `default` is passed, then we return `default` instead of `NA` for any row in `data.frame(w=w,x=x)` that doesn't have a corresponding row in `summaries`.
 
 This is everything I need to do calculations that look like the formulas above.
 ```{r}
@@ -203,7 +214,7 @@ $N_{w,x}$ implemented above.
 Nw   = function(w) { sum(Nwx(w, x)) }
 Px.1 = function(x) { Nwx(1,x)/Nw(1) } 
 Px.0 = function(x) { Nwx(0,x)/Nw(0) } 
-Px   = function(x) { (Nw(0,x)+Nw(1,x)) / n }
+Px   = function(x) { (Nwx(0,x)+Nwx(1,x)) / n }
 ```
 
 Here's how I calculate $\hat\Delta_{\text{raw}}$ and $\hat\Delta_1$ using the 'histogram form' formulas.
@@ -293,8 +304,8 @@ bootstrap.estimates = 1:10000 |> map(function(.) { #<1>
 
   summaries.star = sam[I.star,] |>                                                  #<3>
                 group_by(w,x) |>                                                    #<3>   
-                summarize(muhat = mean(y), .groups='drop')                                          #<3>
-  muhat.star = summary.lookup('muhat', summaries.star)                              #<3>
+                summarize(muhat = mean(y), .groups='drop')                          #<3>
+  muhat.star = summary.lookup('muhat', summaries.star, default=mean(Ystar))         #<3>
   
   data.frame(                                                                           #<4>
     Deltahat.raw = mean(Ystar[Wstar==1]) - mean(Ystar[Wstar==0]),                       #<4>
@@ -305,13 +316,35 @@ bootstrap.estimates = 1:10000 |> map(function(.) { #<1>
 ```
 1. Do what follows 10,000 times. 
 2. Sample with replacement from the sample to get a bootstrap sample.
-3. Summarize the bootstrap sample to get a bootstrap-sample version of the function $\hat\mu(w,x)$.
+3. Summarize the bootstrap sample to get a bootstrap-sample version of the function $\hat\mu(w,x)$. See @nte-empty-columns below for what passing `default` is doing in the call to `summary.lookup`.
 4. Calculate the estimation target using the bootstrap-sample stuff. All you'll need to do is add a few lines here.
 5. This is how we get a data frame with 10,000 rows and two columns, 'Deltahat.raw' and 'Deltahat.1'. What map gives us is a list of 10,000 data frames with one row each (and the right two columns). `bind_rows` will combine them into one data frame.
 
-Here are histograms showing, for $\hat\Delta_\text{raw}$ and $\hat\Delta_1$, its bootstrap sampling distribution. 
-I've used the function `width` to calculate the width of the middle 95% of each distribution and draw that, as
-well as the distribution's mean, in as vertical lines. And I've added my point estimate as a blue dot, too.
+::: {.callout-tip}
+### Choosing the Number of Bootstrap Samples
+This takes about a minute to run on my laptop (a M3 MacBook Air), but I've heard from students that it takes longer on their computers. If you want to speed it up, you can change the number 10,000 to something smaller. You'll get rough-looking histograms if you use 400 instead of 10,000, but it shouldn't have much of an impact on width calculations.
+:::
+
+::: {#nte-empty-columns .callout-note collapse="true"}
+### A Quirk
+
+Sometimes, as a matter of chance, some columns in our bootstrap sample will be empty. That is, there'll be no observation 
+$(W_i^\star, X_i^\star, Y_i^\star)$ where $(W_i^\star, X_i^\star)$ matches a particular pair $(w,x)$ that occurs in the population.
+The result is that there's no obvious way to define the column mean $\hat\mu^\star(w,x)$ for that pair. By passing `default=mean(Ystar)` we're saying that if we have an empty column, we'll define $\hat\mu(w,x)$ for that column to be the mean outcome in the bootstrap sample, i.e., $\frac{1}{n}\sum_{i=1}^n Y_i^\star$. This is a pretty arbitrary decision, but if getting an empty column is rare (e.g. 15 times in 10,000 bootstrap samples), it doesn't have all that much impact on the results. 
+
+The way **R** code tends to be written helps us ignore this issue. We'll get an `NA` most ways of asking for the mean of an empty set
+and ggplot will just ignore rows with `NA`s. when plotting. Maybe we'll get a warning, but you get in the habit of ignoring those. I didn't notice it happening here until it was brought to my attention in this week's Friday lab session/office hours.
+
+This isn't really a bootstrap problem. It's also possible that there'll be no observation $(W_i, X_i, Y_i)$ in our sample with $(W_i, X_i)$ equal to a particular pair $(w,x)$ that occurs in the population. When that happens, there's no obvious way to define the column mean  $\hat\mu(w,x)$ for that pair. If our estimator $\hat\theta$ is specified in terms of $\hat\mu(w,x)$, then it means our estimator is undefined when we get an empty column in our sample. In theoretical terms---because an estimator is a function of the sample that gives us a (not undefined) number---that means the thing we've specified is not an estimator. To make it an estimator, we can specify---for each pair $(w,x)$---what $\hat\mu(w,x)$ should be if the column $(w,x)$ happens to be empty in our sample. Here what I've
+done is to make $\hat\mu(w,x)=\bar Y$ when the column $(w,x)$ is empty in our sample.^[If you've come across the idea of *regularization* before, you can think of this choice of $\bar Y$ as a form of regularization toward a common mean. Elaborate versions of this tend to be called 'multilevel models' or 'hierarchical models'.  This is an important topic, but it's not one we'll have time to cover in this class.]  Once we have an actual estimator, the bootstrap issue is resolved; my decision that $\hat\mu(w,x) = \bar Y$ for empty columns in the sample tells us that $\hat\mu^\star(w,x)=\bar Y^\star$ in the bootstrap sample. 
+
+We tend to encounter this 'not-really-an-estimator problem' when we're bootstrapping or using simulated data to calculate coverage.
+The reason for this is that, if we get a point estimate of 'undefined', there's no point in calibrating an interval estimate around it and calculating its coverage. We choose a different point estimator. This reflects a meaningful difference between the way we talk about estimators formally (in terms of what would happen in infinitely many imaginary studies) and informally (as a way of getting an estimate in the one study we've actually run). 
+
+Given that we have to make an arbitrary choice when we get an empty column, you might ask how the sample column mean $\hat\mu(w,x)$ can be an unbiased estimator of the population mean $\mu(w,x)$. The answer is that it isn't and it can't be. When I said it was earlier, I lied. Every step of our proof but the last one is valid---$\hat\mu(w,x)$ is unbiased conditional on when that column isn't empty---but the last step, in which we average over $(W_1,X_1)\ldots (W_n,X_n)$ to get the unconditional average---doesn't make sense. Unless you've defined $\hat\mu(w,x)$ when the column is empty, you don't really have a well-defined random variable to average. And unless you actually know $\mu(w,x)$, there's no way of defining an estimator that's outright unbiased---whatever you choose for empty columns, you're in effect making something up. 
+:::
+
+Here are histograms showing, for $\hat\Delta_\text{raw}$ and $\hat\Delta_1$, its bootstrap sampling distribution. I've used the function `width` to calculate the width of the middle 95% of each distribution and draw that, as well as the distribution's mean, in as vertical lines. And I've added my point estimate as a blue dot, too.
 
 ::: {.callout-tip collapse="true"}
 ### Code You'll Want 
@@ -397,7 +430,7 @@ Let's check that these are pretty similar to what we get using normal approximat
 We'll use our variance formula from our lecture on [Inference for Complicated Summaries](`r lecture(8)`#a-variance-decomposition-for-our-estimator). And, as in lecture, we'll ignore the term that reflects the randomness of our coefficients. The one written in [red]{.fg style="color:red"} in that lecture.
 
 ```{r}
-#| echo: false
+#| echo: true
 
 grid = expand_grid(w=c(0,1), x=x) 
 ww = grid$w
@@ -435,6 +468,12 @@ As discussed in our lecture on [Inference for Complicated Summaries](`r lecture(
 We've ignored a (non-negative) term that reflects the randomness of our coefficients. Based on the plots above, does it look like ignoring this term is a problem? That is, are we significantly underestimating the variance of our estimators when we use this formula? 
 
 Answer Yes or No. Then briefly explain how you know. A sentence or two should do.
+:::
+
+::: {.callout-note}
+### Note.
+
+I haven't asked you to calculate normal-approximation-based confidence intervals for $\hat\Delta_0$ and $\hat\Delta_\text{all}$ here, but you will need to do that below in @exr-fake-data-coverage. If you want to check that you have that working before jumping into the coverage exercise, go ahead and calculate those intervals here and compare them to the bootstrap-calibrated intervals you calculated above.
 :::
 
 # Checking Your Estimates using Fake Data {#sec-checking-with-fake-data}
@@ -521,7 +560,6 @@ This code will calculate our the sampling distributions of our estimators.
 ```{r}
 #| echo: true
 #| cache: true
-library(purrr)
 sampling.distribution = 1:10000 |> map(function(.) { #<1>
   J = sample(1:m, n, replace=TRUE)  #<2>
   fake.sam = pop[J,]                 #<2>
@@ -530,7 +568,7 @@ sampling.distribution = 1:10000 |> map(function(.) { #<1>
   Y = fake.sam$y                     #<2>
 
   summaries = fake.sam |> group_by(w,x) |> summarize(muhat = mean(y), .groups='drop') #<3>
-  muhat = summary.lookup('muhat', summaries)                          #<3>
+  muhat = summary.lookup('muhat', summaries, default=mean(Y))                          #<3>
 
   data.frame(Deltahat.raw = mean(Y[W==1]) - mean(Y[W==0]),  #<4>
              Deltahat.1   = mean(muhat(1,X[W==1]) - muhat(0,X[W==1]))) #<4>
@@ -570,15 +608,15 @@ your plots with vertical lines indicating the sampling distribution's mean and m
 And add a green vertical line indicating your estimation targets, $\Delta_0$ and $\Delta_\text{all}$, in each plot.
 :::
 
-Here's a follow-up. You're going to calculate the coverage of the confidence intervals you used in the previous section. This one I'm leaving to you. I'm not going to do for $\hat\Delta_{\text{all}}$ and $\hat\Delta_1$ myself. 
+Here's a follow-up. You're going to calculate the coverage of the confidence intervals discussed in the previous section. This one I'm leaving to you. I'm not going to do for $\hat\Delta_{\text{all}}$ and $\hat\Delta_1$ myself. 
 
 ::: {#exr-fake-data-coverage .callout-exercise}
-For $\hat\Delta_0$ and $\hat\Delta_\text{all}$, calculate the coverage of the 95% confidence intervals you used in the previous section---the ones based on the bootstrap and the normal approximation---when you draw samples of size $n=`r n`$ with replacement from the fake population.
+For $\hat\Delta_0$ and $\hat\Delta_\text{all}$, calculate the coverage of the 95% confidence intervals discussed in the previous section---the ones based on the bootstrap and the normal approximation---when you draw samples of size $n=`r n`$ with replacement from the fake population.
 :::
 
 ::: {.callout-tip}
 ### Tips.
-This is exactly like the the coverage calculation you did in [Exercise 11 from the Week 3 Homework](https://davidahirshberg.bitbucket.io/static/week3-homework.html/#exr-interval-comparison). All that's changed is the way your estimator $\hat\theta$ (i.e. $\hat\Delta_0$ and $\hat\Delta_\text{all}$) and estimation target $\theta$ ($\Delta_0$ and $\Delta_\text{all}$) are calculated. 
+This is exactly like the the coverage calculation you did in [Exercise 11 from the Week 3 Homework](https://qtm285-1.github.io/assets/homework/week3-homework.html/#exr-interval-comparison). All that's changed is the way your estimator $\hat\theta$ (i.e. $\hat\Delta_0$ and $\hat\Delta_\text{all}$) and estimation target $\theta$ ($\Delta_0$ and $\Delta_\text{all}$) are calculated. 
 
 Make sure that when you bootstrap, you use a version of $\hat\mu$ that's based on your bootstrap sample $(W_1^\star,X_1^\star,Y_1^\star) \ldots (W_n^\star,X_n^\star,Y_n^\star)$. 
 $$
