@@ -95,6 +95,10 @@ Match each estimator to the plot of its bootstrap sampling distribution.
 That is, say something like `1:A`, `2:B`, `3:C`. But not exactly that.
 :::
 
+::: {.callout-solution}
+1:A, 2:C, 3:B.
+:::
+
 ::: {#exr-mean .callout-exercise}
 For each of these estimators, say whether it is *unbiased* and whether it is *consistent*.
 
@@ -102,10 +106,22 @@ For each of these estimators, say whether it is *unbiased* and whether it is *co
 Each part of this is a Yes or No question. There are estimators that are unbiased or consistent for some populations and not for others, so if I were asking about a population I'd told you nothing concrete about, the answer might be *maybe*. But I'm asking about the specific population plotted above and the plot does give you enough information to determine the answer. 
 :::
 
+::: {.callout-solution}
+1. unbiased and consistent.^[We got lucky here. This is a version of our prior-observations-estimator where $n_\text{prior}=n$ and $\theta_\text{prior}=0$ was exactly equal to $\theta$. If $\theta$ weren't zero, we'd be neither unbiased nor consistent.] 
+2. neither unbiased nor consistent.^[This is another prior observations estimator with $n_\text{prior}=n$ and $\theta_\text{prior}=2$. We're not lucky with our prior observations here.]
+3. unbiased but not consistent. 
+:::
+
 ::: {#exr-mean-vis .callout-exercise}
 For any estimator you described as *biased* or *inconsistent*, 
 describe what you see in the plots above that suggests this is
 the case.
+:::
+
+::: {.callout-solution}
+2. The sampling distribution is centered in the same place at every sample size, and 
+gets narrower and narrower, but the place it's centered isn't the sample mean.
+3. The sampling distribution doesn't get narrower.
 :::
 
 ::: {#exr-variance .callout-exercise}
@@ -116,6 +132,19 @@ For each of the three estimators, do the following.
 3. Check that your answer looks about right using @fig-histogram-theta-star and *describe how you checked*. 
 :::
 
+::: {.callout-solution}
+From the plot, we can see that 
+\begin{aligned}
+\Var(\barY / 2) &= \qty(\frac{1}{2})^2 \Var(\barY) = \frac{1}{4} \frac{\sigma^2}{n} \\
+\Var(1 + \barY / 2) &= \Var(\barY / 2) = \frac{1}{4} \frac{\sigma^2}{n} \\
+\Var(Y_2) &= \sigma^2 
+\end{aligned}
+It follows that the standard deviations are $\sigma/2\sqrt{n} = 3/(2\times 100) = 0.015$ for the first two and $\sigma = 3$ for the third, since we can see from dashed lines inthe population plot that $\sigma=3$ and from the caption in the sample plot that $n=10,000=100^2$.
+
+The first two being averages and therefore approximately normal, we can check out calculation by  going out 2 standard deviations from the mean in the bootstrap sampling distribution and seeing that it gives us about 95% of the distribution. For these two estimators (i.e. estimators A and C), this is about $\pm 0.03$ and it looks good. For Estimator 3/B, since our estimator $Y_2$
+is sampled uniformly-at-random from the population, its sampling distribution looks exactly like the distribution of the population, which is where we got the number $\sigma=3$.
+
+:::
 
 # Complex Summaries and Covariate Shift 
 
@@ -169,6 +198,7 @@ scatter.by.group = function(data, dot=sam.dot, width=sd,
 }
 
 money = function(x) { sprintf('%1.0fk', round(x/1000, digits=0)) }  
+money1 = function(x) { sprintf('%1.1fk', round(x/1000, digits=1)) }  
 ```
 
 
@@ -215,14 +245,25 @@ Histograms of `education` colored by `sex` in two layouts. On the left, they're 
 ca$W = as.numeric(ca$sex == 'female')
 ca$X = ca$education
 summaries = ca |> group_by(W,X) |> 
-  summarize(mu.hat=money(mean(income)), N.wx=n())
+  summarize(mu.hat=money(mean(income)), N.wx=n(), .groups='drop')
+```
+
+```{r}
+nsummaries = ca |> group_by(W,X) |> 
+  summarize(mu.hat=mean(income), N.wx=n(), .groups='drop')
+Nwx = Vectorize(function(w,x) { nsummaries[nsummaries$W==w & nsummaries$X==x,]$N.wx })
+Nw = Vectorize(function(w) { nsummaries[nsummaries$W==w,]$N.wx |> sum() }) 
+Pw = function(w) { Nw(w) / sum(Nw(c(0,1))) }
+Pwx = function(w,x) { Nwx(w,x) / Nw(w) }
 ```
 
 ```{r}
 library(gt)
-summaries |> ungroup() |> gt()
+summaries |> gt()
 ```
+
 :::
+
 ::: {.column width="65%"}
 
 We'll consider the following four estimators of the difference in income between the male and female CA residents in our sample.  
@@ -240,11 +281,79 @@ $$
 Using the data in the table to the left, calculate each of these four estimators.
 :::
 
+::: {.callout-solution}
+To use the data in the table, we'll need these written in 'histogram form.'
+$$
+\color{gray}
+\begin{aligned}
+\hat \Delta_{\text{raw}} 
+&= \sum_x P_{x\mid 1} \hat\mu(1,x) - \sum_x P_{x \mid 0} \hat\mu(0,x) \\
+\hat\Delta_0  
+&= \sum_x P_{x \mid 0} \qty{\hat\mu(1,x) - \hat \mu(0, x)} \\ 
+\hat \Delta_1 
+&= \sum_x P_{x \mid 1} \qty{\hat\mu(1,x) - \hat \mu(0, x)} \\ 
+\hat \Delta_{\text{all}} 
+&= \sum_x P_{x} \qty{\hat\mu(1,x) - \hat \mu(0, x)} 
+\end{aligned}
+$$
+for
+$$
+\begin{aligned}
+P_{x \mid 1} &= \frac{N_{1x}}{N_1} = \frac{N_{1x}}{\sum_x N_{1x}} \\
+P_{x \mid 0} &= \frac{N_{0x}}{N_0} = \frac{N_{0x}}{\sum_x N_{0x}} \\
+P_{x} &= \frac{N_{x}}{n} 
+      = \frac{N_{0x} + N_{1x}}{\sum_{w,x} N_{wx}} \\ 
+      &= \frac{N_{0x}}{\sum_{x} N_{0x}} \times \frac{\sum_{x} N_{0x}}{\sum_{w,x} N_{wx}}
+       + \frac{N_{1x}}{\sum_{x} N_{1x}} \times \frac{\sum_{x} N_{1x}}{\sum_{w,x} N_{wx}} \\
+      &= P_{x \mid 0} \times P_0 + P_{x \mid 1} P_1 \qfor P_w = \sum_{x} \frac{N_{wx}}{\sum_{wx}N_{w,x}}
+\end{aligned}
+$$
+Let's make a table of these quantities.
+
+$x$ | $P_{x \mid 0}$ | $P_{x \mid 1}$ | $P_x$ 
+--- | --- | --- | --- 
+12  | $\frac{`r Nwx(0,12)`}{`r Nw(0)`} \approx `r round(Pwx(0,12), digits=2)`$ | $\frac{`r Nwx(1,12)`}{`r Nw(1)`} \approx `r round(Pwx(1,12), digits=2)`$ | $`r round(Pwx(0,12), digits=2)` \times `r round(Pw(0), digits=2)` + `r round(Pwx(1,12), digits=2)` \times `r round(Pw(1), digits=2)` \approx `r round(Pwx(0,12) * Pw(0) + Pwx(1,12) * Pw(1), digits=2)`$
+13 | $\frac{`r Nwx(0,13)`}{`r Nw(0)`} \approx `r round(Pwx(0,13), digits=2)`$ | $\frac{`r Nwx(1,13)`}{`r Nw(1)`} \approx `r round(Pwx(1,13), digits=2)`$ | $`r round(Pwx(0,13), digits=2)` \times `r round(Pw(0), digits=2)` + `r round(Pwx(1,13), digits=2)` \times `r round(Pw(1), digits=2)` \approx `r round(Pwx(0,13) * Pw(0) + Pwx(1,13) * Pw(1), digits=2)`$
+14 | $\frac{`r Nwx(0,14)`}{`r Nw(0)`} \approx `r round(Pwx(0,14), digits=2)`$ | $\frac{`r Nwx(1,14)`}{`r Nw(1)`} \approx `r round(Pwx(1,14), digits=2)`$ | $`r round(Pwx(0,14), digits=2)` \times `r round(Pw(0), digits=2)` + `r round(Pwx(1,14), digits=2)` \times `r round(Pw(1), digits=2)` \approx `r round(Pwx(0,14) * Pw(0) + Pwx(1,14) * Pw(1), digits=2)`$
+16 | $\frac{`r Nwx(0,16)`}{`r Nw(0)`} \approx `r round(Pwx(0,16), digits=2)`$ | $\frac{`r Nwx(1,16)`}{`r Nw(1)`} \approx `r round(Pwx(1,16), digits=2)`$ | $`r round(Pwx(0,16), digits=2)` \times `r round(Pw(0), digits=2)` + `r round(Pwx(1,16), digits=2)` \times `r round(Pw(1), digits=2)` \approx `r round(Pwx(0,16) * Pw(0) + Pwx(1,16) * Pw(1), digits=2)`$
+18 | $\frac{`r Nwx(0,18)`}{`r Nw(0)`} \approx `r round(Pwx(0,18), digits=2)`$ | $\frac{`r Nwx(1,18)`}{`r Nw(1)`} \approx `r round(Pwx(1,18), digits=2)`$ | $`r round(Pwx(0,18), digits=2)` \times `r round(Pw(0), digits=2)` + `r round(Pwx(1,18), digits=2)` \times `r round(Pw(1), digits=2)` \approx `r round(Pwx(0,18) * Pw(0) + Pwx(1,18) * Pw(1), digits=2)`$
+20 | $\frac{`r Nwx(0,20)`}{`r Nw(0)`} \approx `r round(Pwx(0,20), digits=2)`$ | $\frac{`r Nwx(1,20)`}{`r Nw(1)`} \approx `r round(Pwx(1,20), digits=2)`$ | $`r round(Pwx(0,20), digits=2)` \times `r round(Pw(0), digits=2)` + `r round(Pwx(1,20), digits=2)` \times `r round(Pw(1), digits=2)` \approx `r round(Pwx(0,20) * Pw(0) + Pwx(1,20) * Pw(1), digits=2)`$
+
+Substituting these and values from our table of $\hat\mu(w,x)$ into our 'histogram form' formulas, we get these numbers.
+
+```{r}
+years = nsummaries$X 
+muhat = Vectorize(function(w,x) { nsummaries[nsummaries$W==w & nsummaries$X==x,]$mu.hat })
+Px = function(x) { Pwx(0,x) * Pw(0) + Pwx(1,x) * Pw(1) }
+```
+$$
+\begin{aligned}
+\hat\Delta_{\text{raw}} &\approx `r money1(sum(Pwx(1,years)*muhat(1,years)) - sum(Pwx(0,years)*muhat(0,years)))` \\
+\hat \Delta_0 &\approx `r money1(sum(Pwx(0,years) * (muhat(1,years) - muhat(0,years))))`\\
+\hat \Delta_1 &\approx `r money1(sum(Pwx(1,years) * (muhat(1,years) - muhat(0,years))))`\\
+\hat \Delta_{\text{all}} &\approx `r money1(sum(Px(years) * (muhat(1,years) - muhat(0,years))))`
+\end{aligned}
+$$
+
 :::
+:::
+
 ::::
 
 
 In Lecture 9, we decomposed the raw difference $\hat\Delta_{\text{raw}}$ as a sum of the adjusted difference $\hat\Delta_1$ and a *covariate shift term*.  And we talked about how to use plots like the ones above to understand what the covariate shift term would look like. In this next exercise, we'll get in some practice interpreting plots like these. We'll work with three samples. Each sample is shown in a tab below. 
+
+```{r}
+deltahat.raw = function(sam) { 
+  mean(sam$income[sam$group==1]) - mean(sam$income[sam$group == 0])
+} 
+deltahat.adjusted = function(sam) {
+  summaries = sam |> group_by(group, education) |> 
+    summarize(mu.hat=mean(income), N.wx=n(), .groups='drop')
+  muhat = Vectorize(function(w,x) { summaries[summaries$group==w & summaries$education==x,]$mu.hat })
+  mean(muhat(1, sam$education[sam$group==1]) - muhat(0, sam$education[sam$group==1]))
+} 
+```
 
 ::: {.panel-tabset}
 
@@ -254,6 +363,8 @@ In Lecture 9, we decomposed the raw difference $\hat\Delta_{\text{raw}}$ as a su
 groups = c('los angeles', 'san francisco', 'alameda')
 this.sam = ca |> filter(county %in% groups)
 this.sam$group = this.sam$county != groups[1]
+sfla.sam = this.sam
+
 scatter.by.group(this.sam, group.means.alpha=.2, line.alpha=.5) + 
   scaled.interleaved.bars + 
   scaled.purple.bars 
@@ -277,9 +388,10 @@ ggplot(this.sam) + bars + guides(color='none', fill='none')
 ```{r}
 #| fig-width: 10
 groups = c('san diego', 'orange')
-this.sam = ca |> filter(county %in% groups)
+this.sam = ca |> filter(county %in% groups & !is.na(employed))
 this.sam$group = this.sam$county != groups[1]
 this.sam$income = as.numeric(!this.sam$employed)
+sdoc.sam = this.sam 
 
 proportion.scale = 2
 scatter.by.group(this.sam, group.means.alpha=.2, line.alpha=.5, jitter.height=.2) + 
@@ -314,6 +426,7 @@ this.sam = read.csv('data/social-pressure-data.csv') |>
 
 set.seed(1)
 this.sam = this.sam[sample(1:nrow(this.sam), size=100000),]
+mi.sam = this.sam  
 
 pop.dot = list(size=.2,    alpha=.05)
 proportion.scale = 1
@@ -352,11 +465,66 @@ For each of the three samples, answer these Yes or No questions. No need to expl
 *Tip*. The second question is a bit hard. You should be able to use the plot to know the sign (+/-) of the adjusted difference and covariate shift term. If the signs are the same, you know the magnitude of the raw difference is larger. But if the signs are opposite, it's a bit more subtle. What happens depends on the relative magnitudes of the adjusted difference and covariate shift term. Usually, the magnitude of the covariate shift is less than twice the magnitude of the adjusted difference, which makes the raw difference smaller in magnitude than the adjusted one.  But if the magnitude of the covariate shift term is more than twice the magnitude of the adjusted difference, we have an extreme case of Simpson's paradox: the raw difference is larger in magnitude but opposite in sign to the adjusted difference. For the purpose of this assignment, don't worry about this happening. 
 :::
 
+::: {.callout-solution}
+### Solution. Income in LA vs SFBay
+
+1. Yes, $\hat\Delta_{\text{raw}}$ is larger than $\hat\Delta_1$. Explanation: Rightward covariate shift, increasing function $\hat\mu(0,x)$.
+2. Yes, it's larger in magnitude as well. Explanation: $\hat\Delta_1$ is positive because the typical within-group differences are positive. 
+
+:::
+
+::: {.callout-solution}
+### Solution.Unemployment in SD vs OC
+1. Yes, $\hat\Delta_{\text{raw}}$ is larger than $\hat\Delta_1$. Explanation: Leftward covariate shift, decreasing function $\hat\mu(0,x)$.
+2. No, it's smaller in magnitude. But visually, it's not that obvious. 
+
+Explanation: The within-group differences $\hat\mu(1,x) - \hat\mu(0,x)$ are negative, so $\hat\Delta_1$ is negative. The raw difference, being bigger in signed terms because of covariate shift, could be negative but smaller in magnitude or positive and either smaller or larger in magnitude. My guess was that there isn't enough covariate shift to make the raw difference positive. And looking at the numbers in the table in @nte-actual-numbers confirms this: the raw difference is `r round(deltahat.raw(sdoc.sam), 3)` and the adjusted one in `r round(deltahat.adjusted(sdoc.sam), 3)`.
+
+:::
+::: {.callout-solution}
+### Solution. Primary Turnout in MI
+
+1. Yes, $\hat\Delta_{\text{raw}}$ is larger than $\hat\Delta_1$. Explanation: Leftward covariate shift, decreasing function $\hat\mu(0,x)$.
+2. Yes, it's larger in magnitude as well. Explanation: $\hat\Delta_1$ is positive because the typical within-group differences are positive. 
+
+:::
+
+::: {#nte-actual-numbers .callout-note collapse="true"}
+### The Actual Numbers $\hat\Delta_{\text{raw}}$ and $\hat\Delta_1$
+
+I wanted this to be an exercise in interpreting plots, so I didn't give you the data you'd need to calculate these. But, if you're curious, here they are.
+
+comparison | $\hat\Delta_{\text{raw}}$ | $\hat\Delta_1$
+--- | --- | --- 
+Income in LA vs SFBay | `r money(deltahat.raw(sfla.sam))` | `r money(deltahat.adjusted(sfla.sam))`
+Unemployment in SD vs OC | `r round(deltahat.raw(sdoc.sam),3)` | `r round(deltahat.adjusted(sdoc.sam),3)`
+Primary Turnout in MI | `r round(deltahat.raw(mi.sam),3)` | `r round(deltahat.adjusted(mi.sam),3)`
+
+:::
+
 We can derive similar decompositions for our other adjusted differences $\hat\Delta_0$ and $\hat\Delta_{\text{all}}$. That is, we can decompose $\hat\Delta_{\text{raw}}$ as the sum of $\hat\Delta_0$ or $\hat\Delta_{\text{all}}$ and a different, but conceptually similar covariate shift term. 
 
 ::: {#exr-decompose-ca-estimator .callout-exercise}
 Derive a formula for $\hat\Delta_{\text{raw}}$ as the 
 sum of $\hat\Delta_0$ and a covariate shift term.  Show your work.
+:::
+
+::: {.callout-solution}
+$$
+\color{gray}
+\begin{aligned}
+\hat\Delta_{\text{raw}}
+&= \ingreen{\frac{1}{N_1}\sum_{i:W_i=1} \hat\mu(1,X_i)} - \inred{\frac{1}{N_0}\sum_{i:W_i=0} \hat\mu(0,X_i)} \\
+&=
+\sum_{x} \ingreen{P_{x\mid 1} \ \hat\mu(1,x)} - \sum_{x} \inred{P_{x\mid 0} \  \hat\mu(0,x)}  \\
+&=
+\sum_{x} (\ingreen{P_{x\mid 1}} + \inred{P_{x\mid 0}} - \inred{P_{x\mid 0}}) \ \ingreen{\hat\mu(1,x)} - \sum_{x}  \inred{P_{x\mid 0}} \ \inred{\hat\mu(0,x)}  \\
+&= \underset{\text{covariate shift term}}{\sum_x (\ingreen{P_{x\mid 1}} - \inred{P_{x\mid 0}}) \ \ingreen{\hat \mu(1,x)}} + \underset{\text{adjusted difference}\  \hat\Delta_0}{\sum_x \inred{P_{x \mid 0}} \qty{ \ingreen{\hat\mu(1,x)} \ - \ \inred{\hat\mu(0,x)}}}  
+\end{aligned}
+$$
+
+The raw difference differs from $\hat\Delta_0$ by the red-to-green shift in the average of  
+the function $\ingreen{\hat\mu(1,x)}$. When comparing to $\hat\Delta_1$, it was the same shift in $\inred{\hat\mu(0,x)}$. So we can use the same visualization techniques and heuristics, we just have to look at the green curve instead of the red one. 
 :::
 
 ::: {#nte-decompose-ca-estimator .callout-note}
@@ -392,6 +560,13 @@ you could predict whether $\hat\Delta_{\text{raw}}$ or $\hat\Delta_0$ would be l
 Are your answers here are consistent with what you calculated in @exr-calc-ca-estimator? 
 :::
 
+::: {.callout-solution}
+$\hat\Delta_{\text{raw}}$ is larger than $\hat\Delta_0$. The trend $\ingreen{\hat\mu(1,x)}$ is increasing and the distribution of $x$ shifts to the right, so its average over $\ingreen{P_{x\mid 1}}$ is larger than its average over $\inred{P_{x\mid 0}}$. This is consistent with the numbers from @exr-calc-ca-estimator.
+
+
+The case of $\hat\Delta_{\text{all}}$ has been moved to the extra credit exercise @exr-decompose-ca-estimator-ec below. If you did it here, getting it wrong here won't count against you, but getting it right earns you some of those extra credit points.
+:::
+
 Covariate shift isn't just the phenomenon behind the difference between raw and adjusted differences. It shows up wherever we're comparing averages over different groups. One example is comparing different adjusted differences, e.g. $\hat \Delta_1$ and $\hat \Delta_0$. The following exercises will explore that. These are extra credit exercises, but I encourage you to look them over and think about them at least for a minute or two. There's a good chance that, having made it this far, you'll find them pretty easy. 
 
 ::: {#exr-shift-between-adjusted .callout-exercise} 
@@ -400,7 +575,26 @@ Covariate shift isn't just the phenomenon behind the difference between raw and 
 *Hint*. Compare the 'histogram form' formulas for $\hat\Delta_1$ and $\hat\Delta_0$.
 :::
 
-::: {#exr-shift-between-adjusted .callout-exercise} 
+::: {.callout-solution}
+This is a tricky one. The formula you need is simple. Observe that the difference $\hat\Delta_1 - \hat\Delta_0$ is a shift between averages of the function $f(x)=\hat\mu(1,x) - \hat\mu(0,x)$.
+$$
+\color{gray}
+\begin{aligned}
+\hat\Delta_1 - \hat\Delta_0 
+&= \sum_x \ingroupb{P_{x \mid 1}} \qty{ \ingroupb{\hat\mu(1,x)} - \ingroupa{\hat\mu(0,x)}} 
+- \sum_x \ingroupa{P_{x \mid 0}} \qty{ \ingroupb{\hat\mu(1,x)} - \ingroupa{\hat\mu(0,x)}}.
+\end{aligned}
+$$
+
+What's subtle is making sense of this visually. It's not going to be a big difference because this function $\ingroupb{\hat\mu(1,x)} - \ingroupa{\hat\mu(0,x)}$ isn't changing much over $x$ and there's not a ton of covariate shift either.  But if you look very carefully, you can see that $\hat\Delta_1$ is a bit smaller (i.e. bigger in magnitude) than $\hat\Delta_0$. How? You have to be a bit subtle about how you think the shift in the distribution of $x$. 
+
+The green and red histograms are roughly equal at $x=13$,$14$, and $20$. So what's happening is that the extra mass that's in the red histogram at $x=12$ is getting split between $x=16$ and $x=18$ in the green histogram. The function $\ingroupb{\hat\mu(1,x)} - \ingroupa{\hat\mu(0,x)}$ is roughly the same at $x=12$ and $x=16$, but it's smaller (more negative) at $x=18$. As a result, the average of this function over the green histogram will be a bit smaller (again, more negative) than the average over the red one. 
+
+Does this bear out in the numbers? Yes. If you do the calculations precisely, it does. In @exr-calc-ca-estimator, we calculated $\hat\Delta_1$ to be about \$600 less than $\hat\Delta_0$. 
+
+:::
+
+::: {#exr-shift-between-adjusted-all .callout-exercise} 
 *Extra Credit*. 
 
 1. Write the simplest formula you can expressing 
@@ -411,9 +605,86 @@ $\hat\Delta_{\text{all}}$ in terms of $\hat\Delta_0$ and $\hat\Delta_1$ and othe
 *Hint*. How does the purple histogram in @fig-greenred-scatter relate to the green and red ones? This is not just relevant to the in-visual-terms part; if you don't already have a formula, what you see may guide you toward one. 
 :::
 
+::: {.callout-solution}
+
+1. Here's the formula. It's a weighted average of the two summaries $\hat\Delta_0$ and $\hat\Delta_1$ where the weights are proportional to number of people averaged over in each summary, i.e., the proportions of red (w=0) and green (w=1) dots in the sample.
+$$
+\hat\Delta_{\text{all}} = P_{w=0} \hat\Delta_0 + P_{w=1} \hat\Delta_1 \qfor P_{w=w'} = \frac{1}{n}\sum_{i=1}^n 1_{=w'}(W_i).
+$$
+
+2. Because $\hat\Delta_{\text{all}}$ is a weighted average of $\hat\Delta_0$ and $\hat\Delta_1$, you know it's going to be in between the two. 
+
+3. All three summaries are averages of the $f(x)=\hat\mu(1,x)-\hat\mu(0,x)$ over different distributions. And the height of the purple histogram is always between the green and red histograms. 
+
+I didn't ask for a derivation of the formula $\hat\Delta_{\text{all}}$, but here it is. It's just a matter of recognizing that the purple histogram is the same weighted average of the green and red histograms.
+$$
+\begin{aligned}
+P_x 
+&= \frac{N_{0x} + N_{1x}}{n} \\
+&= \frac{N_{0x}}{\sum_x N_{0x}} \times \frac{\sum_x N_{0x}}{n} + \frac{N_{1x}}{\sum_x N_{1x}} \times \frac{\sum_x N_{1x}}{n} \\
+&= P_{x\mid 0} \times P_{w=0} + P_{x\mid 1} \times P_{w=1} \qfor P_{w=w'} = \frac{1}{n}\sum_x N_{w'x} = \frac{1}{n}\sum_{i=1}^n 1_{=w'}(W_i). 
+\end{aligned}
+$$
+
+Substituting this into the formula for $\hat\Delta_{\text{all}}$, we get
+$$
+\begin{aligned}
+\hat\Delta_{\text{all}} 
+&= \sum_x P_x \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&= \sum_x \qty{ P_{x\mid 0} P_{w=0} + P_{x\mid 1} P_{w=1}} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&= \sum_x P_{x\mid 0} P_{w=0} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} + \sum_x P_{x\mid 1} P_{w=1} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&= P_{w=0} \sum_x P_{x\mid 0} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} + P_{w=1} \sum_x P_{x\mid 1} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&= P_{w=0} \hat\Delta_0 + P_{w=1} \hat\Delta_1.
+\end{aligned}
+$$
+
+
+:::
+
 ::: {#exr-decompose-ca-estimator-ec .callout-exercise} 
 *Extra Credit*. Write out the three-term decomposition 
 for $\hat\Delta_{\text{raw}}$ described above in @nte-decompose-ca-estimator.
 And, with reference to the California income data shown in @fig-greenred-scatter and @fig-greenred-histograms, explain how to use this to see whether $\hat\Delta_{\text{raw}}$ or $\hat\Delta_{\text{all}}$ is larger.
 :::
 
+::: {.callout-solution}
+We'll start with the decomposition from @nte-decompose-ca-estimator and expand.
+$$
+\begin{aligned}
+\hat\Delta_{\text{raw}} 
+&= \hat\Delta_1 + (\hat\Delta_{\text{raw}} - \hat\Delta_1) \\
+&= \hat\Delta_{\text{all}} 
++ \underset{\text{new covariate shift term}}{\qty(\hat\Delta_{1} - \hat\Delta_{\text{all}})}
++ \underset{\text{$\hat\Delta_1$'s covariate shift term}}{(\hat\Delta_{\text{raw}} - \hat\Delta_1)} \\
+&= \hat\Delta_{\text{all}} \\
+&+ \sum_x P_{x\mid 1} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} - \sum_x P_{x} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&+ \sum_x P_{x\mid 1} \hat\mu(0,x) - \sum_x P_{x \mid 0} \hat\mu(0,x) \\
+\end{aligned}
+$$
+and analogously, making a comparison between $\hat\Delta_{\text{all}}$ and $\hat\Delta_0$,
+$$
+\begin{aligned}
+\hat\Delta_{\text{raw}} 
+&= \hat\Delta_{\text{all}} + (\hat\Delta_{0} - \hat\Delta_{\text{all}}) 
++ (\hat\Delta_\text{raw} - \hat\Delta_{0}) \\
+&+\sum_x P_{x\mid 0} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} - \sum_x P_{x} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&+ \sum_x P_{x\mid 1} \hat\mu(1,x) - \sum_x P_{x \mid 0} \hat\mu(1,x)
+\end{aligned}
+$$
+
+We've seen in @exr-decompose-ca-estimator that the last term is positive --- $\hat\Delta_{\text{raw}} > \hat\Delta_0$. So is the middle term. We've seen 
+in @exr-shift-between-adjusted that $\hat\Delta_0 > \hat\Delta_{1}$ 
+and it follows from @exr-shift-between-adjusted-all that $\hat\Delta_0 > \hat\Delta_\text{all} > \hat\Delta_1$.^[You could, if you prefer, use a version of @exr-shift-between-adjusted to see that $\hat\Delta_0 > \hat\Delta_\text{all}$ directly. Instead of thinking about distributing mass from the left side of the red histogram to the right to get the green one, think about distributing mass from the left side of the red histogram to the right to get the purple one.]
+
+:::
+
+::: {.callout-solution}
+### A simpler explanation of which is bigger.
+
+This is based on @exr-shift-between-adjusted-all.
+If $\hat\Delta_\text{raw}$ is bigger than both 
+$\hat\Delta_0$ and $\hat\Delta_1$, then because $\hat\Delta_{\text{all}}$ is between $\hat\Delta_0$ and $\hat\Delta_1$, $\hat\Delta_{\text{raw}}$ is bigger than $\hat\Delta_{\text{all}}$. 
+ 
+We've shown that this applies here above. We've seen that $\hat\Delta_{\text{raw}}$ is bigger than $\hat\Delta_1$ and $\hat\Delta_0$ in @exr-decompose-ca-estimator-ec and @exr-using-decompositions respectively.
+
+:::
