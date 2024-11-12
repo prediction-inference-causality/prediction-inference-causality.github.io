@@ -117,6 +117,10 @@ $$
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\model}{\mathcal{M}}
 
+\newcommand{\lcb}[1]{\color{gray}\left\{ \color{black} #1 \color{gray} \right\} \color{black}}
+\newcommand{\pcb}[1]{\color[RGB]{239,71,111}\left\{ \color{black} #1 \color[RGB]{239,71,111} \right\} \color{black}}
+\newcommand{\tcb}[1]{\color[RGB]{17,138,178}\left\{ \color{black} #1 \color[RGB]{17,138,178} \right\} \color{black}}
+
 \newcommand{\mapbg}{\color[RGB]{6,214,160}}
 \newcommand{\polla}{\color[RGB]{7,59,76}}
 \newcommand{\pollb}{\color[RGB]{239,71,111}}
@@ -158,6 +162,7 @@ $$
 \newcommand{\wzero}{\overset{\veryfaint{w}}{0}}
 \newcommand{\xone}{\overset{\veryfaint{x}}{1}}
 \newcommand{\xzero}{\overset{\veryfaint{x}}{0}}
+
 $$
 :::
 
@@ -209,6 +214,20 @@ sample(1:5)
 #| label: ggplot-utils
 mean_sd = function(x, mult = 1) { mean_se(x, mult = mult*sqrt(length(stats::na.omit(x)))) }
 ```
+```{r}
+#| label: summary-lookup
+summary.lookup = function(column.name, summaries, default=NA) {  
+  function(w,x) { 
+    out = left_join(data.frame(w=w,x=x),                              
+                    summaries[, c('w','x',column.name)],              
+                    by=c('w','x')) |>                                 
+      pull(column.name)                                               
+    out[is.na(out)] = default                                         
+    out
+  }
+}
+```
+
 
 ```{r}
 #| label: coarsen

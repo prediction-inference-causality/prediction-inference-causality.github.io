@@ -1,672 +1,792 @@
 ---
 title: "Lecture 12"
-subtitle: "Behavior of Least Squares Predictors"
+subtitle: "The Behavior of Least Squares Predictors"
 ---
 
-# Review
+# Introduction 
 
-## Least Squares Regression
+## Today's Topic
 
+{{< include ../_extensions/r-wasm/live/_knitr.qmd >}}
 {{< include shared-code.qmd >}}
-{{< include ca-income.qmd >}}
+
 
 ```{r}
-#| label: precision
-options(scipen = 1, digits = 3)
+#| label: fake-data
+x = rep(c(20,30,40), each=5000)
+
+pi.pop = function(x) { case_when(x < 25 ~ .25, x < 35 ~ .5, TRUE ~ .75) } 
+mu.pop = function(w,x) case_when(
+  w==1 & x <  25  ~ 10, 
+  w==1 & x <= 35  ~ 10,
+  w==1            ~ 20, 
+  w==0 & x <  25  ~ 5, 
+  w==0 & x <= 35  ~ 10,
+  w==0            ~ 10)
+
+w = 0 + (runif(length(x)) < pi.pop(x))
+y = rpois(length(x), mu.pop(w,x))
+fake.pop = data.frame(w=w, x=x, y=y)
 ```
 
 ```{r}
-#| out-height: 400px
-#| fig-asp: .4
-
-race.categories = c('White only', 'Black only', 'Asian only', 'Hawaiian/Pacific Islander only (HP)')
-X = earnings$education
-Y = earnings$income
-muhat.monotone = as.stepfun(isoreg(X,Y))
-muhat.lin = lm(Y ~ X)
-lsq.plot = ggplot(data.frame(x=X, y=Y)) + geom_point(aes(x=X,y=Y), alpha=.1, size=1, position=position_jitter(w=.3)) + 
-  stat_summary(aes(x=X+.1, y=Y), fun=mean, geom='point', color='red', alpha=.5) + 
-  stat_summary(aes(x=X+.1, y=Y), fun=mean, geom='line', color='red', alpha=.3) + 
-  geom_point(aes(X-.1, predict(muhat.lin)),  color='blue', alpha=.3) +
-  geom_line(aes(X-.1, predict(muhat.lin)),  color='blue', alpha=.3) +
-  geom_point(aes(x=X, y=muhat.monotone(X)), color='magenta', alpha=.3) + 
-  geom_line(aes(x=X, y=muhat.monotone(X)), color='magenta', alpha=.3) + 
-  scale_y(c(0,150000)) + scale_x()
-lsq.plot
+pop = fake.pop 
+m = nrow(pop)
+n = 200
+set.seed(5)
+J = sample(1:m, size=n, replace=TRUE)
+sam = pop[J,]
 ```
-
-- Regression, generally, is choosing a function of covariates $X_i$ to predict outcomes $Y_i$. 
-- We choose from a set of functions $\model$ that we call a **regression model**.
-
-$$
-Y_i \approx \hat\mu(X_i) \qfor \hat\mu \in \model 
-$$
-
-- Least Squares Regression is a special case in which we choose by minimizing the sum of squared residuals.
-
-$$
-\hat \mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(X_i) }^2
-$$
-
-- Given a model, we can find the least squares estimator by doing this minimization.
-- And we can do this for any model we like, so long as we can solve the minimization problem. 
-$$
-\begin{aligned}
-\textcolor{red}{\model} &= \qty{ \text{all functions} \  m(x) }                               \\
-\textcolor{blue}{\model} &= \qty{ \text{all lines} \ m(x)=ax + b }  \\
-\textcolor{magenta}{\model} &= \qty{ \text{all increasing functions} \  m(x) }   \\
-\end{aligned}
-$$
-
-## Linear Models
 
 ```{r}
-#| out-height: 400px
-#| fig-asp: .4
-lsq.plot
-```
-
-- In this class, we're going to focus on **linear models**.
-  - These are sets of functions that are 'closed' under addition, subtraction, and scaling by constants.
-  - This means when we add, subtract, and scale functions in the model, we get another function in the model.
-$$
-a(x), b(x) \in \model \implies a(x) + b(x), a(x) - b(x), c a(x) \in \model \quad \text{ for any constant $c$ }
-$$
-
-- **Q.** Which of these models are linear? 
-
-$$
-\begin{aligned}
-\textcolor{red}{\model} &= \qty{ \text{all functions} \  m(x) }                               \\
-\textcolor{blue}{\model} &= \qty{ \text{all lines} \ m(x)=ax + b }  \\
-\textcolor{magenta}{\model} &= \qty{ \text{all increasing functions} \  m(x) }   \\
-\end{aligned}
-$$
-
-
-## The Additive Bivariate Model 
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .4
- 
-grid = expand.grid(education=unique(earnings$education), race=race.categories) 
-muhat = function(model) { function(ed,race) { predict(model, newdata=data.frame(education=ed, race=race)) } }
-
-additive.fit   = lm(income ~ race+factor(education), data=earnings[earnings$race %in% race.categories,])
-ggplot(earnings[earnings$race %in% race.categories, ]) + 
-  geom_point(aes(x=education, y=income), size=1, 
-             alpha=.1, position=position_jitter(seed=0,w=.3)) +
-  geom_point(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid) +
-  geom_line(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid, alpha=.5) +
-  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
-```
-
-- Here we let our predictions be arbitrary functions of education ($x$) as before.
-- But we're requiring that race ($w$) only shift that function up and down---it can't change the function's shape.
-- The result, in visual terms, are predictions for different values of $w$ are 'parallel curves'.
-
-$$\small{
-\begin{aligned}
-\textcolor{blue}{\model} &= \qty{ m(w,x) = m_0(w) + m_1(x) \ \ \text{for univariate functions} \ \ m_0, m_1 }  &&\text{additive bivariate model} \\
-\end{aligned}
+prop.scale = 40
+default.shift = .5
+plotX = function(w,x, shift=default.shift) { ifelse(w==0, x-shift, x+shift) }
+lsq.plot = function(sam, formula=NULL, dot.size=1, shift=default.shift, residual.alpha=0) {
+  sam$jitterX = runif(nrow(sam), -1, 1)*shift
+  base.plot = ggplot(sam) + 
+    geom_point(aes(x=plotX(w,x)+jitterX,y=y,color=factor(w)), 
+      alpha=.05, size=dot.size) + 
+    stat_summary(aes(x=plotX(w,x), y=y), 
+      fun.data=mean_sd, geom='pointrange', alpha=.2) +
+    geom_bar(aes(x=x, y=prop.scale*after_stat(prop)), 
+      fill='purple', alpha=.1, linewidth=.05) +
+    scale_y_continuous(sec.axis = sec_axis(~./prop.scale, name='proportion')) +
+    scale_x_continuous(breaks=c(20,30,40)) +
+    coord_cartesian(xlim=c(15,45), ylim=c(-1,40)) +
+    guides(color='none') 
+    
+    if(is.null(formula)) { base.plot } else { 
+        model = lm(formula, data=sam)
+        gridx = seq(-10, 50, length.out=1000)
+        muhat = function(w,x) predict(model, newdata=data.frame(w=w,x=x))   
+        the.plot = base.plot + 
+          geom_point(aes(x=plotX(w,x), y=muhat(w,x), color=factor(w)), 
+            alpha=.7, shape='square') +
+          geom_line(aes(x=plotX(w,x), y=muhat(w,x), color=factor(w)), 
+            data = expand_grid(w=0:1, x=gridx), alpha=.7, linetype='dotted') 
+        if(residual.alpha > 0) {
+          the.plot = the.plot + 
+            geom_segment(aes(x=plotX(w,x)+jitterX, xend=plotX(w,x), y=y, yend=muhat(w,x)), 
+              alpha=residual.alpha, color='orange', linewidth=.1)
+        }
+        the.plot 
+    }
 }
-$$
-
-
-## The Parallel Lines Model 
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .4
- 
-additive.line.fit   = lm(income ~ race+education, data=earnings[earnings$race %in% race.categories,])
-ggplot(earnings[earnings$race %in% race.categories, ]) + 
-  geom_point(aes(x=education, y=income), size=1, 
-             alpha=.1, position=position_jitter(seed=0,w=.3)) +
-  geom_point(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid) +
-  geom_line(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid, alpha=.5) +
-  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
 ```
 
-- Here we impose the additional restriction that the function of education ($x$) is a line.
-- This means that the predictions for different values of $w$ are parallel lines.
-
-$$\small{
-\begin{aligned}
-\textcolor{red}{\model} &= \qty{ m(w,x) = a(w) + b x   }                 &&\text{parallel lines} \\
-\end{aligned}
+```{r}
+lsq.plot.1 = function(sam, formula, dot.size=1, color=groupa, residual.alpha=0) { 
+  sam$jitterX = runif(nrow(sam), -1, 1)
+  base.plot = ggplot(sam) + 
+    geom_point(aes(x=x+jitterX,y=y, color=color), 
+      alpha=.05, size=dot.size) + 
+    stat_summary(aes(x=x+jitterX, y=y), 
+      fun.data=mean_sd, geom='pointrange', alpha=.2) +
+    geom_bar(aes(x=x, y=prop.scale*after_stat(prop)), 
+      fill='purple', alpha=.1, linewidth=.05) +
+    scale_y_continuous(sec.axis = sec_axis(~./prop.scale, name='proportion')) +
+    guides(color='none') 
+    
+    if(is.null(formula)) { base.plot } else { 
+        model = lm(formula, data=sam)
+        muhat = function(x) predict(model, newdata=data.frame(x=x))   
+        the.plot = base.plot + 
+          geom_point(aes(x=x, y=muhat(x)), color=color, alpha=.7, shape=muhat.shape) +
+          geom_line(aes(x=x, y=muhat(x)),  color=color, alpha=.7, shape=muhat.linetype) 
+        if(residual.alpha > 0) {
+          the.plot = the.plot + 
+            geom_segment(aes(x=x+jitterX, xend=x+jitterX, y=y, yend=muhat(x)), 
+              alpha=residual.alpha, color='orange', linewidth=.05)
+        }
+        the.plot 
+    }
 }
-$$
-
-## The Not-Necessarily-Parallel Lines Model 
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .4
- 
-additive.line.fit   = lm(income ~ race+education, data=earnings[earnings$race %in% race.categories,])
-interacted.line.fit = lm(income ~ race*education, data=earnings[earnings$race %in% race.categories,])
-ggplot(earnings[earnings$race %in% race.categories, ]) + 
-  geom_point(aes(x=education, y=income), size=1, 
-             alpha=.1, position=position_jitter(seed=0,w=.3)) +
-  geom_point(aes(x=education, y=muhat(interacted.line.fit)(education,race)),  color='magenta', data=grid) +
-  geom_line(aes(x=education, y=muhat(interacted.line.fit)(education,race)),   color='magenta', data=grid, alpha=.5) +
-  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
 ```
 
-- Here we stick with the lines thing, but drop the additivity restriction.
-- For each value of $w$, we can get a totally different line.
-
-$$\small{
-\begin{aligned}
-\textcolor{magenta}{\model} &= \qty{ m(w,x) = a(w) + b(w) x  }                 &&\text{lines} \\
-\end{aligned}
-}
-$$
-
-
-## Where This Leaves Us
-
-```{r}
-#| out-height: 400px
-#| fig-asp: .4
- 
-ggplot(earnings[earnings$race %in% race.categories, ]) + 
-  geom_point(aes(x=education, y=income), size=1, 
-             alpha=.1, position=position_jitter(seed=0,w=.3)) +
-  geom_point(aes(x=education, y=muhat(interacted.line.fit)(education,race)),  color='magenta', data=grid) +
-  geom_line(aes(x=education, y=muhat(interacted.line.fit)(education,race)),   color='magenta', data=grid, alpha=.5) +
-  geom_point(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid) +
-  geom_line(aes(x=education, y=muhat(additive.line.fit)(education,race)),  color='red', data=grid, alpha=.5) +
-  geom_point(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid) +
-  geom_line(aes(x=education, y=muhat(additive.fit)(education,race)),  color='blue', data=grid, alpha=.5) +
-  facet_grid(cols=vars(race)) + scale_y(c(0,150000))
-```
-
-- Each of these approaches allows us to make predictions everywhere---even in columns we haven't sampled.
-- Fundamentally, it's because they're using information from one column to make predictions in another.
-- This solves the empty-groups problem, but it introduces a new one. What is it?
-
-
-# Bias
-
-## What It Is 
-
-```{r}
-#| out-height: 500px
-mu = 1
-biasdata = data.frame(x=seq(-4,4,length.out=1000), fx=dnorm(seq(-4,4,length.out=1000), mean=mu))
-ggplot() + geom_area(aes(x=x,y=fx), alpha=.2, color='gray', data=biasdata) + 
-           geom_vline(aes(xintercept=mu), color='black', linewidth=2, alpha=.5) + 
-           geom_vline(aes(xintercept=0),  color='green', linewidth=2, alpha=.5)
-```
-
-- Bias is the difference between an estimator's expected value and what we mean to estimate.
-- Intuitively, it's the **systematic part** of our estimator's error.
-- Visually, it's the difference between ...
-  - The location of our estimator's sampling distribution. The black line.
-  - The location of what we're trying to estimate. The green line.
-
-
-**Q.** What is bias here?
-
-::: fragment
-
-It's the difference in the location of the black and green lines: $\text{bias} = 1 - \textcolor{green}{0} = 1.$
-
-:::
-
-## Bias and Consistency 
-
-```{r}
-#| out-height: 500px
-set.seed(1234)
-error = 2*rnorm(100000)
-bias = list(a=function(n) 0, b=function(n) sqrt(10)/sqrt(n), c=function(n) 1)
-
-plotdata = expand_grid(estimator=names(bias), n=c(10,40,160)) %>%
-  pmap(function(estimator, n) {
-    thebias = bias[[estimator]](n)
-    data.frame(estimator=estimator, n=n, muhat=thebias + error / sqrt(n))
-    }) %>% bind_rows() 
-summaries = plotdata %>% group_by(n, estimator) %>% summarize(mean=mean(muhat))
-
-breaks = seq(-4, 4, by=2)/2 
-signs  = case_when(
-  breaks < 0 ~ '-', 
-  breaks == 0 ~ '',
-  breaks > 0 ~ '+')
-offsets = case_when(
-  breaks != 0 ~ sprintf('%d', abs(breaks)),
-  breaks == 0 ~ '')
-labels.abstract = sprintf('μ %s %s', signs, offsets)
-
-ggplot(plotdata) + geom_histogram(aes(x=muhat, y=after_stat(density)), bins=100, alpha=.3) + 
-                   geom_vline(aes(xintercept=mean), data=summaries, linewidth=1, alpha=.6) + 
-                   geom_vline(aes(xintercept=0), color='green', linewidth=1, alpha=.6) + 
-                   scale_x_continuous(breaks=breaks, labels=labels.abstract, limits=range(breaks)) + 
-                   facet_grid(n ~ estimator, labeller=labeller(n=label_both, estimator=label_both)) + 
-                   theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust=1)) + 
-                   xlab('') + ylab('')
-```
-
-- In Practice Midterm 1, we looked at the sampling distribution of three estimators at three sample sizes.
-  - *Estimator a*  was unbiased.
-  - *Estimator b* was biased, but its bias decreased with sample size.
-  - *Estimator c* was biased and its bias didn't change with sample size.
-- Constant bias means our estimator isn't going to much closer to the truth as we get more data. 
-- We call estimators like this---estimators that don't get arbitrarily close to the truth in large samples---**inconsistent**.
-
-## A Biased Least Squares Estimator
-
-```{r}
-#| layout-ncol: 2
-#| out-height: 400px
-#| fig-asp: .8
-
-lm.plot = function(data, formula, dot.size=2) { 
-  model = lm(formula, data=data)
-  muhat = function(ed) predict(model, newdata=data.frame(education=ed))
-  ggplot(data, aes(x=education, y=income)) + 
-    geom_point(alpha=.1, position=position_jitter(w=.3), size=dot.size) + 
-    stat_summary(fun.data=mean_se, geom='pointrange', color='red', alpha=.5) +
-    geom_point(aes(x=education, y=muhat(education)),  color='blue', alpha=.3) +
-    geom_line(aes(x=education, y=muhat(education)),  color='blue', alpha=.3) 
-}
-lm.plot(earnings, 'income~education')
-lm.plot(earnings, 'income~education') + scale_x(c(7.5,10.5)) + scale_y(c(-10000,40000))
-```
-
-$$
-\begin{aligned}
-\textcolor{red}{\model} &= \qty{ \text{all functions} \  m(x) }                               \\
-\textcolor{blue}{\model} &= \qty{ \text{all lines} \ m(x)=ax + b }  \\
-\end{aligned}
-$$
-
-- We can see that, when we use the [all lines]{.fg style="color:blue"} model, our least squares estimate $\hat\mu(8)$ is biased.
-- Why? Because the best line, trying to get the slope right in the middle where most of the data is, gets it wrong at the edges.
-- Typically, we can't **know** an estimator is biased, but we can **suspect** it is.
-  - e.g., because it's nowhere near the [subsample means]{.fg style="color:red"}.
-- That's because bias is a property of the estimator's sampling distribution. And we can't observe that directly.
-- But in this case something gives it away: [$\hat\mu(8)$]{.fg style="color:blue"} is a negative estimate of a positive quantity.
-
-## Bias and Fake Data
-
-```{r}
-#| layout-ncol: 2
-#| out-height: 400px
-#| fig-asp: .8
-
-n = nrow(earnings)
-fake.pop = pop.earnings
-fake.sample = fake.pop[sample(1:nrow(fake.pop), size=n, replace=TRUE), ]
-
-model = lm(income~education, data=fake.sample)
-muhat = function(ed) predict(model, newdata=data.frame(education=ed))
-
-lm.plot(fake.sample, 'income~education', dot.size=1)
-lm.plot(fake.pop, 'income~education',  dot.size=.1)
-```
-
-
-- To really see bias, we have to work with fake data. 
-- We'll work with a fake version of the earnings data we've been using.
-  - Earlier in the semester, we've used a fake version of our income data for illustration.
-  - Now we're actually going to sample from it.
-
-```{r}
-#| echo: true
-#| eval: false
-fake.sample = fake.pop[sample(1:nrow(fake.pop), size=n, replace=TRUE), ]
-```
-
-- And we can actually **calculate** our estimator's error.
-
-```{r}
-#| echo: true
-error = mean(fake.pop$income[fake.pop$education==8]) - muhat(8)
-```
-
-- And therefore its bias, the **mean** of our estimator's error **over many samples**.
 
 ```{r}
 #| cache: true
-set.seed(1)
-muhat8.sampling.distribution = replicate(1000, {
-  fake.sample = fake.pop[sample(1:nrow(fake.pop), size=n, replace=TRUE), ]
-  model = lm(income~education, data=fake.sample)
-  predict(model, newdata=data.frame(education=8))
-}) 
-```
+estimate = function(sam, formula) {
+  X = sam$x
+  W = sam$w
+  model = lm(formula, data=sam)
+  muhat = function(w,x) predict(model, newdata=data.frame(w=w,x=x)) 
+  mean(muhat(1, X) - muhat(0, X))
+}
 
-## Bias and Fake Data
-
-```{r}
-#| layout-ncol: 2
-#| out-height: 400px
-#| fig-asp: .8
-lm.plot(fake.sample, 'income~education', dot.size=1)
-ggplot() + geom_histogram(aes(x=muhat8.sampling.distribution, y=after_stat(density)), alpha=.3, bins=100) +
-           geom_vline(aes(xintercept=mean(muhat8.sampling.distribution)), color='black', alpha=.5) + 
-           geom_vline(aes(xintercept=mean(fake.pop$income[fake.pop$education==8])), color='green', alpha=.5) 
-```
-
-- We can see, looking at our estimator's sampling distribution, that it has downward (i.e. negative) bias.
-
-```{r}
-#| echo: true
-#| eval: false
-muhat8.sampling.distribution = replicate(1000, {
-  fake.sample = fake.pop[sample(1:nrow(fake.pop), size=n, replace=TRUE), ]
-  model = lm(income~education, data=fake.sample)
-  predict(model, newdata=data.frame(education=8))
+samples = 1:4000 |> map(function(.) { 
+  J = sample(1:nrow(pop), size=n, replace=TRUE)
+  pop[J,]
 })
-```
 
-**Q.** Does this go away with more data?
-
-# It Does Not
-```{r}
-#| cache: true 
-muhat8.sampling.distribution = function(sample.size) { 
-  replicate(1000, {
-    fake.sample = fake.pop[sample(1:nrow(fake.pop), size=sample.size, replace=TRUE), ]
-    model = lm(income~education, data=fake.sample)
-    predict(model, newdata=data.frame(education=8))
-  })
-}
-dist.quartern   = muhat8.sampling.distribution(round(n/4))
-dist.n          = muhat8.sampling.distribution(n)
-dist.fourn      = muhat8.sampling.distribution(4*n) 
+target  = pop |> estimate(y~w*factor(x))
+estimates = data.frame( 
+  all.functions = samples |> map_vec(estimate, y~w*factor(x)),
+  lines = samples |> map_vec(estimate, y~w*x))
 ```
 
 ```{r}
-#| layout-ncol: 3
-#| out-height: 400px
-#| fig-asp: .8 
-plot.sampling.dist = function(muhat8.sampling.distribution) {
-  ggplot() + geom_histogram(aes(x=muhat8.sampling.distribution, y=after_stat(density)), alpha=.3, bins=100) +
-             geom_vline(aes(xintercept=mean(muhat8.sampling.distribution)), color='black', alpha=.5, linewidth=2) + 
-             geom_vline(aes(xintercept=mean(fake.pop$income[fake.pop$education==8])), color='green', alpha=.5, linewidth=2) + 
-             xlim(-20000,20000)
-}
-plot.sampling.dist(dist.quartern) + coord_flip()
-plot.sampling.dist(dist.n) + coord_flip()
-plot.sampling.dist(dist.fourn) + coord_flip()
+#| fig.width: 7
+#| layout-ncol: 2
+#| fig-cap: 
+#|  - 'A sample drawn with replacement from a population.'
+#|  - 'That population.'
+sam |> lsq.plot(y~w*x)
+pop |> lsq.plot()
 ```
 
+We're going to talk about statistical inference when we use least squares in linear models. For example ...
+$$
+\color{gray}
+\begin{aligned}
+\theta &= \frac{1}{m}\sum_{j=1}^m \qty{ \mu(1,x_j) -  \mu(0,x_j) } \qfor \mu(w,x)=\frac{1}{m_{w,x}}\sum_{j:w_j=w,x_j=x} y_j \\
+\hat\theta &= \frac{1}{n}\sum_{i=1}^n \qty{ \hat\mu(1,X_i) -  \hat\mu(0,X_i) } \qfor \hat\mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(X_i) }^2
+\end{aligned}
+$$
+
+- Does it look like this is a good estimator?
+- If not, do you think it's too big or too small?
+
+## Summary
 
 ```{r}
-#| echo: true
-#| eval: false
-muhat8.sampling.distribution = function(sample.size) { 
-  replicate(1000, {
-    fake.sample = fake.pop[sample(1:nrow(fake.pop), size=sample.size, replace=TRUE), ]
-    model = lm(income~education, data=fake.sample)
-    predict(model, newdata=data.frame(education=8))
-  })
-}
+#| fig.width: 7
+#| layout-ncol: 2
+#| fig-cap: 
+#|  - 'The sampling distribution of $\hat\theta$ and a perfectly calibrated interval estimate.'
+#|  - 'The population least squares predictor $\tilde\mu$ fit to the population.'
+#| 
+theta.hat = estimate(sam, y~w*x)
+theta.tilde = estimate(pop, y~w*x)
+theta.sampling.dist.plot =ggplot(estimates) + 
+  geom_histogram(aes(x=all.functions, y=after_stat(density)), bins=50, alpha=.05, fill=pink, color='gray', linewidth=.05) + 
+  geom_histogram(aes(x=lines, y=after_stat(density)), bins=50, alpha=.2, fill=teal, color='gray', linewidth=.05) + 
+  with_annotations(c(theta.hat,estimates$lines), estimand=target, highlight.dots=1, interval.width=width(estimates$lines)) + 
+  geom_vline(xintercept=theta.tilde, color=pink, alpha=.3, linewidth=2.5)
 
-dist.quartern   = muhat8.sampling.distribution(round(n/4))
-dist.n          = muhat8.sampling.distribution(n)
-dist.fourn      = muhat8.sampling.distribution(4*n) 
+plot.pop = pop[sample(1:nrow(pop), size=10000),]
+pop.lsq.plot = plot.pop |> lsq.plot(y~w*x)
+
+theta.sampling.dist.plot
+pop.lsq.plot
 ```
 
-## What This Is About
+::: {.panel-tabset}
+### What happened?
+- In this case, $\hat\theta$ is too small. And that's not just a chance occurrence. 
+  - When we look at its sampling distribution, we see that it's *systematically* too small.
+  - It's *biased*. In roughly 95% of samples, $\hat\theta$ will be smaller than $\theta$.
+- It boils down to a bad choice of regression model. 
+  - To make sense of this, think about what happens when everything else is perfect.
+  - i.e. if we fit this model to the whole population, then average over the population.
+  - The result is *nonrandom*. And it's right in the middle of our estimator's sampling distribution.
+$$
+\inpink{\tilde\theta} = \frac{1}{m}\sum_{j=1}^m \qty{ \tilde\mu(1,x_j) -  \tilde\mu(0,x_j) } \qfor \tilde\mu = \argmin_{m \in \model} \frac{1}{m}\sum_{j=1}^m \qty{y_j - m(w_j,x_j)}^2 
+$$
 
-```{r}
+### What happens generally 
 
-model.quartern = lm(income~education, data=fake.pop[sample(1:nrow(fake.pop), size=round(n/4), replace=TRUE), ])
-model.n        = lm(income~education, data=fake.pop[sample(1:nrow(fake.pop), size=n, replace=TRUE), ])
-model.fourn    = lm(income~education, data=fake.pop[sample(1:nrow(fake.pop), size=4*n, replace=TRUE), ])
-preds = function(model,x) { data.frame(x=x, y=predict(model, newdata=data.frame(education=x))) }
+We can think of our estimator's error as a sum of two things.
 
-x = unique(fake.pop$education)
-lm.plot(fake.pop, 'income~education',  dot.size=.025) +
-  geom_point(aes(x=x, y=y), data=preds(model.quartern, x), color='cyan', size=1, alpha=.5) +
-  geom_line(aes(x=x, y=y), data=preds(model.quartern, x), color='cyan', alpha=.7) +
-  geom_point(aes(x=x, y=y), data=preds(model.n, x), color='magenta', size=1, alpha=.5) +
-  geom_line(aes(x=x, y=y), data=preds(model.n, x), color='magenta', alpha=.5) +
-  geom_point(aes(x=x, y=y), data=preds(model.fourn, x), color='orange', size=1, alpha=.4) +
-  geom_line(aes(x=x, y=y), data=preds(model.fourn, x), color='orange', alpha=.6) + 
-  scale_y(c(0,150000)) + scale_x()
-```
+$$
+\hat\theta - \theta = 
+\underset{\text{sampling error}}{\qty{\hat\theta - \inpink{\tilde\theta}}} + 
+\underset{\text{modeling error}}{\qty{\inpink{\tilde\theta} - \theta}}
+$$
 
-- Bias doesn't go away with more data. What we're seeing here is ...
-  - In [blue]{.fg style="color:blue"}, our model's fit to the population.
-  - In [cyan]{.fg style="color:cyan"}, its fit to a sample of size $n/4$.
-  - In [magenta]{.fg style="color:magenta"}, its fit to a sample of size $n$.
-  - In [orange]{.fg style="color:orange"}, its fit to a sample of size $4n$.
-- As sample size increases, we get closer to the [blue line]{.fg style="color:blue"}.
-- But the blue line *isn't* close to the subpopulation (i.e. column) means $\textcolor{red}{\hat\mu(x)}$.
+1. *Sampling error* is the 'variance part'. It's random and has mean zero. 
+  - It's the error we'd have had if what we'd really wanted to estimate was $\tilde\theta$.
+  - We can get a good estimate of this term's distribution using the bootstrap. 
+2. *Modeling error* is the 'bias part'. It's non-random---it's the bias of our estimator. 
+  - It's the error we'd have had if we'd been given the whole population as our sample.
+  - This is zero *if* your model contains the subpopulation mean function $\mu(w,x)$.
+    - e.g. when you use the 'all functions' model.
+
+  - That we have a nice, clean breakdown of our error like this isn't obvious.
+    - You can, of course, add and subtract whatever you want. We chose $\inpink{\tilde\theta}$.
+    - But it's not obvious that the sampling error term $\hat\theta - \inpink{\tilde\theta}$ has mean zero.
+
+### Terminology
   
-## Least Squares Bias
+  - We say a model is *correctly specified* when it contains $\mu$ 
+  - We say it is *misspecified* when it doesn't contain $\mu$.
+
+:::
+  
+## Plan 
+
+$$
+\hat\theta - \theta = 
+\underset{\text{sampling error}}{\qty{\hat\theta - \inpink{\tilde\theta}}} + 
+\underset{\text{modeling error}}{\qty{\inpink{\tilde\theta} - \theta}}
+$$
+
+- Today, we'll do two things. 
+ 1. We'll prove that the sampling error term has mean zero. 
+    - In fact, we'll prove that it's an average of mean-zero random variables.
+    - That'll take a little calculus. It's not a hard proof, but it's a little clever.
+ 2. Then, we'll try to get a handle on what modeling error looks like for different models. 
+  - This'll be a visualization exercise to help you develop some intuition.
+  - This intuition comes in very handy because a lot of people don't have it.^[Blame us teachers. In a lot of classes, you do the math assuming you're using a correctly specified model. Then you learn some techniques for choosing a model that isn't obviously misspecified. The message people get is to put a little effort into choosing a model, then act as if it were correctly specified. That doesn't work.]
+  - With even pretty basic intuition, you can catch a lot of mistakes and get them fixed.
+
+# Modeling and Sampling Error
+
+## Breaking Down the Problem
 
 ```{r}
-#| layout-ncol: 3
-#| out-height: 400px
-#| fig-asp: .8 
-
-pop.model = lm(income~education, data=fake.sample)
-pop.pred = predict(pop.model, newdata=data.frame(education=8))
-
-plot.sampling.dist(dist.quartern) + geom_vline(aes(xintercept=pop.pred), color='blue', alpha=.5, linewidth=2) + coord_flip()
-plot.sampling.dist(dist.n) + geom_vline(aes(xintercept=pop.pred), color='blue', alpha=.5, linewidth=2) + coord_flip()
-plot.sampling.dist(dist.fourn) + geom_vline(aes(xintercept=pop.pred), color='blue', alpha=.5, linewidth=2) + coord_flip()
+#| fig.width: 7
+#| layout-ncol: 2
+#| fig-cap: 
+#|  - 'A sample drawn with replacement from a population.'
+#|  - 'That population.'
+sam |> lsq.plot(y~w*x)
+pop.lsq.plot
 ```
 
-- This isn't great, but at least we know what's going on.
-- In fact, we can *prove* that the **bias** of the least squares estimator $\hat\mu(8)$ ...
-  - is the **error** we get when we fit the model to the whole population
-  - no matter what sample size we're using
-- As sample size increases ...
-  - our estimator's sampling distribution gets narrower and narrower
-  - but---if we have bias---it get narrower around the wrong value.
+
+- The summaries we've been estimating are complex, but made up of simple pieces.
+- In particular, they're all linear combinations of subpopulation means $\mu(w,x)$. 
+
+$$
+\theta = \frac{1}{m}\sum_{j=1}^m \qty{ \mu(1,x_j) -  \mu(0,x_j) } \qfor \mu(w,x)=\frac{1}{m_{w,x}}\sum_{j:w_j=w,x_j=x} y_j
+$$
+
+- Let's start by looking at the error we get when we estimate a single one of these. 
+- We'll break it down into two pieces. 
+  - One piece is the error of a *population least squares predictor* $\inpink{\tilde\mu}$.
+  - The other is the difference between that and our actual predictor $\hat\mu$. 
+
+$$
+\hat\mu(w,x) - \mu(w,x) = \qty{\hat\mu(w,x) - \inpink{\tilde\mu(w,x)}} + \qty{\inpink{\tilde\mu(w,x)} - \mu(w,x)}
+$$
+
+## Estimating Subpopulation Means 
+
+```{r}
+#| cache: true
+grid = expand.grid(w=0:1, x=c(20,30,40))
+mutilde=function(w,x) { predict(lm(y~w*x, data=pop), newdata=data.frame(w=w,x=x)) }
+mu=function(w,x) { predict(lm(y~w*factor(x), data=pop), newdata=data.frame(w=w,x=x)) }
+mu.hat.grid = samples |> map(function(sam) { 
+  newgrid=grid 
+  newgrid$muhat=predict(lm(y~w*x, data=sam), newdata=grid)
+  newgrid 
+}) |> bind_rows()
+```
+```{r}
+#| layout-ncol: 3
+#| layout-nrow: 2
+#| fig-width: 3.5
+
+plothist = function(w,x, color=color) { 
+  ggplot() + 
+    geom_histogram(aes(x=muhat, y=after_stat(density)), 
+      alpha=.2, bins=50, fill=color, data=mu.hat.grid[mu.hat.grid$w==w & mu.hat.grid$x==x,]) +
+    geom_vline(aes(xintercept=mutilde(w,x)), alpha=.2, linewidth=2, color=pink) +
+    geom_vline(aes(xintercept=mu(w,x)), alpha=.2, linewidth=2, color='green')
+}
+
+plothist(0,20, color=groupa)
+plothist(0,30, color=groupa)
+plothist(0,40, color=groupa)
+plothist(1,20, color=groupb)
+plothist(1,30, color=groupb)
+plothist(1,40, color=groupb)
+```
+
+$$
+\hat\mu(w,x) - \mu(w,x) = \qty{\hat\mu(w,x) - \inpink{\tilde\mu(w,x)}} + \qty{\inpink{\tilde\mu(w,x)} - \mu(w,x)}
+$$
+
+- What we see looks a lot like what we saw when we were estimating $\hat\mu$ using the 'all functions' model.
+- But there's one significant difference: bias. 
+  - The sampling distribution of $\hat\mu(w,x)$ isn't centered on the population mean $\mu(w,x)$.
+  - It's centered on the population least squares predictor $\inpink{\tilde\mu(w,x)}$.
+$$
+\E[\hat\mu(w,x)] = \tilde\mu(w,x) \qfor \tilde\mu = \argmin_{m \in \model} \sum_{j=1}^m \qty{y_j - m(w_j,x_j)}^2
+$$
+
+- That's what we're going to prove now. 
+
+**Q.** If the distribution of $\hat\mu$ is centered on the population least squares predictor $\tilde\mu$, \
+why is $\hat\mu(w,x)$ unbiased when we use the 'all functions model'?
 
 
-## It's Not Just About Lines
-
+## Key Idea: Orthogonality of Residuals 
 ```{r}
 #| layout-ncol: 2
-#| out-height: 400px
-#| fig-asp: .8
-#| fig-cap:
-#| - Additive bivariate model fit to a sample from the fake population.
-#| - Additive bivariate model fit to the fake population itself.
-lm.plot2 = function(data, formula, dot.size=2) { 
-  data = data[data$race %in% c('Black only', 'White only'),]
-  model = lm(formula, data=data)
-  muhat = function(r, ed) predict(model, newdata=data.frame(education=ed, race=r))
-  ggplot(data, aes(x=education, y=income)) + 
-    geom_point(alpha=.1, position=position_jitter(w=.3), size=dot.size) + 
-    stat_summary(fun.data=mean_se, geom='pointrange', color='red', alpha=.5) +
-    geom_point(aes(x=education, y=muhat(race, education)),  color='blue', alpha=.3) +
-    geom_line(aes(x=education, y=muhat(race, education)),  color='blue', alpha=.3) + facet_grid(cols=vars(race))
-}
+#| fig-width: 7
+sam |> lsq.plot(y~1, residual.alpha=.1)
+sam |> lsq.plot(y~w, residual.alpha=.1)
+```
+$$
+\textcolor{orange}{\hat\varepsilon_i} = Y_i - \hat\mu(W_i,X_i) \qquad \text{ are the \textbf{residuals}}
+$$
 
-lm.plot2(fake.sample, 'income~factor(education)+race', dot.size=.5) + scale_y(c(0,150000)) 
-lm.plot2(fake.pop,    'income~factor(education)+race', dot.size=.01) + scale_y(c(0,150000))
+::: {.panel-tabset}
+### Properties in Familiar Cases
+- When we use least squares to choose a ...
+  - constant prediction, the residuals sum to zero. 
+  - constant-within-groups prediction, the residuals sum to zero within groups. 
+$$
+\begin{aligned}
+\hat\mu &= \argmin_{\text{constants} \ m} \sum_{i=1}^n \qty{ Y_i - m }^2 \qqtext{ satisfies } \\
+0 &=\frac{d}{dm}\mid_{m=\hat\mu} \sum_{i=1}^n \qty{ Y_i - m }^2 = \sum_{i=1}^n 2 \times \qty{ Y_i - \hat\mu(X_i) } \times -1 = -2\sum_{i=1}^n \hat \varepsilon_i 
+\end{aligned}
+$$
+
+### A Generalization
+
+- The residuals are *orthogonal* to the predictions of every function in our model. 
+$$
+\begin{aligned}
+0 &= \sum_{i=1}^n \hat\varepsilon_i m(W_i, X_i) && \qqtext{ for all } m \in \model
+  &= \underset{\text{vector of residuals}}{\vec{\hat\varepsilon}} \cdot \underset{\text{vector of predictions}}{\vec{m(W,X)}} && \qfor \vec{m(W,X)} = [ m(W_1,X_1), \ldots, m(W_n,X_n) ]
+\end{aligned}
+$$
+
+- For the constant model, that's the same as summing to zero. 
+- For the constant-within-groups model, that's the same as summing to zero within groups.
+
+### Why It's the Same
+
+$$
+\begin{aligned}
+0 &= \sum_{i=1}^n \hat\varepsilon_i m && \qqtext{ for all constants } m \text{ if and only if } \\
+0 &= \sum_{i=1}^n \hat\varepsilon_i.
+\end{aligned}
+$$
+
+$$
+\begin{aligned}
+0 &= \sum_{i=1}^n \hat\varepsilon_i m(W_i) && \qqtext{ for all functions } m(w) 
+\text{ if and only if }  \\
+0 &= \sum_{i=1}^n \hat\varepsilon_i m(W_i) \\ 
+  &= \sum_{w}\sum_{i:W_i=w} \hat\varepsilon_i m(w) \\
+  &= \sum_{w} m(w) \inteal{\sum_{i:W_i=w} \hat\varepsilon_i}  && \text{ is a linear combination of \inteal{zeros} }.
+\end{aligned}
+$$
+
+:::
+
+## Orthogonality of Residuals in General
+```{r}
+#| fig.width: 7
+#| layout-ncol: 2
+sam |> lsq.plot(y~w*x, residual.alpha=.5)
 ```
 
-- When we use the [additive bivariate model]{.fg style="color:blue"} to predict income from education and race ...
-  - some [subpopulation means]{.fg style="color:red"} are still far from the [model's predictions]{.fg style="color:blue"}
-  - i.e. some predictions $\inblue{\hat\mu(x)}$ are still biased estimators of $\inred{\mu(x)}$
+- To prove this is true in general, we'll think about the optimality of $\hat\mu$ *one direction at a time*.
+$$
+\begin{aligned}
+\hat\mu &\qqtext{minimizes} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2 &&\qqtext{ over } m \in \model \implies \\
+\hat\mu &\qqtext{minimizes} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2 &&\qqtext{ over } m \in \model_1 \subseteq \model \\
+        & \text{and in particular} && \qqtext{ over } m \in \model_1 = \qty{ \hat\mu + t m \ : \ t \in \mathbb{R} } \qqtext{ for any } m \in \model
+\end{aligned}
+$$
+
+- Writing mean squared error as a function of $t$ in this model ... 
+  - We can observe that it's minimized at $t=0$, since that's when $\hat\mu + tm=\hat\mu$
+  - And we can set the derivative to zero there to get the orthogonality condition we want.
+  
+::: fragment
+
+$$
+\begin{aligned}
+0 &= \frac{d}{dt}\mid_{t=0} \sum_{i=1}^n \qty{ Y_i - \hat\mu(W_i,X_i) - t m(W_i,X_i) }^2 \\
+  &= \sum_{i=1}^n 2 \times \qty{ Y_i - \hat\mu(W_i,X_i) } \frac{d}{dt}\mid_{t=0} \qty{ Y_i - \hat\mu(W_i,X_i) - t m(W_i,X_i) }^2 \\
+  &= \sum_{i=1}^n 2 \times \qty{ Y_i - \hat\mu(W_i,X_i) } \times -m(W_i,X_i) \\
+  &= -2 \hat\varepsilon_i \dot m(W, X)
+\end{aligned}
+$$
+
+:::
+
+## Orthogonality of Population Residuals
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+sam |> lsq.plot(y~w*x, residual.alpha=.5)
+plot.pop |> lsq.plot(y~w*x, residual.alpha=.2)
+```
+
+- We can define *population residuals* $\tilde\varepsilon_j = y_j - \tilde\mu(w_j,x_j)$ analogously.
+  - These are the residuals we get when we choose a predictor $\tilde\mu$ by least squares in the whole population.
+  - And by the same argument, they're are orthogonal to every function in our model *in a population sense*.
+$$
+\begin{aligned}
+0 &= \veryfaint{\frac{1}{n}}\sum_{i=1}^n \hat\varepsilon_i  m(W_i,X_i)  
+&& \qqtext{ for all } m \in \model \qqtext{ where } \hat\varepsilon_i = Y_i - \hat\mu(W_i,X_i) \\
+0 &= \veryfaint{\frac{1}{m}}\sum_{j=1}^m \tilde\varepsilon_j m(w_j,x_j) 
+&& \qqtext{ for all } m \in \model \qqtext{ where } \tilde\varepsilon_j = y_j - \tilde\mu(w_j,x_j) \\
+  &= \E \qty{ \frac{1}{n}\sum_{i=1}^n \qty{ Y_i - \tilde\mu(W_i,X_i) } m(W_i,X_i) } 
+\end{aligned}
+$$
+
+- We've set out to prove that the population least squares predictor $\tilde\mu$ is the conditional expectation of the sample least squares predictor $\hat\mu$. 
+- To do this, we'll combine these two orthogonality properties in a clever way.
+
+## Relating $\hat\mu$ and $\tilde\mu$ (1/4)
+
+**Claim**. 
+$$
+\begin{aligned}
+\tilde\mu(w,x) &= \mu_E(w,x) 
+&& \qfor \mu_E(w,x) = \E[\hat\mu(W_i,X_i) \mid W_i=w, X_i=x] \\
+&&& \qand \tilde\mu = \argmin_{m \in \model} \sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2
+\end{aligned}
+$$
+
+**Sketch**.
+
+1. We'll show that orthogonality of residuals implies a kind of orthogonality of the difference $\hat\mu - \tilde\mu$.
+$$
+0=\E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } m(W_i,X_i) \right] \qfor \text{ all } m \in \model
+$$
+2. We'll plug in a clever choice of $m$: $m=\mu_E - \tilde \mu$.
+$$
+0=\E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \qty{ \mu_E(W_i,X_i) - \tilde\mu(W_i, X_i) } \right] 
+$$
+3. We'll use the law of iterated expectations to show that this is a mean-squared-difference. 
+$$
+0 = \E\left[  \lcb{ \mu_E(W_i,X_i) - \tilde\mu(W_i, X_i) }^2 \right]
+$$
+- That implies $\mu_E(W_i,X_i) - \tilde\mu(W_i, X_i)=0$. 
+- That's how squares work. If something isn't zero, its mean-square is positive.
+
+## Relating $\hat\mu$ and $\tilde\mu$ (2/4)
+
+**Claim**. 
+$$
+\begin{aligned}
+\tilde\mu(w,x) &= \mu_E(w,x) 
+&& \qfor \mu_E(w,x) = \E[\hat\mu(W_i,X_i) \mid W_i=w, X_i=x] \\
+&&& \qand \tilde\mu = \argmin_{m \in \model} \sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2
+\end{aligned}
+$$
+
+**Step 1**. 
+
+- From the orthogonality of the sample residuals, we have 
+
+$$ 
+\begin{aligned}
+0 &= \frac{1}{n}\sum_{i=1}^n \lcb{ Y_i -\hat\mu(W_i,X_i) } m(W_i,X_i)
+\qqtext{ and therefore } \\
+0 &= \E \left[ \frac{1}{n}\sum_{i=1}^n \lcb{ Y_i -\hat\mu(W_i,X_i) } m(W_i,X_i) \right] \\ 
+  &=  \E\left[ \lcb{ Y_i - \hat\mu(W_i,X_i) } m(W_i,X_i) \right]. 
+\end{aligned}
+$$
+
+- From the orthogonality of the population residuals, we have ...
+
+$$
+\begin{aligned}
+0 &= \E\left[ \lcb{ Y_i - \tilde \mu(W_i,X_i)} m(W_i,X_i) \right] \\
+\end{aligned}
+$$
+
+- Subtracting the first from the second, we get ...
+
+$$
+\begin{aligned}
+0 &= \E\left[ \pcb{ \lcb{ Y_i- \tilde\mu(W_i,X_i) } - \lcb{ Y_i - \hat\mu(W_i,X_i) }} m(W_i,X_i) \right] \\
+  &= \E\left[ \pcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } m(W_i,X_i) \right]
+\end{aligned}
+$$
+
+## Relating $\hat\mu$ and $\tilde\mu$ (3/4)
+
+**Claim**. 
+$$
+\begin{aligned}
+\tilde\mu(w,x) &= \mu_E(w,x) 
+&& \qfor \mu_E(w,x) = \E[\hat\mu(W_i,X_i) \mid W_i=w, X_i=x] \\
+&&& \qand \tilde\mu = \argmin_{m \in \model} \sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2
+\end{aligned}
+$$
+
+**Step 2**.
+$$
+\begin{aligned}
+0 &= \E\qty[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) }m(W_i,X_i) ] \qqtext{ for all } m \in \model \implies \\
+0 &= \E\qty[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \lcb{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) } ]
+\end{aligned}
+$$
+
+- This seems trivial, but to make sure this implication is valid, we have to check something.
+  - We have to check that $m=\mu_E - \tilde\mu$ is in the model $\model$.
+  - This ultimately boils down to linearity of the model and linearity of expectation.
+  - $\mu_E$ is a (probability-weighted) linear combination of functions in the model, so it's in the model.
+$$
+\begin{aligned}
+\mu_E &= \sum_{\substack{(w_1,x_1,y_1) \ldots (w_n,x_n,y_n) \\ w_i=w, x_i=x }} 
+\hat\mu \times P\qty{ (W_1,X_1,Y_1) \ldots (W_n,X_n,Y_n) = (w_1,x_1,y_1) \ldots (w_n,x_n,y_n) \mid W_i=w, X_i=x} \\
+&\qfor \hat\mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ y_i - m(w_i,x_i) }^2
+\end{aligned}
+$$
+
+## Relating $\hat\mu$ and $\tilde\mu$ (4/4)
+**Claim**. 
+$$
+\begin{aligned}
+\tilde\mu(w,x) &= \mu_E(w,x) 
+&& \qfor \mu_E(w,x) = \E[\hat\mu(W_i,X_i) \mid W_i=w, X_i=x] \\
+&&& \qand \tilde\mu = \argmin_{m \in \model} \sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2
+\end{aligned}
+$$
+
+**Step 3**.
+$$
+\begin{aligned}
+0 
+&\explain{=}{Steps 1-2} 
+\E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \lcb{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) } \right] \\
+&\explain{=}{Law of Iterated Expectations} 
+  \E\left[ \color{blue}\E\left[ \color{black}  \left\{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) \right\} \left\{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) \right\} \color{blue} \mid W_i, X_i\right] \color{black} \right] \\
+&\explain{=}{Linearity of Conditional Expectations} 
+  \E\left[  \left\{ \color{blue}\E\left[ \color{black} \hat\mu(W_i,X_i) \color{blue} \mid W_i, X_i\right] \color{black} - \tilde\mu(W_i,X_i) \right\} \left\{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) \right\}  \right] \\
+&\explain{=}{Recognizing $\mu_E$'s definition} 
+\E\qty[ \qty{ \color{blue} \mu_E(W_i,X_i) \color{black} - \tilde\mu(W_i,X_i) }\qty{ \mu_E(W_i,X_i)  - \tilde\mu(W_i,X_i) } ] \
+&\explain{=}{Recognizing a square} 
+\E\left[ \left\{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) \right\}^2 \right] 
+\end{aligned}
+$$
+
+- That concludes the proof. 
+  - If $\mu_E(W_i,X_i) - \tilde\mu(W_i,X_i)$ weren't always zero ...
+  - then the expected value of its square would be positive, not zero.
+
+
+## Implications for Complex Targets
+
+```{r}
+#| fig.width: 7
+#| layout-ncol: 2
+#| fig-cap: 
+#|  - 'A sample drawn with replacement from a population.'
+#|  - 'That population.'
+sam |> lsq.plot(y~w*x)
+pop.lsq.plot
+```
+
+
+- Let's consider a more complex estimation target, e.g., the adjusted difference in means $\hat\Delta_{\text{all}}$.
+  - This, like most of our targets, is a linear combination of column means.
+  - To keep things simple, let's suppose that the weights are non-random.
+  - e.g., if we were able to get the distribution of $w,x$ in the population from a census or voter file.
+- This is how we've been estimating it. 
+$$
+\begin{aligned}
+\hat\theta 
+&= \frac{1}{m}\sum_{j=1}^m \qty{ \hat\mu(1,x_j) -  \hat\mu(0,x_j) } 
+&&\qfor \hat\mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(X_i) }^2 \\
+&= \sum_{w,x} \alpha(w,x) \hat\mu(w,x) 
+&&\qfor \alpha(w,x) = \begin{cases} p_{x} & \text{ for } w=1 \\
+                                    -p_{x} & \text{ for } w=0. \end{cases}
+\end{aligned}
+$$
+
+- We can decompose our estimator's error by comparing to $\tilde\mu$ term-by-term. 
+$$
+\begin{aligned}
+\hat\theta-\theta 
+&= \sum_{w,x} \alpha(w,x) \qty{ \hat\mu(w,x) - \mu(w,x) } \\ 
+&= \underset{\faint{\text{sampling error}}}{\sum_{w,x} \alpha(w,x) \qty{ \hat\mu(w,x) - \tilde\mu(w,x) }} + \underset{\faint{\text{modeling error}}}{\sum_{w,x} \alpha(w,x) \qty{ \tilde\mu(w,x) - \mu(w,x) }} \\ 
+\end{aligned}
+$$
+
+- This breaks our error down into two pieces. 
+  - The *sampling error* has mean zero. Why?
+  - The *modeling error* is deterministic. It's our estimator's bias. 
+
+## What Do We Do With This?
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+theta.sampling.dist.plot
+pop.lsq.plot
+```
+$$
+\begin{aligned}
+\hat\theta-\theta 
+&= \underset{\faint{\text{sampling error}}}{\sum_{w,x} \alpha(w,x) \qty{ \hat\mu(w,x) - \tilde\mu(w,x) }} + \underset{\faint{\text{modeling error}}}{\sum_{w,x} \alpha(w,x) \qty{ \tilde\mu(w,x) - \mu(w,x) }} \\ 
+\end{aligned}
+$$
+
+- We can estimate the distribution of the sampling error as usual.
+  - Meaning using the bootstrap.
+  - There are variance formulas, but they're a little complicated.
+- If there were no modeling error, this'd mean we could calibrate interval estimates for 95% coverage. With modeling error, we can't do that. 
+- This leaves us with some bad options. 
+  1. We act as if there's no modeling error. 
+  2. We act as if what we really wanted to estimate was $\tilde\theta$.
+- Because these choices are so popular, it's important to understand the implications of doing them.
+- But we do have some good options.
+  1. Use the all-functions model, so there really isn't any modeling error.
+  2. Use *inverse probability weighting*, a special way estimation-target-specific way of estimating $\mu$ that can eliminate or at least significant reduce modeling error. That's what we'll discuss next class.
+  
+## Putting It All Together: An Example
+
+```{r}
+#| layout-ncol: 3
+#| layout-nrow: 2
+#| fig-width: 3.5
+
+plothist(0,20, color=groupa)
+plothist(0,30, color=groupa)
+plothist(0,40, color=groupa)
+plothist(1,20, color=groupb)
+plothist(1,30, color=groupb)
+plothist(1,40, color=groupb)
+```
+
+- Above, we see the sampling distribution of $\hat\mu(w,x)$ for $w=0,1$ and $x=20,30,40$.
+- Roughly what's the bias of $\hat\theta$? 
+  - Could you have guessed that from the plot of $\hat\mu$ on top of the sample? 
+  - Or did you need all the population information displayed here?
+
+$$
+\hat\theta = \frac{1}{m}\sum_{j=1}^m \qty{ \hat\mu(1,x_j) -  \hat\mu(0,x_j) } 
+$$
+
+```{r}
+#| fig.width: 7
+#| layout-ncol: 2
+#| fig-cap: 
+#|  - 'A sample drawn with replacement from a population.'
+#|  - 'That population.'
+sam |> lsq.plot(y~w*x)
+pop.lsq.plot
+```
+
+## Quiz 
+
+[Here](https://qtm285-1.github.io/assets/homework/week3-homework.html#fig-3-sampling-distributions) we see the sampling distributions of three estimators of $\theta$ at three different sample sizes.
+
+Which one *couldn't* be the sampling distribution of an estimator $\hat\theta$ like this?
+
+$$
+\hat\theta = \frac{1}{m}\sum_{j=1}^m \qty{ \hat\mu(1,x_j) -  \hat\mu(0,x_j) }  \qfor \hat\mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(X_i) }^2
+$$
+
+# Modeling Error
+
+## Setup
+
+::: {.panel-tabset}
+### Population
+```{webr}
+#| autorun: true
+x = rep(c(20,30,40), each=1000)
+pi.pop = function(x) { case_when(x < 25 ~ .25, x < 35 ~ .5, TRUE ~ .75) } 
+mu.pop = function(w,x) case_when(
+  w==1 & x <  25  ~ 10, 
+  w==1 & x <= 35  ~ 10,
+  w==1            ~ 20, 
+  w==0 & x <  25  ~ 5, 
+  w==0 & x <= 35  ~ 10,
+  w==0            ~ 10)
+
+w = 0 + (runif(length(x)) < pi.pop(x))
+y = rpois(length(x), mu.pop(w,x))
+pop = data.frame(w=w, x=x, y=y)
+```
+
+### Sample
+```{webr}
+#| autorun: true
+m = nrow(pop)
+n = 2000
+set.seed(5)
+J = sample(1:m, size=n, replace=TRUE)
+sam = pop[J,]
+```
+
+### Plotting Code
+```{webr}
+#| autorun: true
+prop.scale = 40
+default.shift = .5
+mean_sd = function(x, mult = 1) { mean_se(x, mult = mult*sqrt(length(stats::na.omit(x)))) }
+plotX = function(w,x, shift=default.shift) { ifelse(w==0, x-shift, x+shift) }
+lsq.plot = function(sam, formula=NULL, dot.size=1, shift=default.shift, residual.alpha=0) { 
+
+  sam$jitterX = runif(nrow(sam), -1, 1)*shift
+  base.plot = ggplot(sam) + 
+    geom_point(aes(x=plotX(w,x)+jitterX,y=y,color=factor(w)), 
+      alpha=.05, size=dot.size) + 
+    stat_summary(aes(x=plotX(w,x), y=y), 
+      fun.data=mean_sd, geom='pointrange', alpha=.2) +
+    geom_bar(aes(x=x, y=prop.scale*after_stat(prop)), 
+      fill='purple', alpha=.1, linewidth=.05) +
+    scale_y_continuous(sec.axis = sec_axis(~./prop.scale, name='proportion')) +
+    guides(color='none') 
     
-  
-## But Lines Aren't Great
-
-```{r}
-#| layout-ncol: 2
-#| out-height: 400px
-#| fig-asp: .8
-#| fig-cap:
-#| - Additive bivariate model fit to a sample from the fake population.
-#| - Additive bivariate model fit to the fake population itself.
-lm.plot2 = function(data, formula, dot.size=2) { 
-  data = data[data$race %in% c('Black only', 'White only'),]
-  model = lm(formula, data=data)
-  muhat = function(r, ed) predict(model, newdata=data.frame(education=ed, race=r))
-  ggplot(data, aes(x=education, y=income)) + 
-    geom_point(alpha=.1, position=position_jitter(w=.3), size=dot.size) + 
-    stat_summary(fun.data=mean_se, geom='pointrange', color='red', alpha=.5) +
-    geom_point(aes(x=education, y=muhat(race, education)),  color='blue', alpha=.3) +
-    geom_line(aes(x=education, y=muhat(race, education)),  color='blue', alpha=.3) + facet_grid(cols=vars(race))
+    if(is.null(formula)) { base.plot } else { 
+        model = lm(formula, data=sam)
+        gridx = seq(-10, 50, length.out=1000)
+        muhat = function(w,x) predict(model, newdata=data.frame(w=w,x=x))   
+        the.plot = base.plot + 
+          geom_point(aes(x=plotX(w,x), y=muhat(w,x), color=factor(w)), alpha=.7, shape='square') +
+          geom_line(aes(x=plotX(w,gridx), y=muhat(w,gridx), color=factor(w)), alpha=.7) 
+        if(residual.alpha > 0) {
+          the.plot = the.plot + 
+            geom_segment(aes(x=plotX(w,x)+jitterX, xend=plotX(w,x), y=y, yend=muhat(w,x)), 
+              alpha=residual.alpha, color='orange', linewidth=.05)
+        }
+        the.plot 
+    }
 }
-
-lm.plot2(fake.sample, 'income~education+race', dot.size=.5) + scale_y(c(0,150000)) 
-lm.plot2(fake.pop,    'income~education+race', dot.size=.01) + scale_y(c(0,150000))
 ```
 
-- That said, when we use the [additive lines model]{.fg style="color:blue"} to predict income from education and race, we tend to do worse.
-  - The **misspecification**, or 'wrongness', of a model is a matter of degree.
-  - And this one is more wrong.
+### Plot Styline
 
-# Bias and Summaries
+```{webr}
+bgcolor = "#E7F0EC"
+class.theme = theme(plot.background = element_rect(fill = bgcolor, colour = NA),
+        panel.background = element_rect(fill = bgcolor, colour = NA),
+        legend.background = element_rect(fill=bgcolor, colour = NA),
+        legend.box.background = element_rect(fill=bgcolor, colour = NA),
+        legend.key = element_rect(fill=bgcolor, colour = NA),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x  = element_text(colour = "#aaaaaa"),
+        axis.text.y  = element_text(colour = "#aaaaaa"),
+        axis.title.x  = element_text(colour = "#aaaaaa"),
+        axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
+)
 
-## Two Versions of Our MHT Experiment
-
-```{r}
-#| layout-ncol: 2
-#| out-height: 400px
-#| fig-asp: .8 
- 
-set.seed(1) 
-m = 1e4 
-pi = function(x) { 1/(1+exp(-(x-60)/8 )) }
-pi2 = function(x) { rep(1/2, length(x)) }
-mu = function(w, x) { 1 - (x-50)/30 + w*((x-50)/30)^2/2 }  
-
-X = 50+round(30*runif(m))
-W = 0 + (runif(m) <= pi(X))
-W2 = 0 + (runif(m) <= pi2(X))
-epsilon0 = rnorm(m)
-epsilon1 = rnorm(m)
-Y0 = mu(0,X) + .25*epsilon0
-Y1 = mu(1,X) + .25*epsilon1
-
-pop = data.frame(X=X, W=W, Y=Y0*(1-W) + Y1*W, Y0=Y0, Y1=Y1)
-pop2 = data.frame(X=X, W=W2, Y=Y0*(1-W2) + Y1*W2, Y0=Y0, Y1=Y1)
-
-n = 5000
-data = pop[sample(nrow(pop), n, replace=TRUE),]
-data2 = pop2[sample(nrow(pop), n, replace=TRUE),]
-
-plotX = function(X,W) { X + .15*(2*W-1) }
-pop.scatter = ggplot(pop) + 
-  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.05, position=position_jitter(w=.15, h=0), size=.5) + 
-  guides(color=FALSE)
-pop.scatter2 = ggplot(pop2) + 
-  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.05, position=position_jitter(w=.15, h=0), size=.5) + 
-  guides(color=FALSE)
-scatter = ggplot(data) + 
-  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.1, position=position_jitter(w=.15, h=0)) + 
-  guides(color=FALSE)
-scatter2 = ggplot(data2) + 
-  geom_point(aes(x=plotX(X,W), y=Y, color=factor(W)), alpha=.1, position=position_jitter(w=.15, h=0), size=.2) + 
-  guides(color=FALSE)
-
-big.coords = coord_cartesian(xlim=c(50,80), ylim=c(-1.5,2.5))
-narrow.coords = coord_cartesian(xlim=c(60,70), ylim=c(-1.5,2.5))
-tight.coords = coord_cartesian(xlim=c(50,80), ylim=c(0,1.5))
-
-annotated.pop.scatter = pop.scatter +  
-  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), geom="pointrange", alpha=.3,
-                 fun=mean, 
-                 fun.min = function(x) mean(x) - sd(x), 
-                 fun.max = function(x) mean(x) + sd(x)) +
-  geom_bar(aes(x=plotX(X,W), y=10*after_stat(prop), color=factor(W)), position='identity', alpha=.1) 
-
-annotated.pop.scatter2 = pop.scatter2 +  
-  stat_summary(aes(x=plotX(X,W), y=Y, color=factor(W)), geom="pointrange", alpha=.3,
-                 fun=mean, 
-                 fun.min = function(x) mean(x) - sd(x), 
-                 fun.max = function(x) mean(x) + sd(x)) +
-  geom_bar(aes(x=plotX(X,W), y=10*after_stat(prop), color=factor(W)), position='identity', alpha=.1) 
-
-annotated.pop.scatter  + tight.coords
-annotated.pop.scatter2 + tight.coords
+theme_set(class.theme)
+theme_update(axis.title.x  = element_blank(),
+             axis.title.y  = element_blank())
+simplified.theme = theme_get()
 ```
 
+:::
 
-- Researchers hypothesize that MHT increases bone density. We want to know is how well it works, on average, for the people who take it.
-- Above, we've got a population of `r approx(m,1)` people eligible for some form of MHT randomized two ways.
-  - Their age at the time the study begins is on the $x$-axis.
-  - Bone density, measured 2 years later, is on the $y$-axis.
-  - Color indicates whether they [did]{.twocolor-green} or [didn't]{.twocolor-red} do MHT.
-  - On the left, randomization probabilities depend on age. On the right, they don't.
-- How does the way we randomize affect the bias of our estimator when we use a bad model?
+## Example 
 
-## Version 1: Age-Dependent Randomization
-```{r}
-#| out-height: 400px
-#| layout-ncol: 2
-#| fig-asp: .8
-
-
-general.model  = lm(Y ~ factor(X) * W,  data=pop)
-additive.model  = lm(Y ~ factor(X) + W,  data=pop)
-additive.lines  = lm(Y ~ X + W, data=pop)
-
-model.plots = function(model, linetype) { 
-  grid = expand.grid(X=unique(pop$X), W=c(0,1))
-  grid$muhat = predict(model, grid)
-  list(geom_point(aes(x=X, y=muhat, color=factor(W)), alpha=.5, data=grid),  
-       geom_line(aes(x=X,  y=muhat, color=factor(W)), alpha=.7, linetype=linetype, data=grid))
-} 
-muhat.general  = function(W, X) { predict(general.model,  newdata=data.frame(X=X, W=W)) }
-muhat.additive = function(W, X) { predict(additive.model, newdata=data.frame(X=X, W=W)) }
-muhat.lines    = function(W, X) { predict(additive.lines, newdata=data.frame(X=X, W=W)) }
-X1 = pop$X[pop$W==1]
-
-annotated.pop.scatter + model.plots(additive.model, 'dashed')  + tight.coords
-annotated.pop.scatter + model.plots(additive.lines, 'dashed')  + tight.coords
+```{webr}
+#| autorun: true
+model.formula = y~w*x
+sam |> lsq.plot(y~w*x)
 ```
 
-$$
-\begin{aligned}
-\ingreen{\frac{1}{m_1}\sum_{j:w_j=1}} \qty{ \ingreen{\hat\mu(1,x_j)} - \inred{\hat\mu(0,x_j)} }
-&= `r mean(muhat.general(1,X))` - `r mean(muhat.general(0,X))` = `r mean(muhat.general(1,X) - muhat.general(0,X))`  && \text{all functions} \\
-&= `r mean(muhat.additive(1,X))` - `r mean(muhat.additive(0,X))` = `r mean(muhat.additive(1,X) - muhat.additive(0,X))`  && \text{additive} \\
-&= `r mean(muhat.lines(1,X))` - `r mean(muhat.lines(0,X))` = `r mean(muhat.lines(1,X) - muhat.lines(0,X))`    && \text{lines} \\
-\end{aligned}
-$$
+```{webr}
+estimate = function(sam, formula) {
+  X = sam$x
+  W = sam$w
+  model = lm(formula, data=sam)
+  muhat = function(w,x) predict(model, newdata=data.frame(w=w,x=x)) 
+  mean(muhat(1, X) - muhat(0, X))
+}
+all.functions.formula = y~w*factor(x)
 
-
-
-## Version 2: Age-Independent Randomization
-
-```{r}
-#| out-height: 400px
-#| layout-ncol: 2
-#| fig-asp: .8
-
-
-general.model  = lm(Y ~ factor(X) * W,  data=pop2)
-additive.model  = lm(Y ~ factor(X) + W,  data=pop2)
-additive.lines  = lm(Y ~ X + W, data=pop2)
-
-model.plots = function(model, linetype) { 
-  grid = expand.grid(X=unique(pop$X), W=c(0,1))
-  grid$muhat = predict(model, grid)
-  list(geom_point(aes(x=X, y=muhat, color=factor(W)), alpha=.5, data=grid),  
-       geom_line(aes(x=X,  y=muhat, color=factor(W)), alpha=.7, linetype=linetype, data=grid))
-} 
-muhat.general  = function(W, X) { predict(general.model,  newdata=data.frame(X=X, W=W)) }
-muhat.additive = function(W, X) { predict(additive.model, newdata=data.frame(X=X, W=W)) }
-muhat.lines    = function(W, X) { predict(additive.lines, newdata=data.frame(X=X, W=W)) }
-X1 = pop2$X[pop2$W==1]
-
-annotated.pop.scatter2 + model.plots(additive.model, 'dashed')  + tight.coords
-annotated.pop.scatter2 + model.plots(additive.lines, 'dashed')  + tight.coords
+data.frame(
+  thetahat   = sam |> estimate(model.formula),
+  thetatilde = pop |> estimate(model.formula), 
+  theta      = pop |> estimate(all.functions.formula)) 
 ```
-
-$$
-\begin{aligned}
-\ingreen{\frac{1}{m_1}\sum_{j:w_j=1}} \qty{ \ingreen{\hat\mu(1,x_j)} - \inred{\hat\mu(0,x_j)} }
-&= `r mean(muhat.general(1,X))` - `r mean(muhat.general(0,X))` = `r mean(muhat.general(1,X) - muhat.general(0,X))`  && \text{all functions} \\
-&= `r mean(muhat.additive(1,X))` - `r mean(muhat.additive(0,X))` = `r mean(muhat.additive(1,X) - muhat.additive(0,X))`  && \text{additive} \\
-&= `r mean(muhat.lines(1,X))` - `r mean(muhat.lines(0,X))` = `r mean(muhat.lines(1,X) - muhat.lines(0,X))`    && \text{lines} \\
-\end{aligned}
-$$
