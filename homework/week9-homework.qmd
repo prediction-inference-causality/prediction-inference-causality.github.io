@@ -31,6 +31,12 @@ Please don't hesitate to reach out if you're having trouble with any part of thi
 Learning new programming styles and new mathematical ideas at the same time can be a lot.
 And Google and ChatGPT may not be as helpful as you'd like. There's a lot of content on the web about this programming style and these mathematical ideas, but there's not much that talks about both at the same time.  
 
+We'll use the tidyverse package.
+```{r}
+#| echo: true
+library(tidyverse)
+```
+
 # Review
 
 Let's review the summaries we'll be working with. We'll stick with the same California income data we've used in lecture. Here are plots to think about while we review.
@@ -283,9 +289,35 @@ Now it's your turn.
 ::: {#exr-calc .callout-exercise}
 Modify the code above to calculate $\hat\Delta_0$ and $\hat\Delta_\text{all}$ three ways:
 by summing over people, using the 'histogram form' formulas, and using the 'general form' formulas.
-Check that the answers agree and, if you like, that they agree with the answers you got in [Exercise 5](https://davidahirshberg.bitbucket.io/static/homework4.html/#exr-calc-ca-estimator) from our last homework. 
+Check that the answers agree.
 
 All you should turn in for this one is the two functions `alpha.0` and `alpha.all` you define to do the 'general form' calculations.
+:::
+
+::: {.callout-solution}
+Here's the code to do the 'general form' calculations.
+```{r}
+#| echo: true
+alphahat.0 = function(w,x) { ifelse(w==1,   Px.0(x), -Px.0(x)) }
+alphahat.all = function(w,x) { ifelse(w==1, Px(x), -Px(x)) }
+```
+And here are the results.
+```{r}
+#| echo: true
+
+Deltahat.0 = general.form.estimate(alphahat.0, muhat, w=c(0,1), x=x)
+Deltahat.all = general.form.estimate(alphahat.all, muhat, w=c(0,1), x=x)
+
+data.frame(Deltahat.0=Deltahat.0, Deltahat.all=Deltahat.all)
+```
+Let's check that they agree with 'sum over people' versions.
+```{r}
+#| echo: true
+data.frame(
+  Deltahat.0 = mean(muhat(1,X[W==0]) - muhat(0,X[W==0])),
+  Deltahat.all = mean(muhat(1,X) - muhat(0,X)))
+```
+They do.
 :::
 
 ## Calibrating Interval Estimates 
@@ -323,6 +355,21 @@ bootstrap.estimates = 1:10000 |> map(function(.) { #<1>
 ::: {.callout-tip}
 ### Choosing the Number of Bootstrap Samples
 This takes about a minute to run on my laptop (a M3 MacBook Air), but I've heard from students that it takes longer on their computers. If you want to speed it up, you can change the number 10,000 to something smaller. You'll get rough-looking histograms if you use 400 instead of 10,000, but it shouldn't have much of an impact on width calculations.
+:::
+
+::: {.callout-tip collapse="true"}
+### Caching in Rmarkdown and Quarto
+
+If you're writing your solutions in Rmarkdown or Quarto, 
+it can be a big waste of time to re-run blocks of code like the one above each time you want to view your document. To speed things up, you can specify that you want the results cached.
+
+To do this, add a special comment to your code chunk. Like this.
+```{{r}}
+#| cache: true
+
+slow.function() 
+```
+
 :::
 
 ::: {#nte-empty-columns .callout-note collapse="true"}
@@ -419,12 +466,88 @@ Here's a review exercise on connecting what we see in the plot to the intervals 
 Draw these intervals (by hand) on top of the plots above. Or, if you prefer, describe how you would draw them.
 :::
 
+::: {.callout-solution}
+Draw arms on the point estimate that extend to the dashed lines. 
+
+This gives us an interval with the same width as the middle 95% of our bootstrap sampling distribution and our point estimate in the middle because the bootstrap sampling distribution is centered on our point estimate.
+:::
+
 Now it's your turn to do all this for $\hat\Delta_0$ and $\hat\Delta_\text{all}$.
 
 ::: {#exr-calibrate-intervals .callout-exercise}
 Draw the bootstrap sampling distributions of $\hat\Delta_0$ and $\hat\Delta_\text{all}$. Include that same annotations used above: vertical lines indicating the mean and middle 95% of each distribution and a blue dot for each point estimate. Then report bootstrap-calibrated 95% confidence intervals around your point estimates from @exr-calc.
 :::
 
+::: {.callout-solution}
+To get the bootstrap sampling distributions of these new estimators, 
+all we need to do is add a few lines to the bootstrap code above. 
+Here it is.
+```{r}
+#| echo: true
+#| cache: true
+bootstrap.estimates = 1:10000 |> map(function(.) { 
+  I.star = sample(1:n, n, replace=TRUE)                                             
+  Wstar = W[I.star]                                                                 
+  Xstar = X[I.star]                                                                 
+  Ystar = Y[I.star]                                                                     
+
+  summaries.star = sam[I.star,] |>                                                  
+                group_by(w,x) |>                                                       
+                summarize(muhat = mean(y), .groups='drop')                          
+  muhat.star = summary.lookup('muhat', summaries.star, default=mean(Ystar))         
+  
+  data.frame(                                                                           
+    Deltahat.raw = mean(Ystar[Wstar==1]) - mean(Ystar[Wstar==0]),                       
+    Deltahat.1   = mean(muhat.star(1,Xstar[Wstar==1]) -   
+                        muhat.star(0,Xstar[Wstar==1])),
+    Deltahat.0   = mean(muhat.star(1, Xstar[Wstar==0]) -   #<1>
+                        muhat.star(0, Xstar[Wstar==0])),   #<1>
+    Deltahat.all = mean(muhat.star(1, Xstar) -             #<1>
+                        muhat.star(0, Xstar))              #<1>
+  )
+}) |> bind_rows() 
+```
+1. These are the new lines.
+
+To plot the distributions, we just have to change a few names in the plotting code above.
+This code uses the variables `Deltahat.0` and `Deltahat.all` defined above in the solution to 
+@exr-calc.
+```{r}
+#| layout-ncol: 2
+#| echo: true 
+
+bootstrap.plot.0 = ggplot() + 
+  geom_histogram(aes(x=Deltahat.0, y=after_stat(density)), 
+    bins=50, alpha=.2, data=bootstrap.estimates) + 
+  geom_point(aes(x=Deltahat.0, y=.00005), color='blue') +
+  width_annotations(bootstrap.estimates$Deltahat.0)  
+
+bootstrap.plot.all = ggplot() + 
+  geom_histogram(aes(x=Deltahat.all, y=after_stat(density)), 
+    bins=50, alpha=.2, data=bootstrap.estimates) + 
+  geom_point(aes(x=Deltahat.all, y=.00005), color='blue') +
+  width_annotations(bootstrap.estimates$Deltahat.all)  
+
+bootstrap.plot.all + scales
+bootstrap.plot.all + scales
+```
+
+And here are 95% intervals around my point estimates, calibrated using the bootstrap.
+```{r}
+#| echo: true
+bootstrap.interval.0 = Deltahat.0 + 
+  c(-1,1)*width(bootstrap.estimates$Deltahat.0)/2
+bootstrap.interval.all = Deltahat.all +
+  c(-1,1)*width(bootstrap.estimates$Deltahat.all)/2
+```
+
+```{r}
+#| echo: true
+bootstrap.interval.0
+bootstrap.interval.all
+```
+
+:::
 
 Let's check that these are pretty similar to what we get using normal approximation. 
 We'll use our variance formula from our lecture on [Inference for Complicated Summaries](`r lecture(8)`#a-variance-decomposition-for-our-estimator). And, as in lecture, we'll ignore the term that reflects the randomness of our coefficients. The one written in [red]{.fg style="color:red"} in that lecture.
@@ -449,9 +572,6 @@ normal.approx = data.frame(
   x = plotx,
   raw = dnorm(plotx, mean=Deltahat.raw, sd=sqrt(Vhat.raw)),
   one = dnorm(plotx, mean=Deltahat.1, sd=sqrt(Vhat.1)))
-
-bootstrap.plot.raw + geom_line(aes(x=x, y=raw), data=normal.approx) + scales 
-bootstrap.plot.1   + geom_line(aes(x=x, y=one), data=normal.approx) + scales
 ```
 
 ```{r}
@@ -470,11 +590,46 @@ We've ignored a (non-negative) term that reflects the randomness of our coeffici
 Answer Yes or No. Then briefly explain how you know. A sentence or two should do.
 :::
 
-::: {.callout-note}
+::: {.callout-solution}
+No. We can see from our plots that the bootstrap sampling distribution and the normal-approximation-based estimate of the sampling distribution are very similar.
+:::
+
+::: {#nte-normal-intervals .callout-note}
 ### Note.
 
 I haven't asked you to calculate normal-approximation-based confidence intervals for $\hat\Delta_0$ and $\hat\Delta_\text{all}$ here, but you will need to do that below in @exr-fake-data-coverage. If you want to check that you have that working before jumping into the coverage exercise, go ahead and calculate those intervals here and compare them to the bootstrap-calibrated intervals you calculated above.
 :::
+
+
+::: {.callout-solution}
+This isn't the solution to an exercise, but I'm going to take the suggestion from the note above. I'm going to get a head start on @exr-fake-data-coverage by calculating normal-approximation-based confidence intervals for $\hat\Delta_0$ and $\hat\Delta_\text{all}$. 
+
+All I have to do is plug the appropriate versions of $\alpha(\cdot)$ from my solution to@exr-calc into the code I used to calculate the normal-approximation-based intervals for $\hat\Delta_\text{raw}$ and $\hat\Delta_1$ above.
+
+```{r}
+#| echo: true
+
+Vhat.0 = sum(alphahat.0(ww, xx)^2 * sigmahat(ww, xx)^2 / Nwx(ww, xx))     #<3>
+Vhat.all = sum(alphahat.all(ww, xx)^2 * sigmahat(ww, xx)^2 / Nwx(ww, xx)) #<3>
+
+normal.interval.0 = Deltahat.0 + 1.96*c(-1,1)*sqrt(Vhat.0)
+normal.interval.all = Deltahat.all + 1.96*c(-1,1)*sqrt(Vhat.all) 
+
+normal.interval.0
+normal.interval.all
+```
+
+Let's compare these to the bootstrap-calibrated intervals. We'll look at the differences in each endpoint.
+```{r}
+#| echo: true 
+
+normal.interval.0 - bootstrap.interval.0
+normal.interval.all - bootstrap.interval.all
+```
+They're similar enough for me. 
+:::
+
+
 
 # Checking Your Estimates using Fake Data {#sec-checking-with-fake-data}
 
@@ -608,6 +763,50 @@ your plots with vertical lines indicating the sampling distribution's mean and m
 And add a green vertical line indicating your estimation targets, $\Delta_0$ and $\Delta_\text{all}$, in each plot.
 :::
 
+::: {.callout-solution}
+
+To get the sampling distribution of $\hat\Delta_0$ and $\hat\Delta_\text{all}$, I just need to add a few lines to the code I used above to get the sampling distribution of $\hat\Delta_\text{raw}$ and $\hat\Delta_1$.
+```{r}
+#| echo: true
+#| cache: true
+sampling.distribution = 1:10000 |> map(function(.) { 
+  J = sample(1:m, n, replace=TRUE)  
+  fake.sam = pop[J,]                
+  W = fake.sam$w                     
+  X = fake.sam$x                     
+  Y = fake.sam$y                     
+
+  summaries = fake.sam |> group_by(w,x) |> summarize(muhat = mean(y), .groups='drop') 
+  muhat = summary.lookup('muhat', summaries, default=mean(Y))                          
+
+  data.frame(Deltahat.raw = mean(Y[W==1]) - mean(Y[W==0]),  
+             Deltahat.1   = mean(muhat(1,X[W==1]) - muhat(0,X[W==1])),
+             Deltahat.0   = mean(muhat(1,X[W==0]) - muhat(0,X[W==0])), #<1>
+             Deltahat.all = mean(muhat(1,X) - muhat(0,X)))             #<1>
+}) |> bind_rows() 
+```
+These are the new lines. Nothing else has changed.
+
+
+Then I can use `plot.sampling.distribution` to plot the sampling distributions of $\hat\Delta_0$ and $\hat\Delta_\text{all}$. But I'll need to calculate the targets $\Delta_0$ and $\Delta_\text{all}$ first. I've got code that does that for $\Delta_\text{raw}$ and $\Delta_1$ above, so I'll copy that here and add a line for each new target.
+```{r}
+#| echo: true
+target = data.frame(Delta.raw = mean(y[w==1]) - mean(y[w==0]), 
+                    Delta.1 = mean(mu(1,x[w==1]) - mu(0,x[w==1])),
+                    Delta.0 = mean(mu(1,x[w==0]) - mu(0,x[w==0])), 
+                    Delta.all = mean(mu(1,x) - mu(0,x)))
+```
+
+Now the plots.
+```{r}
+#| echo: true
+#| layout-ncol: 2
+plot.sampling.distribution(sampling.distribution$Deltahat.0, target$Delta.0)
+plot.sampling.distribution(sampling.distribution$Deltahat.all, target$Delta.all)
+```
+
+:::
+
 Here's a follow-up. You're going to calculate the coverage of the confidence intervals discussed in the previous section. This one I'm leaving to you. I'm not going to do for $\hat\Delta_{\text{all}}$ and $\hat\Delta_1$ myself. 
 
 ::: {#exr-fake-data-coverage .callout-exercise}
@@ -626,8 +825,171 @@ $$
 And you may want want to use fewer than 10,000 samples from the fake population and fewer than 10,000 bootstrap samples from each sample, as this'd result in your calculating you estimators 100 million ($10,000^2$) times. In my solution to Week 3's Exercise 11, I used 1000 of each for a total of a million. You can do that here too, but it'd take a little longer because our estimators are a bit more complicated. Maybe a few hours. Start with 100 of each to see that your code is working first and get a sense of how long it takes to run. When you increase both 100s to 1000s, it'll take about $10^2=100$ times longer. If that's too long for you, go with 200 or 400 of each.
 :::
 
-Now it's time to do something a little different. For the first time in the semester, you'd going to estimate the 
-population column means $\mu(w,x)$ using least squares.^[If you want, you could argue it's not really the first time. You've been estimating $\mu(w,x)$ by least squares all along, since column means are the least squares estimator in the 'all functions' model. But this is the first time you're going to do it with a *different* model.]
+::: {.callout-solution}
+
+This is a long one. I'm going to do it in 3 parts.
+
+1. I'll write code that calculates the bootstrap sampling distribution of our estimators and then boils those down to their widths. This'll borrow from my solution to @exr-calibrate-intervals.
+2. I'll write code that calculates the normal-approximation-based widths of the confidence intervals. This'll borrow from my 'solution' to @nte-normal-intervals.
+3. I'll write code that draws samples from the fake population and calculates point estimates (based on my solution to @exr-fake-data), then uses the code from the first two parts to make bootstrap-based and normal-approximation-based around them, and finally records whether the intervals cover the estimation targets. 
+
+
+**Step 1**. I'm going to start by copying the bootstrap code from my solution to @exr-calibrate-intervals and modifying it so that it's a *function of the sample*. A couple lines change. I'll mark them.
+
+```{r}
+#| echo: true
+bootstrap.estimates = function(sam, replications=400) { #<1>
+  1:replications |> map(function(.) { #<2>
+    n = nrow(sam)                     #<3>
+    I.star = sample(1:n, n, replace=TRUE) 
+    bootstrap.sam = sam[I.star,]  #<4>                                     
+    Wstar = bootstrap.sam$w     #<4>                                                    
+    Xstar = bootstrap.sam$x     #<4>                                                    
+    Ystar = bootstrap.sam$y     #<4>                                         
+
+    summaries.star = sam[I.star,] |>                                                  
+                    group_by(w,x) |>                                                       
+                    summarize(muhat = mean(y), .groups='drop')                          
+    muhat.star = summary.lookup('muhat', summaries.star, default=mean(Ystar))         
+  
+    data.frame(                                                                           
+      Deltahat.raw = mean(Ystar[Wstar==1]) - mean(Ystar[Wstar==0]),                       
+      Deltahat.1   = mean(muhat.star(1,Xstar[Wstar==1]) -   
+                          muhat.star(0,Xstar[Wstar==1])),
+      Deltahat.0   = mean(muhat.star(1, Xstar[Wstar==0]) -  
+                          muhat.star(0, Xstar[Wstar==0])),  
+      Deltahat.all = mean(muhat.star(1, Xstar) -            
+                          muhat.star(0, Xstar))             
+    )
+  }) |> bind_rows() 
+} #<5>
+```
+1. Wrap it in a function of the sample (and number of replications with a default of 400).
+2. Change the number of replications from 10,000 to whatever you ask for.
+3. Calculate `n` from the sample passed in. The code we copied expected `n` to be a global variable that matched the size of the sample `sam`. That'd be ok here because we're still using that sample size and the global variable is still there if you run the code in this document from start to finish, but it'd get you into trouble if you ever tried to use this code for a sample of a different size.
+4. Calculate a bootstrap version of the sample passed in rather than based on the global variables `W`, `X`, and `Y`. 
+5. Just a close-brace for this new function.
+
+Now I'll write a little function that uses this to calculate the width of the bootstrap-based confidence intervals for the estimation targets we've been using.
+
+```{r}
+#| echo: true
+bootstrap.widths = function(sam, replications=400) {
+  bootstrap.estimates(sam, replications) |> 
+    summarize(
+      Deltahat.raw = width(Deltahat.raw),
+      Deltahat.1   = width(Deltahat.1),
+      Deltahat.0   = width(Deltahat.0), 
+      Deltahat.all = width(Deltahat.all))
+}
+```
+
+**Step 2**.
+
+Now we're going to write code that calculates the variance of our point estimates. We've got code to do this from our 'solution' to @nte-normal-intervals, which uses our definitions of `alphahat.0` and `alphahat.all` from @exr-calc and the definitions of `muhat` and `sigmahat` above them. Because all that stuff depends on the sample, we'll have to recalculate them for each sample we draw from the population. Let's wrap all that in a function that takes a sample as input.
+```{r}
+#| echo: true
+
+normal.widths = function(sam) {
+  n = nrow(sam)      
+  summaries = sam |>  #<1>
+    group_by(w,x) |>  #<1>
+    summarize(muhat = mean(y), sigmahat = sd(y), Nwx = n(), .groups='drop') #<1>
+  muhat    = summary.lookup('muhat',    summaries, default=mean(sam$y))     #<1>
+  sigmahat = summary.lookup('sigmahat', summaries, default=Inf)             #<1>
+  Nwx      = summary.lookup('Nwx',      summaries, default=0)              #<1>
+  
+  Nw   = function(w) { sum(Nwx(w, x)) }  #<1>
+  Px.1 = function(x) { Nwx(1,x)/Nw(1) }  #<1>
+  Px.0 = function(x) { Nwx(0,x)/Nw(0) }  #<1>
+  Px   = function(x) { (Nwx(0,x)+Nwx(1,x)) / n } #<1>
+
+  alphahat.0 = function(w,x) { ifelse(w==1,   Px.0(x), -Px.0(x)) }  #<2>
+  alphahat.all = function(w,x) { ifelse(w==1, Px(x), -Px(x)) }      #<2>
+
+  Deltahat.0   = mean(muhat(1, sam$x[sam$w==0]) -                #<3>
+                      muhat(0, sam$x[sam$w==0]))                 #<3>
+  Deltahat.all = mean(muhat(1, sam$x) - muhat(0, sam$x))         #<3>
+  x=unique(xx)                                                   #<3>
+  Deltahat.0.general = general.form.estimate(alphahat.0, muhat, w=c(0,1), x=x) #<3>
+  Deltahat.all.general = general.form.estimate(alphahat.all, muhat, w=c(0,1), x=x) #<3>
+  stopifnot(abs(Deltahat.0 - Deltahat.0.general) <= 1e-10)     #<3>
+  stopifnot(abs(Deltahat.all - Deltahat.all.general) <= 1e-10)  #<3>
+
+  Vhat.0   = sum(alphahat.0(ww, xx)^2 * sigmahat(ww, xx)^2 / Nwx(ww, xx))     #<4>
+  Vhat.all = sum(alphahat.all(ww, xx)^2 * sigmahat(ww, xx)^2 / Nwx(ww, xx))   #<4>
+
+  data.frame(Deltahat.0 = 2*1.96*sqrt(Vhat.0), Deltahat.all = 2*1.96*sqrt(Vhat.all))
+}
+```
+1. Copied from above @exr-calc with one change: I've made the default value for `sigmahat` infinity. The effect is that when we have a pair $(w,x)$ that we don't see in our sample, the ratio $\hat\sigma^2(w,x) / N_{wx}$ will be $\infty/0=\infty$. In other words, if we're estimating the mean of a subpopulation we don't see in our sample---where for point estimation we just make something up (the default value for `muhat`, which I'm making the whole-sample mean $\bar Y$)---we'll get a variance of $\infty$ and therefore an infinitely wide interval. Seems reasonable to me. If this happened often, instead of some weird ad-hoc fix like using these defaults, we'd want to use a different regression model (not the 'all functions' model) so we could guess at $\hat\mu(w,x)$ in a more principled and more statistically-analyzable way.
+3. Copied from the solution to @exr-calc.
+4. Check that we've got alpha defined correctly by comparing point estimates using them to 'sum over people' versions.
+5. Copied from the 'solution' to @nte-normal-intervals. Uses `xx` and `ww` defined above in the solution to @exr-calc.
+
+
+**Step 3**. Now I can copy my code from @exr-fake-data, which draws samples from the fake population and calculates point estimates, so it uses the code above to calculate interval estimates and checks whether they cover the targets. Note that I defined the targets in my solution to @exr-fake-data, so they're available to my code here in the data frame `target`.
+
+```{r}
+set.seed(0)
+```
+```{r}
+#| echo: true
+#| cache: true
+
+samples = 1:400 |> map(function(.) {  #<7>
+  J = sample(1:m, n, replace=TRUE)     #<7>
+  pop[J,]                             #<7>
+})   #<7>
+
+covers = samples |> map(function(fake.sam) { 
+  W = fake.sam$w                     
+  X = fake.sam$x
+  Y = fake.sam$y                    
+
+  summaries = fake.sam |> group_by(w,x) |> summarize(muhat = mean(y), .groups='drop') 
+  muhat = summary.lookup('muhat', summaries, default=mean(Y))                          
+  
+  Deltahat.0   = mean(muhat(1,X[W==0]) - muhat(0,X[W==0]))
+  Deltahat.all = mean(muhat(1,X) - muhat(0,X))  
+
+  width.boot   = bootstrap.widths(fake.sam)  #<1>
+  width.normal = normal.widths(fake.sam)     #<2>
+
+  boot.interval.0 = Deltahat.0 + c(-1,1)*width.boot$Deltahat.0/2           #<3>
+  normal.interval.0 = Deltahat.0 + c(-1,1)*width.normal$Deltahat.0/2       #<3>
+  boot.interval.all = Deltahat.all + c(-1,1)*width.boot$Deltahat.all/2     #<3>
+  normal.interval.all = Deltahat.all + c(-1,1)*width.normal$Deltahat.all/2 #<3>
+ 
+  in.interval = function(target, interval) {  #<4>
+    interval[1] <= target & target <= interval[2] #<4>
+  } #<4>
+  covers = data.frame(                                                 #<5>
+    boot.0     = target$Delta.0   |> in.interval(boot.interval.0), #<5>
+    normal.0   = target$Delta.0   |> in.interval(normal.interval.0), #<5>
+    boot.all   = target$Delta.all |> in.interval(boot.interval.all), #<5>
+    normal.all = target$Delta.all |> in.interval(normal.interval.all)) #<5>
+  covers
+}) |> bind_rows() #<6>
+```
+1. This uses our code from Step 1. All the code above this is from @exr-fake-data. 
+2. This uses our code from Step 2.
+3. Calculate intervals given centers and widths. Standard stuff.
+4. A little function that checks whether a number is in an interval.
+5. Use it to check whether the estimation targets are in the intervals.
+6. Stick together the results from each sample into one data frame.
+7. I decided to calculate and store my samples rather than drawing them in the loop to help me debug. I noticed I was getting a few `NA`s in `covers` and this way, I could look at the rows of covers where they were, find out corresponding samples, and step through the code for that specific sample to see what was up. 
+
+Now we've got a data frame telling us whether the bootstrap-based and normal-approximation-based confidence intervals cover the estimation targets in each of our samples drawn from the fake population. To calculate the coverage probabilities, we just need to take the mean of the four columns of `covers`. You can definitely write more verbose code to do this, but my GPT-o1-mini-based autocomplete suggested this fancy use of `summarize`. It's nice and compact.
+
+```{r}
+#| echo: true
+covers |> summarize(across(everything(), mean))
+```
+:::
+
+
+Now it's time to do something a little different. For the first time in the semester, you'd going to estimate the population column means $\mu(w,x)$ using least squares.^[If you want, you could argue it's not really the first time. You've been estimating $\mu(w,x)$ by least squares all along, since column means are the least squares estimator in the 'all functions' model. But this is the first time you're going to do it with a *different* model.]
 
 ::: {#exr-fake-data-lsq .callout-exercise}
 Repeat the last two exercises with one change: estimate the column means $\mu(w,x)$ in the population via least squares with the 'not-necessarily-parallel lines model'. Like this.
@@ -657,22 +1019,252 @@ $$
 
 ::: callout-tip 
 ### Tip.
-If you want, you can check that you haven't introduced a problem when you modify your code from the previous exercises to 
-do least squares pretty easily. All you have to do is try your new code out using the 'all functions' model instead of the 'not-necessarily-parallel lines' model. Because the least squares estimator of $\mu(w,x)$ in this model is just a column mean,
+If you want, you can check that you haven't introduced a problem when you modify your code from the previous exercises to do least squares pretty easily. All you have to do is try your new code out using the 'all functions' model instead of the 'not-necessarily-parallel lines' model. Because the least squares estimator of $\mu(w,x)$ in this model is just a column mean,
 this should give you the same thing you got in the previous exercises. To do that, you just need to change the *formula* you use when you call `lm`. To use the all functions model, you can say `y ~ w*factor(x)` instead of `y ~ w*x`.
 :::
 
+::: {.callout-solution}
+### Solution: Sampling Distributions 
+```{r}
+#| echo: true
+default.formula = y ~ w*x
+```
+
+The code is from @exr-fake-data. We change how $\hat\mu$ is defined.
+```{r}
+#| echo: true
+formula = default.formula
+sampling.distribution = samples |> map(function(fake.sam) { 
+  fake.sam$w = fake.sam$w + 0 #<1>                     
+  W = fake.sam$w 
+  X = fake.sam$x                     
+  Y = fake.sam$y                    
+
+  fitted.model = lm(formula, data=fake.sam) #<2>
+  muhat = function(w,x) { predict(fitted.model, newdata=data.frame(w=w,x=x)) } #<2>
+  
+  data.frame(
+    Deltahat.0   = mean(muhat(1,X[W==0]) - muhat(0,X[W==0])),
+    Deltahat.all = mean(muhat(1,X) - muhat(0,X))  
+  )
+}) |> bind_rows()
+```
+1. A lot of code in **R** will automatically convert `FALSE`/`TRUE` to `0`/`1` where needed, but `lm` makes a distinction. I'm adding the `+ 0` to convert `W` to numeric `0`/`1`.
+2. The new `muhat`. 
+
+```{r}
+#| echo: true
+#| layout-ncol: 2
+#| fig-width: 5.5
+
+plot.sampling.distribution(sampling.distribution$Deltahat.0, target$Delta.0)
+plot.sampling.distribution(sampling.distribution$Deltahat.all, target$Delta.all)
+```
+
+This model choice worked out very well. Bias is very small, especially for $\Delta_0$.
+:::
+
+::: {#nte-model-choice .callout-note collapse="true"}
+### Note: Model Choice Matters
+To give you a sense of what a bad model choice looks like, here are the sampling distributions we get when we use the 'horizontal lines' model, 
+$$
+\model=\{ a(w) \ \text{for functions } a(w) \}.
+$$ 
+
+To do this, I just copy-paste the code from my solution above and change the formula.
+
+```{r}
+#| echo: true
+formula = y ~ w
+```
+
+```{r}
+#| echo: false
+sampling.distribution = samples |> map(function(fake.sam) { 
+  fake.sam$w = fake.sam$w + 0 #<1>                     
+  W = fake.sam$w 
+  X = fake.sam$x                     
+  Y = fake.sam$y                    
+
+  fitted.model = lm(formula, data=fake.sam) 
+  muhat = function(w,x) { predict(fitted.model, newdata=data.frame(w=w,x=x)) }
+  
+  data.frame(
+    Deltahat.0   = mean(muhat(1,X[W==0]) - muhat(0,X[W==0])),
+    Deltahat.all = mean(muhat(1,X) - muhat(0,X))  
+  )
+}) |> bind_rows()
+```
+
+```{r}
+#| echo: false
+#| layout-ncol: 2
+#| fig-width: 5.5
+
+plot.sampling.distribution(sampling.distribution$Deltahat.0, target$Delta.0)
+plot.sampling.distribution(sampling.distribution$Deltahat.all, target$Delta.all)
+```
+:::
+
+
+
+
+
+::: {.callout-solution}
+### Solution: Coverage
+To do this one, I'm going to copy over my code from @exr-fake-data-coverage
+and make a few changes. I'll point out the changes where they happen.
+
+**Step 1**. In the bootstrap code, all I've done is change my definition of `muhat.star` to use 
+least squares in the not-necessarily-parallel lines model.
+
+```{r}
+bootstrap.estimates = function(sam, replications=400, formula=default.formula) { #<1
+  1:replications |> map(function(.) { 
+    n = nrow(sam)                     
+    I.star = sample(1:n, n, replace=TRUE) 
+    bootstrap.sam = sam[I.star,]                                       
+    Wstar = bootstrap.sam$w                                                         
+    Xstar = bootstrap.sam$x                                                        
+    Ystar = bootstrap.sam$y                                            
+
+    fitted.model = lm(formula, data=bootstrap.sam) #<1>
+    muhat.star = function(w,x) { predict(fitted.model, newdata=data.frame(w=w,x=x)) } #<1>
+  
+    data.frame(                                                                           
+      Deltahat.raw = mean(Ystar[Wstar==1]) - mean(Ystar[Wstar==0]),                       
+      Deltahat.1   = mean(muhat.star(1,Xstar[Wstar==1]) -   
+                          muhat.star(0,Xstar[Wstar==1])),
+      Deltahat.0   = mean(muhat.star(1, Xstar[Wstar==0]) -  
+                          muhat.star(0, Xstar[Wstar==0])),  
+      Deltahat.all = mean(muhat.star(1, Xstar) -            
+                          muhat.star(0, Xstar))             
+    )
+  }) |> bind_rows() 
+} 
+```
+1. I'll add a 'formula' argument I can use least squares for any model I want. The default is the not-necessarily-parallel lines model.
+2. Here I'm using `lm` to fit the specified model via least squares and writing a function that makes predictions using the fitted model.
+
+Here's my width function. Again, I've added a 'formula' argument.
+```{r}
+bootstrap.widths = function(sam, replications=400, formula=default.formula) {
+  bootstrap.estimates(sam, replications, formula) |> 
+    summarize(
+      Deltahat.raw = width(Deltahat.raw),
+      Deltahat.1   = width(Deltahat.1),
+      Deltahat.0   = width(Deltahat.0), 
+      Deltahat.all = width(Deltahat.all))
+}
+```
+
+**Step 2**.
+
+Now here's the code that calculates the variance of our point estimates by substituting the new version of $\hat\mu$ into our code from @exr-fake-data-coverage.
+
+**This is not actually the right variance**. Our variance formula from our [Lecture on Inference for Complex Summaries](`r lecture(8)/#a-variance-decomposition-for-our-estimator) is specific to the case that we use subsample means to estimate the $\mu(w,x)$ in the population. ^[If you caught that and chose not to do that, that's great. But if you catch something like it again, please shoot me an email so I can send out a correction for everyone else.] ^[The correct formula is a little complicated. I'll explain what it looks like and why you might not really want to bother with it next week.] But I forgot to tell you to do the bootstrap intervals only for this one, so let's see what happens. 
+
+```{r}
+#| echo: true
+
+normal.widths = function(sam, formula=default.formula) {
+  n = nrow(sam)      
+  summaries = sam |>  #<1>
+    group_by(w,x) |>  #<1>
+    summarize(muhat = mean(y), sigmahat = sd(y), Nwx = n(), .groups='drop') 
+  fitted.model = lm(formula, data=sam) #<1>
+  muhat = function(w,x) { predict(fitted.model, newdata=data.frame(w=w,x=x)) } #<1>
+  sigmahat = summary.lookup('sigmahat', summaries, default=Inf) 
+  Nwx      = summary.lookup('Nwx',      summaries, default=0) 
+  
+  Nw   = function(w) { sum(Nwx(w, x)) }  
+  Px.1 = function(x) { Nwx(1,x)/Nw(1) }  
+  Px.0 = function(x) { Nwx(0,x)/Nw(0) }  
+  Px   = function(x) { (Nwx(0,x)+Nwx(1,x)) / n } 
+
+  alphahat.0 = function(w,x) { ifelse(w==1,   Px.0(x), -Px.0(x)) }  
+  alphahat.all = function(w,x) { ifelse(w==1, Px(x), -Px(x)) }      
+
+  Deltahat.0   = mean(muhat(1, sam$x[sam$w==0]) -                
+                      muhat(0, sam$x[sam$w==0]))                 
+  Deltahat.all = mean(muhat(1, sam$x) - muhat(0, sam$x))         
+  x=unique(xx)                                               
+  Deltahat.0.general = general.form.estimate(alphahat.0, muhat, w=c(0,1), x=x) 
+  Deltahat.all.general = general.form.estimate(alphahat.all, muhat, w=c(0,1), x=x) 
+  stopifnot(abs(Deltahat.0 - Deltahat.0.general) <= 1e-10)     
+  stopifnot(abs(Deltahat.all - Deltahat.all.general) <= 1e-10)  
+
+  Vhat.0   = sum(alphahat.0(ww, xx)^2 * sigmahat(ww, xx)^2 / Nwx(ww, xx))     
+  Vhat.all = sum(alphahat.all(ww, xx)^2 * sigmahat(ww, xx)^2 / Nwx(ww, xx))   
+
+  data.frame(Deltahat.0 = 2*1.96*sqrt(Vhat.0), Deltahat.all = 2*1.96*sqrt(Vhat.all))
+}
+```
+1. The new part.
+
+**Step 3**. Now all I've got to do is take my Step 3 code from @exr-fake-data-coverage and fix my point estimates to use the new version of $\hat\mu$. The rest of the code is the same because it relies on the width calculations I've already fixed up above. I'll use the same samples as I did in @exr-fake-data-coverage, which I stored in the list `samples` in my code for that one.
+
+```{r}
+set.seed(0)
+```
+
+```{r}
+#| echo: true
+#| cache: true 
+
+formula = default.formula
+covers = samples |> map(function(fake.sam) { 
+  fake.sam$w = fake.sam$w + 0 #<1>                     
+  W = fake.sam$w 
+  X = fake.sam$x                     
+  Y = fake.sam$y                    
+
+  fitted.model = lm(formula, data=fake.sam) #<2>
+  muhat = function(w,x) { predict(fitted.model, newdata=data.frame(w=w,x=x)) } #<2>
+  
+  Deltahat.0   = mean(muhat(1,X[W==0]) - muhat(0,X[W==0]))
+  Deltahat.all = mean(muhat(1,X) - muhat(0,X))  
+
+  width.boot   = bootstrap.widths(fake.sam)  
+  width.normal = normal.widths(fake.sam)     
+
+  boot.interval.0 = Deltahat.0 + c(-1,1)*width.boot$Deltahat.0/2           
+  normal.interval.0 = Deltahat.0 + c(-1,1)*width.normal$Deltahat.0/2       
+  boot.interval.all = Deltahat.all + c(-1,1)*width.boot$Deltahat.all/2    
+  normal.interval.all = Deltahat.all + c(-1,1)*width.normal$Deltahat.all/2 
+ 
+  in.interval = function(target, interval) {  
+    interval[1] <= target & target <= interval[2] 
+  } 
+  covers = data.frame(                                                 
+    boot.0     = target$Delta.0   |> in.interval(boot.interval.0), 
+    normal.0   = target$Delta.0   |> in.interval(normal.interval.0), 
+    boot.all   = target$Delta.all |> in.interval(boot.interval.all), 
+    normal.all = target$Delta.all |> in.interval(normal.interval.all)) 
+  covers
+}) |> bind_rows() 
+```
+1. A lot of code in **R** will automatically convert `FALSE`/`TRUE` to `0`/`1` where needed, but `lm` makes a distinction. I'm adding the `+ 0` to convert `W` to numeric `0`/`1`.
+2. The new `muhat`. 
+
+Now averaging to boil things down to coverage probabilities.
+
+```{r}
+#| echo: true
+covers |> summarize(across(everything(), mean))
+```
+
+Not bad!  This Friday in Lab, we'll dig into why this works ok even though the model doesn't contain any function that can quite go through all the subpopulation means $\mu(w,x)$.
+:::
 
 Here's an extra-credit follow-up that looks back to our last exercise from Practice Midterm 1.
 
 ::: {#exr-practice-midterm-1 .callout-exercise}
 *Extra Credit*. 
-Suppose you want to report an interval estimate centered on the same point estimator you used @exr-fake-data-lsq. The one involving the not-necessarily-parallel lines model. But you want it to have 95% coverage. 
-That means you'll have to use a wider interval.^[You'll have to use a wider interval unless you got 95% coverage in @exr-fake-data-coverage. You shouldn't have. If you did, go back and try to figure out what went wrong.] 
+Suppose you want to report an interval estimate centered on the same point estimator you used @exr-fake-data-lsq. The one involving the not-necessarily-parallel lines model. But you want it to have 95% coverage. That means you'll have to use a wider interval.^[You'll have to use a wider interval unless you got 95% coverage in @exr-fake-data-coverage. You shouldn't have. If you did, go back and try to figure out what went wrong.] 
 
 Here's an idea for how to do this using the bootstrap. Choose a width $w$ so that for 95% of 
-draws $\hat\theta^\star$ from your estimator's bootstrap sampling distribution, the interval $\hat\theta^\star \pm w/2$
-contains a 'sample version' $\theta^\star$ of your estimation target. Do this and report three things.
+draws $\hat\theta^\star$ from your estimator's bootstrap sampling distribution, the interval $\hat\theta^\star \pm w/2$ contains a 'sample version' $\theta^\star$ of your estimation target. Do this and report three things.
 
 1. A description of $\theta^\star$ in mathematical notation.
 2. The coverage probability of this interval estimator. 
