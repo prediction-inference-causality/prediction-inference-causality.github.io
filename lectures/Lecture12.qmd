@@ -4,6 +4,8 @@ subtitle: "The Behavior of Least Squares Predictors"
 ---
 
 # Introduction 
+This is a revised version of Lecture 12 as covered in class. It's a work in progress.
+Parts may be useful as supplemental reading but it isn't yet entirely coherent or complete enough to be a replacement for the version from class.
 
 ## Today's Topic
 
@@ -24,6 +26,7 @@ mu.pop = function(w,x) case_when(
   w==0 & x <= 35  ~ 10,
   w==0            ~ 10)
 
+set.seed(2)
 w = 0 + (runif(length(x)) < pi.pop(x))
 y = rpois(length(x), mu.pop(w,x))
 fake.pop = data.frame(w=w, x=x, y=y)
@@ -42,11 +45,11 @@ sam = pop[J,]
 prop.scale = 40
 default.shift = .5
 plotX = function(w,x, shift=default.shift) { ifelse(w==0, x-shift, x+shift) }
-lsq.plot = function(sam, formula=NULL, dot.size=1, shift=default.shift, residual.alpha=0) {
+lsq.plot = function(sam, formula=NULL, dot.size=2, shift=default.shift, residual.alpha=0) {
   sam$jitterX = runif(nrow(sam), -1, 1)*shift
   base.plot = ggplot(sam) + 
     geom_point(aes(x=plotX(w,x)+jitterX,y=y,color=factor(w)), 
-      alpha=.05, size=dot.size) + 
+      alpha=.2, size=dot.size) + 
     stat_summary(aes(x=plotX(w,x), y=y), 
       fun.data=mean_sd, geom='pointrange', alpha=.2) +
     geom_bar(aes(x=x, y=prop.scale*after_stat(prop)), 
@@ -231,7 +234,453 @@ $$
   - This intuition comes in very handy because a lot of people don't have it.^[Blame us teachers. In a lot of classes, you do the math assuming you're using a correctly specified model. Then you learn some techniques for choosing a model that isn't obviously misspecified. The message people get is to put a little effort into choosing a model, then act as if it were correctly specified. That doesn't work.]
   - With even pretty basic intuition, you can catch a lot of mistakes and get them fixed.
 
-# Modeling and Sampling Error
+# Orthogonality of Residuals
+*The* tool for understanding least squares.
+
+## Review: Least Squares and the Sample Mean
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7 
+#| fig-cap:  
+#|  - 'Some data with horizontal lines at the mean (red), median (orange), and mode (blue).' 
+#|  - 'The sum of squared deviations from $m$ (on the x-axis) with the mean (red), median (orange), and mode (blue) indicated by dots.' 
+Y = sam$y
+X = 1:length(Y)
+signsq = function(x) { sign(x)*x^2 / 40000 }
+themode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+ggplot() + 
+  geom_hline(yintercept=mean(Y), alpha=.4, linewidth=1, color='red') + 
+  geom_hline(yintercept=median(Y), alpha=.4, linewidth=1, color='orange') + 
+  geom_hline(yintercept=themode(Y), alpha=.4, linewidth=1, color='blue') + 
+  geom_point(aes(x=X,y=Y), size=2, alpha=.2) +  
+  geom_segment(aes(x=X, xend=X, y=mean(Y), yend=mean(Y)+signsq(Y-mean(Y))), alpha=.2, color='red', linewidth=.5) + 
+  geom_segment(aes(x=X+.1, xend=X+.1, y=median(Y), yend=median(Y)+signsq(Y-median(Y))), alpha=.2, color='orange', linewidth=.5) +
+  geom_segment(aes(x=X-.1, xend=X-.1, y=themode(Y), yend=themode(Y)+signsq(Y-themode(Y))), alpha=.2, color='blue', linewidth=.5)
+
+ssr = Vectorize(\(m) sum((Y-m))^2)
+x = seq(mean(Y)-2*sd(Y), mean(Y)+2*sd(Y), length.out=1000)
+ggplot() + geom_line(aes(x=x, y=ssr(x)))  +
+  geom_point(aes(x=mean(Y), y=ssr(mean(Y))), color='red', size=4) + 
+  geom_point(aes(x=median(Y), y=ssr(median(Y))), color='orange', size=4) +
+  geom_point(aes(x=themode(Y), y=ssr(themode(Y))), color='blue', size=4)  
+```
+
+$$
+\hat \mu = \argmin_{\text{numbers}\ m} SSR(m) \qfor SSR(m) =\sum_{i=1}^n \qty{ Y_i - m }^2 \quad \text{ satisfies the \textbf{zero-derivative condition} }
+$$
+ 
+$$
+\begin{aligned}
+0 
+&= \frac{d}{dm} \sum_{i=1}^n \qty{ Y_i - m }^2  \ \ \mid_{m=\hat\mu}  
+&&= \sum_{i=1}^n \frac{d}{dm} \qty{ Y_i - m }^2  \ \ \mid_{m=\hat\mu}  \\ 
+&= \sum_{i=1}^n -2 \qty{ Y_i - m } \ \ \mid_{m=\hat\mu} 
+&&= \sum_{i=1}^n -2 \qty{ Y_i - \hat\mu } 
+\end{aligned}
+$$
+
+- This says the least squares residuals [$\hat\varepsilon = Y_i - \hat \mu$]{.fg style="color:red"} *sum to zero*. 
+- With a bit of algebra, this tells us that the least squares estimator $\hat\mu$ is the sample mean.
+
+$$
+\begin{aligned}
+&0 = \sum_{i=1}^n -2\qty{ Y_i - \hat\mu } && \text{ when } \\ 
+&2\sum_{i=1}^n Y_i = 2\sum_{i=1}^n \hat\mu = 2n\hat\mu && \text{ and therefore when } \\
+&\frac{1}{n}\sum_{i=1}^n Y_i = \hat\mu
+\end{aligned}
+$$
+
+## Least Squares and Subsample Means
+
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7 
+#| fig-cap:  
+#|  - 'Some data with horizontal lines at the means of the two groups.' 
+#|  - 'A contour plot of the sum of squared residuals.'
+
+Y = sam$y
+X = 1:length(Y)
+W = sam$w
+
+signsq = function(x) { sign(x)*x^2 / 40000 }
+themode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+subsample.means.plot = ggplot() + 
+  geom_hline(aes(yintercept=mean(Y[W==0])), alpha=.4, linewidth=1, color=groupa) +
+  geom_hline(aes(yintercept=mean(Y[W==1])), alpha=.4, linewidth=1, color=groupb) +
+  geom_hline(aes(yintercept=mean(Y[W==0])), alpha=.4, linetype='dotted', color='red') +
+  geom_hline(aes(yintercept=mean(Y[W==1])), alpha=.4, linetype='dotted', color='red') +
+  geom_hline(aes(yintercept=median(Y[W==0])), alpha=.4, linewidth=1, color=groupa) +
+  geom_hline(aes(yintercept=median(Y[W==1])), alpha=.4, linewidth=1, color=groupb) +
+  geom_hline(aes(yintercept=median(Y[W==0])), alpha=.4, linetype='dashed', color='orange') +
+  geom_hline(aes(yintercept=median(Y[W==1])), alpha=.4, linetype='dashed', color='orange') +
+  geom_hline(aes(yintercept=themode(Y[W==0])), alpha=.4, linewidth=1, color=groupa) +
+  geom_hline(aes(yintercept=themode(Y[W==1])), alpha=.4, linewidth=1, color=groupb) +
+  geom_hline(aes(yintercept=themode(Y[W==0])), alpha=.4, linetype='dotted', color='blue') +
+  geom_hline(aes(yintercept=themode(Y[W==1])), alpha=.4, linetype='dotted', color='blue') +
+  geom_point(aes(x=X,y=Y,color=factor(W)), size=2, alpha=.2) + guides(color='none')
+
+xr = seq(mean(Y)-1.5*sd(Y), mean(Y)+1.5*sd(Y), length.out=100)
+ssr = Vectorize(\(m0,m1) sum((Y-m0*(W==0)-m1*(W==1))^2))
+grid = expand.grid(m0=xr, m1=xr)
+grid$y = ssr(grid$m0, grid$m1)
+
+two.groups.ssr.plot=ggplot() + geom_contour_filled(aes(x=m0, y=m1, z=y), 
+          data=grid, breaks=6000 + c(0,100*2^(0:8))) + 
+           geom_point(aes(x=mean(Y[W==0]), y=mean(Y[W==1])), color='red', size=4) +
+           geom_point(aes(x=median(Y[W==0]), y=median(Y[W==1])), color='orange', size=4) +
+           geom_point(aes(x=themode(Y[W==0]), y=themode(Y[W==1])), color='blue', size=4) + 
+           coord_cartesian(xlim=range(xr), ylim=range(xr)) 
+
+subsample.means.plot 
+two.groups.ssr.plot + class.theme + labs(x='m(0)', y='m(1)', fill='SSR(m)')
+```
+
+$$
+\hat \mu = \argmin_{\text{functions}\ m(w)} SSR(m) \qfor SSR(m) =\sum_{i=1}^n \qty{ Y_i - m(W_i) }^2
+$$
+
+- How do we write a zero-derivative condition for this problem?
+  - i.e., how do we talk about the derivative with respect to a function?
+  - Like many things in multivariable calculus, we think one 'direction' at a time.
+- Let's start with something simpler. How do we visualize this problem? 
+- We can think of each function $m$ as a location in a two-dimensional space. 
+  - One dimension is the value of $m(0)$, the other is the value of $m(1)$. 
+- And we can use a *contour plot* to visualize the sum of squared residuals at each location. 
+  - If you hike or run, you probably see these plots all the time. They're used to show *elevation*.
+  - So you can think of the function we're minimizing, $SSR$, as the elevation of some landscape. 
+- The point we're looking for, $\hat\mu$, is the lowest point in that landscape.
+  - I've drawn in dots showing the height at the within-group [means]{.fg style="color:red"}, [medians]{.fg style="color:orange"}, and [modes]{.fg style="color:blue"}. 
+  - The means are the lowest point. Let's prove it.
+
+## Least Squares and Subsample Means
+
+```{r}
+slope = (median(Y[W==1])-mean(Y[W==1]))/(median(Y[W==0])-mean(Y[W==0]))
+intercept = mean(Y[W==1]) - slope*mean(Y[W==0])
+median.path = geom_abline(aes(slope=slope, intercept=intercept), color='orange', linewidth=.5)
+contour.labs = list(class.theme, labs(x='m(0)', y='m(1)', fill='SSR(m)'))
+two.groups.ssr.plot + median.path + contour.labs
+```
+
+::: {.panel-tabset}
+### Paths
+$$
+\hat \mu = \argmin_{\text{functions}\ m(w)} SSR(m) \qfor SSR(m) =\sum_{i=1}^n \qty{ Y_i - m(W_i) }^2
+$$
+
+- To write a zero-derivative condition, let's keep our landscape metaphor going. 
+  - Let's think about what happens if you start at the lowest point --- the means --- and hike uphill.
+  - Each point on the *path*^[This isn't just my own metaphorical language. These are really called *paths* in statistical theory.] you take is a location in our landscape: a function $m$ in our model.
+- We could, for example, hike straight toward the groupwise medians. I've drawn that path in orange.
+  - At 'time' $t=0$---when we start---we're at [the means.]{.fg style="color:red"}
+  - At 'time' $t=1$---when we finish---we're at the [medians.]{.fg style="color:orange"}^[There's no need to restrict $t$ to $[0,1]$. For $t>1$, we keep going past the medians. For $t<0$, we're walking in the opposite direction. The whole path is shown as an orange line on the contour plot.]
+$$
+m_t = \hat \mu + t (m - \hat \mu) \qqtext{ is 'where we are' at time } t.
+$$
+
+- When we take this path, what's our elevation --- the height of the $SSR$ landscape ---at time $t$?
+
+### The Lowest Point
+
+:::: columns 
+::: column 
+$$
+\begin{aligned}
+SSR(m_t) 
+&= \sum_{i=1}^n \qty{ Y_i - m_t(W_i) }^2 \\
+&= \sum_{i=1}^n \qty{ Y_i - \hat\mu(W_i) - t (m(W_i) - \hat\mu(W_i)) }^2
+\end{aligned}
+$$
+
+- This is a *univariate function*---a function of $t$. 
+- It's minimized at $t=0$ because we're starting at \
+the lowest point: the least squares predictor $\hat\mu$. 
+- That tells us that its derivative is zero at $t=0$. 
+
+$$
+\begin{aligned}
+0 = \frac{d}{dt}\mid_{t=0} SSR(m_t) 
+\end{aligned}
+$$
+
+:::
+::: column 
+```{r} 
+#| fig.width: 7
+x = seq(-1, 1,length.out=1000)
+f = function(x) ssr(mean(Y[W==0])*(1-x) + median(Y[W==0])*x, 
+                    mean(Y[W==1])*(1-x) + median(Y[W==1])*x)
+ggplot() + geom_line(aes(x=x, y=f(x)), color='orange')  +
+  geom_point(aes(x=0,y=f(0)), color='red',   size=4) + 
+  geom_point(aes(x=1,y=f(1)), color='orange', size=4) + class.theme +
+  labs(x='t', y='SSR(m_t)')
+```
+:::
+::::
+
+::: 
+
+## Our Zero-Derivative Condition
+
+```{r}
+two.groups.ssr.plot + 
+  geom_hline(aes(yintercept=mean(Y[W==1])), alpha=.4, linewidth=1, color=groupa) +
+  geom_vline(aes(xintercept=mean(Y[W==0])), alpha=.4, linewidth=1, color=groupb) + 
+  geom_abline(aes(slope=1, intercept=mean(Y[W==1]) - mean(Y[W==0])), color='orange', linewidth=.5) +
+  class.theme + labs(x='m(0)', y='m(1)', fill='SSR(m)')
+```
+
+- To make the math a bit easier, we'll define our paths slightly differently. 
+- We'll think of $m$ as a *direction* instead of a destination. 
+
+$$
+m_t = \hat\mu + t m \qqtext{ is 'where we are' at time } t \color{lightgray} \qqtext{ instead of } m_t = \hat\mu + t (m - \hat\mu).
+$$
+
+- No matter what direction $m \in \model$ we look at, our whole path $\hat\mu + tm$ is in the model.
+  - Why? Because our model is linear, $\hat\mu + tm \in \model$ whenever $\hat\mu \in \model$ and $m \in \model$.
+  - And because $\hat\mu$ is the lowest point in our whole landscape (i.e. our model $\model$), it has to be the lowest point in our path.
+
+- Now let's see what our zero-derivative for $SSR(m_t)$ tells us. 
+
+$$
+\begin{aligned}
+0 = \frac{d}{dt}SSR(m_t) 
+  &= \frac{d}{dt}\mid_{t=0} \sum_{i=1}^n \qty{ Y_i - \hat\mu(W_i) - tm(W_i) }^2   \\
+  &= \sum_{i=1}^n 2 \times \qty{ Y_i - \hat\mu(W_i) } \times \frac{d}{dt}\mid_{t=0} \ \qty{ Y_i - \hat\mu(W_i) - tm(W_i) } \\
+  &= \sum_{i=1}^n -2 \times \qty{ Y_i - \hat\mu(W_i) } \times m(W_i) \\
+\end{aligned}
+$$ 
+
+- Below, I've drawn this function for three different directions $m \in \model$.
+
+$$
+\underset{\text{left}}{\textcolor{red}{m(w)}} = 1_{=0}(w) = \begin{cases} 1 & \text{ if } w=0 \\ 0 & \text{ if } w=1 \end{cases} \qquad 
+\underset{\text{middle}}{\textcolor{magenta}{m(w)}} = 1_{=1}(w) = \begin{cases} 0 & \text{ if } w=0 \\ 1 & \text{ if } w=1 \end{cases} \qquad 
+\underset{\text{right}}{\textcolor{orange}{m(w)}} = 1
+$$
+
+```{r}
+#| fig.width: 3.5
+#| layout-ncol: 3
+x = seq(-2*sd(Y), 2*sd(Y), length.out=1000)
+x0 = mean(Y[W==1])
+f = function(x) ssr(mean(Y[W==0]), x0+x)
+ggplot() + geom_line(aes(x=x, y=f(x)), color='red')  +
+  geom_point(aes(x=0,y=f(0)), color='red', size=4)  
+
+x0 = mean(Y[W==0])
+g = function(x) ssr(x0+x, mean(Y[W==1]))
+ggplot() + geom_line(aes(x=x, y=g(x)), color='magenta') +
+  geom_point(aes(x=0,    y=g(0)),   color='red', size=4)  
+
+h = function(x) ssr(mean(Y[W==0])+x, mean(Y[W==1])+x)
+ggplot() + geom_line(aes(x=x, y=h(x)), color='orange') + 
+  geom_point(aes(x=0, y=h(0)), color='red', size=4) 
+```
+
+- By working with these, we can show some familiar properties of the residuals. 
+  - We know that $\hat\mu$ is the minimizer of $SSR(\hat\mu + tm)$ for any $m \in \model$ ...
+  - so the derivative of $SSR(\hat\mu + tm)$ with respect to $t$ must be zero at $t=0$.
+
+$$
+\begin{aligned}
+0 &= \frac{d}{dt}\mid_{t=0} \ \sum_{i=1}^n \qty{ Y_i - \hat\mu(W_i) + tm(W_i) }^2   \\
+  &= \sum_{i=1}^n 2 \times \qty{ Y_i - \hat\mu(W_i) } \times \frac{d}{dt}\mid_{t=0} \ \qty{ Y_i - \hat\mu(W_i) - tm(W_i) } \\
+  &= \sum_{i=1}^n -2 \times \qty{ Y_i - \hat\mu(W_i) } \times m(W_i) \\
+\end{aligned}
+$$ 
+
+- For the case $m(w) = 1_{=1}(w)$, this says the residuals sum to zero within group $w=1$.
+- For the case $m(w) = 1_{=0}(w)$, this says the residuals sum to zero within group $w=0$.
+- For the case $m(w) = 1$, this says the residuals sum to zero outright.
+
+## Orthogonality of Residuals in General
+
+- There's nothing specific to this model in the math we just did. It works for any linear model.
+- No matter which linear model we use, we can always think one direction at a time. 
+
+$$
+\begin{aligned}
+\hat\mu &\qqtext{minimizes} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2 &&\qqtext{ over } m \in \model \implies \\
+\hat\mu &\qqtext{minimizes} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2 &&\qqtext{ over } m \in \{ m_t = \hat\mu + t m \ : \ t \in \mathbb{R} \} \qqtext{ for any } m \in \model
+\end{aligned}
+$$
+
+- Writing mean squared error as a function of $t$ in this model ... 
+  - We can observe that it's minimized at $t=0$, since that's when $\hat\mu + tm=\hat\mu$
+  - And we can set the derivative to zero there to get the orthogonality condition we want.
+  
+$$
+\begin{aligned}
+0 &= \frac{d}{dt}\mid_{t=0} \sum_{i=1}^n \qty{ Y_i - \hat\mu(W_i,X_i) - t m(W_i,X_i) }^2 \\
+  &= \sum_{i=1}^n 2 \times \qty{ Y_i - \hat\mu(W_i,X_i) } \frac{d}{dt}\mid_{t=0} \qty{ Y_i - \hat\mu(W_i,X_i) - t m(W_i,X_i) }^2 \\
+  &= \sum_{i=1}^n 2 \times \qty{ Y_i - \hat\mu(W_i,X_i) } \times -m(W_i,X_i) \\
+\end{aligned}
+$$
+
+# The Expected Value of the Least Squares Predictor $\hat\mu(w,x)$
+
+## The Population Least Squares Predictor
+
+```{r}
+#| fig.width: 7
+#| layout-ncol: 2
+#| fig-cap: 
+#|  - 'A sample drawn with replacement from a population and the least squares predictor.'
+#|  - 'That population and the population least squares predictor.'
+sam |> lsq.plot(y~w*x)
+plot.pop |> lsq.plot(y~w+x)
+```
+
+
+::: {.panel-tabset}
+### Population Least Squares 
+
+- To make it easier to think about what happens when we do least squares, let's do a thought experiment. 
+  - Let's take all the randomness out of the picture. 
+  - Let's think about what would happen if we chose the function in our model $\model$ that minimizes the sum of squared error *over the whole population*.
+- We call this the *population least squares predictor*.
+
+$$
+\begin{aligned}
+\tilde\mu 
+&= \argmin_{m \in \model} \sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2 \\
+&\explain{=}{When we sample uniformly-at-random from the population, this expectation is $1/m$ times the sum above.}
+\argmin_{m \in \model} \E\qty[ \qty{ Y_i - m(W_i,X_i) }^2 ]   
+\end{aligned}
+$$
+
+- It's reasonable to expect it's a good approximation to the least squares predictor we get from a large sample.
+  - After all, the law of large numbers tells us that sample averages converge to a population averages. 
+  - Including the sample average of squared errors.^[We are talking about minimizing the sum and average of squared errors interchangeably. Why does that difference not matter? *Hint*. Why is the value of $x$ that minimizes $f(x)=x^2$ the same as the value of $x$ that minimizes $10x^2$ and $x^2/10$?]
+$$
+\frac{1}{n}\sum_{i=1}^n \qty{ Y_i - \hat\mu(W_i,X_i) }^2 \to  \E\qty[ \qty{ Y_i - \hat\mu(W_i,X_i) }^2 ] \qqtext{ as } n \to \infty.
+$$
+
+
+### 'Unbiasedness' of the Least Squares Predictor
+
+- It turns out that we can say even more than this. It's also the *expectation* of the least squares predictor.
+  - In other words, if the population least squares prediction $\tilde\mu(w,x)$ were our estimation target...
+  - ... then the least squares predictor we get from a sample would be an *unbiased* estimator for it.
+
+$$
+\E[\hat\mu(w,x)] = \tilde\mu(w,x)
+$$
+
+
+- To prove it, we'll think about the *population least squares residuals* $\tilde\varepsilon_j = y_j - \tilde\mu(w_j,x_j)$.
+- These satisfy an orthogonality property analogous to the one we saw for sample residuals.
+$$
+\begin{aligned}
+0 &= \veryfaint{\frac{1}{n}}\sum_{i=1}^n \overset{\textcolor{lightgray}{\text{sample residuals}}}{\lcb{ Y_i - \hat\mu(W_i,X_i) }} \ m(W_i,X_i)  
+&& \qqtext{ for all } m \in \model \\
+0 &= \veryfaint{\frac{1}{m}}\sum_{j=1}^m \overset{\textcolor{lightgray}{\text{population residuals}}}{\lcb{ y_j - \tilde\mu(w_j,x_j) }} \ m(w_j,x_j) 
+&& \qqtext{ for all } m \in \model \\
+&= \E\qty[ \qty{ Y_i - \tilde\mu(W_i,X_i) } \ m(W_i,X_i) ] 
+\end{aligned}
+$$
+
+- To prove 'unbiasedness', we'll combine these two orthogonality properties in a clever way.
+
+:::
+
+## The Claim and Proof Sketch 
+
+**Claim**. 
+$$
+\begin{aligned}
+\tilde\mu(w,x) &= \mu_E(w,x) 
+&& \qfor \mu_E(w,x) = \E[\hat\mu(W_i,X_i) \mid W_i=w, X_i=x] \\
+&&& \qand \tilde\mu = \argmin_{m \in \model} \sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2
+\end{aligned}
+$$
+
+**Proof Sketch**.
+1. We'll show that orthogonality of residuals implies a kind of orthogonality of the difference $\hat\mu - \tilde\mu$.
+$$
+0=\E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ m(W_i,X_i) \right] \qqtext{ for all } m \in \model
+$$
+
+2. We'll plug in a clever choice of $m \in \model$: $m=\mu_E - \tilde \mu$ and show, using the law of iterated expectations, that this tells us the mean-squared-difference between $\mu_E$ and $\tilde\mu$ is zero.^[That implies $\mu_E(W_i,X_i) - \tilde\mu(W_i, X_i)=0$. That's how squares work. If something isn't zero, its mean-square is positive.]
+$$
+\begin{aligned}
+0 &= \E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ \qty{ \mu_E(W_i,X_i) - \tilde\mu(W_i, X_i) } \right] \\
+  &= \E\left[ \lcb{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) }^2 \right]
+\end{aligned}
+$$
+
+
+## Proof: Part 1
+
+- From the orthogonality of the sample residuals, all $m \in\model$ satisfy ...
+
+$$ 
+\begin{aligned}
+0 &= \frac{1}{n}\sum_{i=1}^n \lcb{ Y_i -\hat\mu(W_i,X_i) } \ m(W_i,X_i) \qqtext{ and therefore } \\
+0 &= \E \left[ \frac{1}{n}\sum_{i=1}^n \lcb{ Y_i -\hat\mu(W_i,X_i) } \ m(W_i,X_i) \right] \\ 
+  &=  \E\left[ \lcb{ Y_i - \hat\mu(W_i,X_i) } \ m(W_i,X_i) \right]. 
+\end{aligned}
+$$
+
+- From the orthogonality of the population residuals, all $m \in\model$ satisfy ...
+
+$$
+\begin{aligned}
+0 &= \E\left[ \lcb{ Y_i - \tilde \mu(W_i,X_i)} \ m(W_i,X_i) \right] \\
+\end{aligned}
+$$
+
+- Subtracting the first from the second, we find that all $m \in \model$ satisfy ...
+
+$$
+\begin{aligned}
+0 &= \E\left[ \tcb{ \lcb{ Y_i- \tilde\mu(W_i,X_i) } - \lcb{ Y_i - \hat\mu(W_i,X_i) }} \ m(W_i,X_i) \right] \\
+  &= \E\left[ \tcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ m(W_i,X_i) \right]
+\end{aligned}
+$$
+
+## Proof: Part 2
+
+- Because $\mu_E$ and $\tilde\mu$ are in the model^[See @sec-check-in-model], so is $m=\mu_E - \tilde\mu$. And therefore ...
+$$
+\begin{aligned}
+0 &= \E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ m(W_i,X_i) \right] \qqtext{ for all } m \in \model \implies \\
+0 &= \E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ \lcb{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) } \right] \qfor \mu_E(w,x) = \E[\hat\mu(W_i,X_i) \mid W_i=w, X_i=x]
+\end{aligned}
+$$
+
+- We'll use the law of iterated expectations to simplify this expectation.
+
+$$
+\begin{aligned}
+0 
+&\explain{=}{Step 1 + Substitution} 
+\E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \lcb{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) } \right] \\
+&\explain{=}{Law of Iterated Expectations} 
+  \E\left[ \color{blue}\E\left[ \color{black}  \left\{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) \right\} \left\{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) \right\} \color{blue} \mid W_i, X_i\right] \color{black} \right] \\
+&\explain{=}{Linearity of Conditional Expectations} 
+  \E\left[  \left\{ \color{blue}\E\left[ \color{black} \hat\mu(W_i,X_i) \color{blue} \mid W_i, X_i\right] \color{black} - \tilde\mu(W_i,X_i) \right\} \left\{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) \right\}  \right] \\
+&\explain{=}{Recognizing $\mu_E$'s definition} 
+\E\qty[ \qty{ \color{blue} \mu_E(W_i,X_i) \color{black} - \tilde\mu(W_i,X_i) }\qty{ \mu_E(W_i,X_i)  - \tilde\mu(W_i,X_i) } ] \\
+&\explain{=}{Recognizing a square} 
+\E\left[ \left\{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) \right\}^2 \right] 
+\end{aligned}
+$$
+
+- That concludes the proof. 
+  - If $\mu_E(W_i,X_i) - \tilde\mu(W_i,X_i)$ weren't always zero ...
+  - then the expected value of its square would be positive, not zero.
+
+# Implications for Complex Targets
 
 ## Breaking Down the Problem
 
@@ -313,252 +762,6 @@ $$
 **Q.** If the distribution of $\hat\mu$ is centered on the population least squares predictor $\tilde\mu$, \
 why is $\hat\mu(w,x)$ unbiased when we use the 'all functions model'?
 
-
-## Key Idea: Orthogonality of Residuals 
-```{r}
-#| layout-ncol: 2
-#| fig-width: 7
-sam |> lsq.plot(y~1, residual.alpha=.1)
-sam |> lsq.plot(y~w, residual.alpha=.1)
-```
-$$
-\textcolor{orange}{\hat\varepsilon_i} = Y_i - \hat\mu(W_i,X_i) \qquad \text{ are the \textbf{residuals}}
-$$
-
-::: {.panel-tabset}
-### Properties in Familiar Cases
-- When we use least squares to choose a ...
-  - constant prediction, the residuals sum to zero. 
-  - constant-within-groups prediction, the residuals sum to zero within groups. 
-$$
-\begin{aligned}
-\hat\mu &= \argmin_{\text{constants} \ m} \sum_{i=1}^n \qty{ Y_i - m }^2 \qqtext{ satisfies } \\
-0 &=\frac{d}{dm}\mid_{m=\hat\mu} \sum_{i=1}^n \qty{ Y_i - m }^2 = \sum_{i=1}^n 2 \times \qty{ Y_i - \hat\mu(X_i) } \times -1 = -2\sum_{i=1}^n \hat \varepsilon_i 
-\end{aligned}
-$$
-
-### A Generalization
-
-- The residuals are *orthogonal* to the predictions of every function in our model. 
-$$
-\begin{aligned}
-0 &= \sum_{i=1}^n \hat\varepsilon_i m(W_i, X_i) && \qqtext{ for all } m \in \model
-  &= \underset{\text{vector of residuals}}{\vec{\hat\varepsilon}} \cdot \underset{\text{vector of predictions}}{\vec{m(W,X)}} && \qfor \vec{m(W,X)} = [ m(W_1,X_1), \ldots, m(W_n,X_n) ]
-\end{aligned}
-$$
-
-- For the constant model, that's the same as summing to zero. 
-- For the constant-within-groups model, that's the same as summing to zero within groups.
-
-### Why It's the Same
-
-$$
-\begin{aligned}
-0 &= \sum_{i=1}^n \hat\varepsilon_i m && \qqtext{ for all constants } m \text{ if and only if } \\
-0 &= \sum_{i=1}^n \hat\varepsilon_i.
-\end{aligned}
-$$
-
-$$
-\begin{aligned}
-0 &= \sum_{i=1}^n \hat\varepsilon_i m(W_i) && \qqtext{ for all functions } m(w) 
-\text{ if and only if }  \\
-0 &= \sum_{i=1}^n \hat\varepsilon_i m(W_i) \\ 
-  &= \sum_{w}\sum_{i:W_i=w} \hat\varepsilon_i m(w) \\
-  &= \sum_{w} m(w) \inteal{\sum_{i:W_i=w} \hat\varepsilon_i}  && \text{ is a linear combination of \inteal{zeros} }.
-\end{aligned}
-$$
-
-:::
-
-## Orthogonality of Residuals in General
-```{r}
-#| fig.width: 7
-#| layout-ncol: 2
-sam |> lsq.plot(y~w*x, residual.alpha=.5)
-```
-
-- To prove this is true in general, we'll think about the optimality of $\hat\mu$ *one direction at a time*.
-$$
-\begin{aligned}
-\hat\mu &\qqtext{minimizes} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2 &&\qqtext{ over } m \in \model \implies \\
-\hat\mu &\qqtext{minimizes} \sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2 &&\qqtext{ over } m \in \model_1 \subseteq \model \\
-        & \text{and in particular} && \qqtext{ over } m \in \model_1 = \qty{ \hat\mu + t m \ : \ t \in \mathbb{R} } \qqtext{ for any } m \in \model
-\end{aligned}
-$$
-
-- Writing mean squared error as a function of $t$ in this model ... 
-  - We can observe that it's minimized at $t=0$, since that's when $\hat\mu + tm=\hat\mu$
-  - And we can set the derivative to zero there to get the orthogonality condition we want.
-  
-::: fragment
-
-$$
-\begin{aligned}
-0 &= \frac{d}{dt}\mid_{t=0} \sum_{i=1}^n \qty{ Y_i - \hat\mu(W_i,X_i) - t m(W_i,X_i) }^2 \\
-  &= \sum_{i=1}^n 2 \times \qty{ Y_i - \hat\mu(W_i,X_i) } \frac{d}{dt}\mid_{t=0} \qty{ Y_i - \hat\mu(W_i,X_i) - t m(W_i,X_i) }^2 \\
-  &= \sum_{i=1}^n 2 \times \qty{ Y_i - \hat\mu(W_i,X_i) } \times -m(W_i,X_i) \\
-  &= -2 \hat\varepsilon_i \dot m(W, X)
-\end{aligned}
-$$
-
-:::
-
-## Orthogonality of Population Residuals
-```{r}
-#| layout-ncol: 2
-#| fig-width: 7
-sam |> lsq.plot(y~w*x, residual.alpha=.5)
-plot.pop |> lsq.plot(y~w*x, residual.alpha=.2)
-```
-
-- We can define *population residuals* $\tilde\varepsilon_j = y_j - \tilde\mu(w_j,x_j)$ analogously.
-  - These are the residuals we get when we choose a predictor $\tilde\mu$ by least squares in the whole population.
-  - And by the same argument, they're are orthogonal to every function in our model *in a population sense*.
-$$
-\begin{aligned}
-0 &= \veryfaint{\frac{1}{n}}\sum_{i=1}^n \hat\varepsilon_i  m(W_i,X_i)  
-&& \qqtext{ for all } m \in \model \qqtext{ where } \hat\varepsilon_i = Y_i - \hat\mu(W_i,X_i) \\
-0 &= \veryfaint{\frac{1}{m}}\sum_{j=1}^m \tilde\varepsilon_j m(w_j,x_j) 
-&& \qqtext{ for all } m \in \model \qqtext{ where } \tilde\varepsilon_j = y_j - \tilde\mu(w_j,x_j) \\
-  &= \E \qty{ \frac{1}{n}\sum_{i=1}^n \qty{ Y_i - \tilde\mu(W_i,X_i) } m(W_i,X_i) } 
-\end{aligned}
-$$
-
-- We've set out to prove that the population least squares predictor $\tilde\mu$ is the conditional expectation of the sample least squares predictor $\hat\mu$. 
-- To do this, we'll combine these two orthogonality properties in a clever way.
-
-## Relating $\hat\mu$ and $\tilde\mu$ (1/4)
-
-**Claim**. 
-$$
-\begin{aligned}
-\tilde\mu(w,x) &= \mu_E(w,x) 
-&& \qfor \mu_E(w,x) = \E[\hat\mu(W_i,X_i) \mid W_i=w, X_i=x] \\
-&&& \qand \tilde\mu = \argmin_{m \in \model} \sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2
-\end{aligned}
-$$
-
-**Sketch**.
-
-1. We'll show that orthogonality of residuals implies a kind of orthogonality of the difference $\hat\mu - \tilde\mu$.
-$$
-0=\E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ m(W_i,X_i) \right] \qqtext{ for all } m \in \model
-$$
-2. We'll plug in a clever choice of $m \in \model$: $m=\mu_E - \tilde \mu$.
-$$
-0=\E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ \qty{ \mu_E(W_i,X_i) - \tilde\mu(W_i, X_i) } \right] 
-$$
-3. We'll use the law of iterated expectations to show that this is a mean-squared-difference. 
-$$
-0 = \E\left[  \lcb{ \mu_E(W_i,X_i) - \tilde\mu(W_i, X_i) }^2 \right]
-$$
-- That implies $\mu_E(W_i,X_i) - \tilde\mu(W_i, X_i)=0$. 
-- That's how squares work. If something isn't zero, its mean-square is positive.
-
-## Relating $\hat\mu$ and $\tilde\mu$ (2/4)
-
-**Claim**. 
-$$
-\begin{aligned}
-\tilde\mu(w,x) &= \mu_E(w,x) 
-&& \qfor \mu_E(w,x) = \E[\hat\mu(W_i,X_i) \mid W_i=w, X_i=x] \\
-&&& \qand \tilde\mu = \argmin_{m \in \model} \sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2
-\end{aligned}
-$$
-
-**Step 1**. 
-
-- From the orthogonality of the sample residuals, all $m \in\model$ satisfy ...
-
-$$ 
-\begin{aligned}
-0 &= \frac{1}{n}\sum_{i=1}^n \lcb{ Y_i -\hat\mu(W_i,X_i) } \ m(W_i,X_i) \qqtext{ and therefore } \\
-0 &= \E \left[ \frac{1}{n}\sum_{i=1}^n \lcb{ Y_i -\hat\mu(W_i,X_i) } \ m(W_i,X_i) \right] \\ 
-  &=  \E\left[ \lcb{ Y_i - \hat\mu(W_i,X_i) } \ m(W_i,X_i) \right]. 
-\end{aligned}
-$$
-
-- From the orthogonality of the population residuals, all $m \in\model$ satisfy ...
-
-$$
-\begin{aligned}
-0 &= \E\left[ \lcb{ Y_i - \tilde \mu(W_i,X_i)} \ m(W_i,X_i) \right] \\
-\end{aligned}
-$$
-
-- Subtracting the first from the second, we find that all $m \in \model$ satisfy ...
-
-$$
-\begin{aligned}
-0 &= \E\left[ \tcb{ \lcb{ Y_i- \tilde\mu(W_i,X_i) } - \lcb{ Y_i - \hat\mu(W_i,X_i) }} \ m(W_i,X_i) \right] \\
-  &= \E\left[ \tcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ m(W_i,X_i) \right]
-\end{aligned}
-$$
-
-## Relating $\hat\mu$ and $\tilde\mu$ (3/4)
-
-**Claim**. 
-$$
-\begin{aligned}
-\tilde\mu(w,x) &= \mu_E(w,x) 
-&& \qfor \mu_E(w,x) = \E[\hat\mu(W_i,X_i) \mid W_i=w, X_i=x] \\
-&&& \qand \tilde\mu = \argmin_{m \in \model} \sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2
-\end{aligned}
-$$
-
-**Step 2**.
-$$
-\begin{aligned}
-0 &= \E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ m(W_i,X_i) \right] \qqtext{ for all } m \in \model \implies \\
-0 &= \E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ \lcb{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) } \right] 
-\end{aligned}
-$$
-
-- This seems trivial, but to make sure this implication is valid, we have to check something.
-  - We have to check that $m=\mu_E - \tilde\mu$ is in the model $\model$.
-  - This ultimately boils down to linearity of the model and linearity of expectation.
-- $\mu_E$ is a (probability-weighted) linear combination of functions in the model, so it's in the model.
-$$
-\begin{aligned}
-\mu_E &= \sum_{\substack{(w_1,x_1,y_1) \ldots (w_n,x_n,y_n) \\ w_i=w, x_i=x }} 
-\hat\mu \times P\qty{ (W_1,X_1,Y_1) \ldots (W_n,X_n,Y_n) = (w_1,x_1,y_1) \ldots (w_n,x_n,y_n) \mid W_i=w, X_i=x} \\
-&\qfor \hat\mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ y_i - m(w_i,x_i) }^2
-\end{aligned}
-$$
-
-## Relating $\hat\mu$ and $\tilde\mu$ (4/4)
-**Claim**. 
-$$
-\begin{aligned}
-\tilde\mu(w,x) &= \mu_E(w,x) 
-&& \qfor \mu_E(w,x) = \E[\hat\mu(W_i,X_i) \mid W_i=w, X_i=x] \\
-&&& \qand \tilde\mu = \argmin_{m \in \model} \sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2
-\end{aligned}
-$$
-
-**Step 3**.
-$$
-\begin{aligned}
-0 
-&\explain{=}{Steps 1-2} 
-\E\left[ \lcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \lcb{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) } \right] \\
-&\explain{=}{Law of Iterated Expectations} 
-  \E\left[ \color{blue}\E\left[ \color{black}  \left\{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) \right\} \left\{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) \right\} \color{blue} \mid W_i, X_i\right] \color{black} \right] \\
-&\explain{=}{Linearity of Conditional Expectations} 
-  \E\left[  \left\{ \color{blue}\E\left[ \color{black} \hat\mu(W_i,X_i) \color{blue} \mid W_i, X_i\right] \color{black} - \tilde\mu(W_i,X_i) \right\} \left\{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) \right\}  \right] \\
-&\explain{=}{Recognizing $\mu_E$'s definition} 
-\E\qty[ \qty{ \color{blue} \mu_E(W_i,X_i) \color{black} - \tilde\mu(W_i,X_i) }\qty{ \mu_E(W_i,X_i)  - \tilde\mu(W_i,X_i) } ] \
-&\explain{=}{Recognizing a square} 
-\E\left[ \left\{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) \right\}^2 \right] 
-\end{aligned}
-$$
-
-- That concludes the proof. 
-  - If $\mu_E(W_i,X_i) - \tilde\mu(W_i,X_i)$ weren't always zero ...
-  - then the expected value of its square would be positive, not zero.
-
-
 ## Implications for Complex Targets
 
 ```{r}
@@ -600,6 +803,8 @@ $$
 - This breaks our error down into two pieces. 
   - The *sampling error* has mean zero. Why?
   - The *modeling error* is deterministic. It's our estimator's bias. 
+
+# Conclusion 
 
 ## What Do We Do With This?
 ```{r}
@@ -661,131 +866,27 @@ sam |> lsq.plot(y~w*x)
 pop.lsq.plot
 ```
 
-## Quiz 
+# Appendix  
 
-[Here](https://qtm285-1.github.io/assets/homework/week3-homework.html#fig-3-sampling-distributions) we see the sampling distributions of three estimators of $\theta$ at three different sample sizes.
+## Checking that $m=\mu_E - \tilde\mu$ is in the model {#sec-check-in-model}
 
-Which one *couldn't* be the sampling distribution of an estimator $\hat\theta$ like this?
-
+- In our proof, we derive this orthogonality condition. 
 $$
-\hat\theta = \frac{1}{m}\sum_{j=1}^m \qty{ \hat\mu(1,x_j) -  \hat\mu(0,x_j) }  \qfor \hat\mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ Y_i - m(X_i) }^2
+0 = \E\left[ \tcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ m(W_i,X_i) \right] \qqtext{ for all } m \in \model
 $$
-
-# Modeling Error
-
-## Setup
-
-::: {.panel-tabset}
-### Population
-```{webr}
-#| autorun: true
-x = rep(c(20,30,40), each=1000)
-pi.pop = function(x) { case_when(x < 25 ~ .25, x < 35 ~ .5, TRUE ~ .75) } 
-mu.pop = function(w,x) case_when(
-  w==1 & x <  25  ~ 10, 
-  w==1 & x <= 35  ~ 10,
-  w==1            ~ 20, 
-  w==0 & x <  25  ~ 5, 
-  w==0 & x <= 35  ~ 10,
-  w==0            ~ 10)
-
-w = 0 + (runif(length(x)) < pi.pop(x))
-y = rpois(length(x), mu.pop(w,x))
-pop = data.frame(w=w, x=x, y=y)
-```
-
-### Sample
-```{webr}
-#| autorun: true
-m = nrow(pop)
-n = 2000
-set.seed(5)
-J = sample(1:m, size=n, replace=TRUE)
-sam = pop[J,]
-```
-
-### Plotting Code
-```{webr}
-#| autorun: true
-prop.scale = 40
-default.shift = .5
-mean_sd = function(x, mult = 1) { mean_se(x, mult = mult*sqrt(length(stats::na.omit(x)))) }
-plotX = function(w,x, shift=default.shift) { ifelse(w==0, x-shift, x+shift) }
-lsq.plot = function(sam, formula=NULL, dot.size=1, shift=default.shift, residual.alpha=0) { 
-
-  sam$jitterX = runif(nrow(sam), -1, 1)*shift
-  base.plot = ggplot(sam) + 
-    geom_point(aes(x=plotX(w,x)+jitterX,y=y,color=factor(w)), 
-      alpha=.05, size=dot.size) + 
-    stat_summary(aes(x=plotX(w,x), y=y), 
-      fun.data=mean_sd, geom='pointrange', alpha=.2) +
-    geom_bar(aes(x=x, y=prop.scale*after_stat(prop)), 
-      fill='purple', alpha=.1, linewidth=.05) +
-    scale_y_continuous(sec.axis = sec_axis(~./prop.scale, name='proportion')) +
-    guides(color='none') 
-    
-    if(is.null(formula)) { base.plot } else { 
-        model = lm(formula, data=sam)
-        gridx = seq(-10, 50, length.out=1000)
-        muhat = function(w,x) predict(model, newdata=data.frame(w=w,x=x))   
-        the.plot = base.plot + 
-          geom_point(aes(x=plotX(w,x), y=muhat(w,x), color=factor(w)), alpha=.7, shape='square') +
-          geom_line(aes(x=plotX(w,gridx), y=muhat(w,gridx), color=factor(w)), alpha=.7) 
-        if(residual.alpha > 0) {
-          the.plot = the.plot + 
-            geom_segment(aes(x=plotX(w,x)+jitterX, xend=plotX(w,x), y=y, yend=muhat(w,x)), 
-              alpha=residual.alpha, color='orange', linewidth=.05)
-        }
-        the.plot 
-    }
-}
-```
-
-### Plot Styline
-
-```{webr}
-bgcolor = "#E7F0EC"
-class.theme = theme(plot.background = element_rect(fill = bgcolor, colour = NA),
-        panel.background = element_rect(fill = bgcolor, colour = NA),
-        legend.background = element_rect(fill=bgcolor, colour = NA),
-        legend.box.background = element_rect(fill=bgcolor, colour = NA),
-        legend.key = element_rect(fill=bgcolor, colour = NA),
-        axis.ticks.x = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.x  = element_text(colour = "#aaaaaa"),
-        axis.text.y  = element_text(colour = "#aaaaaa"),
-        axis.title.x  = element_text(colour = "#aaaaaa"),
-        axis.title.y  = element_text(colour = "#aaaaaa", angle=90)
-)
-
-theme_set(class.theme)
-theme_update(axis.title.x  = element_blank(),
-             axis.title.y  = element_blank())
-simplified.theme = theme_get()
-```
-
-:::
-
-## Example 
-
-```{webr}
-#| autorun: true
-model.formula = y~w*x
-sam |> lsq.plot(y~w*x)
-```
-
-```{webr}
-estimate = function(sam, formula) {
-  X = sam$x
-  W = sam$w
-  model = lm(formula, data=sam)
-  muhat = function(w,x) predict(model, newdata=data.frame(w=w,x=x)) 
-  mean(muhat(1, X) - muhat(0, X))
-}
-all.functions.formula = y~w*factor(x)
-
-data.frame(
-  thetahat   = sam |> estimate(model.formula),
-  thetatilde = pop |> estimate(model.formula), 
-  theta      = pop |> estimate(all.functions.formula)) 
-```
+- And we plug $m=\mu_E - \tilde\mu$ to get this equation.
+$$
+0 = \E\left[ \tcb{ \hat\mu(W_i,X_i) - \tilde\mu(W_i,X_i) } \ \tcb{ \mu_E(W_i,X_i) - \tilde\mu(W_i,X_i) } \right]
+$$
+- But this only follows if we $m=\mu_E - \tilde\mu$ is in the model $\model$.
+  - It is, but to really prove our claim, we have to check.
+  - This ultimately boils down to linearity of the model and linearity of expectation.
+- $\mu_E$ is a (probability-weighted) linear combination of functions in the model, so it's in the model.
+  
+$$
+\begin{aligned}
+\mu_E &= \sum_{\substack{(w_1,x_1,y_1) \ldots (w_n,x_n,y_n) \\ w_i=w, x_i=x }} 
+\hat\mu \times P\qty{ (W_1,X_1,Y_1) \ldots (W_n,X_n,Y_n) = (w_1,x_1,y_1) \ldots (w_n,x_n,y_n) \mid W_i=w, X_i=x} \\
+&\qfor \hat\mu = \argmin_{m \in \model} \sum_{i=1}^n \qty{ y_i - m(w_i,x_i) }^2
+\end{aligned}
+$$
