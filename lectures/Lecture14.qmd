@@ -68,6 +68,7 @@ m0x.flat = rep(c(10,12,14,16,18), c(100,100,100, 100,100))
 m1x.mild     = rep(c(10,12,14,16,18), c(80, 90, 100, 110, 120))
 m1x.moderate = rep(c(10,12,14,16,18), c(50, 75, 100, 125, 150))
 m1x.extreme  = rep(c(10,12,14,16,18), c(2,49, 100, 149, 198))
+m1x.flat = rep(c(10,12,14,16,18), c(100,100,100, 100,100))
 
 exercise.pop = function(m0x, m1x, mu=NULL) {
   if(is.null(mu)) { 
@@ -541,10 +542,17 @@ exercise.pop(m0x.flat, m1x.extreme) |> with.ipw() |> lsq.plot(formula)
 ```
 :::
 
+```{r}
+pop = exercise.pop(m0x.flat, m1x.mild)
+sam = pop[J,]
+```
 
 - In reality, we don't have the population. We have (hopefully) a sample drawn uniformly-at-random from it.
 - To make this work like a sample drawn from the population we've been pretending to have ....
 - ... we weight the people in our sample exactly the same way when we estimate $\hat\mu$.
+
+::: {.panel-tabset}
+### Math
 $$
 \begin{aligned}
 \hat\Delta_0 &= \frac{1}{m_0} \sum_{j:w_j=0} \qty{ \hat\mu(1,x_j) - \hat\mu(0,x_j) } \\
@@ -553,15 +561,64 @@ $$
 \end{aligned}
 $$
 
+### **R**
+
+```{r}
+#| echo: true
+
+pop.summaries = pop |> group_by(w,x) |> summarize(mwx=n(), .groups='drop')  #<1>
+mwx = summary.lookup('mwx', pop.summaries)  #<1> 
+gamma = function(w,x) mwx(0,x) / mwx(1,x) #<2>
+
+sam$weights = gamma(sam$w, sam$x)  #<3>
+fitted.model = lm(y~1+w, weights=weights, data=sam)  #<3>
+muhat = function(w,x) predict(fitted.model, newdata=data.frame(w=w,x=x)) #<3>
+
+Delta0.hat = mean(muhat(1,pop$x) - muhat(0,pop$x)) #<4>
+Delta0.hat 
+```
+1. Here we're calculating $m_{wx}$ as a function of $w$ and $x$. This uses the tidyverse functions `group_by` and `summarize` and the function `summary.lookup` from the Week 9 homework.
+2. This is the function we weight our observations using.  
+3. We fit our model using the **R** built-in function `lm`, telling it to use the weights we've put in the column `sam$weights`. 
+4. We use it in our formula for $\Delta_0$ from @sec-deltahat0-pop-version.
+:::
+
 - Note that the weights $\gamma(w,x)$ we are based on knowledge of the *population's covariate distribution*. 
 - Sometimes we have that information. 
   - E.g. when we survey registered voters, some information about every registered voter is public record. 
 - Sometimes we don't, so we have to use an estimate $\hat\gamma$ of these weights. 
   - E.g., we can use the corresponding ratios of red and green dots in the sample.
 
+::: {.panel-tabset}
+### Math
 $$
 \hat\gamma(w,x) = \frac{\ingroupa{N_{0x}}}{N_{wx}} = \begin{cases} 1 & \text{if } w=0 \\ \frac{\ingroupa{N_{0x}}}{\ingroupb{N_{1x}}} & \text{if } w=1 \end{cases} \qfor N_{wx} = \sum_{i:W_i=w, X_i=x} 1
 $$
+
+### **R**
+
+
+```{r}
+#| echo: true
+
+sam.summaries = sam |> group_by(w,x) |> summarize(Nwx=n(), .groups='drop')  #<1>
+Nwx = summary.lookup('Nwx', sam.summaries)  #<1> 
+gammahat = function(w,x) Nwx(0,x) / Nwx(1,x) #<2>
+
+sam$weights = gammahat(sam$w, sam$x)  #<3>
+fitted.model = lm(y~1+w, weights=weights, data=sam)  #<3>
+muhat = function(w,x) predict(fitted.model, newdata=data.frame(w=w,x=x)) #<3>
+
+Delta0.hat = mean(muhat(1,sam$x) - muhat(0,sam$x)) #<4>
+Delta0.hat #<4>
+```
+1. Here we're calculating $N_{wx}$ as a function of $w$ and $x$. This is like we did for $m_{wx}$ in the population case.
+2. We're calculating the weights using $N_{wx}$ instead of $m_{wx}$ now.
+3. We fit our model using the **R** built-in function `lm`, telling it to use the weights we've put in the column `sam$weights`. 
+4. We use it in our formula for $\Delta_0$ from @sec-deltahat0-sample-version.
+
+:::
+
 
 ## This Works *Perfectly* 
 
@@ -672,7 +729,7 @@ exercise.pop(m0x.flat, m1x.extreme) |> plot.sampling.distribution(formula,
 ```
 :::
 
-- We actually do better when we weight using the *sample covariate distribution*.^[Here, for the sake of clarity, we're talking about $\hat\Delta_0$ defined in @sec-deltahat0-sample-version. 
+- We actually do better when we weight using the *sample covariate distribution*.^[Here, for the sake of clarity, we're talking about $\hat\Delta_0$ defined in @sec-deltahat0-sample-version.] 
   - It has lower variance than the population-based version. 
   - Especially when there's a lot of covariate shift.
   - This is pretty interesting, but we won't have time to get into it.
@@ -680,26 +737,40 @@ exercise.pop(m0x.flat, m1x.extreme) |> plot.sampling.distribution(formula,
 # Generalizing the Idea
 An Exercise.
 
-## $\Delta_0$ Review
+## $\Delta_0$ 
+
+How should we weight to estimate $\Delta_0$?^[We just did this, but go ahead and copy it out here for reference.]
 
 ## $\Delta_1$
 
+How should we weight to estimate $\Delta_1$?^[*Hint*. For $\Delta_0$, we wanted to make the distribution of the pretend (i.e. weighted) green dots like that of the red dots. Now the situation is reversed.]
+
+
 ## $\Delta_{\text{all}}$ 
 
-# Proving Unbiasedness 
-DO IT! 
+How should we weight to estimate $\Delta_{\text{all}}$?^[*Hint*. Now we're averaging over the distribution of *all dots*. How do we duplicate the red dots to get that distribution? What about the green dots?]
 
-::: {.panel-tabset}
-### Setup
+# Proving Unbiasedness 
+
+## Goal
+```{r}
+proof.plot = exercise.pop(m0x.flat, m1x.moderate) |> 
+  with.ipw(from=exercise.pop(m0x.flat, m1x.moderate)) |>
+  lsq.plot(formula)
+proof.plot
+```
+
 - Suppose we have this inverse probability weighted population least squares predictor $\tilde\mu$.
 $$
 \begin{aligned}
-\tilde\mu= \argmin_{m \in \model} \ WMSR(m) \qfor
-WMSR(m) 
-&= \sum_{wx} \frac{\ingroupa{m_{0x}}}{m_{wx}} m_{wx} \lcb{ \mu(w, x) - m(w,x) }^2 \\
+\tilde\mu= \argmin_{m \in \model} \ \text{WMSE}(m) \qfor
+\text{WMSE}(m) 
+&= \sum_{wx} \gamma(w,x) m_{wx} \lcb{ \mu(w, x) - m(w,x) }^2  \\
+\qand &\gamma(w,x) = \frac{\ingroupa{m_{0x}}}{m_{wx}}. 
 \end{aligned}
 $$
-- Show that when we plug it in to our formula for $\tilde\Delta_0$, we get our estimation target $\Delta_0$.
+
+- We want to show that when we plug it in to our formula for $\tilde\Delta_0$, we get our estimation target $\Delta_0$.
 $$
 \begin{aligned}
 \tilde\Delta_0 &= \frac{1}{m_0} \sum_{j:w_j=0} \qty{ \tilde\mu(1,x_j) - \tilde\mu(0,x_j) }  && \text{ the population version of our estimator} \\
@@ -707,15 +778,135 @@ $$
 \end{aligned}
 $$
 
-- *Tips*. 
-  - Write things in histogram form. 
-  - What orthogonality condition to get for weighted least squares?
+## Approach  
 
-### Space 
+```{r}
+proof.plot = exercise.pop(m0x.flat, m1x.moderate) |> 
+  with.ipw(from=exercise.pop(m0x.flat, m1x.moderate)) |>
+  lsq.plot(formula)
+proof.plot
+```
 
-### Questions 
+- We'll start by writing out $\tilde\Delta_0$ and $\Delta_0$ as the sum of a [matched term]{.groupa} and a [mismatched]{.groupa} [term]{.groupb}.
+
+$$
+\begin{aligned}
+\tilde\Delta_0 &= \ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \ingroupb{\tilde\mu(1,x_j)} -
+\ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \ingroupb{\tilde\mu(0,x_j)} \\
+\Delta_0 &= \ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \ingroupb{\mu(1,x_j)} -
+\ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \ingroupb{\mu(0,x_j)}
+\end{aligned}
+$$
+
+- And then write the difference between them as the sum of matched and mismatched terms.
+
+$$
+\Delta_0-\tilde\Delta_0 = \ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \lcb{\ingroupb{\mu(1,x_j) - \tilde\mu(1,x_j)}} - \ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}}\lcb{\ingroupa{\mu(0,x_j)} - \ingroupa{\tilde\mu(0,x_j)}}.
+$$
+
+- We'll work out an *orthogonality condition* characterizing the errors $\mu(w,x)-\tilde\mu(w,x)$.
+- And then use it to show that both the matched and mismatched error terms are zero.
+
+## The Orthogonality Condition 
+
+$$
+\begin{aligned}
+0 &\explain{=}{histogram form} 
+\sum_{wx} \ingroupa{m_{0x}} \lcb{ \mu(w, x) - \tilde\mu(w,x) } m(w,x) \\
+ &\explain{=}{summing over $x$, then $w$} 
+\sum_{w \in 0,1} \sum_x \ingroupa{m_{0x}} \lcb{ \mu(w, x) - \tilde\mu(w,x) } m(w,x) \\
+&\explain{=}{rewriting the histogram-form sum over $x$ as a sum over the population}
+\sum_{w \in 0,1} \sum_{j:w_j=0} \lcb{ \mu(w, x_j) - \tilde\mu(w,x_j) } m(w,x_j) \qqtext{ for all } m \in \model.
+\end{aligned}
+$$ {#eq-weighted-orthogonality-condition}
+
+### Derivation 
+
+::: {.panel-tabset}
+### Idea
+
+- We'll do the derivation in histogram form. 
+- The key idea is optimality along *paths* (see [here](https://qtm285-1.github.io/assets/lectures/Lecture13.html#/optimality-paths) in Lecture 12). Let's review that.
+- Because $\tilde \mu$ minimizes weighted mean squared error over all $m \in \model$ ...
+  - it minimizes the weighted mean squared error along all *paths*  $\{m_t = \tilde\mu + tm : t \in \mathbb{R}\}$ for $m \in \model$
+  - because every function $m_t$ on this path is in the model $\model$.
+- It follows that $\text{WMSE}(\tilde\mu + tm)$ is minimized at $t=0$ for every $m \in \model$. 
+- So the derivative with respect to $t$ is zero at $t=0$.
+
+### Calculation
+$$
+\begin{aligned}
+0 &= \frac{d}{dt}\mid_{t=0} \text{WMSE}(\tilde \mu + t m) \\
+&\explain{=}{plugging in the definition of WMSE and distributing the derivative over terms in the sum}
+\sum_{wx} \gamma(w,x) m_{wx} \times \frac{d}{dt}\mid_{t=0} \lcb{ \mu(w, x) - \pcb{\tilde\mu(w,x) + t m(w,x)} }^2 \\
+&\explain{=}{via the chain rule}
+\sum_{wx} \gamma(w,x) m_{wx} \times 2 \ \lcb{ \mu(w, x) - \tilde\mu(w,x) } \ \frac{d}{dt}\mid_{t=0} \lcb{ \mu(w, x) - \pcb{\tilde\mu(w,x) + t m(w,x)} } \\
+&\explain{=}{differentiating the last factor} 
+\sum_{wx} \gamma(w,x) m_{wx} \times 2 \ \lcb{ \mu(w, x) - \tilde\mu(w,x) } \times -m(w,x) \\
+&\explain{=}{pulling constants out of the sum}
+-2 \sum_{wx} \gamma(w,x) m_{wx} \lcb{ \mu(w, x) - \tilde\mu(w,x) } \ m(w,x) \\
+&\explain{=}{observing that $\gamma(w,x)m_{wx} = \ingroupa{m_{0x}}$. That's why we chose $\gamma$ as we did.}
+-2 \sum_{wx} \ingroupa{m_{0x}} \lcb{ \mu(w, x) - \tilde\mu(w,x) } m(w,x).
+\end{aligned}
+$$
 
 :::
+
+## Showing Error Terms are Zero 
+
+- We'll plug in group indicators $1_{=0}(w)$ and $1_{=x}(x)$ to this orthogonality condition 
+$$
+\begin{aligned}
+0 &= \sum_{w \in 0,1} \sum_{j:w_j=0} \lcb{ \mu(w, x_j) - \tilde\mu(w,x_j) } m(w,x_j) \qqtext{ for all } m \in \model.
+\end{aligned}
+$$ 
+
+- To show that the matched and mismatched error terms in this error decomposition are zero. 
+
+$$
+\Delta_0-\tilde\Delta_0 = \ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \lcb{\ingroupb{\mu(1,x_j) - \tilde\mu(1,x_j)}} - \ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}}\lcb{\ingroupa{\mu(0,x_j)} - \ingroupa{\tilde\mu(0,x_j)}}.
+$$
+
+- Because of our weighting, the case of the mismatched term is exactly like the case of the matched term.
+  
+:::: columns 
+::: column
+
+**The Matched Term**
+$$
+\begin{aligned}
+0 
+&= \sum_{w \in 0,1} \sum_{j:w_j=0} \lcb{ \mu(w, x_j) - \tilde\mu(w,x_j) } \ingroupa{1_{=0}(w)} \\
+&\explain{=}{This is a version of the 'indicator trick'. We drop terms where $w=1$ from our sum because $1_{=0}(1)=0$.} 
+\ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \lcb{ \ingroupa{\mu(0, x_j)} - \ingroupa{\tilde\mu(0,x_j)} }
+\end{aligned}
+$$
+
+:::
+::: column
+
+**The Mismatched Term**
+$$
+\begin{aligned}
+0 
+&= \sum_{w \in 0,1} \sum_{j:w_j=0} \lcb{ \mu(w, x_j) - \tilde\mu(w,x_j) } 1_{=1}(w) \\
+&\explain{=}{Via the indicator trick, as in the matched term.} 
+\ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \lcb{ \ingroupb{\mu(1, x_j)} - \ingroupb{\tilde\mu(1,x_j)} }
+\end{aligned}
+$$
+
+:::
+::::
+
+## A Follow-Up Question
+
+- We've shown unbiasedness when we use the horizontal lines model (@eq-horizontal-lines-model). 
+  - That's what we've been visualizing.
+  - And our proof relies on it to some extent.
+- Do we get an unbiased estimator with these other models? 
+  - The parallel lines model (@eq-parallel-lines-model). 
+  - The lines model (@eq-lines-model).
+  - The additive model (@eq-additive-model).
 
 ## It Does Work for Other Models 
 
@@ -723,6 +914,9 @@ $$
 pop = exercise.pop(m0x.flat, m1x.moderate)
 J = sample(1:nrow(pop), 200)
 sam = pop[J,]
+
+target = Delta0.target(pop)
+with.weights = \(sam)with.ipw(sam, from=pop)
 ```
 
 ::: {.panel-tabset}
@@ -731,17 +925,17 @@ sam = pop[J,]
 #| layout-ncol: 2
 #| fig-width: 7
 formula = y ~ 1+w
-sam |> with.ipw() |> lsq.plot(formula) 
-pop |> plot.sampling.distribution(formula, with.weights=with.ipw)
+sam |> with.weights() |> lsq.plot(formula) 
+pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weights)
 ```
 
 ### Lines Model
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
-formula = y ~ w*x
-sam |> with.ipw() |> lsq.plot(formula) 
-pop |> plot.sampling.distribution(formula, with.weights=with.ipw)
+formula = y ~ w+x
+sam |> with.weights() |> lsq.plot(formula) 
+pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weights)
 ```
 
 ### Parallel Lines Model
@@ -749,8 +943,8 @@ pop |> plot.sampling.distribution(formula, with.weights=with.ipw)
 #| layout-ncol: 2
 #| fig-width: 7
 formula = y ~ w*x
-sam |> with.ipw() |> lsq.plot(formula) 
-pop |> plot.sampling.distribution(formula, with.weights=with.ipw)
+sam |> with.weights() |> lsq.plot(formula) 
+pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weights)
 ```
 
 ### Additive Model
@@ -758,20 +952,120 @@ pop |> plot.sampling.distribution(formula, with.weights=with.ipw)
 #| layout-ncol: 2
 #| fig-width: 7
 formula = y ~ w+factor(x) 
-sam |> with.ipw() |> lsq.plot(formula, line.alpha=0) 
-pop |> plot.sampling.distribution(formula, with.weights=with.ipw)
+sam |> with.weights() |> lsq.plot(formula, line.alpha=0) 
+pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weights)
+```
+
+:::
+
+- All of these models include indicators for each group. 
+- When we weight like this, that's all we need to get unbiasedness *for the target $\Delta_0$*.
+- For other targets, we need other weights. For homework, you'll derive these weights for $\Delta_1$ and $\Delta_{\text{all}}$.
+
+## Why IPW? 
+
+```{r}
+pop = exercise.pop(m0x.moderate, m1x.flat)
+target = Delta0.target(pop)
+with.weights = \(sam)with.ipw(sam, from=pop)
+```
+
+::: {.panel-tabset}
+### The Horizontal Lines Model
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+formula = y ~ 1+w
+pop[J,] |> with.weights() |> lsq.plot(formula)
+pop[J,] |> lsq.plot(formula)
+pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weights) + scalex.hist
+pop |> plot.sampling.distribution(formula, target=target) + scalex.hist
+```
+
+### The Parallel Lines Model
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+formula = y ~ w+x
+pop[J,] |> with.ipw(from=pop) |> lsq.plot(formula)
+pop[J,] |> lsq.plot(formula)
+pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weights) + scalex.hist
+pop |> plot.sampling.distribution(formula, target=target) + scalex.hist
+```
+
+### The Lines Model
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+formula = y ~ w*x
+pop[J,] |> with.ipw(from=pop) |> lsq.plot(formula)
+pop[J,] |> lsq.plot(formula)
+pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weights) + scalex.hist
+pop |> plot.sampling.distribution(formula, target=target) + scalex.hist
+```
+
+### The Additive Model
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+formula = y ~ w+factor(x)
+pop[J,] |> with.ipw(from=pop) |> lsq.plot(formula, line.alpha=0)
+pop[J,] |> lsq.plot(formula, line.alpha=0)
+pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weights) + scalex.hist
+pop |> plot.sampling.distribution(formula, target=target) + scalex.hist
 ```
 :::
 
-## Why This is Called Inverse Probability Weighting 
+::: {.panel-tabset}
+### What We See 
+- On the left, we see the *weighted* least squares predictor and the sampling distribution of $\hat\Delta_0$ when we use it.  
+  - For all of our models---the ones shown in tabs above---this is unbiased. 
+  - We've proven that and seen it a moment ago.
+- On the right, we see the *unweighted* least squares predictor and the sampling distribution of $\hat\Delta_0$ when we use it.
+  - The bias we get here depends on the model. 
+  - Usually there is some, but there isn't always any with the *lines model*.
 
-STUFF
+### The Special Case of the Lines Model 
+- This is the case we looked at in the exercise at the end on [Lab 7](https://qtm285-1.github.io/assets/lectures/Lab7.html#a-caricature-of-the-california-data). 
+- Sometimes something close to this happens, but it's fragile. You have to get lucky. See @sec-lines-get-lucky.
+  - It happens because the covariate distributions in our two groups have a very special relationship.
+  - The ratio of the covariate distributions *is a line*: $\ingroupa{p_{0 \mid x}} / \ingroupb{p_{1 \mid x}} = a+bx$.
+  - $\ingroupa{p_{0 \mid x}}$ is a line and $\ingroupb{p_{0 \mid x}}$ is flat.
+  - When we change the covariate distribution, we get bias again. If we don't weight, we get bias.
+    - Below, noth $\ingroupa{p_{0 \mid x}}$ and $\ingroupb{p_{1 \mid x}}$ are (non-horizontal) lines Their ratio is not a line.
 
-## Conclusion
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
 
-2x2 COMPARISON PLOTS
+pop2 = exercise.pop(m0x.moderate, m1x.moderate)
+formula = y ~ w*x
 
-Comments on Science 
+target = Delta0.target(pop2)
+with.weights = \(sam)with.ipw(sam, from=pop2)
+pop2[J,] |> with.ipw(from=pop2) |> lsq.plot(formula)
+pop2[J,] |> lsq.plot(formula)
+pop2 |> plot.sampling.distribution(formula, target=target, with.weights=with.weights) + scalex.hist
+pop2 |> plot.sampling.distribution(formula, target=target) + scalex.hist
+```
+
+### Conclusion 
+
+- Inverse probability weighting is great idea. You should do it.
+  - It's easy. It's basically a one-line change to your **R** code.
+  - It makes sense. You're focusing on the data that's relevant to your question (i.e. your target).
+- People often don't do it. 
+  - They say it increases variance, so you're less likely to get an answer other than 'I don't know'.
+  - And that you don't have (much) bias anyway your model (almost) isn't misspecified. 
+  - And that misspecification usually doesn't matter anyway because it averages out. 
+    - They'll point to something like this special lines example. 
+- I think that 'it usually works out' claims are missing the point of doing statistics at all. 
+  - A confidence interval says that people can expect you to be right 95% of the time.
+  - What does it mean to 'usually be right' 95% of the time? Nothing. Your calibration is just gone.
+- The point isn't to get an answer other than 'I don't know'. 
+- It's to get the answer 'I don't know' when you don't know. 
+
+:::
 
 # Appendix: Answers 
 
@@ -783,6 +1077,63 @@ They're the same. When we use the horizontal lines model, $\tilde\mu(1,x)$ and $
 
 ## Q3 Answer {#sec-q3-answer}
 It fits the green dots on the right well because that's where most of the green dots are. But we're averaging it over the distribution of the red dots, which are on the left.
+
+## Why the Lines Model 'Gets Lucky' {#sec-lines-get-lucky}
+```{r}
+#| layout-ncol: 2
+#| fig-width: 7
+formula = y ~ w*x
+pop = exercise.pop(m0x.moderate, m1x.flat)
+target = Delta0.target(pop)
+with.weights = \(sam)with.ipw(sam, from=pop)
+pop[J,] |> with.ipw(from=pop) |> lsq.plot(formula)
+pop[J,] |> lsq.plot(formula)
+pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weights) + scalex.hist
+pop |> plot.sampling.distribution(formula, target=target) + scalex.hist
+```
+
+- Our *unweighted* least squares predictor in the lines model gives us an unbiased estimate of $\Delta_0$ when when the ratio of the covariate distributions is a line.^[Up to a constant factor $\ingroupa{m_0}/\ingroupb{m_1}$, the ratio $\gamma(w,x)=\ingroupa{p_{x \mid 0}}/\ingroupb{p_{x \mid 1}}$ of the number of dots in each column agrees with the ratio of the proportions $\ingroupa{p_{x\mid 0}}/\ingroupb{p_{x \mid 1}}$, so it's equivalent to use either ratio in your weights. That equivalence is shown faintly, so as not to distract, below.}
+
+$$
+\veryfaint{ 
+  \frac{m_0}{m_1} \times \frac{p_{x \mid 0}}{p_{x \mid 1}}
+  =
+} \frac{\ingroupa{m_{0x}}}{\ingroupb{m_{1x}}} = a+bx
+$$
+
+- Let's see why by plugging a very special pair of lines into our orthogonality condition.
+
+$$
+\begin{aligned}
+0 &= \sum_{j=1}^n \lcb{ \mu(w_j, x_j) - \tilde\mu(w_j,x_j) } m(w,x) \qqtext{ for any } &&m \in \{ a(w)+b(w)x \} \qqtext{ and therefore for } && m(w,x) = \begin{cases} 0 & \text{if } w=0 \\ 
+                                                   a+bx = \frac{\ingroupa{m_{0x}}}{\ingroupb{m_{1x}}}  & \text{if } w=1 \end{cases}.
+\end{aligned}
+$$
+
+Simplifying, using the indicator trick, we get...
+
+$$
+\begin{aligned}
+0 &= \sum_{j:w_j=1} \lcb{ \mu(1, x_j) - \tilde\mu(1,x_j) } \frac{\ingroupa{m_{0x}}}{\ingroupb{m_{1x}}} \\
+  &= \sum_x \ingroupb{m_{1x}} \lcb{ \ingroupb{\mu(1, x) - \tilde\mu(1,x)} } \frac{\ingroupa{m_{0x}}}{\ingroupb{m_{1x}}} \\
+  &= \sum_x \ingroupa{m_{0x}} \lcb{ \ingroupb{\mu(1, x) - \tilde\mu(1,x)} }.
+\end{aligned}
+$$
+
+- This says that the mismatched term in our decomposition of $\Delta_0-\tilde\Delta_0$ is zero.
+- Plugging in $m(w,x)=1_{=0}(w)$  shows the matched term is zero.
+- To show both terms are zero at once, we can plug in a *signed version* of the inverse probability weights  $\gamma(w,x)$.
+  
+$$
+\gamma_{\pm}(w,x) = \begin{cases} 1 & \text{if } w=0 \\ -(a+bx)=-\frac{\ingroupa{m_{0x}}}{\ingroupb{m_{1x}}} & \text{if } w=1 \end{cases}
+$$
+
+### Lesson 
+
+ - Unweighted least squares is unbiased *if* the (signed) inverse probability weights are in the model.^[You'll prove this for homework.]
+- This is interesting, but it's a lot to expect. 
+  - Unless you intentionally include $\gamma_{\pm}$ in the model. 
+  - That's an option, but people usually weight instead. 
 
 # Appendix: Two Versions of $\hat\Delta$
 
@@ -876,3 +1227,5 @@ $$ {#eq-additive-model}
 #| echo: true
 formula = y ~ w + factor(x)
 ```
+
+
