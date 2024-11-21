@@ -157,6 +157,45 @@ coverage.probability = 1:10000 |> map_vec(function(.) {
 My interval estimator's coverage probability is approximately `r percent(coverage.probability)`.
 :::
 
+::: {#nte-bootstrap-equivalence .callout-note collapse="true"}
+In [Lecture 4](https://qtm285-1.github.io/assets/lectures/Lecture4.html), we talked about
+an equivalence between the Binomial estimate of the sampling distribution used in the code
+above and the *bootstrap sampling distribution*---the distribution of the mean of 
+samples of size $n$ drawn with replacement from our sample $Y_1 \ldots Y_n$.  We'll be using
+the bootstrap sampling distribution to calibrate interval estimates around more complicated 
+point estimators later in the semester, so for reference, here's code that does exactly that in this context.
+
+For this particular estimator, `bootstrap.samples(Y, 10000)` is just a very slow way of drawing 10,000 samples from the Binomial distribution with success probability $\hat\theta$---its output has exactly the same distribution as `rbinom(10000, n, theta.hat)/n`, the line of code from @exr-your-interval-estimate that we've replaced. It's slow enough that I'm going to use 1000 samples instead of 10,000.
+```{r}
+#| echo: true
+#| cache: true
+ 
+point.estimate = function(Y) { mean(Y) }
+bootstrap.samples = function(Y, replications) {  
+  n = length(Y)
+  1:replications |> map_vec(function(.) {
+    J = sample(1:n, n, replace=TRUE)
+    Y.star = Y[J]
+    point.estimate(Y.star)
+  })
+}
+
+theta = mean(y)
+coverage.probability = 1:10000 |> map_vec(function(.) {
+  J = sample(1:m, n, replace=TRUE)
+  Y = y[J]
+  theta.hat = mean(Y)
+  theta.hat.draws = bootstrap.samples(Y, 1000) #<1>
+  w = width(theta.hat.draws)
+  interval = c(theta.hat - w/2, theta.hat + w/2)
+  covers = interval[1] <= theta & theta <= interval[2]
+  covers
+}) |> mean()
+coverage.probability
+```
+1. This is the one line in the calculation of `coverage.probability` that's changed from the solution to @exr-your-coverage above. 
+:::
+
 ## Improving Speed and Precision at The Same Time {#sec-improving-speed-and-precision}
 
 So far, to calculate our interval widths, we've used a 'dot counting' method. We've sampled 10,000 times from our (estimated) sampling distribution,

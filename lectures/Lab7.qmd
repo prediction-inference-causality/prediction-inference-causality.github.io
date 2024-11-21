@@ -332,7 +332,6 @@ mu = function(w,x) { predict(pop.model, newdata=data.frame(w=w,x=x)) }
 ca = list(pop=pop, sam=sam, mu=mu)
 ```
 
-
 ### Scatter Plot
 
 ```{webr}
@@ -356,7 +355,7 @@ scale_x = function(limits=c(min(years)-.5, max(years)+.5)) {
 #| envir: ca 
 #| autorun: true 
 
-proportion.scale = 400000
+proportion.scale = 500000
 plotX = function(w,x, shift=default.shift) { ifelse(w==0, x-shift, x+shift) }
 interleaved.bars = list(
   geom_bar(aes(x=plotX(w,x), y=proportion.scale*after_stat(prop), 
@@ -390,10 +389,10 @@ lsq.plot = function(sam, formula=NULL,
         gridx = seq(-10, 50, length.out=1000)
         muhat = function(w,x) predict(model, newdata=data.frame(w=w,x=x))   
         base.plot + 
-          geom_point(aes(x=plotX(w,x), y=muhat(w,x), fill=factor(w)), 
-            color='black', alpha=.5, shape=23) +
           geom_line(aes(x=plotX(w,x), y=muhat(w,x), color=factor(w)), 
-            data = expand_grid(w=0:1, x=gridx), alpha=.7, linetype='dotted') 
+            data = expand_grid(w=0:1, x=gridx), alpha=.7, linetype='dashed') +
+          geom_point(aes(x=plotX(w,x), y=muhat(w,x), fill=factor(w)), 
+            color='black', alpha=.5, shape=23) 
     }
 }
 ```
@@ -420,6 +419,27 @@ plot.sampling.distribution = function(pop, formula, target, n=nrow(sam), replica
      geom_vline(xintercept = mean(estimates), color='blue', linewidth=.75, alpha=.9) +
      geom_histogram(aes(x=estimates, y=after_stat(density)), bins=50, alpha=.2)
 }
+```
+
+### Data for the Concluding Exercise 
+
+```{webr}
+#| envir: ca 
+#| autorun: true 
+
+m0x = rep(c(10,12,14,16,18), c(50, 75, 100, 125, 150))
+m1x = rep(c(10,12,14,16,18), c(100,100,100, 100,100))
+eps0 = rnorm(length(m0x))
+eps1 = rnorm(length(m1x))
+for(uu in 1:unique(m1x)) { 
+  eps0[m0x==uu] = eps0[m0x==uu] - mean(eps0[m0x==uu])
+  eps1[m1x==uu] = eps1[m1x==uu] - mean(eps0[m1x==uu])
+}
+exercise.pop = rbind(
+  data.frame(w=0, x=m0x, y=mu(0,m0x)+eps0),
+  data.frame(w=1, x=m1x, y=mu(1,m1x)+eps1))
+J = sample(1:nrow(exercise.pop), 1000, replace=TRUE)
+exercise.sam = exercise.pop[J,]
 ```
 
 :::
@@ -894,7 +914,7 @@ $$
 
 - But that has the same problem. Matched stuff only.
 
-### Why it's not *badly* biased^[Better exposition coming soon.]
+### Why it's not *badly* biased
 
 - Let's do what we just said wouldn't work: plug an indicator into our population orthogonality condition. 
 - Using $m(w,x)=1_{=1}(w)$, we get the wrong average of the right function.
@@ -903,7 +923,7 @@ $$
 \begin{aligned}
 0 &= \frac{1}{m}\sum_{j=1}^m \qty{ \mu(w_j,x_j) - \tilde\mu(w_j,x_j) } \ 1_{=1}(w_j)
 \end{aligned}
-$$
+$$ {#eq-wrong-average}
 
 - Using the indicator trick, rearranging, and multiplying by $m/m_1$, and gives us ...
 
@@ -911,11 +931,11 @@ $$
 \ingroupb{\frac{1}{m_1}\sum_{j:w_j=1} \mu(1,x_j)} = \ingroupb{\frac{1}{m_1}\sum_{j:w_j=1} \tilde\mu(1,x_j)}
 $$
 
-- Which we can rewrite in 'histogram form' as ...
+- Which we can rewrite in 'histogram form'^[We'll write [$p_{x \mid 0}$]{.groupa} and [$p_{x \mid 1}$]{.groupb} for the height of the [red]{.groupa} and [green]{.groupb} bars at covariate level $x$ in our population histogram. That is, [$p_{x \mid 0}$]{.groupa} is the proportion of [male residents]{.groupa} in our population with education level $x$ and [$p_{x \mid 1}$]{.groupb} the same for female residents.]
 
 $$
 \sum_x \ingroupb{p_{x \mid 1} \ \tilde\mu(1,x)} 
-= \sum_x \ingroupb{p_{x \mid 1} \ \mu(1,x)}
+= \sum_x \ingroupb{p_{x \mid 1} \ \mu(1,x)} \qfor p_{x \mid w} = \frac{\sum_{j:w_j=w,x_j=x} 1}{\sum_{j:w_j=w} 1}
 $$
 
 - What happens if our two histograms are almost the same? We can't be that far off.
@@ -923,9 +943,194 @@ $$
 \qqtext{ therefore } \sum_x \ingroupa{p_{x \mid 0}} \ \ingroupb{\mu(1,x)} \approx \sum_x \ingroupa{p_{x \mid 0}} \ \ingroupb{\tilde\mu(1,x)} \qqtext{ if } \ingroupa{p_{x \mid 0}} \approx \ingroupb{p_{x \mid 0}} 
 $$
 
-
+- If our histograms were *exactly the same*, it wouldn't really matter what model we used here.
+  - But they're not exactly the same. So it does matter.
+  - Try changing your regression formula to `y ~ 1+w` to fit the 'horizontal lines model'
+  - What happens to our estimator's bias? 
 
 :::
+
+# An Exercise {#sec-exercise}
+
+- Do this to practice using the techniques we've been using to analyze our estimators. 
+- And build some intuition about why misspecification doesn't always cause much bias.
+
+## A Caricature of the California Data
+
+```{webr}
+#| envir: ca 
+#| autorun: true
+#| warning: false
+#| fig-width: 12
+formula = y ~ w*x
+exercise.pop |> lsq.plot(formula)
+```
+
+- Let's dig in to why we do so much better with the *lines model* than with the *horizontal lines model*.
+  - Above, there's a plot of a caricature of our California population data. 
+  - And the population least squares predictor in the lines model.
+- The covariate distributions [$p_{x \mid 0}$]{.groupa} and [$p_{x \mid 1}$]{.groupb} have are very simple.
+  - [$p_{x \mid 1}$]{.groupa} is flat. At each of the 5 education levels, you have 1/5 of the [female residents]{.groupa}.
+  - [$p_{x \mid 0}$]{.groupb} is linear. 
+    - At the level $x=14$, you have 1/5 of the [male residents]{.groupb}. 
+    - But the fraction decreases by $1/20=.05$ with every two years of education.
+
+$$\color{gray}
+\begin{aligned}
+\ingroupb{p_{x \mid 1}} &= \frac{1}{5} \qqtext{ and } 
+\ingroupa{p_{x \mid 0}} &= \frac{1}{5} - \frac{1}{20} \frac{x-14}{2} 
+\end{aligned}
+$$
+
+- More importantly, they have a *linear relationship*.
+
+$$
+\color{gray}
+\begin{aligned}
+\ingroupa{p_{x \mid 0}} &= \ingroupb{p_{x \mid 1}} \times (ax + b) \qfor a=\frac{11}{4} \qand b=-1/8.
+\end{aligned}
+$$
+
+## Exercise 
+
+```{webr}
+#| envir: ca 
+#| autorun: true
+#| warning: false
+#| fig-width: 12
+target = function(muhat, sam) { 
+  mean(muhat(1, sam$x[sam$w==0]) - muhat(0, sam$x[sam$w==0]))
+}
+exercise.pop |> plot.sampling.distribution(formula, target)
+```
+
+- When we look at the sampling distribution of $\hat\Delta_0$, we see no bias at all.
+- And it's not because our covariate distributions are close to the same in the two groups. They're not.
+  - Something else is going on. It's about the relationship between our model and these covariate distributions.
+  - If you change the model to the horizontal lines model, you'll get bias.^[Try it! Change the formula to `y ~ 1+w`]
+
+- **Exercise**. Prove that the population version of our estimator, $\tilde\Delta_0$, is equal to the target, i.e., that
+$$
+\color{gray}
+\begin{aligned}
+\tilde\Delta_0 &= \sum_x \ingroupa{p_{x \mid 0}} \qty{\ingroupb{\tilde\mu(1,x)} - \ingroupa{\tilde\mu(0,x)}} \qfor \\ 
+\tilde \mu &= \argmin_{m \in \model} \frac{1}{m}\sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2 \qqtext{ with } \model = \{ a(w) + b(w) x \}. 
+\end{aligned}
+$$ 
+
+- If you're not convinced that they're exactly equal, run this code to check.
+```{webr}
+#| envir: ca 
+
+pop.fit = lm(formula, data=exercise.pop)
+mutilde = function(w,x) { predict(pop.fit, newdata=data.frame(w=w,x=x)) }
+
+pop.fit.allfunctions = lm(y ~ w*factor(x), data=exercise.pop)
+mu = function(w,x) { predict(pop.fit.allfunctions, newdata=data.frame(w=w,x=x)) }
+
+thetatilde  = target(mutilde, exercise.pop)
+theta       = target(mu,      exercise.pop)
+data.frame(thetatilde, theta)
+```
+
+## Hint 
+
+- Think about the orthogonality of population least squares residuals to function $m \in \model$. 
+- What happened when we plugged in $m(w,x)=1_{=1}(w)$ on @eq-wrong-average?
+  - That didn't show the [mismatched]{.groupa} [term]{.groupb} was unbiased.
+  - We were averaging over the wrong covariate distribution. 
+- Can we show what we want by plugging in a different *m*?
+  - Not $m(w,x)=1_{=1}(w)$, but perhaps $m(w,x)=1_{=1}(w) \times \text{something}$?
+
+
+
+# IPW {#sec-ipw}
+## A Caricature of the California Data
+
+```{webr}
+#| envir: ca 
+#| autorun: true
+#| warning: false
+#| fig-width: 12
+formula = y ~ w*x
+exercise.pop |> lsq.plot(formula)
+```
+
+- Let's dig in to why we do so much better with the *lines model* than with the *horizontal lines model*.
+  - Above, there's a plot of a caricature of our California population data. 
+  - And the population least squares predictor in the lines model.
+- The covariate distributions [$p_{x \mid 0}$]{.groupa} and [$p_{x \mid 1}$]{.groupb} have are very simple.
+  - [$p_{x \mid 1}$]{.groupb} is flat. At each of the 5 education levels, you have 1/5 of the [female residents]{.groupa}.
+  - [$p_{x \mid 0}$]{.groupa} is linear. 
+    - At the level $x=14$, you have 1/5 of the [male residents]{.groupb}. 
+    - But the fraction decreases by $1/20=.05$ with every two years of education.
+
+$$\color{gray}
+\begin{aligned}
+\ingroupb{p_{x \mid 1}} &= \frac{1}{5} \qqtext{ and } 
+\ingroupa{p_{x \mid 0}} &= \frac{1}{5} - \frac{1}{20} \frac{x-14}{2} 
+\end{aligned}
+$$
+
+- More importantly, they have a *linear relationship*.
+
+$$
+\color{gray}
+\begin{aligned}
+\ingroupa{p_{x \mid 0}} &= \ingroupb{p_{x \mid 1}} \times (ax + b) \qfor a=\frac{11}{4} \qand b=-1/8.
+\end{aligned}
+$$
+
+## Exercise 
+
+```{webr}
+#| envir: ca 
+#| autorun: true
+#| warning: false
+#| fig-width: 12
+target = function(muhat, sam) { 
+  mean(muhat(1, sam$x[sam$w==0]) - muhat(0, sam$x[sam$w==0]))
+}
+exercise.pop |> plot.sampling.distribution(formula, target)
+```
+
+- When we look at the sampling distribution of $\hat\Delta_0$, we see no bias at all.
+- And it's not because our covariate distributions are close to the same in the two groups. They're not.
+  - Something else is going on. It's about the relationship between our model and these covariate distributions.
+  - If you change the model to the horizontal lines model, you'll get bias.^[Try it! Change the formula to `y ~ 1+w`]
+
+- **Exercise**. Prove that the population version of our estimator, $\tilde\Delta_0$, is equal to the target, i.e., that
+$$
+\color{gray}
+\begin{aligned}
+\tilde\Delta_0 &= \sum_x \ingroupa{p_{x \mid 0}} \qty{\ingroupb{\tilde\mu(1,x)} - \ingroupa{\tilde\mu(0,x)}} \qfor \\ 
+\tilde \mu &= \argmin_{m \in \model} \frac{1}{m}\sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2 \qqtext{ with } \model = \{ a(w) + b(w) x \}. 
+\end{aligned}
+$$ 
+
+- If you're not convinced that they're exactly equal, run this code to check.
+```{webr}
+#| envir: ca 
+
+pop.fit = lm(formula, data=exercise.pop)
+mutilde = function(w,x) { predict(pop.fit, newdata=data.frame(w=w,x=x)) }
+
+pop.fit.allfunctions = lm(y ~ w*factor(x), data=exercise.pop)
+mu = function(w,x) { predict(pop.fit.allfunctions, newdata=data.frame(w=w,x=x)) }
+
+thetatilde  = target(mutilde, exercise.pop)
+theta       = target(mu,      exercise.pop)
+data.frame(thetatilde, theta)
+```
+
+## Hint 
+
+- Think about the orthogonality of population least squares residuals to function $m \in \model$. 
+- What happened when we plugged in $m(w,x)=1_{=1}(w)$ on @eq-wrong-average?
+  - That didn't show the [mismatched]{.groupa} [term]{.groupb} was unbiased.
+  - We were averaging over the wrong covariate distribution. 
+- Can we show what we want by plugging in a different *m*?
+  - Not $m(w,x)=1_{=1}(w)$, but perhaps $m(w,x)=1_{=1}(w) \times \text{something}$?
 
 # Appendix 
 
@@ -941,3 +1146,4 @@ $$
 &= \frac{1}{m} \ \sum_{j=1}^m m_x \mu(x)
 \end{aligned}
 $$
+
