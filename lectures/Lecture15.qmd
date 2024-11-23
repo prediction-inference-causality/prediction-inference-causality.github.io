@@ -1,6 +1,8 @@
 ---
 title: "Lecture 15"
 subtitle: "Application: Profit vs. Outcomes in Heart Attack Patients" 
+webr: 
+  render-df: gt-interactive
 ---
 
 ## Summary 
@@ -10,15 +12,14 @@ subtitle: "Application: Profit vs. Outcomes in Heart Attack Patients"
 .reveal { background: #ffffff; }
 </style>
 ```
-::: hidden
-{{< include shared-webr-code.qmd >}}
-{{< include shared-code.qmd >}}
-:::
+
+::: {.panel-tabset}
+###
 
 - We're going to get started looking at real question in health policy.
 - **Vague Question**. Do for-profit hospitals prioritize profit over patient outcomes? 
 - We'll read two papers that address this question in the context of treatment for heart attacks.
-  - [Shah et al. (2007)](https://core.ac.uk/download/pdf/81940325.pdf)
+  - [Shah et al. (2007)](https://qtm285-1.github.io/assets/borrowed/shah2007mci.pdf)
   - [Kim et al. (2023)](https://arxiv.org/pdf/2311.00568)
 - We'll discuss them in class Friday. 
 - Today, our goal is to get you prepared to read them. 
@@ -26,7 +27,68 @@ subtitle: "Application: Profit vs. Outcomes in Heart Attack Patients"
   - But not everyone talks about this stuff in the same language we use in class. 
   - What we do need to focus on is translation.
 
+###
 
+{{< include shared-code.qmd >}}
+{{< include shared-webr-code.qmd >}}
+
+###
+```{webr}
+#| label: scatter-plot
+#| autorun: true
+
+no.guides = guides(fill='none', color='none', size='none')
+gamma.constant = function(sam) { rep(1, nrow(sam)) }
+default.jitter = function(sam, x) {
+  h = if(all(sam$y %in% 0:1)) { .1 } else { 0 }
+  w = if(all(sam[,x] %in% 0:1)) { .1 } else { 0 }
+  position_jitter(width=w, height=h, seed=0)
+}
+scatter = function(sam, x, y,  gamma=gamma.constant, jitter=default.jitter(sam,x), dot.alpha=.25, dot.size=.25) {
+  sam$gamma = gamma(sam)/mean(gamma(sam))
+  sam$the.x = sam[,x]
+  sam$the.y = sam[,y]
+  list(geom_point(aes(x=the.x, y=the.y, color=factor(w), size=I(gamma)),
+                position=jitter, alpha=dot.alpha,
+                data=sam),
+    no.guides)
+}
+```
+
+```{webr}
+#| label: histograms
+#| autorun: true
+
+default.scale = 1
+histograms = function(sam, x, gamma=gamma.constant, scale=default.scale, color=TRUE, fill.alpha=.2, mean.linetype='solid', mean.alpha=.5) {
+  sam$gamma = gamma(sam)
+  sam$the.x = sam[,x] 
+  summaries = sam |> 
+    group_by(w) |> 
+    summarize(meanx=sum(the.x*gamma)/sum(gamma), .groups='drop')
+  
+  if(color) { hist.aes = aes(x=the.x, y=scale*after_stat(density), fill=factor(w),  weight=gamma) }   else {      hist.aes = aes(x=the.x, y=scale*after_stat(density), group=factor(w), weight=gamma) }
+  list(geom_histogram(hist.aes, 
+                      bins=100, alpha=fill.alpha, linewidth=.02, color="gray", position="identity",
+                      data=sam),
+       geom_vline(aes(xintercept=meanx, color=factor(w)), data=summaries, linetype=mean.linetype, alpha=mean.alpha),
+       no.guides, labs(x=x, y='density'))
+}
+
+purple.histogram = function(sam, x, scale=default.scale, fill.alpha=.2, mean.linetype='solid', mean.alpha=.5) {
+  sam$the.x = sam[,x]
+  list(geom_histogram(aes(x=the.x, y=scale*after_stat(density)), fill='purple',
+                      bins=100, alpha=fill.alpha, linewidth=.02, color="gray", position="identity",
+                      data=sam),
+       geom_vline(aes(xintercept=mean(the.x)), data=sam, color='purple', linetype=mean.linetype, alpha=mean.alpha))
+}
+
+trimmed = function(f, cutoff) { 
+  function(...) { pmin(f(...), cutoff) }
+}
+```
+
+:::
 
 ## The Heart-Attack Context 
 
@@ -36,119 +98,177 @@ subtitle: "Application: Profit vs. Outcomes in Heart Attack Patients"
 ## Fake Data from [Kim et al. (2023)](https://arxiv.org/pdf/2311.00568)
 
 ::: {.panel-tabset}
-### Generating the Data 
+### The Idea 
+
+- This sample is 'sampled with replacement' from an infinite population. 
+  - Each observation $(W_i,X_i,Y_i)$ is an independent random variable.
+  - The mean of $Y_i$ among people in the population with the same $(W_i,X_i)$ is $\mu(W_i,X_i)$.
+  - The probability that a person receives treatment (i.e. that $W_i=1$) is $\pi(X_i)$
+- If you want to get a sense of what this means, take a look at how it's generated. 
+- But this isn't that important. Don't worry about it unless you want to.
+  
+### Generating Covariates
 ```{webr}
 #| autorun: true
 n = 10000
-mu = function(s) { with(s,
-  (x.1 + x.2 + x.3)^2
-)} 
+
+SigmaX.13 = matrix(c(2,   1,   -1,
+                     1,   1,   -.5,
+                    -1, -.5,    1), 3, 3)
+L = chol(SigmaX.13)              
+Z.13 = matrix(rnorm(3*n),3,n)   
+X.13 = L %*% Z.13               
+X.4 = runif(n, min=-1, max=1)
+X.5 = rchisq(n, df=1)
+X.6 = rbinom(n, size=1, prob=.5)
+
+sam = data.frame(x=rbind(X.13, X.4, X.5, X.6) |> unname() |> t())
+```
+
+- For each of the $n$ people in our sample, we generate a $6$-dimensional vector of covariates. 
+  - These have the same distribution, so let's think about the first one, $X_1$. 
+  - We'll write $X_{1i}$ for the $i$-th component of the vector $X_1$.
+- The first three are normally distributed with mean $0$ and covariances $\E[X_{1i}X_{1j}] = \Sigma_{ij}$.^[To generate these, we find a sort of 'square root', $L$ such that $\Sigma = L L^T$.  Then we take a vector of independent normal random variables with mean 0 and variance 1 and compute $X = L Z$. This is normal---linear combinations of normals are normal---and you can check that $\E[X_{1i}X_{1j}] = \Sigma_{ij}$.]
+- The next three are independent of the first three and each other with different distributions. 
+- Nothing particularly meaningful about any of it. 
+
+
+If you want to see the data in a table, run this.
+
+```{webr}
+sam 
+```
+
+### Assigning Treatment
+```{webr}
+#| label: pi
+#| autorun: true
 pi = function(s) { with(s, 
   pnorm(x.1^2 + 2*x.2^2 - 2*x.3^2 - 
        (x.4+1)^3 - .05*log(x.5+10) + x.6 - 1.5)
 )}
 
-Sigmax13 = matrix(c(2,1,-1,
-                    1,1,-.5,
-                    -1,-.5, 1), 3, 3)
-L = chol(Sigmax13)
-x = rbind(L %*% matrix(rnorm(3*n),3,n),
-          runif(n, min=-1, max=1),
-          rchisq(n, df=1),
-          rbinom(n, size=1, prob=.5))
-
-sam = data.frame(x=t(x))
 sam$w = rbinom(n, size=1, prob=pi(sam))
-
-sam$y=mu(sam) + rnorm(n)
 ```
 
+$$
+\begin{aligned}
+W_i &= \begin{cases}
+1 & \text{ with probability } \pi(x) \\
+0 & \text{ otherwise }
+\end{cases} \\
+\qfor & \pi(x) = \Phi(x_1^2 + 2x_2^2 - 2x_3^2 - (x_4+1)^3 - .05\log(x_5+10) + x_6 - 1.5)
+\end{aligned}
+$$
+
+```{webr}
+#| label: phi-plot
+#| autorun: true
+#| fig-width: 12
+
+invlogit = function(x) { 1 / (1 + exp(-x)) }
+xs = seq(-5, 5, length=1000)
+ggplot() + geom_line(aes(x=xs, y=pnorm(xs))) + 
+           geom_line(aes(x=xs, y=invlogit(xs)), color='blue') +
+labs(y='Φ(x)')
+```
+Here you see two curves mapping the real line into the interval $[0,1]$: in black, the cumulative distribution function $\Phi$ of the standard normal; in blue, the inverse logit function $\invlogit(x)=1/(1+\exp(-x))$. We follow Kim et al. (2023) in using the cumulative
+distribution of the normal.
+
 ### Binary vs. Continuous Outcome
+
+**The Mean Function**.
+```{webr}
+#| autorun: true
+mu = function(s) { with(s,
+  invlogit((x.1 + x.2 + x.3)^2)
+)} 
+```
+$$
+\begin{aligned}
+\E[Y_i \mid W_i,X_i] &= \mu(W_i,X_i) \qfor \mu(w,x) = \invlogit((x_1 + x_2 + x_5)^2). 
+\end{aligned}
+$$
+This deviates from Kim et al. (2023) by using the inverse logit to map their mean function $(x_1+x_2+x_5)^2$ into the interval $[0,1]$.
 
 **Binary**.
 ```{webr} 
 #| autorun: true
 invlogit = function(x) { 1 / (1 + exp(-x)) }
-sam$y.binary = rbinom(n, size=1, prob=invlogit(mu(sam)))
+sam$y = rbinom(n, size=1, prob=mu(sam))
 ```
-The actual outcome we're talking about is binary---it's whether a patient gets the treatment of interest (PCI).
+The actual outcome we're talking about is binary. It's whether a patient gets the treatment of interest (PCI).
 
+$$
+\begin{aligned}
+Y_i &= \begin{cases} 
+1 & \text{ with probability } \mu(w,x) \\
+0 & \text{ otherwise }
+\end{cases} 
+\end{aligned}
+$$
 
 **Continuous**.
 
 ```{webr} 
 #| autorun: true
-sam$y = mu(sam) + rnorm(n)
-```
-But it's easier to plot binary outcomes, so we'll---for a minute anyway---look at binary outcomes with the same within-group means $\mu(w,x)$. These are what Kim et al. (2023) use.
 
-### Plotting
-
-```{webr}
-#| autorun: true
-
-with.scatter = function(scaled=FALSE, jitter.height=0) {
-  if(scaled) {
-    list(geom_point(aes(x=x, y=y, color=factor(w)), alpha=.5, size=0.5),
-         position_jitter(height=jitter.height),
-         guides(fill='none', color='none'))
-  } else {
-    list(geom_point(aes(x=x, y=y, color=factor(w), size=I(weight)), alpha=.5, size=0.5),
-       guides(fill='none', color='none', size='none'))
-  }
+rbinary.uniform = function(n, mu) { 
+  ifelse(rbinom(n, size=1, prob=mu(sam)),                # if we flip 1
+                         runif(n, min=0, max=1-mu(sam)), # draw uniformly from 0 to 1-mu
+                         runif(n, min=-mu(sam), max=0))  # otherwise draw from -mu to 0
 }
 
-with.histograms = function(sam.1d, scale.density=100) {
-  if(!('weight' %in% colnames(sam.1d))) { sam.1d$weight = 1 }
-  scale = scale.density / mean(sam.1d$weight)
-  list(geom_histogram(aes(x=x, y=scale*after_stat(density), fill=factor(w), weight=weight), bins=100, alpha=.2, linewidth=.02, color="gray", position="identity",
-    data=sam.1d),
-       geom_vline(aes(xintercept=sum(x*weight)/sum(weight)), 
-                  color=groupb, alpha=.5, data=sam.1d |> filter(w==1)),
-       geom_vline(aes(xintercept=sum(x*weight)/sum(weight)), 
-                  color=groupa, alpha=.5, data=sam.1d |> filter(w==0)),
-       guides(fill='none', color='none', size='none'))
-}
+sam$y.continuous = mu(sam) + rbinary.uniform(n, mu(sam))
 ```
+But it's harder to plot binary outcomes, so we'll---for a minute anyway---look at non-binary outcomes in [0,1].
+You can think of these as being a spaced-out version of the binary outcomes, where we flip a coin with weight
+$\mu$ to decide whether we're uniformly distributed above or below the mean.
+
+$$
+\begin{aligned}
+Y_i &= \mu(W_i,X_i) + \varepsilon_i \qfor 
+\varepsilon_i = U_i \begin{cases} 1-\mu(W_i,X_i) & \text{ with probability } \mu(W_i,X_i) \\
+-\mu(W_i,X_i) & \text{ otherwise } \end{cases} \qfor U_i \sim \text{Uniform}(0,1)
+\end{aligned}
+$$
+
+Here Kim et al. (2023) took $\varepsilon_i$ to be normal with mean $0$ and variance $1$.
+
 ::: 
 
 ## Plots 
 
-
-```{webr}
-#| autorun: true 
-#| caption: 'Change the covariate `x.1` to `x.2` ... `x.6` to see the outcomes plotted against different covariates. Change `y` to `y.binary` to see the binary outcomes. In that case, you may want to pass `jitter.height=.05` to `with.scatter`.'
-sam.1d = data.frame(x=sam$x.1, w=sam$w, y=sam$y) 
+```{ojs}
+//| echo: false
+viewof xx = Inputs.radio(
+  ["x.1", "x.2", "x.3", "x.4", "x.5", "x.6"], {value:"x.1", label:"x"})
+viewof yy = Inputs.radio(
+  new Map([["binary", "y"], 
+           ["continuous", "y.continuous"]]), {value:"y", label:"y"})
 ```
 
 ::: {.panel-tabset}
 ### Scatter Plot 
 ```{webr}
 #| autorun: true
-ggplot(sam.1d) + with.scatter() + coord_cartesian(ylim=c(-3, 10)) 
+#| fig-width: 12
+#| input: 
+#|   - xx
+#|   - yy
+ggplot() + scatter(sam, xx, yy) 
 ```
 
 ### Histograms
 ```{webr}
 #| autorun: true
-ggplot(sam.1d) + with.histograms(sam.1d)
+#| fig-width: 12
+#| input: 
+#|   - xx
+ggplot() + histograms(sam, xx)
 ```
 
 :::
-
-$$
-\begin{aligned}
-Y_i &= \mu(W_i,X_i) + \varepsilon_i \qfor \mu(w,x) = (x_1 + x_2 + x5)^2 \qand \varepsilon \sim N(0,1) \\
-\pi(x) &= \Phi^{-1}\left(x_1^2 + 2x_2^2 - 2 x_3^2 - (x_4+1)^3 - .05*\log(x_5+10) + x_6 - 1.5 \right) 
-\end{aligned}
-$$
-
-- This sample is 'sampled with replacement' from an infinite population. 
-  - Each observation $(W_i,X_i,Y_i)$ is an independent random variable.
-  - The mean of $Y_i$ among people in the population with the same $(W_i,X_i)$ is $\mu(W_i,X_i)$.
-  - The probability that a person receives treatment (i.e. that $W_i=1$) is $\pi(X_i)$
-  where $\Phi$ is the CDF of a standard normal random variable. 
-- When you read, don't worry about this code or the mathematical description above.
 
 ## About Observational Causal Inference
 
@@ -160,16 +280,285 @@ $$
 
 ## Balancing Weights 
 
-```{webr}
-#| autorun: true
-gamma = function(sam) {
-  ifelse(sam$w==1, 1, pi(sam) / (1-pi(sam)))
-}
-sam$weight = gamma(sam) 
-sam.1d = data.frame(x=sam$x.4, w=sam$w, y=sam$y, weight=sam$weight)
-ggplot(sam.1d) + with.histograms(sam.1d)
+```{ojs}
+//| echo: false
+viewof x = Inputs.radio(
+  ["x.1", "x.2", "x.3", "x.4", "x.5", "x.6"], {value:"x.1", label:"x"})
+viewof trim_level = Inputs.radio( 
+  [1, 2, 5, 10, 20, 100, Infinity], {value: 100, label:"trim γ at"})
+viewof y = Inputs.radio(
+  new Map([["binary", "y"], 
+           ["continuous", "y.continuous"]]), {value:"y", label:"y"})
 ```
 
+::: {.panel-tabset}
+### ATT
+```{webr}
+#| autorun: true
+gamma.att = function(sam) { 
+  ifelse(sam$w, 1, pi(sam) / (1-pi(sam)))
+}
+```
+
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - trim_level
+ggplot() + histograms(sam, x, gamma=trimmed(gamma.att, trim_level)) + 
+           histograms(sam, x, color=FALSE, fill.alpha=.05, mean.linetype='dotted') +
+           facet_grid(rows=vars(w))
+```
+
+**Scatter Plot**
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - y
+#|   - trim_level
+ggplot() + scatter(sam, x, y, gamma=trimmed(gamma.att, trim_level)) 
+```
+
+### ATT Estimates 
+
+
+
+**Estimate**
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - y
+#|   - trim_level
+formula = y ~ w 
+model.ipw = lm(formula, weights=gamma, 
+  data=sam |> mutate(gamma=trimmed(gamma.att, trim_level)(sam)))
+Deltahat.1 = 
+  mean( predict(model.ipw, sam  |> filter(w==1) |> mutate(w=1)) - 
+        predict(model.ipw, sam  |> filter(w==1) |> mutate(w=0)) )
+Deltahat.1
+```
+
+**Without IPW**.
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - y
+model.no.ipw = lm(formula, data=sam) 
+Deltahat.1.no.ipw = 
+  mean( predict(model.no.ipw, sam  |> filter(w==1) |> mutate(w=1)) - 
+        predict(model.no.ipw, sam  |> filter(w==1) |> mutate(w=0)) )
+Deltahat.1.no.ipw
+```
+
+
+:::: columns
+::: column
+```{webr}
+summary(model.ipw)
+```
+:::
+::: column
+```{webr}
+summary(model.no.ipw)
+```
+:::
+::::
+
+**Sampling Distributions**
+
+```{webr}
+estimate.att = function(sam, formula, weight=TRUE) {
+  data = sam |> mutate(gamma=trimmed(gamma.att, trim_level)(sam))
+  model.ipw = if(weight) { lm(formula, weights=gamma, data=data) } 
+              else { lm(formula, data=data) }
+  Deltahat.1 = 
+    mean( predict(model.ipw, sam  |> filter(w==1) |> mutate(w=1)) - 
+          predict(model.ipw, sam  |> filter(w==1) |> mutate(w=0)) )
+  Deltahat.1
+}
+
+bootstrap.samples = 1:400 |> map(function(.) {  
+  J = sample(1:nrow(sam), nrow(sam), replace=TRUE)
+  sam[J,]
+})
+
+att.star = data.frame(
+  ipw = bootstrap.samples |> 
+    map_vec(\(sam) sam |> estimate.att(formula, weight=TRUE)),
+  no.ipw = bootstrap.samples |> 
+    map_vec(\(sam) sam |> estimate.att(formula, weight=FALSE))
+)
+
+bootstrap.dist.plot = ggplot(att.star) + 
+  geom_histogram(aes(x=ipw), bins=50, 
+    alpha=.5, fill=teal, linewidth=.05) + 
+  geom_histogram(aes(x=no.ipw), bins=50, 
+    alpha=.5, fill=pink, linewidth=.05) + 
+  geom_vline(xintercept=0, color='green', linewidth=1.5, alpha=.5)  
+bootstrap.dist.plot 
+```
+for ATT estimators using [inverse probability weighting]{.teal} and [not]{.pink}.
+
+```{webr}
+normal.approx = function(model) { 
+  function(x) { dnorm(x, coef(model)['w'], sqrt(vcov(model)['w','w'])) }
+}
+xs = seq(0, max(att.star$no.ipw), length.out=1000)
+
+bootstrap.dist.plot + 
+  geom_line(aes(x=x, y=px), color=teal, 
+      data=data.frame(x=xs, px=normal.approx(model.ipw)(xs))) +
+  geom_line(aes(x=x, y=px), color=pink, 
+      data=data.frame(x=xs, px=normal.approx(model.no.ipw)(xs)))
+```
+with normal approximations --- using `summary` output --- added.
+
+### ATE
+```{webr}
+#| autorun: true
+gamma.ate = function(sam) { 
+  ifelse(sam$w, 1/pi(sam), 1/(1-pi(sam)))
+}
+```
+
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - trim_level
+ggplot() + histograms(sam, x, gamma=trimmed(gamma.ate, trim_level)) + 
+           histograms(sam, x, color=FALSE, fill.alpha=.05, mean.linetype='dotted') +
+           facet_grid(rows=vars(w))
+```
+
+**Scatter Plot**
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - y
+#|   - trim_level
+ggplot() + scatter(sam, x, y, gamma=trimmed(gamma.ate, trim_level)) 
+```
+
+**Estimate**
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - y
+#|   - trim_level
+
+model = lm(formula, weights=gamma, 
+  data=sam |> mutate(gamma=trimmed(gamma.ate, trim_level)(sam)))
+Deltahat.all = 
+  mean( predict(model, sam  |> mutate(w=1)) - 
+        predict(model, sam  |> mutate(w=0)) )
+Deltahat.all
+```
+
+### ATC
+```{webr}
+#| autorun: true
+gamma.atc = function(sam) { 
+  ifelse(sam$w, (1-pi(sam))/pi(sam), 1)
+}
+```
+
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - trim_level
+ggplot() + histograms(sam, x, gamma=trimmed(gamma.atc, trim_level)) + 
+           histograms(sam, x, color=FALSE, fill.alpha=.05, mean.linetype='dotted') +
+           facet_grid(rows=vars(w))
+```
+
+**Scatter Plot**
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - y
+#|   - trim_level
+ggplot() + scatter(sam, x, y, gamma=trimmed(gamma.atc, trim_level)) 
+```
+
+**Estimate**
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - y
+#|   - trim_level
+
+model = lm(formula, weights=gamma, 
+  data=sam |> mutate(gamma=trimmed(gamma.atc, trim_level)(sam)))
+Deltahat.0 = 
+  mean( predict(model, sam |> filter(w==0) |> mutate(w=1)) - 
+        predict(model, sam |> filter(w==0) |> mutate(w=0)) )
+Deltahat.0
+```
+
+### Overlap-Weighted ATE
+```{webr}
+#| autorun: true
+gamma.overlap = function(sam) {
+  ifelse(sam$w, 1-pi(sam), pi(sam))
+}
+```
+
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - trim_level
+ggplot() + histograms(sam, x, gamma=trimmed(gamma.overlap, trim_level)) + 
+           histograms(sam, x, color=FALSE, fill.alpha=.05, mean.linetype='dotted') +
+           facet_grid(rows=vars(w))
+```
+
+**Scatter Plot**
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - y
+#|   - trim_level
+ggplot() + scatter(sam, x, y, gamma=trimmed(gamma.overlap, trim_level)) 
+```
+
+**Estimate**
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - x
+#|   - y
+#|   - trim_level
+
+model = lm(formula, weights=gamma, 
+  data=sam |> mutate(gamma=trimmed(gamma.overlap, trim_level)(sam)))
+summary(model)
+```
+
+:::
 
 # The Historically-Popular Intro-Stats Perspective 
 
@@ -181,18 +570,17 @@ ggplot(sam.1d) + with.histograms(sam.1d)
 
 ```{webr}
 #| autorun: true
-
-model.fit = lm(y ~ w + x.1 + x.2 + x.3 + x.4 + x.5 + x.6, 
+lm.fit = lm(y ~ w + x.1 + x.2 + x.3 + x.4 + x.5 + x.6, 
   data=sam)
-summary(model.fit)
+summary(lm.fit)
 ```
 
 ```{webr}
 #| autorun: true
 
-model.fit = lm(y ~ w + x.1 + x.2 + x.3 + x.4 + x.5 + x.6, 
-  data=sam, weights=weight)
-summary(model.fit)
+lm.fit.ipw = lm(y ~ w + x.1 + x.2 + x.3 + x.4 + x.5 + x.6, weights=gamma,
+  data=sam |> mutate(gamma=gamma.att(sam)))
+summary(lm.fit.ipw)
 ```
 
 
@@ -201,19 +589,20 @@ summary(model.fit)
 ```{webr}
 #| autorun: true
 
-model.fit = glm(y.binary ~ w + x.1 + x.2 + x.3 + x.4 + x.5 + x.6, 
-  data=sam, family='binomial')
-summary(model.fit)
+glm.fit = glm(y ~ w + x.1 + x.2 + x.3 + x.4 + x.5 + x.6, 
+  family='binomial', data=sam)
+summary(glm.fit)
 ```
 
 ```{webr}
 #| autorun: true
 
-model.fit = glm(y.binary ~ w + x.1 + x.2 + x.3 + x.4 + x.5 + x.6, 
-  data=sam, family='binomial', weights=weight, start=rep(0,8))
-summary(model.fit)
+glm.fit.ipw = glm(y ~ w + x.1 + x.2 + x.3 + x.4 + x.5 + x.6, 
+  family='binomial', weights=gamma, 
+  data=sam |> mutate(gamma=gamma.att(sam)), 
+  start=coef(glm.fit))
+summary(glm.fit.ipw)
 ```
-
 
 # Tables
 These Things Are Everywhere. What are they communicating?
@@ -224,7 +613,7 @@ These Things Are Everywhere. What are they communicating?
 
 # What to Read {#what-to-read}
 
-## [Shah et al. (2007)](https://core.ac.uk/download/pdf/81940325.pdf)
+## [Shah et al. (2007)](https://qtm285-1.github.io/assets/borrowed/shah2007mci.pdf)
 
 - This is short, so you should be able to read it straight through.
 - They report a bunch of stuff. 
@@ -244,3 +633,31 @@ These Things Are Everywhere. What are they communicating?
 - Here's two things to look for.
   - Their estimator for the ATT ($\Delta_1$) compares the sample average outcome of the [treated group]{.groupb} to the *weighted* sample average outcome of the [control group]{.groupa}. That's weighted least squares in the *horizontal lines model*. 
   - Their weights (they write $w_i$ where we write $\gamma(W_i,X_i)$) aren't *defined* as a ratio of covariate distributions $\ingroupa{p_{x\mid 1}}/\ingroupb{p_{x \mid 0}}$. But they're chosen to *do* exactly what weighting using that ratio *does*. That is, to make the distribution of the covariate in the *weighted* sample match match the distribution we're averaging over when we calculate $\Delta_1$.
+    
+# Randomization and Inverse Probability Weighting
+
+$$
+\begin{aligned}
+P(X=x, W=w) 
+&= P(X \mid W=w) P(W=w) \\
+&= P(W \mid X=x) P(X=x) \\ 
+\end{aligned}
+$$
+
+so equating the two expressions for $P(X=x, W=w)$ and solving for $P(X \mid W=w)$ gives ...
+
+$$
+P(X \mid W=w) = \frac{\overset{\faint{\pi(x) \text{ or } 1-\pi(x)}}{P(W=w \mid X=x)} P(X=x)}{\underset{\faint{p_w \text{ or } 1-p_w}}{P(W=w)}}
+$$
+
+and it follows that the inverse probability weights for estimating the ATT $\Delta_1$ are ...
+
+$$
+\begin{aligned}
+\gamma(w,x) & = \begin{cases}
+1 & \text{ if } w=1 \\
+\frac{P(X \mid W=1)}{P(X \mid W=0)} = \frac{\frac{\pi(x) P(X=x)}{p_w}}{\frac{(1-\pi(x)) P(X=x)}{1-p_w}} 
+= \frac{\pi(x)}{1-\pi(x)} \times \frac{1-p_w}{p_w} & \text{ if } w=0
+\end{cases}
+\end{aligned}
+$$
