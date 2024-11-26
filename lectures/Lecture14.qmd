@@ -91,7 +91,7 @@ exercise.pop.moderate = exercise.pop(m0x.moderate, m1x.moderate)
 exercise.pop.extreme = exercise.pop(m0x.extreme, m1x.extreme)
 
 set.seed(0)
-J.sam = sample(1:nrow(exercise.pop.moderate), 200, replace=TRUE)
+J.sam = sample(1:nrow(exercise.pop.moderate), 500, replace=TRUE)
 exercise.sam = exercise.pop.moderate[J.sam,]
 n = nrow(exercise.sam)
 ```
@@ -115,7 +115,7 @@ with.ipw = function(sam, from=sam) {
 } 
 
 plot.sampling.distribution = function(pop, formula, n = nrow(sam), 
-target=Delta0.target(), pop.version=FALSE, replications=1000,
+target=Delta0.target(), pop.version=FALSE, replications=5000,
 with.weights=with.constant.weights, seed=1) { 
     estimates = with_seed(function() { 
       1:replications |> map_vec(function(rep) { 
@@ -367,7 +367,7 @@ when our adjustment uses the least squares predictor in the *horizontal lines* m
 See @sec-q2-answer for the answer.
 
 ### Question 3 
-Why, in intuitive terms, is the constant [$\tilde\mu(1,x)$]{.groupa} *not* the right prediction to use in this comparison? *Hint*. Think about the extreme covariate shift case. Which green dots does fit well? Which does it not fit well? Why?
+Why, in intuitive terms, is the constant [$\tilde\mu(1,x)$]{.groupb} *not* the right prediction to use in this comparison? *Hint*. Think about the extreme covariate shift case. Which green dots does fit well? Which does it not fit well? Why?
 
 See @sec-q3-answer for the answer.
 
@@ -633,7 +633,7 @@ Delta0.hat #<4>
 formula = y ~ 1+w
 J = J.sam
 
-xrange = c(-25000, 0)
+xrange = c(-30000, 5000)
 xbreaks = seq(xrange[1], xrange[2], by=5000)
 scalex.hist = scale_x_continuous(breaks=xbreaks, limits=range(xbreaks), labels=sprintf("$%dk", xbreaks/1000))
 
@@ -734,7 +734,7 @@ exercise.pop(m0x.flat, m1x.extreme) |> plot.sampling.distribution(formula,
   - Especially when there's a lot of covariate shift.
   - This is pretty interesting, but we won't have time to get into it.
 
-# Generalizing the Idea
+# Generalizing the Idea {#sec-generalizing}
 An Exercise.
 
 ## $\Delta_0$ 
@@ -792,9 +792,9 @@ proof.plot
 $$
 \begin{aligned}
 \tilde\Delta_0 &= \ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \ingroupb{\tilde\mu(1,x_j)} -
-\ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \ingroupb{\tilde\mu(0,x_j)} \\
+\ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \ingroupa{\tilde\mu(0,x_j)} \\
 \Delta_0 &= \ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \ingroupb{\mu(1,x_j)} -
-\ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \ingroupb{\mu(0,x_j)}
+\ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \ingroupa{\mu(0,x_j)}
 \end{aligned}
 $$
 
@@ -854,7 +854,7 @@ $$
 
 ## Showing Error Terms are Zero 
 
-- We'll plug in group indicators $1_{=0}(w)$ and $1_{=x}(x)$ to this orthogonality condition 
+- We'll plug in group indicators [$m(w,x)=1_{=0}(w)$]{.groupa} and [$m(w,x)=1_{=x}(x)$]{.groupb} to this orthogonality condition 
 $$
 \begin{aligned}
 0 &= \sum_{w \in 0,1} \sum_{j:w_j=0} \lcb{ \mu(w, x_j) - \tilde\mu(w,x_j) } m(w,x_j) \qqtext{ for all } m \in \model.
@@ -889,7 +889,7 @@ $$
 $$
 \begin{aligned}
 0 
-&= \sum_{w \in 0,1} \sum_{j:w_j=0} \lcb{ \mu(w, x_j) - \tilde\mu(w,x_j) } 1_{=1}(w) \\
+&= \sum_{w \in 0,1} \sum_{j:w_j=0} \lcb{ \mu(w, x_j) - \tilde\mu(w,x_j) } \ingroupb{1_{=1}(w)} \\
 &\explain{=}{Via the indicator trick, as in the matched term.} 
 \ingroupa{\frac{1}{m_0} \sum_{j:w_j=0}} \lcb{ \ingroupb{\mu(1, x_j)} - \ingroupb{\tilde\mu(1,x_j)} }
 \end{aligned}
@@ -929,7 +929,7 @@ sam |> with.weights() |> lsq.plot(formula)
 pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weights)
 ```
 
-### Lines Model
+### Parallel Lines Model
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
@@ -938,7 +938,7 @@ sam |> with.weights() |> lsq.plot(formula)
 pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weights)
 ```
 
-### Parallel Lines Model
+### Lines Model
 ```{r}
 #| layout-ncol: 2
 #| fig-width: 7
@@ -960,7 +960,7 @@ pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weig
 
 - All of these models include indicators for each group. 
 - When we weight like this, that's all we need to get unbiasedness *for the target $\Delta_0$*.
-- For other targets, we need other weights. For homework, you'll derive these weights for $\Delta_1$ and $\Delta_{\text{all}}$.
+- For other targets, we need other weights.^[We talked about what these should be for $\Delta_1$ and $\Delta_{\text{all}}$ earlier (@sec-generalizing). If you got them right, you should be able to prove that you get unbiasedness for those targets when you use them. Prove it!]
 
 ## Why IPW? 
 
@@ -1092,7 +1092,7 @@ pop |> plot.sampling.distribution(formula, target=target, with.weights=with.weig
 pop |> plot.sampling.distribution(formula, target=target) + scalex.hist
 ```
 
-- Our *unweighted* least squares predictor in the lines model gives us an unbiased estimate of $\Delta_0$ when when the ratio of the covariate distributions is a line.^[Up to a constant factor $\ingroupa{m_0}/\ingroupb{m_1}$, the ratio $\gamma(w,x)=\ingroupa{p_{x \mid 0}}/\ingroupb{p_{x \mid 1}}$ of the number of dots in each column agrees with the ratio of the proportions $\ingroupa{p_{x\mid 0}}/\ingroupb{p_{x \mid 1}}$, so it's equivalent to use either ratio in your weights. That equivalence is shown faintly, so as not to distract, below.}
+- Our *unweighted* least squares predictor in the lines model gives us an unbiased estimate of $\Delta_0$ when when the ratio of the covariate distributions is a line.^[Up to a constant factor $\ingroupa{m_0}/\ingroupb{m_1}$, the ratio $\gamma(w,x)=\ingroupa{p_{x \mid 0}}/\ingroupb{p_{x \mid 1}}$ of the number of dots in each column agrees with the ratio of the proportions $\ingroupa{p_{x\mid 0}}/\ingroupb{p_{x \mid 1}}$, so it's equivalent to use either ratio in your weights. That equivalence is shown faintly, so as not to distract, below.]
 
 $$
 \veryfaint{ 
@@ -1105,8 +1105,10 @@ $$
 
 $$
 \begin{aligned}
-0 &= \sum_{j=1}^n \lcb{ \mu(w_j, x_j) - \tilde\mu(w_j,x_j) } m(w,x) \qqtext{ for any } &&m \in \{ a(w)+b(w)x \} \qqtext{ and therefore for } && m(w,x) = \begin{cases} 0 & \text{if } w=0 \\ 
-                                                   a+bx = \frac{\ingroupa{m_{0x}}}{\ingroupb{m_{1x}}}  & \text{if } w=1 \end{cases}.
+0 &= \sum_{j=1}^n \lcb{ \mu(w_j, x_j) - \tilde\mu(w_j,x_j) } m(w,x) \qqtext{ for any } && m \in \{ a(w)+b(w)x \} \\
+&\qqtext{ and therefore for } && m(w,x) = \begin{cases} 
+0 & \text{if } w=0 \\ 
+a+bx = \frac{\ingroupa{m_{0x}}}{\ingroupb{m_{1x}}}  & \text{if } w=1 \end{cases}.
 \end{aligned}
 $$
 
@@ -1114,7 +1116,11 @@ Simplifying, using the indicator trick, we get...
 
 $$
 \begin{aligned}
-0 &= \sum_{j:w_j=1} \lcb{ \mu(1, x_j) - \tilde\mu(1,x_j) } \frac{\ingroupa{m_{0x}}}{\ingroupb{m_{1x}}} \\
+0 &= \sum_{w\in 0,1} \sum_{j:w_j=1} \lcb{ \mu(w_j, x_j) - \tilde\mu(w_j,x_j) } \times \begin{cases}
+0 & \text{if } w=0 \\
+\frac{\ingroupa{m_{0x}}}{\ingroupb{m_{1x}}} & \text{if } w=1 
+\end{cases} \\
+&= \sum_{j:w_j=1} \lcb{ \ingroupb{\mu(1, x_j) - \tilde\mu(1,x_j)} } \frac{\ingroupa{m_{0x}}}{\ingroupb{m_{1x}}} \\
   &= \sum_x \ingroupb{m_{1x}} \lcb{ \ingroupb{\mu(1, x) - \tilde\mu(1,x)} } \frac{\ingroupa{m_{0x}}}{\ingroupb{m_{1x}}} \\
   &= \sum_x \ingroupa{m_{0x}} \lcb{ \ingroupb{\mu(1, x) - \tilde\mu(1,x)} }.
 \end{aligned}
@@ -1130,7 +1136,7 @@ $$
 
 ### Lesson 
 
- - Unweighted least squares is unbiased *if* the (signed) inverse probability weights are in the model.^[You'll prove this for homework.]
+ - Unweighted least squares is unbiased *if* the (signed) inverse probability weights are in the model.
 - This is interesting, but it's a lot to expect. 
   - Unless you intentionally include $\gamma_{\pm}$ in the model. 
   - That's an option, but people usually weight instead. 
@@ -1171,7 +1177,7 @@ sam |> lsq.plot(y ~ w*x)
 ```
 
 $$
-\model=\{m(w,x)=a(w) \qqtext{ for functions } a\}
+\model=\{m(w,x)=a(w) \qqtext{ for all functions } a\}
 $$ {#eq-horizontal-lines-model}
 
 ```{r}
@@ -1186,7 +1192,7 @@ formula = y ~ w
 sam |> lsq.plot(y ~ w+x) 
 ```
 $$
-\model=\{m(w,x)=a(w)+bx \qqtext{ for functions } a,b\}
+\model=\{m(w,x)=a(w)+bx \qqtext{ for all functions } a \qqtext{and numbers} b\}
 $$ {#eq-parallel-lines-model}
 
 ```{r}
@@ -1202,7 +1208,7 @@ sam |> lsq.plot(y ~ w*x)
 ```
 
 $$
-\model=\{m(w,x)=a(w)+b(w)x \qqtext{ for functions } a,b\}
+\model=\{m(w,x)=a(w)+b(w)x \qqtext{ for all functions } a,b\}
 $$ {#eq-lines-model}
 
 ```{r}
@@ -1220,7 +1226,7 @@ sam |> lsq.plot(y ~ w + factor(x), line.alpha=0)
 ```
 
 $$
-\model=\{m(w,x)=a(w)+b(x) \qqtext{ for functions } a,b\}
+\model=\{m(w,x)=a(w)+b(x) \qqtext{ for all functions } a,b\}
 $$ {#eq-additive-model}
 
 ```{r}
