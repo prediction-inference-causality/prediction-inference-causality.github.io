@@ -1,0 +1,1164 @@
+---
+title: "Week 13 Homework"
+format: html
+---
+{{< include shared-code.qmd >}}
+```{r}
+set.seed(1)
+theme_set(whitebw.theme())
+```
+
+# Introduction 
+
+## Summary 
+In this homework, we're going to focus on estimating average treatment effects.
+While we haven't done that in any previous one, it's not really a new thing either.
+It's really just a matter of using our adjusted difference in means estimators $\hat\Delta_1$, 
+$\hat\Delta_{\text{all}}$, etc. with the right data. After all, [we've shown](https://qtm285-1.github.io/assets/lectures/Lecture10.html#/unbiasedness-of-hatdelta_textall) that $\hat\Delta_{\text{all}}$ is an unbiased estimator of the 
+average treatment effect $\bar\tau = \frac{1}{m}\sum_{j=1}^m y_j(1) - y_j(0)$ when treatment is [conditionally randomized](https://qtm285-1.github.io/assets/lectures/Lecture10.html#/what-is-conditional-randomization). 
+
+The new part is how we're going to check that they work. We're going to simulate conditionally randomized experiments in two ways.
+
+1. We'll use *fully-synthetic* data, in which everything is made up. We start with the potential outcomes of everyone in our population and then simulate both sampling and randomization.
+2. We'll use *semi-synthetic* data, in which we start with data from an unconditionally randomized experiment and then, with probability that depends on each person's covariates, randomly exclude some from our sample. The resulting sample is conditionally randomized but not unconditionally randomized, so it presents a challenge for our estimators. And while we don't know our estimation target exactly, we know that a simple difference in means estimator in the original sample will be unbiased. 
+
+Having done this, we can show our estimator's sampling distribution and check coverage just like we did in the last homework. We'll compare what happens with and without inverse probability weighting.
+
+## This is a real thing 
+
+We've been doing simulation all semester. That's how we've been visualizing the sampling distribution of our estimators and calculating coverage. This is just bringing that into a causal inference context. This isn't just something people do in class. It's how people check that their estimators work and compare them to each other. Many papers in Machine Learning conferences and statistics journals use one or both of these simulation techniques. Maybe even the majority of them. Here are a few examples.
+
+- [Kim et al. 2023](https://arxiv.org/pdf/2311.00568), which we're talking about in our case study, works with fully synthetic.^[It's in Section 4.]
+- [Pham et al. 2024](https://arxiv.org/pdf/2402.08009), which proposes a new method for estimating the effect of treatments on the survival time for terminally ill patients.^[More generally, it's about the effect of treatments on the time until some event that happens only once, so some people prefer to call this 'time-to-event' data instead of 'survival data'.] ^[That, coincidentally, is also in Section 4. A lot of papers have roughly the same structure, so if you're looking for this, starting with Section 4 isn't a bad bet.]
+
+Andrew Gelman has a blog post with the title [Yes, I really really really like fake-data simulation, and I can’t stop talking about it.](https://statmodeling.stat.columbia.edu/2019/03/23/yes-i-really-really-really-like-fake-data-simulation-and-i-cant-stop-talking-about-it/). 
+
+## Goals 
+
+1. You'll learn how to test estimators for causal effects using fully-synthetic and semi-synthetic data.
+2. You'll understand how to anticipate and adjust for covariate shift induced by conditional randomization. 
+  - You'll learn to predict the direction of the bias of a simple difference in means as an estimate of the ATE by looking at the randomization probability $\pi(x)$. 
+  - You'll learn how to define inverse probability weights in terms of this randomization probability $\pi(x)$
+  that result in unbiased---or nearly unbiased---estimators of the ATE, ATT, etc. 
+3. You'll review important skills and ideas from earlier in the semester. 
+ - Approximating the coverage of biased estimators using normal approximation and the $\text{bias}/\text{standard deviation}$ ratio.^[This'll be similar to [these exercises](`r lecture(13,'exercises')`) from Lecture 13.]
+ - Calculating the coverage of complicated point estimators using the simulation.^[This'll be similar to [this exercise](`r homework(9,'exr-fake-data-coverage')` from the Week 9 Homework.]
+
+   
+## Setup Code  
+
+Here are the libraries we'll need.
+```{r}
+#| echo: true
+#| output: false 
+library(tidyverse)
+library(rpart)
+```
+
+And some settings to configure how our plots and code output looks.
+```{r}
+#| echo: true 
+theme_set(theme_minimal())
+options(scipen = 1, digits = 3)
+```
+
+# The Data
+
+We're going to work with the example we talked about in [Lecture 10](../lectures/Lecture10.html).^[The process we use to generate the data here is a different (simpler) but the overall theme is the same.]  We've got a list of people that might donate to a political campaign---that's our population---and we're considering two ways of contacting them to ask for money: [an email]{.groupa} or [a phone call]{.groupb}. We're running a pilot study to decide which one to use. In particular we want to estimate the *average treatment effect* of a call (vs. an email) on the amount they donate.
+
+$$
+\begin{aligned}
+\text{ATE} &= \frac{1}{m}\sum_{j=1}^m y_j(1) - y_j(0) \qqtext{ where }  \\
+ & y_j(1) \text{ is amount person $j$ would donate if contacted by phone} \\
+ & y_j(0) \text{ is amount person $j$ would donate if contacted by email}
+\end{aligned}
+$$
+
+We call $y_j(w)$ the *potential outcome* for person $j$ under treatment $w$. These are, of course, just things we're imagining---we either we call them or we don't---but that's decision-making. When you think through your options, you're imagining the consequences of some choices that you aren't ultimately going to make. 
+
+## Simulating the Data 
+To estimate $\bar\tau$, we're sample people from our population and then
+randomize them to a treatment. In particular, we'll do it like this.
+1. Sample without replacement from our population to choose who we're going to contact.
+2. Assign each of them to treatment by flipping a weighted coin that may depend on that person's age.
+To simulate an experiment like this, we have to start one step back. 'Step 0' is making up 
+the population. 
+
+### Step 0 
+When we make up our population, we haven't yet assigned these people to treatment, so we describe each person by their age $x_j$ and their potential outcomes $y_j(\cdot)$^[With this notation, we're writing our potential outcomes as one thing (a function of treatment $w$) instead of two things (that function's value at treatments $w=0$ and $w=1$).] This means our whole population is a list $x_1, y_1(\cdot) \ldots x_m, y_m(\cdot)$. Here's some code that makes up a population like this.
+
+We're going to use a random number generator to help us do this, but this isn't a part of the random process we're analyzing statistically. It's just a way of making up $m$ different things without having to do it all by hand. That means that *we only do this once*, even when we're using simulating our study over and over to calculate the sampling distribution of our estimator. The population isn't changing. 
+
+```{r}
+#| label: finance-potential-outcome-population
+#| echo: true
+m = 1000
+set.seed(1)
+
+x = sample(c(20,30,40,50), m, replace=TRUE)
+y = function(w) { (2 + 10*((x-20)/30 + w*sqrt((x-20)/30))) * runif(m, min=0, max=2) }
+
+po.pop = data.frame(x=x, y0=y(0), y1=y(1)) 
+```
+
+### Step 1
+We choose a random sample $X_1, Y_1(\cdot) \ldots X_n, Y_n(\cdot)$ by sampling without replacement from the population.^[Why without replacement? See [The Infinite Superpopulation Approximation](#infinite-superpopulation) in the Appendix.] These random variables $X_i, Y_i(\cdot)$ are sampled uniformly-at-random from our population, so $\E[Y_i(w)]=\frac{1}{m}\sum_{j=1}^m y_j(w)$.
+
+```{r}
+#| label: finance-sample
+#| echo: true
+n = 200
+J = sample(1:m, n, replace=FALSE)
+po.sam = po.pop[J,]
+```
+
+### Step 2
+For each person ($i$) we've chosen, we flip a coin with probability $\pi(X_i)$ of landing heads. Then, taking the corresponding potential outcome for each person, we get the sample we actually observe: $W_1, Y_1(W_1) \ldots W_n, Y_n(W_n)$. We call $Y_i(W_i)$, which is sometime just written as $Y_i$, the *realized outcome*.
+
+```{r}
+#| label: finance-randomization
+#| echo: true
+pi = function(x) { 1/(1+exp(-(x-30)/8 )) }
+W = rbinom(n, 1, pi(po.sam$x))
+sam = data.frame(w=W, x=po.sam$x, y=ifelse(W==1, po.sam$y1, po.sam$y0))
+```
+
+### Visualizing our Simulation Process 
+
+By flipping through the tabs below, you can see the process of simulating our experiment.
+
+0. In the first tab, you can see the population of potential outcomes we're sampling from. 
+Each pair $\ingroupa{y_j(0)}, \ingroupb{y_j(1)}$ is drawn as a pair of points connected 
+by a thin line. I've made them hollow because they're potential outcomes---they don't 
+necessarily happen. 
+1. In the second, you see the `r n` of these that we've sampled. 
+2. In the third, the circle corresponding to the *realized* outcome gets filled in.
+
+::: {.panel-tabset}
+### Step 0
+
+```{r}
+#| fig-width: 10
+plotX = function(X,W,sep=1.5) { X + sep*(2*W-1) }
+po.scatter = function(data, W=rep(-1, nrow(data)), size=2, alpha=.2, shape=21) { 
+  data$fill0 = ifelse(W==0, groupa, NA)
+  data$fill1 = ifelse(W==1, groupb, NA)
+  data$jx = (\()runif(nrow(data), min=-1, max=1)) |> with_seed(1)
+  ggplot(data) + 
+    geom_point(aes(x=plotX(x,0)+jx, y=y0, fill=I(fill0)), 
+      color=groupa, alpha=alpha, size=size, shape=shape) + 
+    geom_point(aes(x=plotX(x,1)+jx, y=y1, fill=I(fill1)), 
+      color=groupb, alpha=alpha, size=size, shape=shape) +  
+    geom_segment(aes(x=plotX(x,0)+jx, xend=plotX(x,1)+jx, y=y0, yend=y1), 
+      alpha=.05, linewidth=.02) 
+}
+
+scales = list(scale_x_continuous(breaks=c(20,30,40), labels=c("20s","30s","40s"), expand=c(0,0)),
+             scale_y_continuous(breaks=c(0, 5, 10, 15), labels=label_dollar(prefix="$")),
+             coord_cartesian(xlim=c(15,45), ylim=c(0,15)),
+             guides(fill='none', color='none'),
+             labs(x="age", y="contribution"))
+
+po.pop |> po.scatter() + scales
+```
+
+### Step 1
+
+```{r}
+#| fig-width: 10
+po.sam |> po.scatter() + scales
+```
+
+### Step 2
+
+```{r}
+#| fig-width: 10
+
+po.sam |> po.scatter(W) + scales
+```
+
+:::
+
+## Identifying the ATE {#sec-identification}
+
+Let's start by reviewing our identification results from [Lecture 11](`r lecture(11, 'identification-in-conditionally-randomized-experiments')`). We know, because it's right in the code above this, that these two sampling and randomization conditions are satisfied.
+1. $X_1,Y_1(\cdot) \ldots X_n,Y_n(\cdot)$ are sampled uniformly-at-random from our population of covariate/potential-outcome pairs $x_1,y_1(\cdot) \ldots x_n, y_n(\cdot)$.
+2. The treatment $W_i$ is a binary random variable with a probability $\pi(X_i)$ of being one that depends only the covariate $X_i$.
+
+When these conditions are satisfied, we can *identify* the mean potential outcome among people with each level of the covariate. That means we can work out a formula for it in terms of the distribution of the data we actually observe: the treatment, covariate, and realized outcome triples $W_1,X_1,Y_1(W_1) \ldots W_n,X_n,Y_n(W_n)$. The mean of the potential outcome $y_j(w)$ for treatment $w$ among people with covariate value $x$ is the *conditional* mean $\mu(w,x)$ of the *realized outcome* $Y_i(W_i)$ given that treatment $W_i=w$ and covariate value $X_i=x$.
+
+$$
+\begin{aligned}
+\mu(w,x) 
+&\explain{=}{This is just notation. $\mu(w,x)$ is defined by this equation.} 
+\E[Y_i(W_i) \mid W_i=w, X_i=x] \\
+&\explain{=}{$Y_i(W_i)=Y_i(w)$ when $W_i=w$} 
+\E[Y_i(w) \mid W_i=w, X_i=x] \\
+&\explain{=}{irrelevance of conditionally independent conditioning variables} 
+\E[Y_i(w) \mid X_i=x] \\
+&\explain{=}{$Y_i(w)$ is sampled uniformly at random from the potential outcomes $y_j(w)$ of the $m_x$ units with $X_i=x$} 
+\frac{1}{m_x} \sum_{j:x_j=x} y_j(w) \qfor m_x = \frac{1}{n} \sum_{i=1}^n 1_{=x}(X_i) 
+\end{aligned}
+$$ {#eq-within-group-identification}
+
+From here, showing that the average treatment effect (ATE) is equal to the familiar quantity $\Delta_{\text{all}}$ is a matter of averaging.
+
+$$
+\begin{aligned}
+\Delta_{\text{all}}
+&\explain{=}{This equation defines $\Delta_{\text{all}}$}
+\E[ \mu(1,X_i) - \mu(0,X_i) ] \\
+&\explain{=}{Our within-group identification result @eq-within-group-identification}
+\E\qty[ \E[ Y_i(1) \mid X_i] - \E[Y_i(0) \mid X_i] ] \\
+&\explain{=}{Linearity of conditional expectations} 
+\E\qty[ \E[ Y_i(1) - Y_i(0) \mid X_i] ] \\
+&\explain{=}{The law of iterated expectations} 
+\E\qty[ Y_i(1) - Y_i(0) ] \\
+&\explain{=}{sampling uniformly-at-random} 
+\frac{1}{m}\sum_{j=1}^m \cb{ y_j(1) - y_j(0) } = \text{ATE}.
+\end{aligned}
+$$ {#eq-ATE-identification}
+
+::: {.callout-note collapse="true"}
+### Optional Reading.
+
+There's a something buried in the notation above. At the heart of it
+is a difference between studies with and without randomization that'll
+come up again and again.
+
+When we aren't randomizing, $\mu(w,x)$ is the mean of our outcome $y_j$ for some group of people in our population. We can write it as a conditional expectation involving random variables $W_i,X_i,Y_i$
+sampled uniformly-at-random from our population $w_1,x_1,y_1 \ldots w_m,x_m,y_m$, but we don't have to.
+The way I like to think about it, that conditional expectation isn't what it really *is*, it's just something that has the same value.
+$$
+\begin{aligned}
+\mu(w,x) 
+&= \frac{1}{m_{wx}} \sum_{j:w_j=w, x_j=x} y_j 
+&&\qfor m_{wx} = \frac{1}{m}\sum_{j:w_j=w, x_j=x} 1 \\ 
+&= \E[Y_i \mid W_i=w, X_i=x] 
+&&\qqtext{when $(W_i,X_i,Y_i)$ is sampled uniformly-at-random} 
+\end{aligned}
+$$ {#eq-mu-definition}
+
+We can't define $\mu(w,x)$ the 'first line way' in a study involving randomization. There is
+no such group in the population because the people in our population don't have a $w_j$; 
+$w$ is something that's assigned to the people in our sample. We can, however, still 
+calculate the conditional expectation of the realized outcome $Y_i=Y_i(W_i)$ given 
+a treatment assignment $W_i=w$ and covariate value $X_i=x$. So that's how we *define*
+$\mu(w,x)$ in a randomized study. We skip the first line of @eq-mu-definition and
+jump straight to the second. What comes of this is that $\mu(w,x)$ summarizes the 
+distribution of our sample in the same way when we randomize and when we don't.
+The difference is that when we're randomizing, it doesn't describe any actual group 
+of people in our population.
+
+So let's think for a moment about what this means about our identification result @eq-ATE-identification.
+It's saying that a summary of the potential outcomes $y_j(\cdot)$ of the people in our population ($\text{ATE}$) is equal to a summary of *the distribution* of the observations $W_i,X_i,Y_i(W_i)$ in our sample ($\Delta_\all$). This'll come up in a moment when we talk about inverse probability weighting. When we randomize, we can't talk about the covariate distributions [$p_{x \mid 0}$]{.groupa} and [$p_{x \mid 1}$]{.groupb} as the distributions of groups of people in our population. Instead, we'll have to think of them as *conditional distributions* of the random variable $X_i$ given that $W_i=0$ and $W_i=1$. Without randomization, that's an implication of our groups-of-people definition when we sample uniformly-at-random; with randomization, it's where we start.
+
+:::
+
+## The Estimator and Its Sampling Distribution {#sec-ate-estimator}
+
+Now let's estimate the thing. We've shown that the ATE is equal to $\Delta_\all$, 
+so we can estimate it exactly the same way we estimated $\Delta_\all$ in our last
+assignment. We'll estimate $\hat\mu$ by (potentially weighted) least squares, then
+average the difference in predictions $\ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat\mu(0,X_i)}$ 
+over the sample. 
+$$
+\begin{aligned}
+\hat\Delta_\all 
+&= \frac{1}{n} \sum_{i=1}^n \cb{\ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat\mu(0,X_i)} } \\
+&\qfor \hat\mu(w,x) = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i, X_i) \ \cb{ Y_i - m(W_i,X_i) }^2 
+\end{aligned}
+$$ {#eq-ATE-estimator}
+
+Below, I've packaged all that up into a single function that returns 
+this estimate of the ATE when you give it three arguments.
+
+1. A sample $W_1,X_1,Y_1 \ldots W_n,X_n,Y_n$.
+2. A formula describing a regression model $\model$.
+3. A function $\gamma$ that computes weights $\gamma(W_i,X_i)$ for each observation.
+
+```{r}
+#| echo: true 
+constant.weights = function(sam) { rep(1, nrow(sam)) }
+estimate.ate = function(sam, formula, gamma=constant.weights) {
+  model = lm(formula, weights=gamma, data=sam |> mutate(gamma=gamma(sam)))
+  muhat.0X = predict(model, newdata=sam |> mutate(w=0))
+  muhat.1X = predict(model, newdata=sam |> mutate(w=1))
+  mean(muhat.1X - muhat.0X)
+}
+```
+
+By default, the it uses the weights $\gamma(w,x)=1$, i.e., it uses unweighted least squares. If we want to use inverse probability weighted least squares, we can in this weighting function. We'll talk about why these are the right weights below in @exr-ate-ipw. 
+```{r}
+#| echo: true 
+ate.weights = function(sam) { ifelse(sam$w==1, 1/pi(sam$x), 1/(1-pi(sam$x))) }
+```
+Writing the estimator as a function of the sample makes it easy to calculate its 
+sampling distribution and its bootstrap sampling distribution. We'll get there.
+First, let's just calculate point estimates. We'll try using both the unweighted 
+and inverse probability weighted least squares predictors in the parallel lines model.
+```{r}
+#| echo: true 
+ate.hat.lsq = sam |> estimate.ate(y~w+x)
+ate.hat.ipw = sam |> estimate.ate(y~w+x, ate.weights)
+```
+
+And here's the estimation target.
+
+```{r}
+#| echo: true 
+ate = mean(po.pop$y1 - po.pop$y0)
+```
+
+target | without ipw | with ipw 
+--- | --- | --- 
+`r format(ate, digits=3)` | `r format(ate.hat.lsq, digits=3)` | `r format(ate.hat.ipw, digits=3)`
+
+It looks like we're doing better without the weights. To get a sense of whether this is just least
+squares getting lucky, let's look at the sampling distributions of these two estimators.
+
+To do that, we'll use two functions defined below. 
+
+1. `sample.and.randomize` simulates the process of sampling and randomizing. It takes 
+as input a population of potential outcomes, a sample size $n$, a function $\pi(x)$ that tells 
+us the probability of assigning treatment $w=1$ to a person with covariate value $x$. And it returns 
+a list of data frames, with each data frame describing a sample $W_1,X_1,Y_1(W_1) \ldots W_n,X_n,Y_n(W_n)$.
+By default, it gives us 1000 samples like this.
+2. `sampling.distribution` is not particularly interesting, but it is useful. It takes a list of samples and 
+a list of estimators, calculates each estimator in each sample, and returns the results a data frame describing 
+the sampling distribution of each estimator. Here an estimator is a function that takes one argument, a sample 
+like the ones returned by `sample.and.randomize`, and returns an estimate. 
+
+```{r}
+#| echo: true
+
+sample.and.randomize = function(po.pop, n, pi, replications=10) {
+  1:replications |> map(function(.) {  
+    J = sample(1:nrow(po.pop), n, replace=FALSE)
+    po.sam = po.pop[J,]
+    W = rbinom(n, 1, pi(po.sam$x))
+    sam = data.frame(w=W, x=po.sam$x, y=ifelse(W==1, po.sam$y1, po.sam$y0))
+    sam 
+  })
+}
+sampling.distribution = function(samples, estimators) { 
+  samples |> map(function(sam) {  
+    estimators |> map(function(estimator) {
+      data.frame(value=estimator(sam))
+    }) |> bind_rows(.id='estimator')  
+  }) |> bind_rows(.id='sample')
+}
+```
+
+We can use these functions to calculate the sampling distribution of our two estimators.
+```{r}
+#| echo: true
+samples = po.pop |> sample.and.randomize(n, pi)
+estimators = list(
+  lsq=\(sam)estimate.ate(sam, y~w+x), 
+  ipw=\(sam)estimate.ate(sam, y~w+x, ate.weights))
+
+sampling.dist = samples |> sampling.distribution(estimators)
+```
+
+Here are the results. I've used a function defined in the 
+expandable box below to draw my histograms. The one using  
+inverse probability weighted least squares is drawn in
+[purple]{.bg color="purple"} and the one using unweighted 
+least squares is drawn in [orange]{.bg color="orange"}.
+Their means are marked by vertical lines of the same color
+and the target---the ATE---is marked by a thick green line.
+
+::: {.callout-note collapse="true"}
+### Plotting Code You'll Need 
+You don't need to read it if you don't feel like it.  
+```{r}
+#| echo: true 
+lsq.plot = function(sam, formula, gammas, dot.size=NULL, dot.size.scale=2) { 
+  diamond.shape = 23
+  square.shape = 22
+  triangle.shape = 24
+  jitter = position_jitter(width=2, height=0, seed=0)
+
+  predictions = gammas |> map(function(gamma) {
+    model = lm(formula, weights=gamma, 
+      data=sam |> mutate(gamma=gamma(sam)))
+    sam |> mutate(muhat = predict(model, newdata=sam))
+  }) |> bind_rows(.id='weights')
+  
+  sam$dot.size = if(is.null(dot.size)) {
+    1
+  } else {
+    sum.normalize = function(x) x/mean(x)
+    dot.sizes = dot.size(sam) 
+    dot.sizes[sam$w==1] = sum.normalize(dot.sizes[sam$w==1]) 
+    dot.sizes[sam$w==0] = sum.normalize(dot.sizes[sam$w==0])
+    dot.sizes 
+  }
+
+  sam |> 
+    ggplot() + 
+      geom_point(aes(x=x, y=y, color=factor(w), size=dot.size.scale*I(dot.size)), 
+        alpha=.5, position=jitter) + 
+      geom_point(aes(x=x, y=muhat, fill=factor(w), shape=factor(weights)), 
+        alpha=.5, color='black', data=predictions) +
+      geom_line(aes(x=x, y=muhat, color=factor(w), linetype=factor(weights)), 
+      linewidth=.5, data=predictions) + 
+    scale_shape_manual(values=c(diamond.shape, square.shape, triangle.shape)) +
+    scale_linetype_manual(values=c('solid', 'dashed', 'dotted')) +
+    guides(color='none', fill='none', shape='none', linetype='none', size='none')
+}
+```
+
+```{r}
+#| echo: true 
+plot.sampling.distribution = function(sampling.dist, target) {
+  sampling.dist |> 
+    ggplot() + 
+      geom_histogram(aes(x=value, y=after_stat(density), fill=factor(estimator)), 
+        bins=50, alpha=.2, color='gray', linewidth=.05, position='identity') +
+      geom_vline(xintercept=target, color='green', linewidth=2, alpha=.5) +
+      stat_summary(aes(x=0, y=value, color=factor(estimator)), 
+        geom='vline', fun.data=\(y)data.frame(xintercept=mean(y)),
+        alpha=.9) + 
+      scale_fill_manual(values=c('purple', 'orange')) +
+      scale_color_manual(values=c('purple', 'orange')) +
+      guides(color='none', fill='none')
+}
+```
+:::
+
+::: {.panel-tabset}
+### In a Table
+
+```{r}
+#| echo: true
+sampling.dist
+```
+
+### In a Histogram
+```{r}
+#| echo: true
+#| fig-width: 10
+sampling.dist |> plot.sampling.distribution(target=ate)
+```
+
+:::
+
+What can we conclude? Both estimators work pretty well. 
+You can see that the estimator that uses unweighted least squares
+is slightly biased, but not really enough to worry about.
+
+We know this bias shouldn't have much impact on coverage, but let's try to 
+quantify it. We can calculate the bias and standard deviation of that estimator like this.
+```{r}
+#| echo: true
+estimates = sampling.dist |> filter(estimator=='lsq') |> pull(value)
+bias = mean(estimates)-ate 
+se   = sd(estimates)
+```
+
+bias | standard deviation 
+--- | --- 
+`r format(bias, digits=3)` | `r format(se, digits=3)`
+
+::: {.callout-exercise}
+If the sampling distribution of this estimator were normal, 
+what would this tell us about the coverage of the 95% confidence interval
+$\hat\theta \pm 1.96 \times \sigma_{\theta}$. Here $\hat\theta$ is our 
+point estimate and $\sigma_{\theta}$ is its standard deviation.
+
+*Hint*. See [this slide](`r lecture(13, 'summary-and-generalization')`).
+:::
+
+When we're working with real data, we don't know our estimator's standard deviation $\sigma_{\theta}$.
+We have to estimate it. Let's do that using the bootstrap. The way we've organized our code makes this
+easy. If we have a list of bootstrap samples, we can just call to `sampling.distribution` passing
+in this list and the same estimators as before.
+```{r}
+bootstrap.samples = function(sam, replications=40) {
+  map(1:replications, function(.) {
+    J = sample(1:nrow(sam), replace=TRUE)
+    sam[J,]
+  })
+}
+
+bootstrap.dist = sam |> bootstrap.samples() |> sampling.distribution(estimators)
+bootstrap.se = bootstrap.dist |> filter(estimator=='lsq') |> pull(value) |> sd()
+```
+
+Here's a version of the table above with this estimated standard deviation added.
+
+bias | standard deviation | estimated standard deviation
+--- | --- | --- 
+`r format(bias, digits=3)` | `r format(se, digits=3)` | `r format(bootstrap.se, digits=3)`
+
+It's not exactly the same, but it's close. 
+
+Let's see how our bias and our imperfect estimate of our standard deviation affect the coverage of an interval estimate we can really use, $\hat\theta \pm 1.96 \times \hat\sigma_{\theta}$ where $\hat\sigma_{\theta}$ is the bootstrap standard deviation.
+
+::: {#exr-bootstrap-se .callout-exercise}
+Calculate the coverage of the interval estimate $\hat\theta \pm 1.96 \times \hat\sigma_{\theta}$.
+:::
+
+::: {.callout-tip collapse="true"}
+### Don't Write Too Much Code
+If you use the code above, you can do this without 
+writing much more. My solution is seven lines of code.
+ 
+- Three of these lines are copied word-for-word from the code above.
+- Three more are copied word-for-word from the code block below.
+ 
+```{r}
+#| echo: true
+#| eval: false
+covers = samples |> map_vec(function(sam) { 
+  # 3 lines copied from above here
+  # 1 new one.
+})
+mean(covers)
+```
+
+:::
+
+::: {.callout-note collapse="true"}
+### Runtime 
+To cut down on runtime, I used only 40 bootstrap samples 
+to calculate my bootstrap standard deviation. To calculate 
+coverage the coverage of the resulting interval estimate,
+I used 1,000 samples. That's 40 \times 1,000 = 40,000 
+calls to `estimate.ate`. On an M2 MacBook Air, this took
+about 2 minutes.
+::: 
+
+::: {.callout-solution}
+```{r}
+#| cache: true
+covers = samples |> map_vec(function(sam) { 
+  ate.hat.lsq = estimate.ate(sam, y~w+x)
+  bootstrap.dist = sam |> bootstrap.samples() |> sampling.distribution(estimators)
+  bootstrap.se = bootstrap.dist |> filter(estimator=='lsq') |> pull(value) |> sd()
+  ate.hat.lsq - 1.96*bootstrap.se < ate & ate < ate.hat.lsq + 1.96*bootstrap.se
+}) 
+mean(covers)
+```
+:::
+
+
+### The Weights 
+
+```{r}
+plotX = function(W,X,sep=1.5) { X + sep*(2*W-1) }
+proportion.scale = 1
+
+with.weights = function(sam, gamma) { 
+  sum.normalize = function(x) x/mean(x)
+  dot.sizes = gamma(sam) 
+  dot.sizes[sam$w==1] = sum.normalize(dot.sizes[sam$w==1]) 
+  dot.sizes[sam$w==0] = sum.normalize(dot.sizes[sam$w==0])
+  sam |> mutate(dot.size = dot.sizes) 
+}
+
+interleaved.bars = geom_bar(aes(x=plotX(w,x), y=after_stat(prop), fill=factor(w), weight=dot.size), 
+           position='identity', alpha=.1, linewidth=.05, color='gray')
+purple.bars = geom_bar(aes(x=x, y=after_stat(prop), weight=dot.size), 
+                       alpha=.1, linewidth=.05, fill='purple', color='gray', width=2.5)
+bars = list(interleaved.bars, purple.bars, guides(fill='none', color='none'), labs(x='x', y='proportion')) 
+```
+
+```{r}
+summary.lookup = function(column.name, summaries, default=NA) { #<1>
+  function(w,x) { 
+    out = left_join(data.frame(w=w,x=x),                              #<2>
+                    summaries[, c('w','x',column.name)],              #<2>
+                    by=c('w','x')) |>                                 #<2>
+      pull(column.name)                                               #<2>
+    out[is.na(out)] = default                                         #<3>
+    out
+  }
+}
+
+ate.weights.density = function(sam) { 
+  sums = sam |> group_by(w,x) |> summarize(Nwx = n()) 
+  Nwx = summary.lookup('Nwx', sums, 0)
+  (Nwx(0,sam$x) + Nwx(1,sam$x)) / Nwx(sam$w,sam$x)
+}
+```
+
+
+When we talked about inverse probability weighting in [Lecture 14](`r lecture(14)`), 
+we talked about using the weights $\gamma(w,x)=m_{x}/m_{wx}$ to estimate 
+$\Delta_\all$. That was an exercise---it's not in the slides---so we'll review it here.
+Let's start with the intuition. By weighting this way, we're effectively using a sample
+drawn from an imaginary population in which each column (i.e. at each level of $x$)
+has one red dot and one green dot for each *dot of either color* in our actual
+population. As a result, the distributions $\pa{x}$ and $\pb{x}$ of $x$ in our
+imaginary population are the same as the the distribution $\pall{x}$ of $x$ 
+in our actual population. 
+
+In the plot below, you can see this in action. On the left, I've plotted a population.
+We see the population, the mean in each group, and the distribution of the covariate 
+$x$ in each group and in the population as a whole. On the right, you can see the
+imaginary population we've created by using the weights $\gamma(w,x)=m_{x}/m_{wx}$.
+I've scaled the size of each dot in proportion to its weight. I've calculated 
+weighted means within each group and the 'weighted covariate distribution' 
+for each group and the population as a whole, i.e., the proportion of weight
+at each level of $x$ rather than the proportion of people. You can see that in the 
+imaginary population, the overall (purple) covariate distribution is the same as it is in the unweighted sample, but the covariate distributions of the 
+red and green groups now match the overall distribution. That's what using the weights $\gamma(w,x)=m_x/m_{wx}$ does.
+
+::: {#fig-ate-weights}
+```{r}
+#| layout-ncol: 2
+#| layout-nrow: 2  
+
+set.seed(0)
+W = rbinom(nrow(po.pop), 1, pi(po.pop$x))
+pop = data.frame(x=po.pop$x, w=W, y=ifelse(W==1, po.pop$y1, po.pop$y0))
+
+pop |> lsq.plot(y~w, list(constant.weights), constant.weights) 
+pop |> lsq.plot(y~w, list(ate.weights.density), ate.weights.density) 
+pop |> with.weights(constant.weights) |> ggplot() + bars 
+pop |> with.weights(ate.weights.density) |> ggplot() + bars
+```
+:::
+
+There's something about this that doesn't quite make sense in randomized experiments. 
+What does it mean to talk about the covariate distributions $\pb{x}$ and $\pa{x}$ 
+among the treated and untreated people in our population when only the ones we 
+sample are actually randomized to treatment?  Or the number of people $\ingroupb{m_{1x}}$
+and $\ingroupa{m_{0x}}$ with covariate value $x$ in those groups? 
+
+Let's think about the plot above. The population that's shown
+looks a lot like a bigger version of the samples we've been working with
+because it is. To get it, randomly assigned a treatment (i.e. a color) 
+to each person in the population we've been sampling from exactly the same way 
+I've been assigning treatment to our samples. Like this.
+
+```{r}
+#| echo: true
+#| eval: false
+W = rbinom(nrow(po.pop), 1, pi(po.pop$x))
+pop = data.frame(x=po.pop$x, w=W, y=ifelse(W==1, po.pop$y1, po.pop$y0))
+```
+
+If we like, we can think of our sample as being drawn from this pre-randomized population. Like this.
+
+```{r}
+#| echo: true
+#| eval: false
+J = sample(1:nrow(pop), n, replace=FALSE)
+sam = pop[J,]
+```
+
+Why? Let's think about how we get our sample in physical terms. Suppose we have a population 
+of people and each of them has a coin. To sample with replacement, we write each person's phone 
+number on a card, shuffle the deck, and call the first $n$ numbers. Does it matter if the people
+we call flip their coin before we call them or after? It doesn't. Earlier, in @sec-identification,
+they flipped after we called; in the code right above, they flipped before. 
+
+If we think like this, the numbers $\ingroupa{m_{0x}}$ and $\ingroupb{m_{1x}}$ 
+of [untreated]{.groupa} and [treated]{.groupb} people in our population with 
+covariate value $x$ do make sense. But they're random. And they depend on a bunch of
+coin flips that have absolutely nothing to do with the people in our sample. So 
+instead of using this random denominator $m_{wx}$ in our weights $\gamma(w,x)=m_x/m_{wx}$, 
+let's average over all these coin flips. Let's use $\gamma(w,x)=m_x / \E[m_{wx}]$ instead.
+
+It turns out that this is very easy. Recall that we've randomized treatment 
+with probability $\pi(x)$ that depends only on the covariate $x$, so $m_{wx}$ 
+is the sum of $m_x$ coin flips that come up heads ($W_j=1$) with probability $\pi(x)$.
+$$
+\begin{aligned}
+\E\qty[m_{wx}] 
+&= \E\qty[\sum_{j:X_j=x} 1_{=w}(W_j)] \\
+&= \sum_{j:X_j=x} \E\qty[1_{=w}(W_j)] \\
+&= m_x \E\qty[1_{=w}(W_j)] \\
+&= m_x \begin{cases} \pi(x) & \qif w=1 \\ 1-\pi(x) & \qif w=0 \end{cases} 
+\end{aligned}
+$$ {#eq-expected-mwx}
+As a result, we can write the weights $\gamma(w,x)=m_x / \E[m_{wx}]$ in terms of $\pi(x)$. The factor of $m_x$ cancels out.
+$$
+\begin{aligned}
+\gamma(w,x) 
+&= \groupb \frac{m_x}{m_x \pi(x)}       &&= \groupb \frac{1}{\pi(x)}       & \groupb \qif w=1 \\
+&= \groupa \frac{m_x}{m_x \{1-\pi(x)\}} &&= \groupa \frac{1}{1-\pi(x)}     & \groupa \qif w=0
+\end{aligned}
+$$
+Those are the weights we're using in the code above. We don't need to know the covariate distribution in the population to use them;
+we just need to know how treatment was randomized. Cool, right? This is where the name 'inverse probability weighting' comes from.
+The weight we give each observation is the (multiplicative) inverse of the probability it was randomized to the treatment it received.
+
+
+The randomization probability $\pi(x)$ plays a pretty pivotal role, so let's take a look at it. And, while we're at it, $\gamma(w, x)$.
+
+```{r}
+#| layout-ncol: 2
+#| fig-cap:
+#|  - The randomization probability $pi(x)$.
+#|  - The weights $gamma(w, x)$.
+X = unique(pop$x)
+x = seq(min(X)-5, max(X)+5, length.out=1000)
+ggplot() + 
+  geom_line(aes(x=x, y=pi(x)), alpha=.3) + 
+  geom_point(aes(x=X, y=pi(X))) + 
+  coord_cartesian(xlim=c(min(X), max(X))) +
+  labs(x=expression(x), y=expression(pi(x))) 
+
+ggplot() +
+  geom_line(aes(x=x, y=1/pi(x)), alpha=.3, color=groupb) + 
+  geom_point(aes(x=X, y=1/pi(X)), color=groupb) +
+  geom_line(aes(x=x, y=1/(1-pi(x))), alpha=.3, color=groupa) +
+  geom_point(aes(x=X, y=1/(1-pi(X))), color=groupa) +
+  coord_cartesian(xlim=c(min(X), max(X))) + 
+  labs(x=expression(x), y=expression(gamma(w, x)))
+```
+
+Let's take a look at what these weights do in our sample. On the left, 
+I've plotted our sample, the means in each group, and the covariate
+distribution in each group and in the sample as a whole. On the right, 
+you can see all the same stuff for imaginary sample we've created using the weights 
+$\ingroupb{\gamma(1,x)=1/\pi(x)}$ and $\ingroupa{\gamma(0,x)=1/\{1-\pi(x)\}}$.
+To compare to what happens using weights $\gamma(w,x)=m_x/m_{wx}$ based on
+our pre-randomized population, flip to the second tab. 
+
+::: {#fig-ate-weights-pi}
+### $\gamma(w,x) = \frac{1_{=1}(w)}{\pi(x)} + \frac{1_{=0}(w)}{1-\pi(x)}$
+```{r}
+#| layout-ncol: 2
+#| layout-nrow: 2  
+sam |> lsq.plot(y~w, list(constant.weights), constant.weights) 
+sam |> lsq.plot(y~w, list(ate.weights), ate.weights) 
+sam |> with.weights(constant.weights) |> ggplot() + bars 
+sam |> with.weights(ate.weights) |> ggplot() + bars
+```
+### $\gamma(w,x) = \frac{m_x}{m_{wx}}$
+```{r}
+#| layout-ncol: 2
+#| layout-nrow: 2  
+sam |> lsq.plot(y~w, list(constant.weights), constant.weights) 
+sam |> lsq.plot(y~w, list(ate.weights.density), ate.weights.density) 
+sam |> with.weights(constant.weights) |> ggplot() + bars 
+sam |> with.weights(ate.weights.density) |> ggplot() + bars
+```
+:::
+
+::: {.callout-note collapse="true"}
+### Weights and Covariate Shift 
+In our simulation, the randomization probability $\pi(x)$ is *increasing* from left to right.
+As a result, the [treated people]{.groupb} in our sample get bigger weights when $x$ is small 
+and the [untreated people]{.groupa} get bigger weights when $x$ is big. That's why, when you
+look at the weighted least squares plot in @fig-ate-weights, we've got big [red dots]{.groupa} on the right 
+and big [green dots]{.groupb} on the left. That's the opposite of the direction of covariate shift---
+the [red bars]{.groupa} are bigger on the left and the [green bars]{.groupb} are bigger on the right---and that's
+the point. We're weighting our observations (i.e. scaling our dots) to compensate for covariate shift, so 
+when our bars are based on weight (dot area) instead of count, there's no shift. 
+:::
+
+
+Having done all this, let's think about bias. That is, after all, why we're inverse probability weighting.
+This is going to look a lot like our analysis in [Lecture 14](`r lecture(14)`). 
+
+Let's think $\tilde\mu$, the minimizer of expected weighted squared error. 
+$$
+\tilde\mu = \argmin_{m \in \model} \E\qty[ \gamma(W_i,X_i) \cb{Y_i - m(W_i,X_i)}^2 ]
+$$
+What do we know about this? Following the same logic as in [Lecture 14](`r lecture(14)`), we get a 'weighted orthogonality condition'. 
+$$
+\E\qty[ \gamma(W_i,X_i) \cb{\mu(W_i,X_i) - \tilde\mu(W_i,X_i)} m(W_i,X_i) ] = 0 \qqtext{ for all } m \in \model.
+$$ 
+
+::: {#exr-unbiasedness .callout-exercise}
+Using the weighted orthogonality condition, show that whenever the model $\model$ includes group indicators $\ingroupa{m(w,x)= 1_{=0}(w)}$
+and $\ingroupb{m(w,x)= 1_{=1}(w)}$, $\E[\mua{X_i}=\E[\tmua{X_i}]$ and $\E[\mub{X_i}]=\E[\tmub{X_i}]$. In a sentence or two, explain why
+---if we've randomized treatment as discussed in @sec-identification---this implies $\E[\tmub{X} - \tmua{X_i}]=\text{ATE}$.
+
+*Hint*. Use the *indicator trick* and the *law of iterated expectations* conditioning on $X_i$. 
+:::
+
+Now let's take a moment to acknowledge a quirk. @exr-unbiasedness does not necessarily imply that 
+if we do the same thing in our sample, we'll get an unbiased estimate of the ATE.^[This isn't just a randomization thing. In [Lecture 14](`r lecture(14)`), we did a 
+calculation similar to @exr-unbiasedness in a section of the slides called 'Proving Unbiasedness', but we never actually proved that our estimator was unbiased. It isn't. Here, you'll get a chance to see why. And why it's pretty close to unbiased anyway.]
+
+Let's think about two estimators.
+$$
+\begin{aligned}
+\hat\theta_0 &= 
+\frac{1}{n}\sum_{i=1}^n 1_{=1}(W_i) \gamma(W_i,X_i) Y_i - \frac{1}{n}\sum_{i=1}^n 1_{=0}(W_i) \gamma(W_i,X_i) Y_i \\
+\hat\theta_1 &= 
+\frac{1}{n}\sum_{i=1}^n \hat\mu(1,X_i) - \hat\mu(0,X_i) \qfor \hat\mu(w,x) = \argmin_{m \in \model} \sum_{i=1}^n \gamma(W_i, X_i) \ \cb{ Y_i - m(W_i,X_i) }^2
+\end{aligned}
+$$
+When you use the parallel lines model, these are pretty similar, but they are not the same.
+
+::: {#exr-unbiased .callout-exercise}
+Suppose you're using the parallel lines model $\model=\{ m(w,x) = a(w) \qqtext{ for all functions } a \}$.
+Solve for $\hat\mu$ explicitly in terms of $W_i,X_i,Y_i$ and the weights $\gamma(W_i,X_i)$. Then plug
+it into the formula for $\hat\theta_1$ to get a formula similar to the formula for $\hat\theta_0$.
+
+*Hint*. This is like [a calculation we saw in our first class on least squares](https://qtm285-1.github.io/assets/lectures/Lecture11.html#/two-locations-regression-with-a-binary-covariate-1), but with weights.
+:::
+
+::: {#exr-unbiased .callout-exercise}
+One of these two estimators --- either $\hat\theta_0$ or $\hat\theta_1$ --- is an unbiased
+estimator of the ATE $\E[\mub{X_i} - \mua{X_i}]$. Which one? Prove that your choice is unbiased.
+:::
+
+::: {#exr-ate-approximate .callout-exercise}
+**Extra Credit**. The other of these two estimators is not necessarily unbiased, but it's pretty close.
+Using a linear approximation similar to the one you used in [this exercise](`r homework(5,'exr-ratio-bias')), 
+explain why the bias of this other estimator is small. 
+:::
+
+
+# Estimating the ATT
+
+Now let's think about estimating the ATT: the average treatment effect on the treated.
+
+$$
+\text{ATT} = \E[Y_i(1) - Y_i(0) \mid W_i=1]
+$$
+
+Using an argument a lot like the one we used to show that the ATE was equal to $\Delta\all$ @sec-identification, 
+we can show that this is --- in a sense --- equal to $\Delta_1$. This argument, like that one, uses the law of iterated expectations 
+to boil things down to the 'within-group' identification  @eq-within-group-identification implied by 
+conditional randomization. But there's a trick to using the law of iterated expectations here because 
+we're already conditioning on $W_i=1$. The trick is to start by getting rid of the conditioning.
+Here's a formula that'll help us do that.
+$$
+\E[ Z \mid W=1] = \E[ Z 1_{=1}(W) ] / P(W=1) \qqtext{ for any random variables $W$ and $Z$ with $W \in \{0,1\}$ }.
+$$ {#eq-conditioning-indicator-trick}
+
+::: {.callout-note collapse="true"}
+### Deriving the Formula 
+To derive this, basically all we need to do is use the law of iterated expectations. It'll be helpful to 
+have a notation for the conditional expectation function of $Z$: let $z(w)=\E[Z \mid W=w]$, so $\E[Z \mid W]=z(W)$.
+$$
+\begin{aligned}
+\E[Z 1_{=1}(W)] 
+&\explain{=}{iterated expectations}
+\E\qty[\E[Z 1_{=1}(W) \mid W]] \\
+&\explain{=}{linearity of conditional expectations}
+\E\qty[\E[Z \mid W] 1_{=1}(W) ] \\
+&\explain{=}{notation}
+\E\qty[ z(W) 1_{=1}(W) ] \\
+&\explain{=}{indicator trick}
+\E\qty[ z(1) 1_{=1}(W) ] \\
+&\explain{=}{linearity of expectations}
+z(1) \E\qty[ 1_{=1}(W) ] \\
+&=
+z(1) \P(W=1) = \E[Z \mid W=1] \P(W=1)
+\end{aligned}
+$$
+:::
+
+We'll use this formula to get rid of that conditioning on $W_i=1$ when we get started
+and put it back at the end. Here's the full step-by-step derivation.
+$$
+\begin{aligned}
+\text{ATT}
+&\explain{=}{Using @eq-conditioning-indicator-trick with $Z=Y_i(1)-Y_i(0)$} 
+\E\qty[\{Y_i(1) - Y_i(0)\} 1_{=1}(W_i) ] / P(W_i=1) \\
+&\explain{=}{iterated expectations conditioning on $W_i,X_i$}
+\E\qty[ \E\qty[\{Y_i(1) - Y_i(0)\} 1_{=1}(W_i) \mid W_i, X_i]] / P(W_i=1) \\ 
+&\explain{=}{linearity of conditional expectations} 
+\E\qty[ \qty{ \E\qty[Y_i(1)\mid W_i, X_i] - \E\qty[Y_i(0) \mid W_i, X_i] }  1_{=1}(W_i) ] / P(W_i=1) \\ 
+&\explain{=}{Using @eq-within-group-identication} 
+\E\qty[ \qty{ \mu(1,X_i) - \mu(0,X_i) }  1_{=1}(W_i) ] / P(W_i=1) \\ 
+&\explain{=}{iterated expectations conditioning on $X_i$}
+\E\qty[ \E[ \qty{ \mu(1,X_i) - \mu(0,X_i) }  1_{=1}(W_i) \mid X_i]] / P(W_i=1) \\ 
+&\explain{=}{linearity of conditional expectations}
+\E\qty[ \qty{ \mu(1,X_i) - \mu(0,X_i) }  \E[1_{=1}(W_i) \mid X_i]] / P(W_i=1) \\ 
+&\explain{=}{Using @eq-conditioning-indicator-trick in reverse with $Z=\mu(1,X_i)-\mu(0,X_i)$} 
+\E\qty[ \qty{ \mu(1,X_i) - \mu(0,X_i) }  \mid W_i=1] 
+\end{aligned}
+$$ {#eq-att-identification}
+
+Typically, we estimate this with an analogous sample average of $\hat\mu$.
+$$
+\widehat{ATT} = \ingroupb{\frac{1}{N_1}\sum_{i:W_i}}\qty{ \ingroupb{\hat\mu(1,X_i)} - \ingroupa{\hat \mu(0,X_i)} }
+$$
+This should look familiar. We've been using the same formula to estimate $\Delta_1$.
+
+::: {#nte-what-does-the-att-mean .callout-note collapse="true"}
+### What Does the ATT Mean?
+
+The formula we derived in @eq-att-identification looks like $\Delta_1$, but is it?
+Sort of. When we've talked about $\Delta_1$ before, we haven't been randomizing, 
+and we've written it as a sum over the people with $w_j=1$ 
+in a population $w_1,x_1,y_1 \ldots w_n,x_n,y_n$. When $(W_i,X_i,Y_i)$ is drawn
+uniformly-at-random from this population, the expectation in @eq-att-identification 
+is equivalent.
+$$
+\begin{aligned}
+\Delta_1 
+&= \frac{1}{m_1} \sum_{j:w_j=1} \qty{\mu(1,x_j) - \mu(0,x_j)} && \text{averaging over the treated people} \\
+&= \E[ \mu(1,X_i) - \mu(0,X_i) \mid W_i=1]                    && \text{due to uniform sampling} \\
+\end{aligned}
+$$
+But when we're randomizing, there isn't a group of treated people in our population to average over.
+You can, using steps similar to the ones in @eq-att-identification above, show that the ATT is equal to
+a weighted average of the individual treatment effects $\tau_j$ with weights proportional to our
+randomization probabilities $\pi(x_j)$.^[Go ahead and try it if you like. It's a good exercise, but not one I'm going to assign.] 
+$$
+\frac{1}{m}\sum_{j=1}^m \frac{\pi(x_j)}{\bar\pi} \tau_j \qfor \bar \pi = \frac{1}{m}\sum_{j=1}^m \pi(x_j) 
+$$
+What's weird about this is that, when we choose how to randomize treatment, we're making a choice about
+what the ATT is, too. This isn't all that common in real-world randomized experiments. What is common
+is using the idea of the ATT to think about what it means to estimate $\Delta_1$ when we haven't really 
+randomized.
+:::
+
+Now let's run through a few of the same steps we did for the ATE to estimate the ATT. If 
+you've defined a function `estimate.att` analogous to `estimate.ate` from @sec-ate-estimator,
+this should plot the sampling distribution of your ATT estimator. I'll give you some code to 
+get you started. What I've done is copy and paste code from @sec-ate-estimator that we used
+to estimate the ATE and changed a few names. What I haven't done is changed the code so it 
+actually estimates the ATT. I've marked a few lines where you'll want to make changes. 
+
+```{r}
+#| echo: true 
+#| eval: false
+constant.weights = function(sam) { rep(1, nrow(sam)) }
+estimate.att = function(sam, formula, gamma=constant.weights) {
+  model = lm(formula, weights=gamma, data=sam |> mutate(gamma=gamma(sam)))
+  muhat.0X = predict(model, newdata=sam |> mutate(w=0))
+  muhat.1X = predict(model, newdata=sam |> mutate(w=1))
+  mean(muhat.1X - muhat.0X)   #<1>
+}
+
+att.weights = function(sam) { 
+  ifelse(sam$w==1, 1/pi(sam$x), 1/(1-pi(sam$x))) #<2>
+}
+```
+1. You'll need to change this to do anything.
+2. You'll need to change this if you want your inverse probability weights to work.
+
+```{r}
+#| echo: true
+#| eval: false
+att = mean((po.pop$y1 - po.pop$y0)*pi(po.pop$x)/mean(pi(po.pop$x))) #<1>
+estimators = list(
+  lsq=\(sam)estimate.att(sam, y~w+x), 
+  ipw=\(sam)estimate.att(sam, y~w+x, att.weights))
+
+sampling.dist = samples |> sampling.distribution(estimators)
+sampling.dist |> plot.sampling.distribution(target=att)
+```
+1. See @nte-what-does-the-att-mean for a discussion of this formula.
+
+
+::: {.callout-exercise}
+Change the code above to get an estimator of the ATT where $\hat\mu$
+is the (unweighted) least squares predictor in the parallel lines model.
+Plot its sampling distribution. Is your estimator 
+positively biased (typically too big), 
+negatively biased (typically too small),
+or approximately unbiased?
+:::
+
+Now let's do some inverse probability weighting. When we talked about
+the inverse probability weights for the ATE, we started with the idea 
+of using the weights $\gamma(w,x)=m_x/m_{wx}$ and then replaced $m_{wx}$
+with its expectation. Let's do something similar for the weights 
+$\gamma(w,x)=m_{1x}/m_{wx}$. These are like the weights we focused on 
+in Lecture 14 when we were estimating $\Delta_0$, but with the 
+colors flipped---$\Delta_1$ is an average over the green dots and 
+$\Delta_0$ is an average over the red ones. 
+
+::: {.callout-exercise}
+Write a formula, in terms of the randomization probability $\pi(x)$, 
+for the ratio $\gamma(w,x)=\E[m_{1x}]/\E[m_{wx}]$.
+:::
+
+If you've gotten these right, you should be able to get a nearly-unbiased
+estimator of the ATT using them. 
+
+::: {.callout-exercise}
+Fix up `att.weights` to use your formula from the previous exercise. 
+Plot the sampling distribution of $\widehat{ATT}$ when you estimate
+$\hat\mu$ using inverse probability weighted least squares in the 
+parallel lines model. Is you estimator positively biased, negatively biased,
+or approximately unbiased?
+
+*Hint*. If you've fixed `estimate.att` and  `att.weights` in the code above,
+it should do the rest for you.
+:::
+
+
+### More Models
+
+Now let's think briefly about what happens when we use
+different models. Below, I've tried out four. For each,
+I've drawn two plots below.
+
+1. The least squares and inverse probability weighted least squares predictors on top of the sample they're fit to. Squares show the  unweighted least squares predictions; diamonds show the inverse probability weighted least squares predictions.
+2. The sampling distributions of the ATT estimators using least squares and inverse probability weighted least squares. The unweighted version is in orange; the inverse probability weighted one is in purple.
+
+Let's use these to do an exercise on visualizing and
+communicating about bias and coverage.
+
+::: {.callout-exercise}
+Suppose you accept the premise that the population
+we made up in 'Step 0' is pretty close to the population
+you're actually studying. As a result, you trust that 
+what you see in these histograms is very close to the 
+actual sampling distribution of these 8 ATT estimators. 
+Suppose you're ok with 85% coverage, but not less than
+that. 
+
+Which of these estimators, if any, would you object to using?
+For each of the estimators you object to, explain, with reference
+to the corresponding plot of $\hat\mu$, what you expect 
+would be wrong with it. Do you expect the estimate of the ATT to 
+be an overestimate (too big)? An underestimate (too small)?  What is it about the way $\hat\mu$ does (or doesn't) fit the data that suggests that? 
+If there's another predictor based on the same model that does work, e.g. the inverse probability weighted least squares one, describe --- in visual terms --- why using that one leads to an acceptable estimate of the ATT but the one you object to does not.
+:::
+
+```{r}
+scales = list(scale_x_continuous(breaks=c(0,5,10,15), labels=label_dollar(prefix="$")),
+              scale_y_continuous(breaks=seq(0,1, by=.2)), 
+              coord_cartesian(xlim=c(-2.5,17.5), ylim=c(0,.5)))
+```
+
+
+```{r}
+estimate.att = function(sam, formula, gamma=constant.weights) {
+  model = lm(formula, weights=gamma, data=sam |> mutate(gamma=gamma(sam)))
+  muhat.0X = predict(model, newdata=sam |> mutate(w=0))
+  muhat.1X = predict(model, newdata=sam |> mutate(w=1))
+  mean((muhat.1X - muhat.0X)[sam$w==1])   
+}
+att.weights = function(sam) { 
+  ifelse(sam$w==1, 1, pi(sam$x)/(1-pi(sam$x))) 
+}
+```
+
+```{r}
+gammas = list(none=constant.weights, ipw=att.weights)
+estimators = \(formula) list(
+  lsq=\(sam) estimate.att(sam, formula, constant.weights),
+  ipw=\(sam) estimate.att(sam, formula, ate.weights))
+target = att
+target.name = 'ATT'
+```
+
+:::: {.panel-tabset}
+### Horizontal Lines Model 
+::: {.panel-tabset}
+### $\hat\mu$
+```{r}
+#| fig-width: 10
+#| echo: true 
+formula = y~w
+sam |> lsq.plot(formula, gammas) 
+```
+### $\widehat{`r target.name`}$'s Sampling Distribution
+```{r}
+#| fig-width: 10
+samples |> 
+  sampling.distribution(estimators(formula)) |> 
+  plot.sampling.distribution(target) + scales
+```
+:::
+### Parallel Lines Model 
+::: {.panel-tabset}
+### $\hat\mu$
+```{r}
+#| fig-width: 10
+#| echo: true 
+formula = y~w+x
+sam |> lsq.plot(formula, gammas) 
+```
+### $\widehat{`r target.name`}$'s Sampling Distribution
+```{r}
+#| fig-width: 10
+samples |> 
+  sampling.distribution(estimators(formula)) |> 
+  plot.sampling.distribution(target) + scales
+```
+:::
+
+### Lines Model 
+::: {.panel-tabset}
+### $\hat\mu$
+```{r}
+#| fig-width: 10
+#| echo: true 
+formula = y~w*x
+sam |> lsq.plot(formula, gammas) 
+```
+### $\widehat{`r target.name`}$'s Sampling Distribution
+```{r}
+#| fig-width: 10
+samples |> 
+  sampling.distribution(estimators(formula)) |> 
+  plot.sampling.distribution(target) + scales
+```
+:::
+
+### Additive Model
+::: {.panel-tabset}
+### $\hat\mu$
+```{r}
+#| fig-width: 10
+#| echo: true 
+formula = y~w+factor(x)
+sam |> lsq.plot(formula, gammas) 
+```
+### $\widehat{`r target.name`}$'s Sampling Distribution
+```{r}
+#| fig-width: 10
+samples |> 
+  sampling.distribution(estimators(formula)) |> 
+  plot.sampling.distribution(target) + scales 
+```
+:::
+::::
+
+There reason you'd actually have a bunch of plots like
+this is to think or communicate about which estimator 
+you should be using. So let's imagine you're in that role.
+Here's the scenario. 
+
+Imagine you're working on a political campaign
+trying to get donations. One of your coworkers, who knows
+nothing about statistics, is in charge of choosing between
+calling and texting your potential donors. They know what
+an average treatment effect is but next to nothing about 
+estimating things, so you're pretty sure they're going to 
+get some causal inference package in **R** or **Python** 
+or whatever, thumb through the documentation, and pick an
+estimator basically at random. People tend to listen to 
+them, so to prepare for the likely outcome that they'll
+do something that won't work, you've designed this simulation.
+
+
+
+
+--- they read one of those
+books with a ton of causal inference stuff and nex to
+
+You know what
+they're going to do to estimate this ATE---they're going
+to look through the documentation in their statistical
+software (because that's where you learn about these things)
+and arbitrarily choose one of the options described there. One of 
+these 8 options. To prepare for this, you've decided to simulate
+
+
+
+
+Suppose you're really working on a political campaign
+trying to get donations. One of your coworkers, who knows
+nothing about statistics, is in charge of choosing between
+calling and texting your potential donors. You know what
+they're going to do to estimate this ATE---they're going
+to look through the documentation in their statistical
+software (because that's where you learn about these things)
+and arbitrarily choose one of the options described there. One of 
+these 8 options. To prepare for this, you've decided to simulate
+
+
+
+
+
