@@ -109,26 +109,29 @@ trimmed = function(f, cutoff) {
   - $W_i$, our treatment, indicates whether that was a [for-profit hospital]{.groupb} or a [non-profit hospital]{.groupa}.
 - We'll think of this as a sample from some population $w_1,x_1,y_1 \ldots w_n,x_n,y_n$.
 - And we'll think of each of these as having two potential outcomes.
- - $y_j(0)$ is 1 if the patient would receive PCI at a non-profit hospital. 0 otherwise. 
- - $y_j(1)$ is 1 if the patient would receive PCI at a for-profit hospital. 0 otherwise. 
- - $\tau_j = y_j(1) - y_j(0)$ is the effect of for-profit status on what they receive. 
-  - $\tau_j = 0$ if the treatment would be the same regardless of hospital type.
-  - $\tau_j = 1$ if they'd get PCI at a for-profit hospital but not a non-profit hospital.
-  - $\tau_j = -1$ if they'd get PCI at a non-profit hospital but not a for-profit hospital.
+  - $y_j(0)$ is 1 if the patient would receive PCI at a non-profit hospital. 0 otherwise. 
+  - $y_j(1)$ is 1 if the patient would receive PCI at a for-profit hospital. 0 otherwise. 
+  - $\tau_j = y_j(1) - y_j(0)$ is the effect of for-profit status on what they receive. 
+    - $\tau_j = 0$ if the treatment would be the same regardless of hospital type.
+    - $\tau_j = 1$ if they'd get PCI at a for-profit hospital but not a non-profit hospital.
+    - $\tau_j = -1$ if they'd get PCI at a non-profit hospital but not a for-profit hospital.
 - To summarize these effects, we can average over groups in the population. 
 $$
+\color{gray}
 \begin{aligned}
 \tau_j 
 &\explain{=}{The effect of for-profit status on patient $j$ receiving PCI}
-  y_j(1) - y_j(0) && \text{ is the effect on patient } j \\   
+  \ingroupb{y_j(1)} - \ingroupa{y_j(0)} && \text{ is the effect on patient } j \\   
 \text{ATE} 
 &\explain{=}{The average effect for all patients in our population} 
-\frac{1}{m} \sum_{j=1}^m \gcb{ y_j(1) - y_j(0) } 
+\inpurple{\frac{1}{m} \sum_{j=1}^m} \lcb{ \ingroupb{y_j(1)} - \ingroupa{y_j(0)} } \\
 \text{ATT} 
 &\explain{=}{The average effect for the treated patients in our population} 
-\frac{1}{m_1} \sum_{j:w_j=1} \gcb{ y_j(1) - y_j(0) }
+\ingroupb{\frac{1}{m_1} \sum_{j:w_j=1}} \lcb{ \ingroupb{y_j(1)} - \ingroupa{y_j(0)} }
 \end{aligned}
 $$
+
+## Assumptions: Randomization and Random Sampling
 
 - To analyze this, the papers we read effectively make two assumptions.
   1. *Random sampling*. The observations we have are drawn uniformly-at-random from a population of heart-attack patients $(w_1,x_1,y_1),\ldots,(w_n,x_n,y_n)$.
@@ -142,15 +145,15 @@ $$
 ## About the Data 
 
 - I'd love to look at the real data, but we don't have it.
-  - I contacted one of the authors of `r kim2023` and they couldn't give it to me. - That's almost always the case with medical records. It's a patient privacy thing. 
+  - I contacted one of the authors of `r kim2023` and they couldn't give it to me. 
+  - That's almost always the case with medical records. It's a patient privacy thing. 
 - That means we don't even have the kinds of plots we usually show in class.
   - Plots of the outcome against the covariates.
   - Histograms of the covariates within each treatment group. 
 - What we do have are the tables in these two papers. 
   - These have some of the information we'd usually look at. 
   - e.g., they have the *means* of the covariates in each treatment group.
-- To make all this feel a little familiar, we're going to look at some fake data.
-  - In fact, we'll work with samples drawn from a *fake population*.
+/  - In fact, we'll work with samples drawn from a *fake population*.
   - We'll use the same fake population that `r kim2023` used to test out their method.^[Almost. You'll see a difference or two on the next slide.] 
 - This'll let us test out the methods used in these papers.
   - And it'll let us draw our usual plots *plus* the kind of information we see in the tables we have.
@@ -238,7 +241,7 @@ labs(y='Φ(x)')
   - In blue, the inverse logit function $\invlogit(x)=1/(1+\exp(-x))$.
 - We follow Kim et al. (2023) in using the cumulative distribution of the normal.
 
-### Binary vs. Continuous Outcome
+### Outcomes
 
 **The Mean Function**.
 ```{webr}
@@ -309,6 +312,32 @@ $$
 
 - Here Kim et al. (2023) took $\varepsilon_i$ to be normal with mean $0$ and variance $1$.
 - What I did instead ensured we'd get outcomes in $[0,1]$, so we could scale our axes the same way for both the binary and continuous outcomes.
+
+### Putting It All Together
+
+- We'll need to draw samples repeatedly to see what the sampling distribution of our estimators looks like.
+- Having all this code in one function will make this easier.
+```{webr}
+#| autorun: true
+draw.sample = function(n) {
+  SigmaX.13 = matrix(c(2,   1,   -1,
+                       1,   1,   -.5,
+                        -1, -.5,    1), 3, 3)
+  L = chol(SigmaX.13)              
+  Z.13 = matrix(rnorm(3*n),3,n)   
+  X.13 = L %*% Z.13               
+  X.4 = runif(n, min=-1, max=1)
+  X.5 = rchisq(n, df=1)
+  X.6 = rbinom(n, size=1, prob=.5)
+
+  sam = data.frame(x=rbind(X.13, X.4, X.5, X.6) |> unname() |> t())
+  sam$w = rbinom(n, size=1, prob=pi(sam))
+  sam$y = rbinom(n, size=1, prob=mu(sam))
+  sam$y.continuous = mu(sam) + rbinary.uniform(n, mu(sam))
+  sam
+}
+```
+
 ::: 
 
 ## What the Data Looks Like {#sec-data}
@@ -563,7 +592,7 @@ summary(linear.predictor.parallel)
 #| input: 
 #|   - xx
 #|   - yy
-muhat.WX = predict(linear.predictor, newdata=sam) 
+muhat.WX = predict(linear.predictor.parallel, newdata=sam) 
 ggplot() + scatter(sam |> mutate(muhat=muhat.WX), xx, 'muhat', 
                    shape=square.shape, jitter=no.jitter)
 ```
@@ -726,7 +755,7 @@ $$
 $$
 \begin{aligned}
 \text{OR}(x) &= \frac{\frac{\mu(1,x)}{1-\mu(1,x)}}{\frac{\mu(0,x)}{1-\mu(0,x)}} \qqtext{ varies with } x \\
- &\qqtext{ unless } \mu(w,x)=\invlogit(a(w) + b(x)) \qqtext{ for some } a(w), b(x)
+ \qqtext{ unless } &\mu(w,x)=\invlogit(a(w) + b(x)) \qqtext{ for some } a(w), b(x)
 \end{aligned}
 $$
 
@@ -776,7 +805,7 @@ ggplot(grid) +
   - [46.5%]{.groupb} of the time vs. [47.1%]{.groupa} of the time in non-profit hospitals.
   - If we really want this as an odds ratio, we can calculate it. It's a little less than 1.
 $$
-\frac{\frac{46.5\%}{1-46.5\%}}{\frac{47.1\%}{1-47.1\%}} \approx  `r round(46.5/(1-46.5) / 47.1/(1-47.1), 2)` \qqtext{ is less than 1 } 
+\frac{\frac{.465}{1-.465}}{\frac{.471}{1-.471}} \approx  `r round((.465/(1-.465)) / (.471/(1-.471)), 2)` \qqtext{ is less than 1 } 
 $$
 
 - But that's a raw difference. We know those are impacted by covariate shift. e.g ... 
@@ -803,12 +832,18 @@ $$
 - Even if the odds ratio *were* constant --- i.e. if the 'unless' part was true --- misspecification is likely.
   - We get constancy if the log odds $\log\{\mu(w,x)/(1-\mu(w,x))\}$ are *additive* in $w$ and $x$.
   $$
-  \mu(w,x)=\invlogit(a(w) + b(x)) \iff \log\left\{\frac{\mu(w,x)}{1-\mu(w,x)}\right\}=a(w) + b(x)
+  \begin{aligned}
+  \mu(w,x) &= \invlogit(a(w) + b(x)) && \qqtext{if and only if} 
+  &\log\left\{\frac{\mu(w,x)}{1-\mu(w,x)}\right\}=a(w) + b(x)
+  \end{aligned}
   $$
-  - Our model includes a small subset of functions like that: the ones where the log odds are linear combinations of $x_1 \ldots x_6$. 
+  - Our model includes a small subset of functions like that: the ones where \
+  the log odds are linear combinations of $x_1 \ldots x_6$. 
   $$ 
-  m(w,x) = \invlogit(a_0 + a_w w + b_1 x_1 + \cdots + b_6 x_6) \iff 
-  \log\left\{\frac{m(w,x)}{1-m(w,x)}\right\}=a_0 + a_w w + b_1 x_1 + \cdots + b_6 x_6
+  \begin{aligned}
+  m(w,x) &= \invlogit(a_0 + a_w w + b_1 x_1 + \cdots + b_6 x_6) &&\qqtext{if and only if} \\
+  &\log\left\{\frac{m(w,x)}{1-m(w,x)}\right\}=a_0 + a_w w + b_1 x_1 + \cdots + b_6 x_6
+  \end{aligned}
   $$
 
 - We're doing *something* to adjust for covariate shift, we may not be adjusting for it successfully.
@@ -829,25 +864,25 @@ its.standard.deviation = sqrt(vcov(logit.predictor)['w','w'])
 point.estimate + c(-1,1) * 1.96 * its.standard.deviation 
 ```
 
-### What We Learn from This 
+## What We Learn from This 
 
 - We're doing essentially the same thing they did in `r shah2007`. It's not working. 
   - Our log-odds-ratio target is zero but our interval estimate nowhere near there.
   - That's worrisome. Perhaps we shouldn't trust the concusions of `r shah2007`. 
 - We see the same problem in the summary output for our 'parallel lines model' on @sec-parallel-shortcut.
-  - Our target in that context---whether we're thinking of the ATE or ATT---is zero. 
-  - Our interval is tiny but everything in it is way off. Way bigger than zero. This is bad.
-    - It's bad enough that our estimate *is* far off target. 
-    - What makes it worse is that *we're saying* that it's very close (because our interval is so small).
-    
+
 ```{webr}
 #| autorun: true
 point.estimate = coef(linear.predictor.parallel)['w']
 its.standard.deviation = sqrt(vcov(linear.predictor.parallel)['w','w'])
 point.estimate + c(-1,1) * 1.96 * its.standard.deviation 
 ```
-
-- We get similar point estimates when we calculate the ATE and ATT using the other models we've looked at.
+- Our target in that context---whether we're thinking of the ATE or ATT---is zero. 
+  - Our interval is tiny but everything in it is way off. Way bigger than zero. This is bad.
+  - It's bad enough that our estimate *is* far off target. 
+  - What makes it worse is that *we're saying* that it's very close (because our interval is so small).
+- We get similar point estimates when we calculate the ATE and ATT 'the long way' \
+  using the other models we've looked at.
   - The 'lines' model (@sec-step-3).
   - The 'logit version' of the 'parallel lines model' (@sec-logit-steps).
 - All of these estimators are badly biased. 
@@ -902,17 +937,18 @@ ggplot() + scatter(sam, x, y, gamma=trimmed(gamma.att, trim_level))
 
 ### ATT Estimates 
 
+::: {.panel-tabset}
+### Estimates 
+```{webr}
+#| autorun: true 
+formula = y ~ w 
+```
 
-
-**Estimate**
 ```{webr}
 #| autorun: true
 #| fig-width: 12
 #| input: 
-#|   - x
-#|   - y
 #|   - trim_level
-formula = y ~ w 
 model.ipw = lm(formula, weights=gamma, 
   data=sam |> mutate(gamma=trimmed(gamma.att, trim_level)(sam)))
 Deltahat.1 = 
@@ -924,10 +960,6 @@ Deltahat.1
 **Without IPW**.
 ```{webr}
 #| autorun: true
-#| fig-width: 12
-#| input: 
-#|   - x
-#|   - y
 model.no.ipw = lm(formula, data=sam) 
 Deltahat.1.no.ipw = 
   mean( predict(model.no.ipw, sam  |> filter(w==1) |> mutate(w=1)) - 
@@ -935,68 +967,97 @@ Deltahat.1.no.ipw =
 Deltahat.1.no.ipw
 ```
 
+### Code for Doing This Over and Over 
 
+```{webr}
+#| autorun: true
+#| input: 
+#|   - trim_level
+estimate.att = function(sam, formula, gamma=gamma.constant) { 
+  data = sam |> mutate(gamma=gamma(sam))
+  model = lm(formula, weights=gamma, data=data) 
+  Deltahat.1 = 
+    mean( predict(model, sam  |> filter(w==1) |> mutate(w=1)) - 
+          predict(model, sam  |> filter(w==1) |> mutate(w=0)) )
+  Deltahat.1
+}
+```
+
+```{webr}
+#| autorun: true
+#| input: 
+#|   - trim_level
+estimators = function(sample) {
+  data.frame(ipw=estimate.att(sample, formula, gamma=trimmed(gamma.att, trim_level)),
+             no.ipw=estimate.att(sample, formula))
+}
+```
+
+```{webr}
+#| autorun: true
+plot.sampling.distribution = function(samples, target=0) {
+  ggplot(samples) + 
+    geom_histogram(aes(x=ipw), bins=50, alpha=.5, fill=teal, linewidth=.05) + 
+    geom_histogram(aes(x=no.ipw), bins=50, alpha=.5, fill=pink, linewidth=.05) + 
+    geom_vline(xintercept=target, color='green', linewidth=1.5, alpha=.5)  
+}
+```
+
+### Summary Outputs 
 :::: columns
 ::: column
 ```{webr}
+#| autorun: true
+#| input: 
+#|   - trim_level
 summary(model.ipw)
 ```
 :::
 ::: column
 ```{webr}
+#| autorun: true 
 summary(model.no.ipw)
 ```
 :::
 ::::
+:::
 
-**Sampling Distributions**
+:::{.panel-tabset}
+### Actual Sampling Distribution
 
 ```{webr}
-estimate.att = function(sam, formula, weight=TRUE) {
-  data = sam |> mutate(gamma=trimmed(gamma.att, trim_level)(sam))
-  model.ipw = if(weight) { lm(formula, weights=gamma, data=data) } 
-              else { lm(formula, data=data) }
-  Deltahat.1 = 
-    mean( predict(model.ipw, sam  |> filter(w==1) |> mutate(w=1)) - 
-          predict(model.ipw, sam  |> filter(w==1) |> mutate(w=0)) )
-  Deltahat.1
-}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - trim_level
+samples = 1:400 |> map(function(.) {  
+  sam = draw.sample(n) 
+  sam 
+})
 
+att.samples = samples |> map(estimators) |> bind_rows()
+plot.sampling.distribution(att.samples)
+```
+
+### Bootstrap Sampling Distribution
+
+```{webr}
+#| autorun: true
+#| fig-width: 12
+#| input: 
+#|   - trim_level
 bootstrap.samples = 1:400 |> map(function(.) {  
   J = sample(1:nrow(sam), nrow(sam), replace=TRUE)
   sam[J,]
-})
+})  
 
-att.star = data.frame(
-  ipw = bootstrap.samples |> 
-    map_vec(\(sam) sam |> estimate.att(formula, weight=TRUE)),
-  no.ipw = bootstrap.samples |> 
-    map_vec(\(sam) sam |> estimate.att(formula, weight=FALSE))
-)
-
-bootstrap.dist.plot = ggplot(att.star) + 
-  geom_histogram(aes(x=ipw), bins=50, 
-    alpha=.5, fill=teal, linewidth=.05) + 
-  geom_histogram(aes(x=no.ipw), bins=50, 
-    alpha=.5, fill=pink, linewidth=.05) + 
-  geom_vline(xintercept=0, color='green', linewidth=1.5, alpha=.5)  
-bootstrap.dist.plot 
+att.star = bootstrap.samples |> map(estimators) |> bind_rows()
+plot.sampling.distribution(att.star)
 ```
-for ATT estimators using [inverse probability weighting]{.teal} and [not]{.pink}.
+:::
 
-```{webr}
-normal.approx = function(model) { 
-  function(x) { dnorm(x, coef(model)['w'], sqrt(vcov(model)['w','w'])) }
-}
-xs = seq(0, max(att.star$no.ipw), length.out=1000)
+These are for our ATT estimators using [inverse probability weighting]{.teal} and [not]{.pink}.
 
-bootstrap.dist.plot + 
-  geom_line(aes(x=x, y=px), color=teal, 
-      data=data.frame(x=xs, px=normal.approx(model.ipw)(xs))) +
-  geom_line(aes(x=x, y=px), color=pink, 
-      data=data.frame(x=xs, px=normal.approx(model.no.ipw)(xs)))
-```
-with normal approximations --- using `summary` output --- added.
 
 ### ATE
 ```{webr}
@@ -1138,14 +1199,6 @@ summary(model)
 
 :::
 
-
-# Tables
-These Things Are Everywhere. What are they communicating?
-
-## The Target Population
-
-## Covariate Shift 
-
 # What to Read {#what-to-read}
 
 ## [Shah et al. (2007)](https://qtm285-1.github.io/assets/borrowed/shah2007mci.pdf)
@@ -1169,35 +1222,6 @@ These Things Are Everywhere. What are they communicating?
   - Their estimator for the ATT ($\Delta_1$) compares the sample average outcome of the [treated group]{.groupb} to the *weighted* sample average outcome of the [control group]{.groupa}. That's weighted least squares in the *horizontal lines model*. 
   - Their weights (they write $w_i$ where we write $\gamma(W_i,X_i)$) aren't *defined* as a ratio of covariate distributions $\ingroupa{p_{x\mid 1}}/\ingroupb{p_{x \mid 0}}$. But they're chosen to *do* exactly what weighting using that ratio *does*. That is, to make the distribution of the covariate in the *weighted* sample match match the distribution we're averaging over when we calculate $\Delta_1$.
     
-# Randomization and Inverse Probability Weighting
-
-## 
-$$
-\begin{aligned}
-P(X=x, W=w) 
-&= P(X \mid W=w) P(W=w) \\
-&= P(W \mid X=x) P(X=x) \\ 
-\end{aligned}
-$$
-
-so equating the two expressions for $P(X=x, W=w)$ and solving for $P(X \mid W=w)$ gives ...
-
-$$
-P(X \mid W=w) = \frac{\overset{\faint{\pi(x) \text{ or } 1-\pi(x)}}{P(W=w \mid X=x)} P(X=x)}{\underset{\faint{p_w \text{ or } 1-p_w}}{P(W=w)}}
-$$
-
-and it follows that the inverse probability weights for estimating the ATT $\Delta_1$ are ...
-
-$$
-\begin{aligned}
-\gamma(w,x) & = \begin{cases}
-1 & \text{ if } w=1 \\
-\frac{P(X \mid W=1)}{P(X \mid W=0)} = \frac{\frac{\pi(x) P(X=x)}{p_w}}{\frac{(1-\pi(x)) P(X=x)}{1-p_w}} 
-= \frac{\pi(x)}{1-\pi(x)} \times \frac{1-p_w}{p_w} & \text{ if } w=0
-\end{cases}
-\end{aligned}
-$$
-
 # Appendix
 
 ## About Inconclusiveness {#sec-about-inconclusiveness}
