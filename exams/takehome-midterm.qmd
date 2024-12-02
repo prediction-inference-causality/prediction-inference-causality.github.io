@@ -1,0 +1,559 @@
+---
+title: "Midterm 2"
+subtitle: "QTM 285-1"
+---
+
+{{< include shared-code.qmd >}}
+{{< include ca-income.qmd >}}
+
+```{r}
+#| echo: false
+theme_set(theme_minimal())
+options(scipen = 1, digits = 2)
+```
+
+```{r}
+#| echo: false
+#| warning: false
+library(patchwork)
+```
+
+# Problem 1
+
+Suppose we have a sample of $(X_1,Y_1) \ldots (X_n,Y_n)$ drawn with replacement from a population. It's stored in vectors $X$ and $Y$ of length $n$. $X_i$ can take the values of 1,2,3,4 or 5. 
+```{r}
+#| echo: false
+set.seed(123)
+n = 1000
+X = c(rep(1,350), rep(2,300),rep(3,200),rep(4,100),rep(5,50))
+Y = X + rnorm(n,0,2)
+df<- data.frame(x=X,y=Y)
+```
+
+Here's what the data looks like.
+
+```{r}
+#| out-height: 3.5in
+#| fig-ncol: 2
+#| fig-subcap:
+#|  -  Histogram of the vector Y's elements
+#|  -  Jittered Scatterplot of X and Y
+ggplot() + geom_histogram(aes(x=Y,     y=after_stat(density)), alpha=.2, bins=50) + 
+           geom_vline(aes(xintercept=mean(Y)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(Y)+c(-1,1)*sd(Y)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(Y), xmin=mean(Y)-1.96*sd(Y), xmax=mean(Y)+1.96*sd(Y), y=.025)) + theme_bw() + xlab('') + ylab('')
+
+ggplot() + geom_point(aes(x=X, y=Y), alpha=.1, position=position_jitter(w=.2, h=0)) + xlab('') + ylab('') +
+           stat_summary(aes(x=X, y=Y), geom='pointrange', 
+              fun=mean, 
+              fun.min=function(x) mean(x)-sd(x),
+              fun.max=function(x) mean(x)+sd(x))  
+```
+
+
+We run this code.
+
+```{r}
+#| echo: true
+B=1000
+
+thetastar =  rep(NA,B)
+for( b in 1:B ){
+  Jstar = sample(1:n,size=n,replace=TRUE)
+  Xstar = X[Jstar]
+  Ystar = Y[Jstar]
+  thetastar[b] = (1/4)*(mean(Ystar[Xstar==5]) - mean(Ystar[Xstar==1]))
+}
+```
+
+```{r}
+#| out-height: 3.5in
+#| fig-cap: Histogram of the thetastar's elements
+ggplot() + geom_histogram(aes(x=thetastar, y=after_stat(density)), alpha=.2) + 
+           geom_vline(aes(xintercept=mean(thetastar)), alpha=.5) + 
+           geom_vline(aes(xintercept=mean(thetastar)+c(-1,1)*sd(thetastar)), linetype='dashed', alpha=.5) + 
+           geom_pointrange(aes(x=mean(thetastar), xmin=mean(thetastar)-1.96*sd(thetastar), xmax=mean(thetastar)+1.96*sd(thetastar), y=1)) + xlab('') + ylab('')
+
+```
+
+
+## Part A
+What does this code calculate? State it in words and mark it with an 'a', and an arrow or bracket
+if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mean(Y)
+```
+
+
+## Part B
+What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(Y)
+```
+
+## Part C
+What does this code calculate? State it in words and mark it with a 'c', and an arrow or bracket
+if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+mean(Y[X==1])
+```
+
+## Part D   
+What does this code calculate? State it in words and mark it with a 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+sd(thetastar)
+```
+
+## Part E
+What does this code calculate? State it in words and mark it with a 'e', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
+```{r}
+#| echo: true
+#| eval: false
+(1/4)(mean(Y[X=5]) - mean(Y[X=1])) 
+- 1.96* sqrt((1/4)^2*var(Y[X=5])/length(Y[X=5]) + (-1/4)^2*var(Y[X=1])/length(Y[X=1]))
+
+(1/4)(mean(Y[X=5]) - mean(Y[X=1]))
++ 1.96* sqrt((1/4)^2*var(Y[X=5])/length(Y[X=5]) + (-1/4)^2*var(Y[X=1])/length(Y[X=1]))
+```
+
+## Part F
+How could you calculate roughly the same thing as in Part E if you knew `sd(thetastar)` 
+but not `Var(Y[X=5])` and `Var(Y[X=1])`?
+
+# Problem 2
+
+
+```{r}
+ca = earnings 
+sam = data.frame(
+  w = 0 + (ca$sex == 'female'),
+  x = ca$education,
+  y = ca$income)
+```
+
+```{r}
+summaries = sam |> 
+    group_by(w,x) |> 
+    summarize(muhat = mean(y), sigmahat = sd(y), Nwx = n(), .groups='drop')
+  
+summary.lookup = function(column.name, summaries, default=NA) { #<1>
+  function(w,x) { 
+    out = left_join(data.frame(w=w,x=x),                              #<2>
+                    summaries[, c('w','x',column.name)],              #<2>
+                    by=c('w','x')) |>                                 #<2>
+      pull(column.name)                                               #<2>
+    out[is.na(out)] = default                                         #<3>
+    out
+  }
+}
+
+muhat    = summary.lookup('muhat',    summaries)
+sigmahat = summary.lookup('sigmahat', summaries)
+Nwx      = summary.lookup('Nwx',      summaries)
+
+W = sam$w
+X = sam$x
+Y = sam$y
+x = unique(X)
+n = length(Y)
+```
+
+```{r}
+proportion.scale = 350000
+plotX = function(w,x, shift=default.shift) { ifelse(w==0, x-shift, x+shift) }
+interleaved.bars = list(
+  geom_bar(aes(x=plotX(w,x), y=proportion.scale*after_stat(prop), 
+               fill=factor(w), width=w), 
+           position='identity', alpha=.1, linewidth=.05, color='black'))
+purple.bars = geom_bar(aes(x=x, y=proportion.scale*after_stat(prop)), 
+                       alpha=.1, linewidth=.05, fill='purple', color='black', width=.2)
+scales = list(
+  scale_y(sec.axis=sec_axis(~./proportion.scale, name='proportion')), 
+  scale_x(),
+  coord_cartesian(ylim=c(0,1.5e5)),
+  guides(color='none', fill='none', size='none') 
+)
+```
+
+```{r}
+m0x.mild     = rep(c(10,12,14,16,18), rev(c(80, 90, 100, 110, 120)))
+m0x.moderate = rep(c(10,12,14,16,18), rev(c(50, 75, 100, 125, 150)))
+m0x.extreme  = rep(c(10,12,14,16,18), rev(c(2,49, 100, 149, 198)))
+m0x.flat = rep(c(10,12,14,16,18), c(100,100,100, 100,100))
+m1x.mild     = rep(c(10,12,14,16,18), c(80, 90, 100, 110, 120))
+m1x.moderate = rep(c(10,12,14,16,18), c(50, 75, 100, 125, 150))
+m1x.extreme  = rep(c(10,12,14,16,18), c(2,49, 100, 149, 198))
+m1x.flat = rep(c(10,12,14,16,18), c(100,100,100, 100,100))
+
+exercise.pop = function(m0x, m1x, mu=NULL) {
+  if(is.null(mu)) { 
+    fit = lm(y ~ w*factor(x), data=sam)
+    mu = function(w,x) { predict(fit, newdata=data.frame(w=w, x=x)) }
+  }
+  eps0 = rnorm(length(m0x))*sigmahat(0,m0x)/3
+  eps1 = rnorm(length(m1x))*sigmahat(1,m1x)/3
+  for(uu in unique(m1x)) { 
+    eps0[m0x==uu] = eps0[m0x==uu] - mean(eps0[m0x==uu])
+    eps1[m1x==uu] = eps1[m1x==uu] - mean(eps1[m1x==uu])
+  }
+  rbind(
+    data.frame(w=0, x=m0x, y=mu(0,m0x)+eps0),
+    data.frame(w=1, x=m1x, y=mu(1,m1x)+eps1))
+}
+
+exercise.pop.mild = exercise.pop(m0x.mild, m1x.mild)
+exercise.pop.moderate = exercise.pop(m0x.moderate, m1x.moderate)
+exercise.pop.extreme = exercise.pop(m0x.extreme, m1x.extreme)
+
+set.seed(0)
+J.sam = sample(1:nrow(exercise.pop.moderate), 500, replace=TRUE)
+exercise.sam = exercise.pop.moderate[J.sam,]
+n = nrow(exercise.sam)
+```
+
+```{r}
+Delta0.target = function(pop=NULL) {
+  function(mu, sam) { 
+    if(is.null(pop)) { pop = sam }
+    mean(mu(1,pop$x[pop$w==0]) - mu(0,pop$x[pop$w==0]))
+  }
+}
+with.constant.weights = function(sam) { 
+  sam$weights = 1  
+  sam
+}
+with.ipw = function(sam, from=sam) { 
+  summaries = from |> group_by(w,x) |> summarize(Nwx=n(), .groups='drop')
+  Nwx = summary.lookup('Nwx', summaries)
+  sam$weights = Nwx(0,sam$x) / Nwx(sam$w,sam$x)
+  sam 
+} 
+
+plot.sampling.distribution = function(pop, formula, n = nrow(sam), 
+target=Delta0.target(), pop.version=FALSE, replications=5000,
+with.weights=with.constant.weights, seed=1) { 
+    estimates = with_seed(function() { 
+      1:replications |> map_vec(function(rep) { 
+        J = sample(1:nrow(pop), size=n, replace=TRUE)
+        sam = pop[J,] |> with.weights() 
+
+        fitted.model = lm(formula, data=sam, weights=weights) 
+        muhat = function(w,x) { predict(fitted.model, newdata=data.frame(w=w, x=x)) } 
+        target(muhat, sam)
+    })}, seed=seed)
+    
+    mu.model = lm(y~w*factor(x), data=pop)
+    mu = function(w,x) { predict(mu.model, newdata=data.frame(w=w, x=x)) }
+    the.target = target(mu, pop)
+    
+
+    mutilde.model = lm(formula, data=pop |> with.weights(), weights=weights)
+    mutilde = function(w,x) { predict(mutilde.model, newdata=data.frame(w=w, x=x)) }
+    the.pop.version = target(mutilde, pop)
+    
+    p = ggplot() + 
+     geom_vline(xintercept = the.target, color='green', linewidth=2, alpha=.5) 
+    if(pop.version) { p = p + geom_vline(xintercept = the.pop.version, color=pink, linewidth=2, alpha=.5) }
+    p +
+     geom_vline(xintercept = mean(estimates), color='blue', linewidth=.75, alpha=.9) +
+     geom_histogram(aes(x=estimates, y=after_stat(density)), bins=50, alpha=.2)
+}
+```
+
+```{r}
+default.shift = .15
+biggest.max.weight = exercise.pop.extreme |> with.ipw() |> pull(weights) |> max()
+lsq.plot = function(sam, formula=NULL, shift=default.shift, line.alpha=.7, size.scale=.5) {
+  if(is.null(sam$weights)) { 
+    sam$weights = rep(1, nrow(sam))
+  }
+  max.weight = max(sam$weights)
+  max.size = size.scale * max.weight 
+  
+  base.plot = ggplot(sam) + 
+    geom_point(aes(x=plotX(w,x), y=y,color=factor(w), size=I(weights)), 
+      position=position_jitter(seed=0, width=shift),
+      alpha=.3) + 
+    stat_summary(aes(x=plotX(w,x), y=y, fill=factor(w)), 
+      fun.data=mean_sd, geom='pointrange', 
+      shape=21, alpha=.5, color='black') +
+    interleaved.bars + purple.bars + scales
+    
+    if(is.null(formula)) { base.plot } else { 
+        model = lm(formula, data=sam, weights=weights)
+        gridx = seq(-10, 50, length.out=1000)
+        muhat = function(w,x) predict(model, newdata=data.frame(w=w,x=x))   
+        
+        the.plot = base.plot 
+        if(line.alpha > 0) { 
+            the.plot = base.plot + 
+            geom_line(aes(x=plotX(w,x), y=muhat(w,x), color=factor(w)), 
+              data = expand_grid(w=0:1, x=gridx), alpha=line.alpha, linetype='dashed') 
+        }
+        the.plot + 
+          geom_point(aes(x=plotX(w,x), y=muhat(w,x), fill=factor(w)),  
+            color='black', alpha=.5, shape=23)
+    }
+}
+```
+
+```{r}
+#| out-width: 100%
+exercise.pop(m1x.moderate, m0x.moderate) |>  lsq.plot(y ~ 1+w)
+```
+                                                     
+
+Consider the following population summaries.
+$$
+\begin{aligned}
+\Delta_{\text{raw}} &= \frac{1}{m_1}\sum_{j:w_j=1} y_j - \frac{1}{m_0}\sum_{j:w_j=0} y_j \qfor m_w = \sum_{j:w_j=w} 1 \\
+\Delta_{0}   &= \frac{1}{m_0}\sum_{j:w_j=0} \lcb{ \mu(1,x_j) - \mu(0,x_j) }  \\
+\Delta_{1}   &= \frac{1}{m_1}\sum_{j:w_j=1} \lcb{ \mu(1,x_j) - \mu(0,x_j) } \\ 
+\Delta_{\text{all}}   &= \frac{1}{m}\sum_{j=1}^m \lcb{ \mu(1,x_j) - \mu(0,x_j) }  
+\end{aligned}
+$$
+                                       
+::: {.callout-exercise}
+### Part A
+In the population shown above, with annotations interpreted as usual, which is bigger, $\Delta_{\text{raw}}$ or $\Delta_{\text{1}}$?
+:::
+
+
+::: {.callout-exercise}
+### Part B
+In the population shown above, with annotations interpreted as usual, which is bigger, $\Delta_{\text{1}}$ or $\Delta_{\text{0}}$?
+:::
+
+
+::: {.callout-exercise}
+### Part C
+In the population shown above, with annotations interpreted as usual, which is bigger, $\Delta_{\text{1}}$ or $\Delta_{\text{all}}$?
+:::
+
+::: {.callout-exercise}
+### Part D
+Suppose I'm talking about an entirely new population in which $\Delta_{\text{1}} < \Delta_{\text{0}}$.
+Which is bigger, $\Delta_{\text{1}}$ or $\Delta_{\text{all}}$? If you can't say for sure, explain why.
+:::
+
+
+# Problem 3
+
+Consider the following code.
+
+```{r}
+#| echo: true
+#| eval: false 
+
+sampling.dist = function(pop) { 
+  map(1:10000, function(.) { 
+     J = sample(1:n, size=m, replace=TRUE)
+     sam = pop[J,]
+     model.fit = lm(y ~ w*factor(x), data=sam)
+     muhat = function(w,x) { predict(model.fit, newdata=data.frame(w=w, x=x)) } #<1>
+     thetahat = mean(muhat(1,sam$x) - muhat(0,sam$x))
+     thetahat
+  }
+}
+
+estimator.samples  = sampling.dist(pop) 
+bootstrap.samples  = sampling.dist(sam)
+bootstrap.width = 2*1.96*sd(bootstrap.samples) 
+
+coverage.probability = 
+  mean(estimator.samples - bootstrap.width/2 <= theta & 
+       theta <= estimator.samples + bootstrap.width/2)
+```
+1. We're using the 'all functions' model here, so this is just the mean of the observations with $W_i=w$ and $X_i=x$.
+
+Suppose you're checking out the interval estimator $\hat\theta \pm 1.96\text{sd}(\hat\theta^\star)$ 
+where
+$$ 
+\begin{aligned}
+\hat\theta = \frac{1}{n}\sum_{i=1}^n \qty{\mu(1,X_i) - \mu(0,X_i)} 
+&&\qfor \hat\mu(w,x)=\frac{1}{N_{wx}}\sum_{i:W_i=w,X_i=x} Y_i \\
+&&\qand N_{wx} = \sum_{i:W_i=w,X_i=x} 1
+\end{aligned}
+$$
+and $\text{sd}(\hat\theta^\star)$ is the standard deviation of draws from the bootstrap sampling distribution of $\hat\theta$.
+To do this, you're seeing if it works on data sampled with replacement from the made-up population `pop`.
+Your sample is called `sam`. After defining `theta` to be $\frac{1}{m}\sum_{i=1}^m \qty{\mu(1,x_j) - \mu(0,x_j)}$, 
+you run the code above.
+
+
+::: {.callout-exercise}
+### Part A
+Explain what you'd do to get an accurate estimate of this interval estimator's coverage probability. 
+'Just report `coverage.probability`' is technically an answer, but I hope it's not yours. You don't
+have to write code, but you should be able to describe what you'd do in a way that a good programmer 
+who didn't know anything about statistics could write the code.
+:::
+
+::: {.callout-exercise}
+### Part B
+Suppose that the code above is your friend's, and when they see your answer to Part A, 
+they say "That seems like a lot of work. We both calculated the coverage probability to be 0.95. I think mine's good enough."
+Explain what's wrong with their approach. 
+
+
+*Tip.* Try to provide a simple example in which their approach will often (i.e. in most samples `sam` drawn with replacement from the population) arrive at the correct coverage probability, but won't doesn't always. Your estimator and target don't have to be this one. Perhaps it's easier to explain if you're just estimating the population's mean. If you like, go ahead and assume the outcome is binary
+so that mean is a proportion.
+:::
+
+
+
+# Problem 4 
+
+In the plot below, I'm showing some data from a (fake) survey of people in your city who've recently finished with school and begun working.
+For whatever reason, nobody who attends school in this city goes to college, so everyone finishes with between 8 and 12 years of education.
+There are 10,000 of these people, and we mailed out (and received back) 2000 surveys, sampling from this population of 10,000 with replacement.
+The x-axis shows the survey recipient's years of education, the y-axis shows their income, the points with arms are within-column means and standard deviations, and the heights of the bars are proportional to the proportion of recipients with each level of education.
+
+```{r}
+#| out-width: 100%
+set.seed(1)
+xs = 8:12
+p  = \(x) (x-6)/sum(xs-6)
+e  = \(x) (x-6)^2/sum((xs-6)^2)
+mu = \(w, x) exp(x/2)/max(exp(xs/2)) * 50000
+
+m = 10000
+pop.x =  sample(xs, size=m, replace=TRUE, prob=p(xs))
+pop.w =  0 + (runif(m) <= e(pop.x))
+eps = runif(m, min=-1, max=1)*mu(pop.w, pop.x)
+pop.y =  mu(pop.w, pop.x) + eps
+pop = tibble(x=pop.x, w=pop.w, y=pop.y)
+
+n = 2000
+sam = pop[sample(1:m, n, replace=TRUE), ]
+
+mean_sd = \(x, mult=1) {
+  data.frame(y=mean(x)*mult, ymin=mean(x)-sd(x)*mult, ymax=mean(x)+sd(x)*mult)
+}
+
+ggplot(sam) + 
+  geom_point(aes(x=x, y=y), alpha=.1, size=1, position=position_jitter(w=.2,h=0)) + 
+  stat_summary(aes(x=x, y=y), fun.data=mean_sd, geom='pointrange') +
+  geom_bar(aes(x=x, y=max(pop$y)*after_stat(prop)), alpha=.1, color='black', linewidth=.05) + 
+  scale_y_continuous(labels=label_dollar()) +
+  xlab('') + ylab('')  
+```
+
+::: {.callout-exercise}
+### Part A
+Consider two summaries of the incremental value of a year of high school in this sample.
+
+$$
+\begin{aligned}
+\hat\theta_{\text{years}}  &= \frac{\sum_{x \in 9 \ldots 12}     \qty{\hat\mu(x) - \hat\mu(x-1)}}{4} \\
+\hat\theta_{\text{people}} &= \frac{\sum_{i:X_i \in 9 \ldots 12} \qty{\hat\mu(X_i) - \hat\mu(X_i-1)}}{\sum_{i:X_i \in 9\ldots 12} 1} \\
+\end{aligned}
+$$
+
+Which is larger? Explain how you know.
+:::
+
+::: {.callout-solution}
+$\hat\theta_{\text{people}}$ is larger. The increments $\hat\mu(x) - \hat\mu(x-1)$ get larger as $x$ increases,
+and so does the proportion of individuals with that level of education (i.e. the number of dots in the $\text{years}=x$ column). In $\hat\theta_{\text{people}}$, these larger increments get more weight because there are more with these lager values of $x$; in $\hat\theta_{\text{years}}$ all increments get equal weight.
+:::
+
+
+These survey recipients went to two schools: [School 0]{.groupa} and [School 1]{.groupb}
+```{r}
+#| out-width: 100%
+plotX = \(w,x) x + .15*(2*w-1)
+
+phat = (\(w,x) { sum(sam$x==x & sam$w==w)  / sum(sam$w==w) }) |> Vectorize()
+
+ggplot(sam) + 
+  geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), alpha=.1, size=1, position=position_jitter(w=.075,h=0)) + 
+  stat_summary(aes(x=plotX(w,x), y=y, color=factor(w)), fun.data=mean_sd, geom='pointrange') +
+  geom_col(aes(x=plotX(w,x), y=max(pop$y)*phat(w,x)), alpha=.1, color='black', linewidth=.05, 
+           data=expand_grid(w=c(0,1), x=xs)) + 
+  scale_y_continuous(labels=label_dollar()) +
+  guides(color='none') +
+  xlab('') + ylab('')  
+
+```
+
+Children in your district go to School 0.  Your cousin, who lives in a district that goes to School 1, encourages you to pretend that you and your family live with them so that your child can go to School 1. This is a thing that happens, at least on the TV show 'Friday Night Lights.' Their argument is that School B must be better because the average income of students who have attended it is clearly higher. 
+Check out this confidence interval for the difference in mean incomes of students who have attended the two schools, they say.
+
+```{r}
+#| echo: false
+Y = sam$y
+W = sam$w
+X = sam$x
+n = nrow(sam)
+
+width = function(samples, center=mean(samples), alpha=.05) {
+  covg.dif = function(w) { 
+    actual = mean( center - w/2 <= samples & samples <= center + w/2)
+    nominal = 1-alpha 
+    actual - nominal  
+  }
+  uniroot(covg.dif, interval=c(0, 2*max(abs(samples-center))))$root
+}
+```
+
+```{r}
+#| echo: true
+
+Delta.hat = mean(Y[W==1]) - mean(Y[W==0])
+
+Delta.hat.star = replicate(1000, {
+  J.star = sample(1:n, size=n, replace=TRUE)
+  W.star = W[J.star]
+  X.star = X[J.star]
+  Y.star = Y[J.star]
+  
+  mean(Y.star[W.star==1]) - mean(Y.star[W.star==0])
+})
+
+interval.width = width(Delta.hat.star)
+confidence.interval = c(Delta.hat - interval.width/2, 
+                        Delta.hat + interval.width/2)
+confidence.interval
+```
+
+They even based their calculation on a lecture from the class website, so it's got to be legit. School 1 is at least \$`{r} round(min(confidence.interval))` better. 
+
+You, on the other hand, look at the data and claim that a year at School 0 is worth just as much as a year at School 1. And you're right. You calculate school-specific versions of $\hat\theta_{\text{years}}$, bootstrap the difference between them, 
+and find convincing evidence that the incremental value of a year at each school is the roughly the same.
+
+```{r}
+#| echo: true
+
+your.summary = function(W,X,Y) {
+  muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
+  (mean(muhat(1,9:12)-muhat(1,8:11))) - (mean(muhat(0,9:12)-muhat(0,8:11)))
+}
+
+theta.hat.years.difference = your.summary(W,X,Y)
+
+theta.hat.years.difference.star = replicate(100, {
+  J.star = sample(1:n, size=n, replace=TRUE)
+  your.summary(W[J.star], X[J.star], Y[J.star])
+})
+ 
+
+interval.width = width(theta.hat.years.difference.star)
+confidence.interval = c(theta.hat.years.difference - interval.width/2, 
+                        theta.hat.years.difference + interval.width/2)
+confidence.interval
+```
+
+::: {.callout-exercise}
+### Part B
+Explain, in terms your cousin can understand, how it's possible that the average income of students who have attended School 1 is higher than the average income of students who have attended School 0, but the average incremental value of a year at both schools is the same.
+:::
+
