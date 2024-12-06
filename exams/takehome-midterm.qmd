@@ -86,6 +86,9 @@ if necessary for clarity, on the appropriate plot above.
 mean(Y)
 ```
 
+::: {.callout-solution}
+The mean of the sample $Y_1 \ldots Y_n$.
+:::
 
 ## Part B
 What does this code calculate? State it in words and mark it with a 'b', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
@@ -94,6 +97,11 @@ What does this code calculate? State it in words and mark it with a 'b', and an 
 #| eval: false
 sd(Y)
 ```
+
+::: {.callout-solution}
+The standard deviation of the sample $Y_1 \ldots Y_n$.
+:::
+
 
 ## Part C
 What does this code calculate? State it in words and mark it with a 'c', and an arrow or bracket
@@ -104,6 +112,10 @@ if necessary for clarity, on the appropriate plot above.
 mean(Y[X==1])
 ```
 
+::: {.callout-solution}
+The mean of the outcomes $Y_1 \ldots Y_n$  that are in the subsample (or column) where $X_i=1$.  
+:::
+
 ## Part D   
 What does this code calculate? State it in words and mark it with a 'd', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
 ```{r}
@@ -111,6 +123,14 @@ What does this code calculate? State it in words and mark it with a 'd', and an 
 #| eval: false
 sd(thetastar)
 ```
+
+::: {.callout-solution}
+The bootstrap standard deviation of an estimator you could reasonably describe two ways.
+
+1. The mean of the four increments $\hat\mu(x)-\hat\mu(x-1)$ for $x=2,3,4,5$. 
+2. A fourth of the difference between the mean outcome in the subsamples where $X_i=5$ and $X_i=1$.
+:::
+
 
 ## Part E
 What does this code calculate? State it in words and mark it with a 'e', and an arrow or bracket if necessary for clarity, on the appropriate plot above.
@@ -124,9 +144,18 @@ What does this code calculate? State it in words and mark it with a 'e', and an 
 + 1.96* sqrt((1/4)^2*var(Y[X=5])/length(Y[X=5]) + (-1/4)^2*var(Y[X=1])/length(Y[X=1]))
 ```
 
+::: {.callout-solution}
+A 95% interval based on normal approximation centered on the same estimator as in Part D. 
+:::
+
+
 ## Part F
 How could you calculate roughly the same thing as in Part E if you knew `sd(thetastar)` 
 but not `Var(Y[X=5])` and `Var(Y[X=1])`?
+
+::: {.callout-solution}
+Replace the formula-based standard deviation estimate---the thing that comes after the 1.96---with the bootstrap standard deviation `sd(thetastar)`.
+:::
 
 # Problem 2
 
@@ -326,16 +355,51 @@ $$
 In the population shown above, with annotations interpreted as usual, which is bigger, $\Delta_{\text{raw}}$ or $\Delta_{\text{1}}$?
 :::
 
+::: {.callout-solution}
+$\Delta_{\text{1}}$ is bigger. 
+
+*Explanations*.
+
+1. A visual one. The raw difference---the height of the green horizontal line minus that of the red one --- is smaller (i.e. further below zero)
+than any of the within-column differences in means that we average to get $\Delta_{\text{1}}$.
+
+2. A math one. The raw difference in means $\Delta_\text{raw}$
+is equal the sum of $\Delta_{\text{1}}$ and a covariate shift term $\sum_x \ingroupb{p_{x \mid 1}}\  \ingroupa{\mu(0,x)} - \sum_x \ingroupa{p_{x \mid 0} \  \mu(0,x)}$
+The function $\ingroupa{\mu(0,x)}$ is increasing from left to right and our covariate shift from $\ingroupa{p_{x \mid 0}}$ to $\ingroupb{p_{x \mid 1}}$ is from right to left, from where $\ingroupa{\mu(0,x)}$ is big to where it's small, so the covariate shift term is negative. $\Delta_{\text{raw}} = \Delta_1 + \text{negative covariate shift term}$,
+so $\Delta_\text{raw} < \Delta_1$. See [Lecture 9](`r lecture(9)`) for reference. 
+
+:::
 
 ::: {.callout-exercise}
 ### Part B
 In the population shown above, with annotations interpreted as usual, which is bigger, $\Delta_{\text{1}}$ or $\Delta_{\text{0}}$?
 :::
 
+::: {.callout-solution}
+$\Delta_{1}$ is bigger. 
+
+*Explanation*.
+
+The within-column differences $\ingroupb{\mu(1,x)} - \ingroupa{\mu(0,x)}$ we 
+average to get both $\Delta_1$ and $\Delta_0$ decrease from left to right.
+$\Delta_0$ puts more weight on the the differences on the right
+and $\Delta_1$ puts more weight on the differences on the left,
+and the ones on the left are bigger, so $\Delta_1$ is bigger.
+:::
 
 ::: {.callout-exercise}
 ### Part C
 In the population shown above, with annotations interpreted as usual, which is bigger, $\Delta_{\text{1}}$ or $\Delta_{\text{all}}$?
+:::
+
+::: {.callout-solution}
+$\Delta_1$ is bigger. 
+
+*Explanation*.
+
+$\Delta_{\text{all}}$ is a weighted average of $\Delta_{\text{1}}$ and $\Delta_{\text{0}}$,
+so it's between them (see the [Week 7 Homework](`r homework(7, 'exr-shift-between-adjusted-all')`)). 
+Since $\Delta_1$ is bigger than $\Delta_0$, it follows that $\Delta_1 > \Delta_{\text{all}} > \Delta_0$.
 :::
 
 ::: {.callout-exercise}
@@ -344,6 +408,13 @@ Suppose I'm talking about an entirely new population in which $\Delta_{\text{1}}
 Which is bigger, $\Delta_{\text{1}}$ or $\Delta_{\text{all}}$? If you can't say for sure, explain why.
 :::
 
+::: {.callout-solution}
+$\Delta_{\text{all}}$ is bigger. 
+
+*Explanation*.
+
+It's the reasoning as in Part C, but now with $\Delta_1 < \Delta_0$ and therefore $\Delta_1 < \Delta_{\text{all}} < \Delta_0$.
+:::
 
 # Problem 3
 
@@ -355,10 +426,10 @@ Consider the following code.
 
 sampling.dist = function(pop) { 
   map(1:10000, function(.) { 
-     J = sample(1:n, size=m, replace=TRUE)
-     sam = pop[J,]
-     model.fit = lm(y ~ w*factor(x), data=sam)
-     muhat = function(w,x) { predict(model.fit, newdata=data.frame(w=w, x=x)) } #<1>
+     J = sample(1:m, size=n, replace=TRUE)                                      #<1>
+     sam = pop[J,]                                                              #<1>
+     model.fit = lm(y ~ w*factor(x), data=sam)                                  #<2>
+     muhat = function(w,x) { predict(model.fit, newdata=data.frame(w=w, x=x)) } #<2>
      thetahat = mean(muhat(1,sam$x) - muhat(0,sam$x))
      thetahat
   }
@@ -372,9 +443,10 @@ coverage.probability =
   mean(estimator.samples - bootstrap.width/2 <= theta & 
        theta <= estimator.samples + bootstrap.width/2)
 ```
-1. We're using the 'all functions' model here, so this is just the mean of the observations with $W_i=w$ and $X_i=x$.
+1. Here we're drawing a sample of size `r n` with replacement from our population. This is exactly how we got our sample `sam` from the population `pop`.
+2. We're using the 'all functions' model here, so this is just the mean of the observations with $W_i=w$ and $X_i=x$.
 
-Suppose you're checking out the interval estimator $\hat\theta \pm 1.96\text{sd}(\hat\theta^\star)$ 
+Suppose you're interested in checking out the interval estimator $\hat\theta \pm 1.96\text{sd}(\hat\theta^\star)$ 
 where
 $$ 
 \begin{aligned}
@@ -385,8 +457,8 @@ $$
 $$
 and $\text{sd}(\hat\theta^\star)$ is the standard deviation of draws from the bootstrap sampling distribution of $\hat\theta$.
 To do this, you're seeing if it works on data sampled with replacement from the made-up population `pop`.
-Your sample is called `sam`. After defining `theta` to be $\frac{1}{m}\sum_{i=1}^m \qty{\mu(1,x_j) - \mu(0,x_j)}$, 
-you run the code above.
+After defining `theta` to be $\frac{1}{m}\sum_{i=1}^m \qty{\mu(1,x_j) - \mu(0,x_j)}$
+and drawing a sample `sam` with replacement from your population `pop`, you run the code above.
 
 
 ::: {.callout-exercise}
@@ -395,6 +467,43 @@ Explain what you'd do to get an accurate estimate of this interval estimator's c
 'Just report `coverage.probability`' is technically an answer, but I hope it's not yours. You don't
 have to write code, but you should be able to describe what you'd do in a way that a good programmer 
 who didn't know anything about statistics could write the code.
+:::
+
+::: {.callout-solution}
+The problem with this code is that we're calculating width based on the one sample `sam`
+that exists outside the `map` call. [We should be calculating width exactly the same way,
+but inside the `map` call, using the same sample used to calculate the point estimate 
+we're going to center our interval at.]{.target} 
+
+To fix this, copy the code for the function `sampling.dist` then,
+after the line that defines `theta.hat`, paste in the lines that define `bootstrap.samples` and `bootstrap.width`
+and then check if `theta` is in the interval `theta.hat - bootstrap.width/2` to `theta.hat + bootstrap.width/2`. 
+The result will be a function that takes a population and returns 10000 TRUE/FALSE values indicating whether each of 
+the 10000 interval estimators we calculated covers the true parameter. Average them to get the coverage probability.
+
+Hopefully, if you tell someone to do that, you'll get this.
+```{r}
+#| eval: false
+coverage.samples = function(pop) { 
+  map(1:10000, function(.) { 
+     J = sample(1:m, size=n, replace=TRUE)                                      
+     sam = pop[J,]                                                              
+     model.fit = lm(y ~ w*factor(x), data=sam)                                  
+     muhat = function(w,x) { predict(model.fit, newdata=data.frame(w=w, x=x)) } 
+     thetahat = mean(muhat(1,sam$x) - muhat(0,sam$x))
+     bootstrap.samples = sampling.dist(sam)
+     bootstrap.width = 2*1.96*sd(bootstrap.samples)
+     interval.covers = thetahat - bootstrap.width/2 <= theta & theta <= thetahat + bootstrap.width/2
+     interval.covers
+  }
+}
+coverage.probability = mean(coverage.samples(pop))
+```
+
+*What I was looking for.*
+The first paragraph, the second, or some approximation of the code above would each be a good answer on their own in my book.
+What I was looking for was that you'd either written something like the second sentence of the first paragraph---the one I 
+[highlighted like this]{.target}---or some implementation of that idea.
 :::
 
 ::: {.callout-exercise}
@@ -408,6 +517,25 @@ Explain what's wrong with their approach.
 so that mean is a proportion.
 :::
 
+::: {.callout-solution}
+What's wrong is that the width is calculated based on a different sample than the one used to calculate the point estimate.
+The conceptual issue is that when we're simulating the process of constructing an interval estimator to check coverage, 
+our sample is the one inside the `map` call---and our width has the be based on that sample. 
+
+One reason the code above might calculate about the same thing as the correct code is that every one of these widths, the ones our fixed-up
+code calculates inside the `map` call and the one the incorrect code calculates outside it, is an estimate of the same thing:
+the width `2*1.96*sd(estimator.samples)` of our estimator's actual sampling distribution. If those estimates are all close to
+the width they're estimating, then it won't matter much whether we do it inside the `map` call or outside it. This tends 
+to happen when the sample is large. We talked about this in the [Week 5 Homework](`r homework(5)`).
+
+But, especially in smaller samples, this approach can get us in trouble. Suppose we're using the incorrect approach above 
+to calculate the coverage probability of an interval estimator of a population proportion $\theta$ centered on the sample proportion $\hat\theta$.
+If $\theta=.2$ and the sample proportion $\hat\theta$ is $.3$, then our estimator's standard deviation is $\sqrt{.2 \times .8/n}$ and we've
+estimated it to be $\sqrt{.3 \times .7/n}$, roughly $\sqrt{.3 \times .7 / .2 \times .8} \approx `r sqrt(.3*.7/(.2*.8))`$ bigger 
+than our estimator's actual standard deviation. Using intervals based on this one overestimate of our estimator's standard deviation
+around each of our 10000 point estimates, rather than intervals that are sometimes wider and sometimes narrower than ones based on our estimator's actual standard deviation
+as we would if we calculated width within the `map` call, will tell us our interval estimator's coverage probability is larger than it actually is.
+:::
 
 
 # Problem 4 
@@ -534,7 +662,8 @@ and find convincing evidence that the incremental value of a year at each school
 #| echo: true
 
 your.summary = function(W,X,Y) {
-  muhat = Vectorize(function(w,x) { mean(Y[W==w & X==x]) })
+  model.fit = lm(y ~ w*factor(x), data=data.frame(w=W, x=X, y=Y))            #<1>
+  muhat = function(w,x) { predict(model.fit, newdata=data.frame(w=w, x=x)) } #<1>
   (mean(muhat(1,9:12)-muhat(1,8:11))) - (mean(muhat(0,9:12)-muhat(0,8:11)))
 }
 
@@ -551,9 +680,15 @@ confidence.interval = c(theta.hat.years.difference - interval.width/2,
                         theta.hat.years.difference + interval.width/2)
 confidence.interval
 ```
+1. We're using the 'all functions' model here, so this is just the mean of the observations with $W_i=w$ and $X_i=x$.
 
 ::: {.callout-exercise}
 ### Part B
 Explain, in terms your cousin can understand, how it's possible that the average income of students who have attended School 1 is higher than the average income of students who have attended School 0, but the average incremental value of a year at both schools is the same.
 :::
 
+::: {.callout-solution}
+Students at School 1 tend to stay in school longer than students at school 0, so even though
+the incremental value of each year is the same at the two schools, the students at School 1 tend to 
+*actually get* more of this value because they stay in school for more of these years.
+:::
