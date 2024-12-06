@@ -174,7 +174,7 @@ $$
 ### Generating Covariates
 ```{webr}
 #| autorun: true
-n = 10000
+n = 2000 # 10000
 
 SigmaX.13 = matrix(c(2,   1,   -1,
                      1,   1,   -.5,
@@ -918,7 +918,10 @@ gamma.att = function(sam) {
 #| fig-width: 12
 #| input: 
 #|   - x
-#|   - trim_level
+#|   - trim_level 
+sam1 = sam; sam1$x = sam1[,x] 
+gamma.att.thing = sbw.att(sam1, K.gaussian)(1)
+gamma.att.sbw = \(sam) gamma.att.thing(sam[,x])
 ggplot() + histograms(sam, x, gamma=trimmed(gamma.att, trim_level)) + 
            histograms(sam, x, color=FALSE, fill.alpha=.05, mean.linetype='dotted') +
            facet_grid(rows=vars(w))
@@ -1198,6 +1201,107 @@ summary(model)
 ```
 
 :::
+
+
+## *Stable Balancing Weights*
+
+::: {.panel-tabset}
+### Kernels 
+```{webr}
+#| autorun: true
+K.seminorm = function(x,xp, s=1) {
+    diff.norm = abs(x-xp)
+    (-1)^(s+1) * ifelse(diff.norm==0, 0, diff.norm^(2*s)*log(diff.norm))
+}
+P.seminorm = function(x,s=1) {
+    outer(x,0:(s-1), function(x,p) x^p)
+}
+K.norm = function(x,xp, s=1) {
+    diff.norm = abs(x-xp)
+    exp(-diff.norm)/2
+}
+K.gaussian = function(x,xp) {
+    diff.norm = abs(x-xp)
+    exp(-diff.norm^2/2)/sqrt(2*3.14159)
+}
+K.poly = function(x,xp, p=1) {
+    (1 + x %*% xp)^p
+}
+```
+
+### Prediction 
+```{webr}
+#| autorun: true
+predict.kernel.regression = function(obj, newdata, KxX=NULL, Px=NULL) {
+    x = newdata$X
+    X = obj$X
+    K = obj$K
+    P = obj$P
+    alpha = obj$alpha
+    gamma = obj$gamma
+
+    if(is.null(KxX)) { KxX = outer(x,X,K) }
+    if(is.null(P)) { 
+        KxX %*% gamma 
+    } else {
+        if(is.null(Px)) { Px = P(x) }
+        Px %*% alpha + KxX %*% gamma
+    }
+}
+```
+
+### Fitting Weights 
+```{webr}
+#| autorun: true
+ridge.both = function(W,X,Y,K,P=NULL) {
+    KxX = outer(X,X[W==1],K)
+    KXX = KxX[W==1,]
+    evd = eigen(KXX, symmetric = TRUE)
+    
+    V = evd$vectors
+    l = evd$values
+    VtY = t(V) %*% Y[W==1]
+
+    VtsumKxX = t(V) %*% colSums(KxX)
+    Px = NULL
+    PX = NULL
+    VtPX = NULL
+    alpha = NULL
+    if(!is.null(P)) {
+        Px = P(X)
+        PX = Px[W==1,]
+        VtPX = t(V) %*% PX
+    }
+    
+    gamma = function(sigma) { 
+        if(!is.null(P)) {
+            alpha = solve(t(PX) %*% PX  - t(VtPX) %*% diag(1/(l + sigma^2)) %*% VtPX,
+                          colSums(Px) -   t(VtPX) %*% diag(1/(l + sigma^2)) %*% VtsumKxX)
+            VtsumKxX = VtsumKxX - VtPX %*% alpha
+        }
+        gamma = V %*% diag(1/(l^2 + sigma^2*l)) %*% VtsumKxX 
+        obj = list(alpha=alpha, gamma=gamma, K=K, P=P, X=X[W==1])
+        attr(obj, 'class') = 'kernel.regression'
+        obj
+    }
+    
+    list(gamma=gamma, evd=evd, KxX=KxX, Px=Px) 
+}
+```
+
+### Everything Together
+```{webr}
+#| autorun: true
+sbw.att = function(sam, K=K.gaussian) {
+  fits = ridge.both(sam$w, sam$x, sam$y, K.gaussian)
+  function(sigma) { 
+    gamma0 = predict(fits$gamma(sigma), newdata=data.frame(X=sam$x))
+    ifelse(sam$w==1, 1, gamma0)
+  }  
+}
+```
+:::
+
 
 # What to Read {#what-to-read}
 
