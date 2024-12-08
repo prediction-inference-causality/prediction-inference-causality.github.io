@@ -5,6 +5,14 @@
   - Remind students where day 1 ends/day 2 begins by using link that jumps to the section where day 2 starts on the website.
  - Have review at the beginning of 'new' lectures. 
  - Remind students that before day 2 of '2 day lectures' they should make sure they're good to continue.
+- To Least Squares and Miscalibration HW, Add constancy of IPW w/ Grid Q.  - In Matching and Weighting class
+   - matching: start w/ big control group and throw away people
+      - plot number histograms instead of proportion histograms... / cut down 
+   - weighting: start w/ proportional [2-step density] and double people 
+      - describe area-weighted histogram stuff
+- In Cond Randomized Experiments Class, Do IPWs
+- In IPWLSQ class, note grids/trees are 'self-weighting': Extra credit: IPWLSQ w/ imperfect weights 
+- Add 'The Machine Learning Model' (Signal + Noise) to Loose Ends. Do Functions of Continuous and Discrete Covariates, say connection is more obvious for discrete, other involves limits..            
 
 # Lecture 1 
 - Seemed good. A little long. Maybe 10-15 min. 
