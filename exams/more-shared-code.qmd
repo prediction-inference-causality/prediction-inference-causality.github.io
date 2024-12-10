@@ -1,0 +1,90 @@
+```{r}
+summary.lookup = function(column.name, summaries, default=NA) { #<1>
+  function(w,x) { 
+    out = left_join(data.frame(w=w,x=x),                              #<2>
+                    summaries[, c('w','x',column.name)],              #<2>
+                    by=c('w','x')) |>                                 #<2>
+      pull(column.name)                                               #<2>
+    out[is.na(out)] = default                                         #<3>
+    out
+  }
+}
+```
+1. input: a data.frame with columns 'w', 'x', and 'column.name'
+2. output: a function that takes 'w' and 'x' as input and returns the value of 'column.name'
+3. default: a value to return if 'w' and 'x' are not found in the summaries data.frame
+
+  
+```{r}
+group.normalize = function(w, v) { 
+  for(u in unique(w)) {
+    v[w==u] = v[w==u]/mean(v[w==u])
+  }
+  v
+}
+
+default.gammas = list(constant=function(sam)rep(1, nrow(sam))) 
+lsq.plot = function(sam, formula, gammas=default.gammas, dot.weight=gammas[[1]], dot.size=1, plot.means=FALSE, jitter=.8) { #<1>
+  circle.shape = 21
+  diamond.shape = 23
+  square.shape = 22
+  triangle.shape = 24
+  if(!('w' %in% names(sam))) { sam$w = 0 }
+
+  nw = length(unique(sam$w))
+  meanuw = mean(unique(sam$w))
+  space = min(abs(diff(unique(sam$x))))/nw
+  shift = .3*space 
+  plotX = function(w,x) { 
+    x + 2*(w-meanuw)*shift
+  }
+  jitter.pos = position_jitter(width=jitter*shift, height=0, seed=0)
+ 
+  predictions = gammas |> map(function(gamma) {
+    model = lm(formula, weights=gamma, 
+      data=sam |> mutate(gamma=gamma(sam)))
+    sam |> mutate(muhat = predict(model, newdata=sam))
+  }) |> bind_rows(.id='weights')
+  
+  sam$dot.size = dot.size*group.normalize(sam$w, dot.weight(sam))
+  means.vis = if(!plot.means) { list() } else {
+    list(stat_summary(aes(x=plotX(w,x), y=y), 
+          geom='pointrange', fun.data=\(y)data.frame(y=mean(y), ymin=mean(y)-sd(y), ymax=mean(y)+sd(y)),
+         alpha=.4, linewidth=.5, shape=circle.shape, fill='black'))
+  }
+  
+  sam |> 
+    ggplot() + 
+      geom_point(aes(x=x, y=y, color=factor(w), size=I(dot.size)), 
+        alpha=.5, position=jitter.pos) + 
+      means.vis +
+      geom_point(aes(x=x, y=muhat, fill=factor(w), shape=factor(weights)), 
+        alpha=.5, color='black', data=predictions) +
+      geom_line(aes(x=x, y=muhat, color=factor(w), linetype=factor(weights)), 
+      linewidth=.5, data=predictions) + 
+    scale_shape_manual(values=c(diamond.shape, square.shape, triangle.shape)) +
+    scale_linetype_manual(values=c('dashed', 'dotted')) +
+    guides(color='none', fill='none', shape='none', linetype='none', size='none')
+}
+```
+1. input: a sample, regression formula, gammas, dot.size, dot.size.scale, plot.means
+
+```{r}
+#| echo: true 
+
+plot.sampling.distribution = function(sampling.dist, target) { #<1>
+  sampling.dist |> 
+    ggplot() + 
+      geom_histogram(aes(x=value, y=after_stat(density), fill=factor(estimator)), 
+        bins=50, alpha=.2, color='gray', linewidth=.05, position='identity') +
+      geom_vline(xintercept=target, color='green', linewidth=2, alpha=.5) +
+      stat_summary(aes(x=0, y=value, color=factor(estimator)), 
+        geom='vline', fun.data=\(y)data.frame(xintercept=mean(y)),
+        alpha=.9) + 
+      scale_fill_manual(values=c('purple', 'orange')) +
+      scale_color_manual(values=c('purple', 'orange')) +
+      guides(color='none', fill='none')
+} #<2>
+```
+1. input: a data.frame with columns 'estimator' and 'value'
+2. output: a plot of the sampling distributions of the estimators

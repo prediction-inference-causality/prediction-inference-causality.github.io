@@ -5,14 +5,21 @@ crossref:
   chapters: true
 ---
 
+
+::: {.hidden}
 {{< include shared-code.qmd >}}
+{{< include more-shared-code.qmd >}}
 
 ```{r}
-library(tidyverse)
 theme_set(whitebg.theme())
 ```
 
-### Summary
+:::
+
+
+# Introduction 
+
+## Premise 
 Whether you're in academia or industry, you'll run into people who are analyzing data badly. 
 Often, what they're doing is both the established common practice and obviously wrong. In this practice exam,
 I'm going to run you through some examples in which this is happening. I'm going to ask you how to do better;
@@ -25,47 +32,107 @@ Aside from giving you some practice recognizing and dealing with this stuff, wha
 explain what's going on when these things happen. Often, if someone's making a mistake in a subtler form or a more complex problem, you can 
 point out that the situation in analogous to one where the problem is much more obvious, as it is in many of these examples. 
 
-I hope you find this useful.  For the exam, expect similar exercises with less text around them. Much less text, in the case of Problem 5 here.   
+## About the Exam 
 
-This is not graded, so exercises marked *Extra Credit* are not actually worth extra credit. 
-But they're similar in character to what you might see as an extra credit exercise on the exam.
+This practice exam was long and, in places, hard.
+Think about this as a set of exercises I wrote to
+make sure y'all had some practice with the ideas 
+and skills that'll come up on the exam. 
+
+For the actual exam, expect questions that look like these, 
+but they'll be simpler with less repetition and fewer of parts.
+
+## A Theme
+Several of these exercises --- Problems 2, 4, and parts of 5 --- 
+look at how evidence from simulations can be misleading. 
+I wanted to bring this up, show you a few flavors of it, and pick apart what's 
+going on a little in a simple case for two reasons.
+
+1. A lot of the evidence people use to choose methods is based
+on simulation. When you write a paper proposing a new method,
+you're expected to show it works---and often that it works better
+than the alternatives---in simulated data. That evidence is often
+pretty questionable. Even if you put aside the incentive to make
+your method look good, if you spend months or years working on a 
+method to solve one piece of a problem, you get tunnel vision. 
+That's the piece of the problem that shows up in your simulated
+data because that's the piece of the problem you've been thinking 
+about. Knowing that this happens and a little about what it can look 
+like can make it a little less disorienting the first time you
+download someone's code, try it out, and find that it doesn't
+seem to work as well as you've been led to believe.
+
+2. Arguably, many methods work pretty often for the 
+same reason simulations don't show that they don't work.
+A stopped clock is right twice a day. And in Problem 2,
+we see an estimator that's right 'once a day'. But when we 
+get to more complex estimators, there start to be a lot of 
+ways for things to go right. In Problem 5, we see two that
+come up when estimating treatment effects.
+  
+  - We could have misspecification but not covariate shift, and therefore no bias. 
+  - We could have covariate shift but no misspecification, and therefore no bias.
+
+We can even have misspecification and covariate shift that
+somehow fit together perfectly so there's still no bias. We saw [one 
+example of this](https://qtm285-1.github.io/assets/lectures/Lab7.html#/sec-exercise) 
+a few weeks ago. It's not likely that this is happening exactly---
+unless you use models that can't be misspecified (all functions)
+or techniques like inverse probability weighting, you'll get bias---
+but maybe not enough that it really matters. I don't mean to suggest
+that you should be relying on this kind of luck instead of just 
+using better models or inverse probability weighting if you have a 
+choice. But it might be a reason not to discount conclusions based
+on problematic methods too much. Pretty often, when you reanalyze the
+data using a more trustworthy approach, what you get is roughly the
+same point estimate and a slightly wider confidence interval.
 
 
 # Problem 1
 
 ```{r}
-#| fig-width: 10
+#| fig-width: 5
+#| layout-ncol: 2
+#| fig-cap: 
+#|  - "The population and the population least squares line"
+#|  - "A sample of size 13 and the least squares line" 
 set.seed(1)
-mu = function(x){.2 + x + .37*sinpi(x)}
-n = c(10, 20, 40, 1000)
-X = round(runif(max(n)), 1)
-Y = mu(X) + .4*rnorm(max(n))
-data = data.frame(X=X, Y=Y)
+m = 10000
+x = round(runif(m), 1)
+y = .2 + x + .37*sinpi(x) + .4*rnorm(max(m))
+pop = data.frame(x=x, y=y)
+pop.predictor = lm(y~factor(x), data=pop) 
+mu = function(x) predict(pop.predictor, newdata=data.frame(x=x))
 
-ggplot(data) + geom_point(aes(x=X, y=Y), position=position_jitter(w=.025,h=0), alpha=.3)  
+
+n = c(10, 20, 40, 1000)
+J = sample(1:m, max(n), replace=TRUE)
+sam = pop[J, ]
+X = sam$x
+Y = sam$y
+
+pop |> lsq.plot(y~x, dot.size=.1)
+sam[1:13,] |> lsq.plot(y~x, dot.size=1, jitter=0)
 ```
 
-Suppose we observe a sample of $(X_1, Y_1), \ldots, (X_n, Y_n)$ drawn with replacement from the population $(x_1,y_1) \ldots (x_m,y_m)$ plotted above and we're interested in estimating the subpopulation mean $\mu(0) = \sum_{j:x_j=0} y_j / \sum_{j:x_j=0} 1$.
+Suppose we're interested in estimating the subpopulation mean $\mu(0) = \sum_{j:x_j=0} y_j / \sum_{j:x_j=0} 1$ of the population drawn on the left above.
+We're working with a sample of $(X_1, Y_1), \ldots, (X_n, Y_n)$ drawn with replacement from this population, like the one drawn on the right above. 
 
-To do this, we use least squares to fit a line to the data and then let its value $\hat\mu(0)$ at $x=0$ be our estimate. Below is a plot of its sampling distribution at sample size $n=13$. As usual, I've plotted its mean, mean plus or minus one standard deviation, and mean plus or minus two standard deviations as solid, dashed, and dotted blue lines respectively. I've also plotted the subpopulation mean $\mu(0)$ itself as a green line. 
+As our estimate of $\mu(0)$, we use $\hat\mu(0)$ where $\hat\mu$ is the least squares line^[If we want to be verbose, it's the least squares predictor in the 'lines model' $\model=\{m(w)=a+b w\}$]. Below is a plot of its sampling distribution at sample size $n=13$. As usual, I've plotted its mean, mean plus or minus one standard deviation, and mean plus or minus two standard deviations as solid, dashed, and dotted blue lines respectively. I've also plotted the subpopulation mean $\mu(0)$ itself as a green line. 
 
-You may assume that the standard deviation of the estimator at sample size $n$ is $\text{se}=\sigma/\sqrt{n}$ for some number $\sigma$ *that does not vary with sample size*, just like it would be if $\hat\mu(0)$ were the mean of a sample of size $n$.  
-
-
+**You may assume** that the standard deviation of the estimator at sample size $n$ is $\text{se}=\sigma/\sqrt{n}$ for some number $\sigma$ *that does not vary with sample size*, just like it would be if $\hat\mu(0)$ were the mean of a sample of size $n$.  
 
 ```{r} 
 #| fig-width: 10
-sampdist = replicate(10000, {
-  samp = data[sample(1:nrow(data), 13, replace=TRUE), ]
-  model = lm(Y~X, data=samp)
+sampdist = map_vec(1:1000, function(.) { 
+  sam = pop[sample(1:nrow(pop), 13, replace=TRUE), ]
+  model = lm(y~x, data=sam)
   c(coef(model)[1])
 })
+
 ggplot() + geom_histogram(aes(x=X, y=after_stat(density)), 
   data=data.frame(X=sampdist), bins=50, alpha=.3) +
-  geom_vline(aes(xintercept=mu(0)), color='green', linewidth=1.5) +
-  geom_vline(aes(xintercept=mean(sampdist)), color='blue') +
-  geom_vline(aes(xintercept=mean(sampdist)+c(-1,1)*sd(sampdist)), color='blue', linetype='dashed') + 
-  geom_vline(aes(xintercept=mean(sampdist)+c(-2,2)*sd(sampdist)), color='blue', linetype='dotted') 
+  with_annotations(sampdist, estimand=mu(0), highlight.dots=0, interval.width=2*sd(sampdist))
 ```
 
 ::: {#exr-1a .callout-exercise} 
@@ -75,46 +142,138 @@ At which of these three samples sizes --- 25, 50, or 100 --- would you expect th
 ::: {.callout-solution}
 50. 
 
-Here's why. If standard error is $\sigma/\sqrt{n}$, increasing sample size by a factor of $s$ will decrease it by a factor of
-$(\sigma/\sqrt{sn}) / (\sigma/\sqrt{n}) = \sqrt{n/(sn)} = 1/\sqrt{s}$. So, if we quadruple the sample size, the standard error will be halved. 
-In this instance, we can see from the plot that the standard error at sample size $13$ is roughly $1$, so quadrupling that to roughly $50$ will give us a standard error of roughly $1/2$.
+From the plot of the sampling distribution at our current sample size of $13$,  we see that our
+current interval's width is roughly $1$. To halve this width, we need to increase our sample size
+enough to halve $\text{se}=\sigma/\sqrt{n}$. Quadrupling our sample size does that. 
+$\text{new se} = \sigma/\sqrt{4 \times 13} = \frac{1}{2} \times \sigma/\sqrt{13}$. And 50 is close enough to $13\times 4 = 52$.
 :::
+
+
 
 ::: {#exr-1b .callout-exercise}
 At which of these three samples sizes --- 25, 50, or 100 --- would you expect the coverage of the usual 95\% confidence interval $\hat\mu(0) \pm 1.96\ \text{se}$ to be closest to 50\%?
 :::
-::: {.callout-solution}
-50. 
 
-Here's why. The bias of a least squares estimator is the error it makes when fit to the population and therefore does not depend on sample size. 
-Our bias is roughly 1 standard error at sample size $n=13$ and therefore will be roughly 2 standard errors at sample size $n=50$. And we get roughly 50% coverage when the bias is roughly 2 standard errors.
-
-You can see this by drawing the integral you'd use to do the coverage calculation. You do not, of course, actually have the sampling distribution for $n=50$ so you can't draw that exactly. But you know it should be centered in the same place as the one you do have, but about half as wide. I've drawn that below in red. For what it's worth, I've also drawn the actual sampling distribution for $n=50$ in blue. You'd integrate this sampling distribution from two standard errors left of the estimation target to two standard deviations right of it---i.e., over the region I've shaded yellow. And because that yellow region extends right to the center of the (roughly symmetric) sampling distribution and left far enough to include essentially all of its probability mass, this integral is roughly $.5$---half of the sampling distribution's total mass. 
-```{r} 
-sampdist.50 = replicate(1000, {
-  samp = data[sample(1:nrow(data), 50, replace=TRUE), ]
-  model = lm(Y~X, data=samp)
-  c(coef(model)[1])
-})
-ggplot() + 
-  geom_histogram(aes(x=X, y=after_stat(density)), 
-    data=data.frame(X=sampdist.50), bins=50, alpha=.3, fill='red') +
-  geom_histogram(aes(x=X, y=after_stat(density)), 
-    data=data.frame(X=(1/2)*sampdist + (1/2)*mean(sampdist)), bins=50, alpha=.3, fill='blue') +
-  geom_vline(aes(xintercept=mu(0)), color='black') +
-  geom_vline(aes(xintercept=mean(sampdist.50)), color='blue') +
-  geom_vline(aes(xintercept=mean(sampdist.50)+c(-1,1)*sd(sampdist.50)), color='blue', linetype='dashed') + 
-  geom_vline(aes(xintercept=mean(sampdist.50)+c(-2,2)*sd(sampdist.50)), color='blue', linetype='dotted') +
-  geom_area(aes(y=5, x=mu(0)+c(-2,2)*sd(sampdist.50)), fill='yellow', color='yellow', alpha=.3)
-```
-
-:::
 
 ::: {.callout-tip collapse="true"}
 ### Tip. Draw 
-If the answers aren't obvious to you, it might be helpful to sketch the sampling distribution of the estimator at the different sample sizes
-you're considering. How does their width vary as you increase sample size? What about their center?
+If the answer isn't obvious to you, it might be helpful to sketch the sampling distribution of the estimator at the different sample sizes you're considering. How does their width vary as you increase sample size? What about their center?
 :::
+
+
+::: {.callout-solution}
+50. 
+
+There are two things you need to know to answer this question. 
+
+1. The bias of $\hat\mu(0)$ doesn't depend on sample size.
+2. We get roughly 50% coverage when our estimator's bias is *half of our interval's width*, i.e., when our interval is $\hat\theta \pm \text{width}/2$.  
+
+The first tells us is that no matter what sample size we use, bias is the same as it is in the plot above: roughly $1/4$. The second tells us that we'll get 50% coverage when our interval's width is $1/4 \times 2 = 1/2$. The previous exercise tells us this happens for $n=50$.
+
+*Where are these two things coming from?*
+
+1. The bias of $\hat\mu(0)$ is the error $\tilde\mu(0)-\mu(0)$ that we get when we use the *population least squares predictor* in the same model. No matter what our sample size, $\E[\hat\mu(x)]=\tilde\mu(x)$. See [Lecture 12](`r lecture(12)`) for this. 
+2. In visual terms, if our bias is half the width of our intervals (their 'arm length'), then ...
+  - when we get a point estimate *above* our sampling distribution's mean, it doesn't cover the target. 
+  - when get a point estimate *below* our sampling distribution's mean, it does cover the target.
+    
+If our sampling distribution is (close to) symmetric around its mean, then we'll be above half the time and below half the time, so we get roughly 50% coverage.  See [Lecture 13](`r lecture(13)`) for this and the generalization discussed in the note below.
+
+:::
+
+::: {.callout-note collapse="true"}
+### A Generalization
+This is a summary of our discussion [here](`r lecture(13, "misspecification-and-inference")) in Lecture 13 in
+the context of this question. What we saw there is that our sampling distribution is approximately normal, what determines coverage is the ratio $\text{bias}/\text{se}$ of our estimator's bias to its standard deviation. And we can plot coverage as a function of that ratio. We do in @sec-appendix-plots. 
+
+Where is this coming from? If we're looking at the sampling distribution of $\hat\theta$ and thinking about the coverage of 
+intervals $\hat\theta \pm \ell$ of width $2\ell$ ($\ell$ for 'arm-length'), the ones that cover are the ones where the arms
+reach from $\hat\theta$ to $\theta$, i.e. the ones where $\abs{\hat\theta-\theta} \le \ell$. To count those, we integrate 
+the sampling distribution of $\hat\theta$ from $\theta-\ell$ to $\theta+\ell$. You can see this by drawing the integral you'd use to do the coverage calculation. I've done that below.
+
+
+Look at the top 2 plots. On the left, I've drawn the $n=13$ sampling distribution again, this time with this domain of integration shaded. On the right, I've drawn a version for $n=50$. What you know about the sampling distribution for $\hat\mu(0)$ when $n=50$ is that it's centered in the same place as it is for $n=13$ and it's about half as wide. I've drawn exactly that on the right; I've taken the $n=13$ histogram on the left and 'compressed it' so everything is $1/2$ as far from the mean. To show that this width-halving approach works, I've also drawn the actual sampling distribution for $n=50$ as a faint gray outline.
+Since we're using intervals that are &plusmn; two standard deviations, we integrate the sampling distribution from two standard deviations left of the estimation target to two standard deviations right of it---i.e., over the region I've shaded yellow. Because that yellow region extends right to the center of the (roughly symmetric) sampling distribution and left far enough to include essentially all of its probability mass on that side, this integral is roughly $.5$---half of the sampling distribution's total mass. 
+
+```{r} 
+#| layout-ncol: 2 
+#| layout-nrow: 2
+sampdist.50 = map_vec(1:1000, function(.) {
+  sam = pop[sample(1:nrow(pop), 50, replace=TRUE), ]
+  model = lm(y~x, data=sam)
+  c(coef(model)[1])
+})
+halved.sampdist = (sampdist+mean(sampdist))/2
+nsd = \(x)sd(x)*sqrt((length(x)-1) / length(x))
+
+labeller = \(x) sprintf('%1.2f', x)
+sigma13 = sd(sampdist)
+p1=ggplot() + 
+  geom_histogram(aes(x=X, y=after_stat(density)), 
+    data=data.frame(X=sampdist), bins=50, alpha=.2, fill='blue') +
+  with_annotations(sampdist, estimand=mu(0), highlight.dots=0, interval.width=4*nsd(sampdist),
+                   shade.center=mu(0), shade.width=4*nsd(sampdist), shade.color="yellow") +
+  scale_x_continuous(breaks = mean(sampdist) + seq(-4,4,by=2)*nsd(sampdist), labels=labeller) +
+  scale_y_continuous(breaks = seq(0,2,by=.5), labels=labeller) +
+  coord_cartesian(xlim=mean(sampdist) + c(-4,4)*nsd(sampdist), ylim=c(0,2))
+
+p2=ggplot() + 
+  geom_histogram(aes(x=X, y=after_stat(density)), 
+    data=data.frame(X=halved.sampdist), alpha=.2, fill='blue', bins=50) +    
+  geom_histogram(aes(x=X, y=after_stat(density)), 
+    data=data.frame(X=sampdist.50), bins=50, alpha=.2, fill=NA, color='gray', linewidth=.1) +
+  with_annotations(halved.sampdist, estimand=mu(0), highlight.dots=0, interval.width=4*nsd(halved.sampdist),
+    shade.center=mu(0), shade.width=4*nsd(halved.sampdist), shade.color="yellow") + 
+  scale_x_continuous(breaks = mean(halved.sampdist) + seq(-4,4,by=2)*nsd(halved.sampdist), labels=labeller) +
+  scale_y_continuous(breaks = seq(0,4,by=1), labels=labeller) +
+  coord_cartesian(xlim=mean(halved.sampdist) + c(-4,4)*nsd(halved.sampdist), ylim=c(0,4))
+
+p3=ggplot() + 
+  geom_histogram(aes(x=X, y=after_stat(density)), 
+    data=data.frame(X=halved.sampdist), alpha=.2, fill='blue', bins=50) +    
+  geom_histogram(aes(x=X, y=after_stat(density)), 
+    data=data.frame(X=sampdist.50), bins=50, alpha=.2, fill=NA, color='gray', linewidth=.1) +
+  with_annotations(halved.sampdist, estimand=(mu(0)+mean(sampdist))/2, highlight.dots=0, interval.width=4*nsd(halved.sampdist),
+    shade.center=mu(0), shade.width=4*nsd(halved.sampdist), shade.color="yellow") + 
+  scale_x_continuous(breaks = mean(halved.sampdist) + seq(-4,4,by=2)*nsd(halved.sampdist), labels=labeller) +
+  scale_y_continuous(breaks = seq(0,4,by=1), labels=labeller) +
+  coord_cartesian(xlim=mean(halved.sampdist) + c(-4,4)*nsd(halved.sampdist), ylim=c(0,4))
+
+p1
+p2
+p3
+p3
+```
+
+Why is $\text{bias}/\text{se}$ all that really matters? In [Lecture 13](`r lecture(13, "misspecification-and-inference")), we showed it via calculus. We wrote out the integral of the normal distribution with mean $\theta+\text{bias}$ and standard deviation $\text{se}$ and did a change of variables. But I'll try to give you a more visual explanation here. 
+
+Think about what's happened when we (roughly) quadrupled our sample size to $n=50$.
+We took the $n=13$ histogram and made it half as wide. And our intervals got half as wide too: their width scales with the sampling distribution's. What doesn't change is where the target is. On the left, it's 1 standard deviation from the mean. On the right, it's 2. Not because the target or the sampling distribution's center has changed, but because the standard deviation has. That changes the value of the integral. But if we halved the bias at the same time as we halved everything else, then 
+we'd get exactly the same integral---the plot on the right would just be a half-as-wide version as of the plot on the left.
+
+I've illustrated that on the bottom row by drawing exactly the same thing twice: the $n=50$ plot with the target changed so the bias is halved. By comparing the two plots on the right, top and bottom, you can see that all that's changed is that the target's been changed so the bias is halved. And by comparing the two pots on the left, you can see that all that's changed are the numbers on the axes---it's exactly the same plot, but half as wide and twice as tall. And because of that, the proportion of the sampling distribution in the range we're integrating over is the same as it is in the $n=13$ case.
+:::
+
+::: {.callout-note}
+### Lesson
+
+When use misspecified models, bias doesn't depend on sample size,
+but the *impact of that bias on inference* does depend on sample size. 
+More data, worse coverage.
+
+*Why emphasize this?* Because it's easy to get in the habit of 
+thinking that more data is just better, and that's not true if 
+you're not careful about your choice of model. It's true if all we care about
+is the accuracy of our point estimators, e.g. their mean squared error;
+misspecification *limits* how well we can do in those terms, but the more data 
+we have the closer we get to that limit. But we usually do care about interval
+estimation, and if you don't stop to visualize what's going on with the sampling 
+distribution---that it's actually shrinking away from the target as we get more 
+data---it can be counterintuitive that getting more data can create problems.
+
+:::
+
 
 # Problem 2
 
@@ -133,16 +292,16 @@ $$
 ### Formula Derivation. Optional Reading.
 $$
 \begin{aligned}
- E[\bar{Y}_k] - \mu 
- &= \E[\frac{n}{n+k}\bar Y_0] - \mu \\
+ \E\qty[\bar{Y}_k] - \mu 
+ &= \E\qty[\frac{n}{n+k}\bar Y_0] - \mu \\
  &= \frac{n}{n+k}\E[\bar Y_0] - \mu \\
  &=\frac{n}{n+k}\mu - \mu \\
  &= \qty(\frac{n}{n+k} - 1)\mu \\
  &= \qty(\frac{n}{n+k} - \frac{n+k}{n+k})\mu \\
  &= -\frac{k}{n+k}\mu \\
  & \\
-\Var[\tilde{Y}_k] 
- &= \Var[\frac{n}{n+k} \bar {Y}_0] \\
+\Var\qty[\bar{Y}_k] 
+ &= \Var\qty[\frac{n}{n+k} \bar {Y}_0] \\
  &= \qty(\frac{n}{n+k})^2 V[\bar{Y}_0] \\
  &= \frac{n^2}{(n+k)^2} \frac{\sigma^2}{n} \\
  &= \frac{ n\sigma^2}{(n+k)^2}=\frac{\sigma^2}{n} \times \frac{n^2}{(n+k)^2}
@@ -150,9 +309,7 @@ $$
 $$
 :::
 
-And they've drawn the sampling distribution of [$\bar{Y}_0$]{.pollb}, [$\bar{Y}_{10}$]{.pollc}, and [$\bar{Y}_{100}$]{.polld} (top, middle, and bottom rows respectively)
-for sample sizes $n=100$ and $n=10,000$ (left and right columns respectively) *for $\mu=0$ and $\sigma=1$*. 
-The solid line is the estimator's expected value $\E[\bar{Y}_k]$, 
+And they've drawn the sampling distribution of [$\bar{Y}_0$]{.pollb}, [$\bar{Y}_{10}$]{.pollc}, and [$\bar{Y}_{100}$]{.polld} (top, middle, and bottom rows respectively) for sample sizes $n=100$ and $n=10,000$ (left and right columns respectively) *for $\mu=0$ and $\sigma=1$*. The solid line is the estimator's expected value $\E[\bar{Y}_k]$, 
 the dashed lines are $\E[\bar Y_k] \pm \sd[\bar Y_k]$, and the dotted lines are $\E[\bar Y_k] \pm 2 \sd[\bar Y_k]$.
 ```{r manynormals}
 #| layout-nrow: 3
@@ -193,8 +350,8 @@ plot.normals(mu,n=10000,k=100) + scale.10000
 On the basis of those drawings, your coworker proposes using $\bar{Y}_{100}$ to estimate $\mu$.
 
 ::: {#exr-2a .callout-exercise}
-Suppose your sample size is $n=100$. Explain why your coworker's original proposal to use $\tilde Y_{10}$ and
-your hyperbolic suggestion to use $\tilde Y_{100}$ are *appears*, from the drawings, to be a way to increase precision without increasing bias. 
+Suppose your sample size is $n=100$. Explain why your coworker's original proposal to use $\bar Y_{10}$ and
+your hyperbolic suggestion to use $\bar Y_{100}$ are *appears*, from the drawings, to be a way to increase precision without increasing bias. 
 To explain why this is misleading, describe what happens in the case that $\mu=11/10$ and $\sigma=1$ by doing the following.
 
 - Modifying the drawings to show the sampling distributions in this new case.
@@ -203,13 +360,78 @@ To explain why this is misleading, describe what happens in the case that $\mu=1
 *Tip*. You can 'change the location' of the distributions in the drawing above by changing the labels on the x-axis.
 :::
 
+::: {.callout-solution}
+Before getting into the solution, let's think about what this estimator is doing.
+It's a weighted average of of the sample mean and zero with weight $n/(n+k)$ on the sample mean. 
+We talked about these in the homework before our first midterm; we can think of this as adding 
+$k$ fake observations $Y_{n+1} \ldots Y_{n+k}$ to our sample, all of which are zero. 
+
+$$
+\bar Y_{k} =  \frac{n}{n+k} \bar Y_0 + \frac{k}{n+k} \times 0  
+$$
+We call these *shrinkage estimators* because they take the sample mean and shrink it toward zero. 
+The bias of $\bar Y_{k}$ is proportional to $\mu$.  When $\mu=0$, as it is for the plots above, there no bias. But if it's not zero, there is bias. What we pay for an estimator that's more precise *when we're estimating zero* is *bias toward zero* when we're not. 
+
+**Drawing**.
+To draw what's happening, we don't have to change the shape of the distributions. That shape---the standard deviation---doesn't depend on $\mu$. What does change when we think about the case that $\mu=11/10$ (1.10) are the means. 
+$$
+\E[\bar Y_k] = \frac{n}{n+k} \E[\bar Y_0] = \frac{n}{n+k} \mu 
+= \begin{cases} 
+\frac{100}{100} \times \frac{11}{10} = 1.10   & \qfor k=0 \\
+\frac{100}{110} \times \frac{11}{10} = 1.00   & \qfor k=10 \\
+\frac{100}{200} \times \frac{11}{10} = 0.55   & \qfor k=100
+\end{cases}
+$$
+
+To change the plots to reflect these new means, we just relabel the $x$-axis to be the numbers that are already there *plus these means*. That way, our distributions are now centered at $\E[Y_k]$ for $\mu=11/10$ instead of at $0$, but the shape is unchanged. 
+
+Where we'd draw in the target, of course, has also changed. For $\mu=0$, it's right at the center of the distribution.
+
+- For $k=0$, it still is.
+- For $k=10$, it's 1 grid line to the right of the distribution's center. 
+  - That's just a little more than 1 standard deviation away. 
+  - That means *coverage should be about 85%*.
+- For $k=100$, it's 5.5 grid lines to the right of the distribution's center. 
+  - That's just off the plot. Many, many standard deviations away. 
+  - That means *coverage should be about 0%*.
+
+**Coverage.**
+Those approximations to coverage are fine for the purposes of answering this question.
+But for the next one, it's useful to have a formula for what matters for inference: the bias/standard deviation ratio. 
+$$
+\begin{aligned}
+\frac{\E[\bar Y_k] - \mu}{\sd[\bar Y_k]} 
+&= \frac{-\frac{k}{n+k}\mu}{\frac{\sigma}{\sqrt{n}} \times \frac{n}{n+k}} \\
+&= -\frac{k\mu}{n} \times \frac{\sqrt{n}}{\sigma} \\
+&= -\frac{\mu}{\sigma} \times \frac{k}{\sqrt{n}} \\
+&= \begin{cases}
+  -\frac{11}{10} \times \frac{0}{10} = 0 & \qfor k=0 \\
+  -\frac{11}{10} \times \frac{10}{10} = -1.1 & \qfor k=10 \\
+  -\frac{11}{10} \times \frac{100}{10} = -11 & \qfor  k=100 \\
+\end{cases}
+\end{aligned}
+$$
+
+To get more precise coverage numbers, we can look these ratios up in @fig-coverage.
+A ratio of 1.1 is about 80% coverage. A ratio of 11 is way off the chart, but we're clearly at essentially zero coverage---at a ratio of $5$, at the chart's edge, we're basically at zero.
+:::
+
 ::: {#exr-2b .callout-exercise}
-This coworker isn't going anywhere. Next time, it might be better to bite your tongue and  save time. If your sample size was $n=10,000$, maybe your coworker's idea to use $\tilde Y_{10}$ really wasn't creating much of a problem. What would you need to know about $\mu$ and $\sigma$ to guarantee at least 85% coverage?  
+This coworker isn't going anywhere. Next time, it might be better to bite your tongue and save time. If your sample size was $n=10,000$, maybe your coworker's idea to use $\tilde Y_{10}$ really wasn't creating much of a problem. What would you need to know about $\mu$ and $\sigma$ to guarantee at least 85% coverage?  
 :::
 
 ::: {.callout-solution}
-What you really need to know is that $\text{bias}/\text{se}=\mu k/ \sigma \sqrt{n}$ is small. For $k=10$ and $n=10,000$,
-that's $\mu/ 10\sigma$. We don't see a problem with $Y_{10}$ in our drawings because this is either $0$ (in the plots on the left) or $1/10$ (in the plots on the right). But if $\mu$ were very large or $\sigma$ very small this could be a problem. But, if you like, you can estimate both, see whether it's a problem, and humor your coworker if it's not.
+For 85% coverage, we need the magnitude of $\abs{\text{bias}}/\text{sd}$ to be less than 1. That ratio was
+calculated in the last exercise's solution: n abstract terms, it's $(\abs{\mu}/\sigma) \times (k/\sqrt{n})$. In this
+example, $k/\sqrt{n}=10/\sqrt{10,000}=10/100=1/10$, so 
+$$
+1 \ge \frac{\abs{\text{bias}}}{\text{sd}} = \frac{\abs{\mu}}{\sigma} \times \frac{1}{10} \qif \abs{\mu} \le 10\sigma. 
+$$
+
+*Interpretation*.
+We want to know if it matters that our coworker wants to include 10 'fake observations' of zero with out 10,000 real ones.
+That's a tiny fraction of fake observations in the 10,010 observations (real and fake) that they'd be averaging. It won't cause much loss of coverage unless those fake observations are extremely far from the actual value of $\mu$. But what 'extremely far' means is measured in 'standard deviation units'---if *all* of our 10,000 real observations are $.01$, zero is infinitely far away in this sense.
+
 :::
 
 ::: {#exr-2c .callout-exercise}
@@ -219,6 +441,40 @@ Elections are always pretty close, so you can assume that the proportion registe
 is between .4 and .6. Approximately how much coverage does using the interval estimator $\bar{Y}_{k} \pm 1.96\ \text{se}$
 guarantee you for $k=0$, $k=10$, and $k=100$?
 :::
+
+::: {.callout-solution}
+The key observation here is that in a population of binary outcomes with mean $\mu$, the standard deviation is a function of $\mu$: $\sigma=\sqrt{\mu(1-\mu)}$. As a result, so is the the bias/standard deviation ratio.
+$$
+\frac{\abs{\text{bias}}}{\text{sd}}=\frac{\mu}{\sigma} \times \frac{k}{\sqrt{n}} = \frac{\mu}{\sqrt{\mu (1-\mu)}} \times \frac{k}{10}.
+$$
+To see how big this can get for $\mu \in [.4,.6]$, and therefore how bad our coverage can be, 
+we can look at @fig-thetaratio, a plot of $x/\sqrt{x(1-x)}$ in the appendix. This
+ratio is largest at $\mu=.6$, which is intuitive; shrinkage toward zero creates the biggest problem when the proportion we're estimating is furthest from zero. And at $\mu=.6$, it's roughly $1.2$. That's close enough to $\mu/\sigma = (11/10) / 1 = 11/10$,
+which we considered in @exr-2a, that its implications for coverage should be roughly the same. 
+
+- For $k=0$, we're just talking about the mean. No bias. 95% coverage.
+- For $k=10$, our bias/sd ratio is 1.2. From @fig-coverage, we can see that's about 80% coverage. 
+- For $k=100$, our bias/sd ratio is 12. We don't need to look at anything. That's virtually 0 coverage.
+
+:::
+
+
+::: {.callout-note}
+### Lessons
+
+1. Be careful with evidence from simulations. Consider the 
+possibility that there's something special about the way
+the data is being simulated that makes the estimator
+look good. 
+
+2. When you do identify a potential problem with an estimator, 
+try to keep it in perspective. Think about what information you
+have that you can use to understand whether it's a big or small
+problem. Sometimes just thinking about the kind of data you're 
+working with, e.g. binary data as in @exr-2c, tells you a lot.
+
+:::
+
 
 # Problem 3
 
@@ -346,6 +602,54 @@ For each of the examples above, answer the following questions.
 I'm not asking you to compare the magnitudes of these estimation targets. If $\Delta_1$ is positive and $\Delta_\text{raw}$ is negative, then no matter what the magnitudes are, $\Delta_1 > \Delta_\text{raw}$.
 :::
 
+::: {.callout-solution}
+ 
+Here's the essential approach I'm using to answer these questions.
+
+1. The difference $\Delta_1-\Delta_\text{raw}$ is the 'covariate shift term' $\sum_x \pb{x} \mua{x} - \sum_x \pb{x} \mua{x}$.
+  - if the shift from $\pa{x}$ to $\pb{x}$ is toward where $\mua{x}$ larger, this difference is positive: $\Delta_{\text{raw}}> \Delta_1$ 
+  - if it's toward where $\mua{x}$ smaller, the difference is negative: $\Delta_{\text{raw}} < \Delta_1$.
+  - if $\mua{x}$ is constant, there's no difference. 
+2. The difference $\Delta_1-\Delta_0$ is analogous, but with $\tau(x)=\mub{x}-\mua{x}$ in place of $\mua{x}$. 
+  - if the shift from $\pa{x}$ to $\pb{x}$ is toward where $\tau(x)$ larger, the difference is positive: $\Delta_1 > \Delta_0$.
+  - etc. 
+3. $\Delta_{\text{all}}$ is an average of $\Delta_0$ and $\Delta_1$, so it's between the two. 
+  - i.e. either $\Delta_1 > \Delta_{\text{all}} > \Delta_0$ or $\Delta_{1} < \Delta_{\text{all}} < \Delta_0$. Or all 3 are equal.
+  - That means the answer to 3 is always the same as the answer to 2. 
+
+**Example A**
+
+1. No. $\Delta_1 < \Delta_\text{raw}$. In intuitive terms, what we see if a 'treatment' of being green that does nothing but 
+higher outcomes for the green people on average because they're over on the right, where outcomes in both groups tend to be higher.
+In math terms, $\mua{x}$ is increasing and we have covariate shift from left to right, so the 'covariate shift term'
+ is positive. 
+2. No. $\Delta_1 = \Delta_0$. The within-group means $\mub{x}$ and $\mua{x}$ are the same, so their difference $\tau(x)$ is constant (zero), 
+and it doesn't matter how you average it---you always get zero. 
+3. No. $\Delta_1=\Delta_\text{all}$ for the same reason. 
+
+**Example B**
+
+1. Yes. $\Delta_1 > \Delta_\text{raw}$. 
+ $\mua{x}$ is increasing and we have covariate shift from [right]{.groupa} to [left]{.groupb}, so the 'covariate shift term'
+$\Delta_{\text{raw}} - \Delta_1$ is negative. In intuitive terms, when we adjust by covariate shift by comparing green dots 
+to red dots *in the same column*, we're looking at red dots that are further to the left than what's typical for red dots 
+(which are mostly on the right), so $\ingroupb{\text{same}} - \ingroupa{\text{smaller}} = \text{bigger}$. 
+2. No. $\Delta_1 < \Delta_0$. The within-group difference $\mub{x} - \mua{x}$ is increasing, so we get a 
+bigger average on the right (where the red dots are) than on the left (where the green dots are).  
+3. No. Because $\Delta_\text{all}$ is an average of and therefore between $\Delta_1$ and $\Delta_0$, it's bigger than $\Delta_1$ if $\Delta_0$ is. 
+
+**Example C** 
+
+1. No. $\Delta_1 = \Delta_\text{raw}$. The within-group mean $\mua{x}$ doesn't vary with $x$, so the 
+average over the [red distribution]{.groupa} is the same as the average over the [green distribution]{.groupb}. 
+2. No. $\Delta_1 < \Delta_0$. The within-group difference $\mub{x} - \mua{x}$ is decreasing, so 
+averaging it over the [green distribution]{.groupb} (which is shifted to the right relative to the [red distribution]{.groupa}),
+gives us a smaller number than averaging it over the [red distribution]{.groupa}. 
+3. No. $\Delta_1 < \Delta_\text{all}$. Because $\Delta_\text{all}$ is an average of and therefore between $\Delta_1$ and $\Delta_0$, it's bigger than $\Delta_1$ if $\Delta_0$ is. 
+
+::: 
+
+
 # Problem 4
 
 Your friend tells you about a new estimator for the mean $\theta=\frac1m\sum_{j=1}^m y_j$ of a population $y_1 \ldots y_m$. They like to use it when they think the population mean $\theta$ is close to zero.
@@ -450,7 +754,11 @@ It doesn't take me more than 5 seconds to fix and I don't type very fast.
 :::
 
 ::: {.callout-solution}
+They're not using the same sample to calculate and bootstrap their point estimator. To bootstrap
+properly, move the line where we calculate `se` so it's right after the like `Y=y[J]` that draws our sample. 
+
 ```{r}
+#| echo: true
 set.seed(0)
 covers = 1:1000 |> map_vec( function(Y) { 
   J = sample(1:m, n, replace=TRUE)
@@ -463,7 +771,7 @@ mean(covers)
 :::
 
 ::: {#exr-4b .callout-exercise}
-*Extra Credit*. Suppose that somewhere in the code they used to draw those plots, 
+*Extra Credit Style*. Suppose that somewhere in the code they used to draw those plots, 
 they were actually drawing a sample `Y` from the population `y`. They were running this code.
 ```{r}
 #| echo: true
@@ -473,6 +781,7 @@ Y = y[J]
 ```
 They ran it before they calculated the coverage probability this morning and they ran it again before they calculated it just now. Why do you think the two coverage probabilities they calculated are so different? 
 :::
+
 
 ::: {.callout-tip collapse="true"}
 ### Hint.
@@ -545,6 +854,34 @@ plot.sampling.dist()
 ```
 :::
 
+
+::: {.callout-solution}
+The output of `sample` is random, so if they reran that code between this morning and now, the sample `Y` 
+that they were using to calculate their one standard deviation was different this morning from what it is now. 
+
+They must've had a sample in which the bootstrap sampling distribution of the 
+estimator $\hat\theta$ had a bigger standard deviation than it does in the 
+one we're using now, so they were calculating the coverage of wider intervals 
+around the same (distribution of) point estimators.
+
+That's not just a thing about this estimator. You can see in the plots in the tip above that 
+it happens with the sample mean too. It's a bit easier to understand that mathematically 
+because $\bar{Y}$'s bootstrap standard deviation is just $1/\sqrt{n}$ times the standard deviation of the sample;
+when we have more spread in the sample `Y`, the width of all these intervals is bigger. 
+
+:::
+
+::: {.callout-note}
+### Lesson
+If you're using simulated data to look at what an estimator does,
+make sure it's the estimator you'd actually be using. 
+
+The bootstrap-once thing that's going on in your friend's code 
+might be a simple mistake or it might be a way to speed up the 
+coverage calculation, but the result is that what's being calculated 
+isn't the estimator's actual coverage. 
+:::
+
 # Problem 5
 
 ```{r scatter}
@@ -588,9 +925,11 @@ plot.summaries =  list(
   
 scatter = ggplot(sam) + 
   geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
-             position=position_jitter(w=.18,h=0, seed=0), alpha=.3, size=.5) + 
+             position=position_jitter(w=.18,h=0, seed=0), alpha=.3, size=1) + 
              plot.summaries
-scatter 
+means = stat_summary(aes(x=plotX(w,x), y=y), geom='pointrange',
+             fun.data = mean_sd, alpha=.5, size=.5)
+scatter + means
 ```
 
 You're working at a company that makes a fancy alarm clock that watches you sleep. You don't tell it when to wake you up.
@@ -607,10 +946,11 @@ You have a population $w_1, x_1, y_1 \ldots w_m, x_m, y_m$ of people who have be
 Privacy is a big deal when you're selling a device that watches people sleep, so your app doesn't report 
 sleep quality scores directly to your company. You actually have to run a survey. The result is a sample 
 $(W_1, X_1, Y_1) \ldots (W_n,X_n,Y_n)$ that's drawn with replacement from the population. You have it  
-in an **R** dataframe `sam` with `n` rows. I've plotted it above. As usual, $X$ is on the horizontal axis,
+in an **R** dataframe `sam` with `n` rows. I've plotted it above. 
+
+As usual, $X$ is on the horizontal axis,
 $Y$ variable is on the vertical axis, and $W$ variable, which is binary, is indicated by color: green for $W=1$, red for $W=0$. 
-The proportion of times that $X$ takes on each value $x$ when $W=0$ and when $W=1$, 
-$\ingroupa{P_{x\mid 0}}$ and $\ingroupb{P_{x\mid 1}}$ respectively, are plotted as histograms in matching colors. 
+The mean in each column is indicated by a black pointrange (`r pointrange`). The proportion of times that $X$ takes on each value $x$ when $W=0$ and when $W=1$, $\ingroupa{P_{x\mid 0}}$ and $\ingroupb{P_{x\mid 1}}$ respectively, are plotted as histograms in matching colors. 
 They're also shown in the table below.
 
 ```{r summaries}
@@ -666,7 +1006,7 @@ grid = expand.grid(x=unique(sam$x), w=0:1)
 scatter + 
   geom_line(aes(x=x, y=muhat.additive(w,x), color=factor(w)), data=grid, linetype='dashed') +
   geom_point(aes(x=x, y=muhat.additive(w,x), fill=factor(w)), shape=filled$square, color='black', data=sam) + 
-  guides(fill='none', shape='none', color='none')
+  means +  guides(fill='none', shape='none', color='none')
 ```
 
 ::: {.callout-exercise #exr-additive-bias}
@@ -674,9 +1014,19 @@ Do you think their estimate is biased up (too large) or down (too small)? Referr
 :::
 
 ::: {.callout-solution}
-It's biased up. Looking at the distribution of the treated people --- count the green dots or look at the green histogram, where it's been done for you --- we see that the ATT is essentially an average of the difference between the green and red lines in the middle of the plot. And when you look there the green line fits the data but the red line is an underestimate: 
-$\text{good} - \text{too small} = \text{too big}$.
+I think it's biased up (too large). You can see that where most of the green dots are, 
+the difference in predictions $\heffect{x}$ that we get with the additive model
+is smaller in magnitude, and (being negative) therefore bigger in a signed sense, than the 
+actual spacing between the two groups. Especially at $x=2$ where almost half of the green dots are.
 :::
+
+::: {.callout-note}
+### A Revision
+I've drawn in the column means in a revised version posted Monday night. If you were working on this one over the weekend,
+it was probably a little difficult because in this data, it little hard to see where the mean is each column is. 
+You could get those means from the plot below, but it's easier having them all in one place. 
+:::
+
 
 ## Part 2 {#sec-5b}
 
@@ -703,7 +1053,7 @@ all.functions.predictor
 ```
 That's $\hat a_1$ when we write out the least squares predictor like this.
 $$
-\hat\mu(w,x) = \hat a_0 + \hat a_1 w + \hat a_2 1_{=2}(x) + \ldots + \hat a_5 1_{=5}(x) + \hat a_6 w 1_{=2}(x) + \ldots + \hat a_{9} w 1_{=5}(x)
+\hat\mu(w,x) = \hat a_0 + \hat a_1 w + \hat a_2 1_{=1}(x) + \ldots + \hat a_5 1_{=4}(x) + \hat a_6 w 1_{=1}(x) + \ldots + \hat a_{9} w 1_{=4}(x)
 $$ {#eq-all-functions-mu}
 
 That number doesn't sound right to them, so they plot their new predictor using the code you just wrote. Here's what they see.
@@ -714,6 +1064,7 @@ muhat.all.functions = function(w,x) { predict(all.functions.predictor, newdata=d
 scatter + 
   geom_line(aes(x=x, y=muhat.all.functions(w,x), color=factor(w)), data=grid, linetype='dashed') +
   geom_point(aes(x=X, y=muhat.all.functions(w,x), fill=factor(W)), shape=filled$square, color='black', data=sam) + 
+  means + 
   guides(fill='none', shape='none', color='none')
 ```
 
@@ -729,7 +1080,6 @@ like 'take this number from this place, multiply it by this number from this oth
 2. Explain why what they were doing before worked for the additive model but not for the all functions model.
    
 :::
-
 
 ::: {.callout-tip collapse="true"}
 ### If You Don't Want to Interpret the Output of `lm` 
@@ -787,13 +1137,33 @@ predict(another.all.functions.predictor, data.frame(w=1, x=1:4))
 
 ::: {.callout-solution}
 
-To estimate the ATT, we want to average the difference $\hat\mu(1,x)-\hat\mu(0,x)$ between the green and red curves over the distribution of the green points, i.e., using the weights $\hat p(1, x)$ shown in the green histogram. Abstractly, here's our estimate.
+1. To estimate the $\Delta_1$, we want to average the difference $\hat\mu(1,x)-\hat\mu(0,x)$ between the green and red curves over the distribution of the green points, i.e., using the weights $P_{x\mid 1}$ 
 $$ 
-\widehat{ATT} = \sum_x \hat p(1,x) \qty{ \hat\mu(1,x) - \hat\mu(0,x) }
+\hat \Delta_1 = \sum_x \ingroupb{P_{x \mid 1}} \qty{ \heffect{x} }
 $$
 
-We've got a table of $\hat p(1, x)$ above, so what we need to actually calculate this is add a row of the difference 
-$\hat\mu(1,x) - \hat\mu(0,x)$. And for this model, FINISH THIS.
+We've tables of both of these things above, so we can plug in numbers from those. Or, if we like, we can 
+read $\hat\mu(1,x)-\hat\mu(0,x)$ from the **R** output as the coefficient on `w` (for $x=0$) and on 
+`w:factor(x)1` ... `w:factor(x)4` for $x=1 \ldots 4$ instead of looking at the $\hat\mu$ table. 
+
+```{r}
+Px.1 = function(x) { f1$f[x+1] }
+muhat = muhat.all.functions 
+tau = function(x) { muhat(1,x)-muhat(0,x) }
+```
+$$
+\begin{aligned}
+\hat\Delta_1 &= `r Px.1(0)` \times `r tau(0)` + `r Px.1(1)` \times `r tau(1)` 
++ `r Px.1(2)` \times `r tau(2)` + `r Px.1(3)` \times `r tau(3)` + `r Px.1(4)` \times `r tau(4)` \\ 
+& = `r sum(Px.1(0:4) * tau(0:4))`
+\end{aligned}
+$$
+
+2. In the additive model, the difference $\hat\mu(1,x) - \hat\mu(0,x)$ didn't depend on $x$, so 
+making that comparison at $x=0$ gave the same thing as making it everywhere and averaging. Once 
+we have a model that predicts what the data tells us at $x=0$ --- that the green and red dots 
+in that column look the same --- using the difference there to tell us about the difference 
+elsewhere doesn't work at all because that's not at all what happens elsewhere. 
 
 :::
 
@@ -910,6 +1280,11 @@ the same standard deviation as the sample $Y_1 \ldots Y_n$?
 
 ::: {.callout-solution}
 The estimator $\hat\theta = Y_1$. Or $\hat\theta=Y_2$, $\hat\theta=Y_3$, etc.
+
+When we bootstrap the estimator $\hat\theta=Y_1$,
+the bootstrap estimators $\hat\theta^\star=Y_1^\star$ are 
+just observations drawn uniformly at random from the sample $Y_1 \ldots Y_1$,
+so their variance is the variance of the sample $Y_1 \ldots Y_n$.
 :::
 
 ## Part 4 {#sec-5d}
@@ -926,12 +1301,13 @@ bootstrap.difmeans = sampling.distribution(sam, difmeans.estimator)
 se.difmeans = sd(bootstrap.difmeans)
 ```
 
+
 When you and your coworker bring a summary of your findings to your boss, they're annoyed. They say this.
 
 > Why are you doing all this complicated nonsense? 
 
 They pull up the data, subtract the mean of the green points from the mean of the red points. They estimate the standard deviation of their estimator $\hat\Delta_{\text{raw}}$ 
-to be `{r} se.difmeans`, which gives them a 95% confidence interval of $\hat\Delta_{\text{raw}} \pm `r 1.96*se.difmeans`$.
+to be `r se.difmeans`, which gives them a 95% confidence interval of $\hat\Delta_{\text{raw}} \pm `r 1.96*se.difmeans`$.
 
 > Much better! Simple. And more precise. 
 > Your interval was $\pm `r 1.96*se`$. 
@@ -941,6 +1317,11 @@ But width isn't everything. Their interval isn't just narrower. It's nowhere nea
 
 ::: {.callout-exercise #exr-5d}
 Is their point estimate $\hat\Delta_{\text{raw}}$ bigger or smaller than your point estimate $\hat\Delta_1$?  Explain why. 
+:::
+
+::: {.callout-solution}
+It's bigger. This is like Example A in @exr-3: $\hmua{x}$ is increasing and there's covariate shift from left (where it's small) to right
+(where it's big). 
 :::
 
 ## Part 5 
@@ -956,6 +1337,7 @@ pop = expand.grid(w=c(0,1), x=rep(seq(0,4), m/10)) |>
   mutate(y=(mu(w,x) + .5*rnorm(m)) |> trim(0,4))
 
 scatter = ggplot(pop) + 
+  means + 
   geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
              position=position_jitter(w=.18,h=0, seed=0), alpha=.15, size=.1) + 
              plot.summaries
@@ -1022,6 +1404,35 @@ What is it about this population that makes this happen?
 No need for a long explanation. A sentence should be enough.
 :::
 
+::: {.callout-solution}
+*What is it about the population?*
+There's no covariate shift: the red and green dots have the same covariate distribution.  
+That was all I was asking for, but I'll explain. 
+
+*Why this matters.*  When there's no covariate shift, it doesn't matter how we adjust for covariate shift.
+
+*How do we know this?*
+This is proven [here](https://qtm285-1.github.io/assets/lectures/Lab7.html#/the-mismatched-part) in our [Lab on Misspecification and Averaging](https://qtm285-1.github.io/assets/lectures/Lab7.html#/the-mismatched-part). How do we remember it? Here are two ideas. 
+
+1. When there's no covariate shift, unweighted least squares is inverse probability weighted least squares: the inverse probability weights $\gamma(w,x)=p_{x \mid 1} / p_{x \mid w}$ are one. 
+
+2. The 'matched term' $\sum_{x} \pb{x} \hmub{x}$ in $\Delta_1$ is unbiased no matter what model we use^[Within reason. We need group indicators in our model.]. When there's no covariate shift ($\pb{x}=\pa{x}$), both terms in $\Delta_1$ are effectively matched terms, as 
+$\sum_{x} \pb{x} \hmua{x} = \sum_{x} \pa{x}\hmua{x}$.
+
+Some intuition that might help remember the 'matched term' thing is that one of the 'least squares things to do' is to get the mean right. 
+If we average the least squares predictor in any model (that includes a constant) over the sample it's fit to, we just get that sample mean. When we use, e.g. the 'not necessarily parallel lines model', we're really just fitting $\hmua{\cdot}$ to the red dots and $\hmub{\cdot}$ to the green ones, so the matched terms are really just averages of $\hmua{\cdot}$ and $\hmub{\cdot}$ over the samples they're fit to. 
+
+:::
+
+::: {.callout-note}
+### Lesson
+If you're using simulation to understand methods for adjusting for covariate shift, 
+don't simulate data with no covariate shift.
+
+People do it a lot more often than you'd expect. 
+:::
+
+
 ## Part 6 
 
 Your coworker has lost confidence in their ability to make up fake populations 
@@ -1034,10 +1445,19 @@ m = 10000
 x = rep(seq(0,4), m/5)
 pi = function(x) { 1-(.2+.6*x/4) }
 w = rbinom(m, 1, pi(x))
-pop = data.frame(w=w, x=x) |>
-  mutate(y=3+w-x/4 + (rnorm(n) |> trim(-1,1)))
+eps = rnorm(m) |> trim(-1,1)
+for(ux in unique(x)) {
+  for(uw in c(0,1)) { 
+  ii = (w==uw) & (x==ux)
+  eps[ii] = eps[ii] - mean(eps[ii])
+  }
+}
+
+pop = data.frame(w=w, x=x, eps=eps) |>
+  mutate(y=3+w-x/4 + eps)
   
 scatter = ggplot(pop) + 
+  means +
   geom_point(aes(x=plotX(w,x), y=y, color=factor(w)), 
              position=position_jitter(w=.18,h=0, seed=0), alpha=.15, size=.1) + 
              plot.summaries
@@ -1047,6 +1467,7 @@ scatter
 
 ```{r}
 #| cache: true
+sim.draws = 5000
 mu.model = lm(y~w*factor(x), data=pop)
 mu = function(w,x) { predict(mu.model, newdata=data.frame(w=w, x=x)) }
 att = mean(mu(1,pop$x[pop$w==1]) - mu(0,pop$x[pop$w==1]))
@@ -1059,7 +1480,7 @@ estimators = list(
   raw = function(sam) { difmeans.estimator(sam) })
 
 estimates = estimators |> map(\(estimator) data.frame(estimate=pop |> 
-                  sampling.distribution(estimator, draws=1000))) |>
+                  sampling.distribution(estimator, draws=sim.draws))) |>
   list_rbind(names_to='estimator')
 ```
 
@@ -1087,23 +1508,56 @@ What's going on? What is it about this population that makes this happen?
 No need for a long explanation. A sentence should be enough.
 :::
 
+::: {.callout-solution}
+There isn't bias with the additive model because it's not misspecified.
+The difference between the red and green means at each $x$ is constant:
+$\mua{x}$ and $\mub{x}$ are parallel lines.
+:::
 
 ::: {.callout-exercise #exr-5f-p2}
 When they use the same axes for all the plots, the sampling distribution of your boss's estimator $\hat\Delta_{\text{raw}}$ just isn't there. That estimator is so biased that its sampling distribution
 is off the plot to one side or the other. Which side is it on? Is the bias of $\hat\Delta_{\text{raw}}$ positive or negative?
 :::
 
+::: {.callout-solution}
+It's to the right. $\mua{x}$ is decreasing and we have covariate shift from [right]{.groupa} to [left]{.groupb},
+which makes $\Delta_{\text{raw}}$ bigger $\Delta_1$.
+:::
 
+::: {.callout-note}
+### Lesson
+Inverse probability weighting protects you from bias due to misspecification. 
+If you simulate data in which the model you're using isn't misspecified, 
+it looks like you don't need it.  
+:::
+
+::: {.callout-note collapse="true"}
+### The Wrong Lesson
+
+You could say that if you *use* a model that's not misspecified, you
+don't need inverse probability weighting. But for the kinds of models we've talked about,
+with the exception of the 'all functions model', misspecification
+is pretty much a certainty when you're analyzing real data. 
+$\mu(w,x)$ is the mean of an actual group of people in your population. 
+If an additive model (or lines, or whatever) actually did go through the 
+means for the first $m-1$ people in your population 
+perfectly, adding the last one will break that. That doesn't mean models like
+this are badly misspecified, but in larger sample sizes, even small
+small amounts of misspecification can be a disaster for coverage.
+
+:::
 
 # Appendix {#sec-appendix-plots}
 
 ::: {#fig-coverage}
 ```{r}
-coverage = function(bias.over.se){ pnorm(1.96+bias.over.se + 1.96) - pnorm(bias.over.se - 1.96) }
-x=seq(-3,3,by=.01)
-ggplot() + geom_line(aes(x=x, y=coverage(x)), color='blue') + xlab('bias/sd') + ylab('coverage')
+coverage = function(bias.over.se){ pnorm(bias.over.se + 1.96) - pnorm(bias.over.se - 1.96) }
+x=seq(-6,6,by=.01)
+ggplot() + geom_line(aes(x=x, y=coverage(x)), color='blue') + xlab('bias/sd') + ylab('coverage') + class.theme +
+  scale_x_continuous(breaks=seq(-5,5,by=1)) + scale_y_continuous(breaks=seq(0,1,by=.1), limits=c(0,1))
 ```
-The coverage of a 95% confidence interval $\hat\theta \pm 1.96\ \sd[\hat\theta]$ when $\hat\theta$ has a normal sampling distribution.
+The coverage of a 95% confidence interval $\hat\theta \pm 1.96\ \sd[\hat\theta]$ when $\hat\theta$ has a normal sampling distribution
+as a function of the bias/standard deviation ratio.
 :::
 
 ::: {#fig-thetaratio}
@@ -1111,7 +1565,9 @@ The coverage of a 95% confidence interval $\hat\theta \pm 1.96\ \sd[\hat\theta]$
 ```{r}
 x=seq(0,1,by=.01)
 ggplot() + 
-  geom_line(aes(x=x, y=x/sqrt(x * (1-x)))) + scale_y_continuous(limits=c(0,10), breaks=seq(0,10,by=1)) + labs(x='', y='') 
+  geom_line(aes(x=x, y=x/sqrt(x * (1-x)))) + 
+  scale_x_continuous(breaks=seq(0,1,by=.2)) +
+  scale_y_continuous(limits=c(0,10), breaks=seq(0,10,by=1)) + labs(x='', y='') + class.theme
 ```
 This is a plot of $f(x) = x/\sqrt{x(1-x)}$.
 :::
