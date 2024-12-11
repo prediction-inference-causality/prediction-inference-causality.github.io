@@ -91,7 +91,7 @@ purple.histogram = function(sam, x, scale=default.scale, fill.alpha=.2, mean.lin
 }
 
 trimmed = function(f, cutoff) { 
-  function(...) { pmin(f(...), cutoff) }
+  function(...) { pmax(0, pmin(f(...), cutoff)) }
 }
 ```
 
@@ -911,8 +911,7 @@ viewof y = Inputs.radio(
 #| input:
 #|  - trim_level
 gamma.ipw = function(sam) { ifelse(sam$w, 1, pi(sam) / (1-pi(sam))) }
-gamma.sbw = \(sam) pmax(0,sbw.att(sam, sigma=1, K=K.gaussian))
-gamma = gamma.ipw
+gamma.sbw = sbw.att(sam, K=K.gaussian)
 ```
 
 ```{webr}
@@ -921,6 +920,7 @@ gamma = gamma.ipw
 #| input: 
 #|   - x
 #|   - trim_level 
+gamma = gamma.ipw
 ggplot() + histograms(sam, x, gamma=trimmed(gamma, trim_level)) + 
            histograms(sam, x, color=FALSE, fill.alpha=.05, mean.linetype='dotted') +
            facet_grid(rows=vars(w))
@@ -1132,21 +1132,14 @@ K.poly = function(x,xp, p=1) {
 ### Prediction 
 ```{webr}
 #| autorun: true
-predict.kernel.regression = function(obj, newdata, KxX=NULL, Px=NULL) {
+predict.kernel.regression = function(obj, newdata, KxX=NULL) {
     x = newdata$X
     X = obj$X
     K = obj$K
-    P = obj$P
     alpha = obj$alpha
-    gamma = obj$gamma
 
     if(is.null(KxX)) { KxX = outerproduct(x,X,K) }
-    if(is.null(P)) { 
-        KxX %*% gamma 
-    } else {
-        if(is.null(Px)) { Px = P(x) }
-        Px %*% alpha + KxX %*% gamma
-    }
+    KxX %*% alpha 
 }
 ```
 
@@ -1163,36 +1156,35 @@ kernel.sbw = function(W,X,K,P=NULL) {
     l = evd$values
 
     VtsumKxX = t(V) %*% colSums(KxX[W==1,])
-    Px = NULL
-    PX = NULL
-    VtPX = NULL
-    alpha = NULL
-    gamma = function(sigma) { 
-        gamma = V %*% diag(1/(l^2 + sigma^2*l)) %*% VtsumKxX 
-        obj = list(alpha=alpha, gamma=gamma, K=K, P=P, X=X[W==0,])
+    function(sigma) { 
+        alpha = V %*% diag(1/(l^2 + sigma^2*l)) %*% VtsumKxX 
+        obj = list(alpha=alpha, K=K, X=X[W==0,])
         attr(obj, 'class') = 'kernel.regression'
         obj
     }
-    
-    list(gamma=gamma, evd=evd, KxX=KxX, Px=Px) 
 }
 ```
 
 ### Everything Together
 ```{webr}
 #| autorun: true
-sbw.att = function(sam, K=K.gaussian, sigma=1) {
+sbw.att = function(sam, K=K.gaussian) {
   X = as.matrix(sam[, c('x.1','x.2','x.3','x.4','x.5','x.6')])
-  fits = kernel.sbw(sam$w, X, K)
-  gamma.obj = fits$gamma(sigma)
-  gamma0 = predict(gamma.obj, newdata=list(X=X)) * 
-           mean(sam$w) # this fixes the denominator: kernel.sbw gives weights for estimating (1/n)\sum_{i:W_i=1} \mu(0,X_i)
-  ifelse(sam$w==1, 1, gamma0)
+  sigma.to.sbw = kernel.sbw(sam$w, X, K)
+  P1 = mean(sam$w)
+  gammahat = function(newsam, sigma=1) {
+    newX = as.matrix(newsam[, c('x.1','x.2','x.3','x.4','x.5','x.6')])
+    newdata = list(X=newX[newsam$w==0,])
+    obj = sigma.to.sbw(sigma)
+    weights = rep(1,nrow(newsam))
+    weights[newsam$w==0] = predict(obj, newdata) * P1 
+    weights
+  }
 }
 
 sam = draw.sample(1000)
-gamma = sbw.att(sam, sigma=4)
-mean((1-sam$w)*gamma)
+gammahat = sbw.att(sam)
+mean((1-sam$w)*gammahat(sam,.1))
 mean(gamma*sam$w*sam$y - gamma*(1-sam$w)*sam$y)
 ```
 :::
