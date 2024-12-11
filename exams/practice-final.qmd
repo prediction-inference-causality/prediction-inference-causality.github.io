@@ -17,8 +17,6 @@ theme_set(whitebg.theme())
 :::
 
 
-# Introduction 
-
 ## Premise 
 Whether you're in academia or industry, you'll run into people who are analyzing data badly. 
 Often, what they're doing is both the established common practice and obviously wrong. In this practice exam,
@@ -42,11 +40,16 @@ and skills that'll come up on the exam.
 For the actual exam, expect questions that look like these, 
 but they'll be simpler with less repetition and fewer of parts.
 
-## A Theme
+## A Theme 
+
 Several of these exercises --- Problems 2, 4, and parts of 5 --- 
 look at how evidence from simulations can be misleading. 
-I wanted to bring this up, show you a few flavors of it, and pick apart what's 
-going on a little in a simple case for two reasons.
+I wanted to bring this up, show you a few flavors of it, 
+and pick apart what's going on a little in a simple case for two reasons. 
+To explain them, I do have to give away a few exercise solutions.
+
+::: {.callout-note collapse="true"}
+### The Reasons
 
 1. A lot of the evidence people use to choose methods is based
 on simulation. When you write a paper proposing a new method,
@@ -87,6 +90,7 @@ on problematic methods too much. Pretty often, when you reanalyze the
 data using a more trustworthy approach, what you get is roughly the
 same point estimate and a slightly wider confidence interval.
 
+:::
 
 # Problem 1
 
@@ -180,11 +184,27 @@ The first tells us is that no matter what sample size we use, bias is the same a
     
 If our sampling distribution is (close to) symmetric around its mean, then we'll be above half the time and below half the time, so we get roughly 50% coverage.  See [Lecture 13](`r lecture(13)`) for this and the generalization discussed in the note below.
 
+*Something to remember.*
+When use misspecified models, bias doesn't depend on sample size,
+but the *impact of that bias on inference* does depend on sample size. 
+More data, worse coverage.
+
+*Why emphasize this?* Because it's easy to get in the habit of 
+thinking that more data is just better, and that's not true if 
+you're not careful about your choice of model. It's true if all we care about
+is the accuracy of our point estimators, e.g. their mean squared error;
+misspecification *limits* how well we can do in those terms, but the more data 
+we have the closer we get to that limit. But we usually do care about interval
+estimation, and if you don't stop to visualize what's going on with the sampling 
+distribution---that it's actually shrinking away from the target as we get more 
+data---it can be counterintuitive that getting more data can create problems.
+
+
 :::
 
 ::: {.callout-note collapse="true"}
 ### A Generalization
-This is a summary of our discussion [here](`r lecture(13, "misspecification-and-inference")) in Lecture 13 in
+This is a summary of our discussion [here](`r lecture(13, "misspecification-and-inference")`) in Lecture 13 in
 the context of this question. What we saw there is that our sampling distribution is approximately normal, what determines coverage is the ratio $\text{bias}/\text{se}$ of our estimator's bias to its standard deviation. And we can plot coverage as a function of that ratio. We do in @sec-appendix-plots. 
 
 Where is this coming from? If we're looking at the sampling distribution of $\hat\theta$ and thinking about the coverage of 
@@ -254,26 +274,6 @@ we'd get exactly the same integral---the plot on the right would just be a half-
 
 I've illustrated that on the bottom row by drawing exactly the same thing twice: the $n=50$ plot with the target changed so the bias is halved. By comparing the two plots on the right, top and bottom, you can see that all that's changed is that the target's been changed so the bias is halved. And by comparing the two pots on the left, you can see that all that's changed are the numbers on the axes---it's exactly the same plot, but half as wide and twice as tall. And because of that, the proportion of the sampling distribution in the range we're integrating over is the same as it is in the $n=13$ case.
 :::
-
-::: {.callout-note}
-### Lesson
-
-When use misspecified models, bias doesn't depend on sample size,
-but the *impact of that bias on inference* does depend on sample size. 
-More data, worse coverage.
-
-*Why emphasize this?* Because it's easy to get in the habit of 
-thinking that more data is just better, and that's not true if 
-you're not careful about your choice of model. It's true if all we care about
-is the accuracy of our point estimators, e.g. their mean squared error;
-misspecification *limits* how well we can do in those terms, but the more data 
-we have the closer we get to that limit. But we usually do care about interval
-estimation, and if you don't stop to visualize what's going on with the sampling 
-distribution---that it's actually shrinking away from the target as we get more 
-data---it can be counterintuitive that getting more data can create problems.
-
-:::
-
 
 # Problem 2
 
@@ -456,11 +456,8 @@ which we considered in @exr-2a, that its implications for coverage should be rou
 - For $k=10$, our bias/sd ratio is 1.2. From @fig-coverage, we can see that's about 80% coverage. 
 - For $k=100$, our bias/sd ratio is 12. We don't need to look at anything. That's virtually 0 coverage.
 
-:::
 
-
-::: {.callout-note}
-### Lessons
+*Things to Remember.*
 
 1. Be careful with evidence from simulations. Consider the 
 possibility that there's something special about the way
@@ -471,7 +468,7 @@ look good.
 try to keep it in perspective. Think about what information you
 have that you can use to understand whether it's a big or small
 problem. Sometimes just thinking about the kind of data you're 
-working with, e.g. binary data as in @exr-2c, tells you a lot.
+working with, e.g. binary data as in this last exercise. tells you a lot.
 
 :::
 
@@ -768,6 +765,16 @@ covers = 1:1000 |> map_vec( function(Y) {
 })
 mean(covers)
 ```
+
+
+*Something to remember.*
+If you're using simulated data to look at what an estimator does,
+make sure it's the estimator you'd actually be using. 
+
+The bootstrap-once thing that's going on in your friend's code 
+might be a simple mistake or it might be a way to speed up the 
+coverage calculation, but the result is that what's being calculated 
+isn't the estimator's actual coverage. 
 :::
 
 ::: {#exr-4b .callout-exercise}
@@ -871,16 +878,6 @@ when we have more spread in the sample `Y`, the width of all these intervals is 
 
 :::
 
-::: {.callout-note}
-### Lesson
-If you're using simulated data to look at what an estimator does,
-make sure it's the estimator you'd actually be using. 
-
-The bootstrap-once thing that's going on in your friend's code 
-might be a simple mistake or it might be a way to speed up the 
-coverage calculation, but the result is that what's being calculated 
-isn't the estimator's actual coverage. 
-:::
 
 # Problem 5
 
@@ -1422,14 +1419,9 @@ $\sum_{x} \pb{x} \hmua{x} = \sum_{x} \pa{x}\hmua{x}$.
 Some intuition that might help remember the 'matched term' thing is that one of the 'least squares things to do' is to get the mean right. 
 If we average the least squares predictor in any model (that includes a constant) over the sample it's fit to, we just get that sample mean. When we use, e.g. the 'not necessarily parallel lines model', we're really just fitting $\hmua{\cdot}$ to the red dots and $\hmub{\cdot}$ to the green ones, so the matched terms are really just averages of $\hmua{\cdot}$ and $\hmub{\cdot}$ over the samples they're fit to. 
 
-:::
-
-::: {.callout-note}
-### Lesson
+*Something to remember.*
 If you're using simulation to understand methods for adjusting for covariate shift, 
-don't simulate data with no covariate shift.
-
-People do it a lot more often than you'd expect. 
+don't simulate data with no covariate shift. People do it a lot more often than you'd expect. 
 :::
 
 
@@ -1512,6 +1504,25 @@ No need for a long explanation. A sentence should be enough.
 There isn't bias with the additive model because it's not misspecified.
 The difference between the red and green means at each $x$ is constant:
 $\mua{x}$ and $\mub{x}$ are parallel lines.
+
+
+*Something to remember.* 
+Inverse probability weighting protects you from bias due to misspecification. 
+If you simulate data in which the model you're using isn't misspecified, 
+it looks like you don't need it.  
+
+*A dangerous interpretation.*
+You could read this as saying that if you *use* a model that's not misspecified, 
+you don't need inverse probability weighting. But for the kinds of models we've talked about,
+with the exception of the 'all functions model', misspecification
+is pretty much a certainty when you're analyzing real data. 
+$\mu(w,x)$ is the mean of an actual group of people in your population. 
+If an additive model (or lines, or whatever) actually did go through the 
+means for the first $m-1$ people in your population 
+perfectly, adding the last one will break that. That doesn't mean models like
+this are badly misspecified, but in larger sample sizes, even small
+small amounts of misspecification can be a disaster for coverage.
+
 :::
 
 ::: {.callout-exercise #exr-5f-p2}
@@ -1524,28 +1535,6 @@ It's to the right. $\mua{x}$ is decreasing and we have covariate shift from [rig
 which makes $\Delta_{\text{raw}}$ bigger $\Delta_1$.
 :::
 
-::: {.callout-note}
-### Lesson
-Inverse probability weighting protects you from bias due to misspecification. 
-If you simulate data in which the model you're using isn't misspecified, 
-it looks like you don't need it.  
-:::
-
-::: {.callout-note collapse="true"}
-### The Wrong Lesson
-
-You could say that if you *use* a model that's not misspecified, you
-don't need inverse probability weighting. But for the kinds of models we've talked about,
-with the exception of the 'all functions model', misspecification
-is pretty much a certainty when you're analyzing real data. 
-$\mu(w,x)$ is the mean of an actual group of people in your population. 
-If an additive model (or lines, or whatever) actually did go through the 
-means for the first $m-1$ people in your population 
-perfectly, adding the last one will break that. That doesn't mean models like
-this are badly misspecified, but in larger sample sizes, even small
-small amounts of misspecification can be a disaster for coverage.
-
-:::
 
 # Appendix {#sec-appendix-plots}
 
