@@ -13,6 +13,8 @@
 - In Cond Randomized Experiments Class, Do IPWs
 - In IPWLSQ class, note grids/trees are 'self-weighting': Extra credit: IPWLSQ w/ imperfect weights 
 - Add 'The Machine Learning Model' (Signal + Noise) to Loose Ends. Do Functions of Continuous and Discrete Covariates, say connection is more obvious for discrete, other involves limits..            
+- What is the right combination of population and random variable notation?  
+  - Have some exercises on that [conditioning and not]
 
 # Lecture 1 
 - Seemed good. A little long. Maybe 10-15 min. 
