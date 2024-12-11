@@ -908,9 +908,11 @@ viewof y = Inputs.radio(
 ### ATT
 ```{webr}
 #| autorun: true
-gamma.att = function(sam) { 
-  ifelse(sam$w, 1, pi(sam) / (1-pi(sam)))
-}
+#| input:
+#|  - trim_level
+gamma.ipw = function(sam) { ifelse(sam$w, 1, pi(sam) / (1-pi(sam))) }
+gamma.sbw = \(sam) pmax(0,sbw.att(sam, sigma=1, K=K.gaussian))
+gamma = gamma.ipw
 ```
 
 ```{webr}
@@ -919,10 +921,7 @@ gamma.att = function(sam) {
 #| input: 
 #|   - x
 #|   - trim_level 
-sam1 = sam; sam1$x = sam1[,x] 
-gamma.att.thing = sbw.att(sam1, K.gaussian)(1)
-gamma.att.sbw = \(sam) gamma.att.thing(sam[,x])
-ggplot() + histograms(sam, x, gamma=trimmed(gamma.att, trim_level)) + 
+ggplot() + histograms(sam, x, gamma=trimmed(gamma, trim_level)) + 
            histograms(sam, x, color=FALSE, fill.alpha=.05, mean.linetype='dotted') +
            facet_grid(rows=vars(w))
 ```
@@ -935,7 +934,7 @@ ggplot() + histograms(sam, x, gamma=trimmed(gamma.att, trim_level)) +
 #|   - x
 #|   - y
 #|   - trim_level
-ggplot() + scatter(sam, x, y, gamma=trimmed(gamma.att, trim_level)) 
+ggplot() + scatter(sam, x, y, gamma=trimmed(gamma, trim_level)) 
 ```
 
 ### ATT Estimates 
@@ -953,7 +952,7 @@ formula = y ~ w
 #| input: 
 #|   - trim_level
 model.ipw = lm(formula, weights=gamma, 
-  data=sam |> mutate(gamma=trimmed(gamma.att, trim_level)(sam)))
+  data=sam |> mutate(gamma=trimmed(gamma, trim_level)(sam)))
 Deltahat.1 = 
   mean( predict(model.ipw, sam  |> filter(w==1) |> mutate(w=1)) - 
         predict(model.ipw, sam  |> filter(w==1) |> mutate(w=0)) )
@@ -991,7 +990,7 @@ estimate.att = function(sam, formula, gamma=gamma.constant) {
 #| input: 
 #|   - trim_level
 estimators = function(sample) {
-  data.frame(ipw=estimate.att(sample, formula, gamma=trimmed(gamma.att, trim_level)),
+  data.frame(ipw=estimate.att(sample, formula, gamma=trimmed(gamma, trim_level)),
              no.ipw=estimate.att(sample, formula))
 }
 ```
@@ -1061,171 +1060,72 @@ plot.sampling.distribution(att.star)
 
 These are for our ATT estimators using [inverse probability weighting]{.teal} and [not]{.pink}.
 
-
-### ATE
-```{webr}
-#| autorun: true
-gamma.ate = function(sam) { 
-  ifelse(sam$w, 1/pi(sam), 1/(1-pi(sam)))
-}
-```
-
-```{webr}
-#| autorun: true
-#| fig-width: 12
-#| input: 
-#|   - x
-#|   - trim_level
-ggplot() + histograms(sam, x, gamma=trimmed(gamma.ate, trim_level)) + 
-           histograms(sam, x, color=FALSE, fill.alpha=.05, mean.linetype='dotted') +
-           facet_grid(rows=vars(w))
-```
-
-**Scatter Plot**
-```{webr}
-#| autorun: true
-#| fig-width: 12
-#| input: 
-#|   - x
-#|   - y
-#|   - trim_level
-ggplot() + scatter(sam, x, y, gamma=trimmed(gamma.ate, trim_level)) 
-```
-
-**Estimate**
-```{webr}
-#| autorun: true
-#| fig-width: 12
-#| input: 
-#|   - x
-#|   - y
-#|   - trim_level
-
-model = lm(formula, weights=gamma, 
-  data=sam |> mutate(gamma=trimmed(gamma.ate, trim_level)(sam)))
-Deltahat.all = 
-  mean( predict(model, sam  |> mutate(w=1)) - 
-        predict(model, sam  |> mutate(w=0)) )
-Deltahat.all
-```
-
-### ATC
-```{webr}
-#| autorun: true
-gamma.atc = function(sam) { 
-  ifelse(sam$w, (1-pi(sam))/pi(sam), 1)
-}
-```
-
-```{webr}
-#| autorun: true
-#| fig-width: 12
-#| input: 
-#|   - x
-#|   - trim_level
-ggplot() + histograms(sam, x, gamma=trimmed(gamma.atc, trim_level)) + 
-           histograms(sam, x, color=FALSE, fill.alpha=.05, mean.linetype='dotted') +
-           facet_grid(rows=vars(w))
-```
-
-**Scatter Plot**
-```{webr}
-#| autorun: true
-#| fig-width: 12
-#| input: 
-#|   - x
-#|   - y
-#|   - trim_level
-ggplot() + scatter(sam, x, y, gamma=trimmed(gamma.atc, trim_level)) 
-```
-
-**Estimate**
-```{webr}
-#| autorun: true
-#| fig-width: 12
-#| input: 
-#|   - x
-#|   - y
-#|   - trim_level
-
-model = lm(formula, weights=gamma, 
-  data=sam |> mutate(gamma=trimmed(gamma.atc, trim_level)(sam)))
-Deltahat.0 = 
-  mean( predict(model, sam |> filter(w==0) |> mutate(w=1)) - 
-        predict(model, sam |> filter(w==0) |> mutate(w=0)) )
-Deltahat.0
-```
-
-### Overlap-Weighted ATE
-```{webr}
-#| autorun: true
-gamma.overlap = function(sam) {
-  ifelse(sam$w, 1-pi(sam), pi(sam))
-}
-```
-
-```{webr}
-#| autorun: true
-#| fig-width: 12
-#| input: 
-#|   - x
-#|   - trim_level
-ggplot() + histograms(sam, x, gamma=trimmed(gamma.overlap, trim_level)) + 
-           histograms(sam, x, color=FALSE, fill.alpha=.05, mean.linetype='dotted') +
-           facet_grid(rows=vars(w))
-```
-
-**Scatter Plot**
-```{webr}
-#| autorun: true
-#| fig-width: 12
-#| input: 
-#|   - x
-#|   - y
-#|   - trim_level
-ggplot() + scatter(sam, x, y, gamma=trimmed(gamma.overlap, trim_level)) 
-```
-
-**Estimate**
-```{webr}
-#| autorun: true
-#| fig-width: 12
-#| input: 
-#|   - x
-#|   - y
-#|   - trim_level
-
-model = lm(formula, weights=gamma, 
-  data=sam |> mutate(gamma=trimmed(gamma.overlap, trim_level)(sam)))
-summary(model)
-```
-
 :::
 
-
 ## *Stable Balancing Weights*
+```{r}
+#| autorun: true
+
+pi = function(s) { with(s, 
+  pnorm(x.1^2 + 2*x.2^2 - 2*x.3^2 - 
+       (x.4+1)^3 - .05*log(x.5+10) + x.6 - 1.5)
+)}
+
+invlogit = function(x) { 1 / (1 + exp(-x)) }
+mu = function(s) { with(s,
+  invlogit((x.1 + x.2 + x.3)^2)
+)} 
+
+draw.sample = function(n) {
+  SigmaX.13 = matrix(c(2,   1,   -1,
+                       1,   1,   -.5,
+                        -1, -.5,    1), 3, 3)
+  L = chol(SigmaX.13)              
+  Z.13 = matrix(rnorm(3*n),3,n)   
+  X.13 = L %*% Z.13               
+  X.4 = runif(n, min=-1, max=1)
+  X.5 = rchisq(n, df=1)
+  X.6 = rbinom(n, size=1, prob=.5)
+
+  sam = data.frame(x=rbind(X.13, X.4, X.5, X.6) |> unname() |> t())
+  sam$w = rbinom(n, size=1, prob=pi(sam))
+  sam$y = rbinom(n, size=1, prob=mu(sam))
+  sam$y.continuous = mu(sam) + rbinary.uniform(n, mu(sam))
+  sam
+}
+```
 
 ::: {.panel-tabset}
 ### Kernels 
 ```{webr}
 #| autorun: true
-K.seminorm = function(x,xp, s=1) {
-    diff.norm = abs(x-xp)
-    (-1)^(s+1) * ifelse(diff.norm==0, 0, diff.norm^(2*s)*log(diff.norm))
+atleast_2d = function(X) { 
+  if(length(dim(X))==1) {
+    dim(X)=c(dim(X),1)
+  }
+  X
 }
-P.seminorm = function(x,s=1) {
-    outer(x,0:(s-1), function(x,p) x^p)
+
+outerproduct = function(A,B,K) { 
+  A = atleast_2d(A)
+  B = atleast_2d(B)
+  O = array(dim=c(nrow(A), nrow(B)))
+  for(ib in 1:nrow(B)) { 
+      O[,ib] = K(A,B[ib,])
+  }
+  O
 }
+
 K.norm = function(x,xp, s=1) {
-    diff.norm = abs(x-xp)
+    diff.norm = sqrt(colSums((t(x)-xp)^2))
     exp(-diff.norm)/2
 }
 K.gaussian = function(x,xp) {
-    diff.norm = abs(x-xp)
+    diff.norm = sqrt(colSums((t(x)-xp)^2))
     exp(-diff.norm^2/2)/sqrt(2*3.14159)
 }
 K.poly = function(x,xp, p=1) {
-    (1 + x %*% xp)^p
+    (1 + t(c(x)) %*% c(xp))^p
 }
 ```
 
@@ -1240,7 +1140,7 @@ predict.kernel.regression = function(obj, newdata, KxX=NULL, Px=NULL) {
     alpha = obj$alpha
     gamma = obj$gamma
 
-    if(is.null(KxX)) { KxX = outer(x,X,K) }
+    if(is.null(KxX)) { KxX = outerproduct(x,X,K) }
     if(is.null(P)) { 
         KxX %*% gamma 
     } else {
@@ -1253,34 +1153,23 @@ predict.kernel.regression = function(obj, newdata, KxX=NULL, Px=NULL) {
 ### Fitting Weights 
 ```{webr}
 #| autorun: true
-ridge.both = function(W,X,Y,K,P=NULL) {
-    KxX = outer(X,X[W==1],K)
-    KXX = KxX[W==1,]
+kernel.sbw = function(W,X,K,P=NULL) {
+    X = atleast_2d(X)
+    KxX = outerproduct(X,X[W==0,],K)
+    KXX = KxX[W==0,]
     evd = eigen(KXX, symmetric = TRUE)
     
     V = evd$vectors
     l = evd$values
-    VtY = t(V) %*% Y[W==1]
 
-    VtsumKxX = t(V) %*% colSums(KxX)
+    VtsumKxX = t(V) %*% colSums(KxX[W==1,])
     Px = NULL
     PX = NULL
     VtPX = NULL
     alpha = NULL
-    if(!is.null(P)) {
-        Px = P(X)
-        PX = Px[W==1,]
-        VtPX = t(V) %*% PX
-    }
-    
     gamma = function(sigma) { 
-        if(!is.null(P)) {
-            alpha = solve(t(PX) %*% PX  - t(VtPX) %*% diag(1/(l + sigma^2)) %*% VtPX,
-                          colSums(Px) -   t(VtPX) %*% diag(1/(l + sigma^2)) %*% VtsumKxX)
-            VtsumKxX = VtsumKxX - VtPX %*% alpha
-        }
         gamma = V %*% diag(1/(l^2 + sigma^2*l)) %*% VtsumKxX 
-        obj = list(alpha=alpha, gamma=gamma, K=K, P=P, X=X[W==1])
+        obj = list(alpha=alpha, gamma=gamma, K=K, P=P, X=X[W==0,])
         attr(obj, 'class') = 'kernel.regression'
         obj
     }
@@ -1292,13 +1181,19 @@ ridge.both = function(W,X,Y,K,P=NULL) {
 ### Everything Together
 ```{webr}
 #| autorun: true
-sbw.att = function(sam, K=K.gaussian) {
-  fits = ridge.both(sam$w, sam$x, sam$y, K.gaussian)
-  function(sigma) { 
-    gamma0 = predict(fits$gamma(sigma), newdata=data.frame(X=sam$x))
-    ifelse(sam$w==1, 1, gamma0)
-  }  
+sbw.att = function(sam, K=K.gaussian, sigma=1) {
+  X = as.matrix(sam[, c('x.1','x.2','x.3','x.4','x.5','x.6')])
+  fits = kernel.sbw(sam$w, X, K)
+  gamma.obj = fits$gamma(sigma)
+  gamma0 = predict(gamma.obj, newdata=list(X=X)) * 
+           mean(sam$w) # this fixes the denominator: kernel.sbw gives weights for estimating (1/n)\sum_{i:W_i=1} \mu(0,X_i)
+  ifelse(sam$w==1, 1, gamma0)
 }
+
+sam = draw.sample(1000)
+gamma = sbw.att(sam, sigma=4)
+mean((1-sam$w)*gamma)
+mean(gamma*sam$w*sam$y - gamma*(1-sam$w)*sam$y)
 ```
 :::
 
