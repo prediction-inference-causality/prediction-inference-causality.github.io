@@ -1,6 +1,5 @@
 ---
-title: "Lecture 1"
-subtitle: "Introduction"
+title: "Introduction" 
 execute:
   echo: false
   warning: false
@@ -37,6 +36,7 @@ annotated.social.pressure.plot = social.pressure.plot +
 mitt.votes = pop$voted[pop$treatment==' Neighbors' & pop$age==31 & pop$p2002=='no'] == 'Yes'
 rush.votes = pop$voted[pop$treatment==' Neighbors' & pop$age==27 & pop$p2002=='yes'] == 'Yes'
 al.votes = pop$voted[pop$treatment==' Neighbors' & pop$age==34 & pop$p2002=='yes'] == 'Yes'
+rush.votes.no = pop$voted[pop$treatment==' Control' & pop$age==27 & pop$p2002=='yes'] == 'Yes'
 
 dpop = pop[j.plot,]
 dmitt.votes = dpop$voted[dpop$treatment==' Neighbors' & dpop$age==31 & dpop$p2002=='no'] == 'Yes'
@@ -64,11 +64,15 @@ voting_rate = function(letter, data=social.pressure) {
 control.rate = voting_rate(' Control')
 neighbors.rate = voting_rate(' Neighbors')
 n.age = nrow(filter(social.pressure, age >= 25 & age <= 35))
+n.like = function(age, p2002) { 
+  sum(social.pressure$age == age & social.pressure$p2002 == p2002)
+}
+n.rush = n.like(27, 'no')
 ```
 
-# Introduction
+# This Chapter and the Rest 
 
-Today we'll introduce the main ideas we'll cover in this course through the lens of a real study. We'll touch on many concepts that we'll explore in detail throughout the semester, just to give you a sense of the big picture and identify where we'll start digging in. You can find the full syllabus at [qtm285-1.github.io](https://qtm285-1.github.io), which includes the schedule, assignments, and assessment details.
+In this chapter, we'll introduce the main ideas we'll cover in this course through the lens of a real study. We'll touch on many concepts that we'll explore in detail throughout the semester, just to give you a sense of the big picture and identify where we'll start digging in.
 
 As we work through our example today, you'll notice that the process isn't always smooth. We'll take some wrong turns that we'll need to back out of, and we'll make some jumps that aren't fully justified. This is intentional - I want to give you a sense of what it's like to do this kind of work on your own. Most days in this class will be different; I'll guide you through the material smoothly, and I've chosen topics that fit together well (that's why we're doing Trees and Forests at the end instead of Neural Nets, for example).
 
@@ -78,20 +82,21 @@ Learning is about trying things, seeing how they go, and understanding the under
 
 # The Social Pressure Experiment
 
-Prediction, Inference, and Causality. And how they fit together.
-
 ## The Experiment
 
 ::: {.panel-tabset}
-### Basic Plot
+### The Data
 ```{r}
+#| label: fig-social-pressure
 social.pressure.plot
 ```
 
-### With Group Means
+### With Frequencies Drawn In
 ```{r}
+#| label: fig-social-pressure-frequencies
 annotated.social.pressure.plot
 ```
+
 :::
 
 ### The Idea 
@@ -123,15 +128,13 @@ We have that data. We're looking at some of it. We're looking at the people in t
 - Its location on the y-axis indicates whether they voted in the 2006 primary.  
   - Yeses in the top row; nos on the bottom.
 
-## A Missed Opportunity?
+Flip to the "With Frequencies Drawn In" tab to see the fraction of Yeses within each group shown as a bigger dot. For example, in the [green]{.groupb} column at age 27, the big dot is at about 0.3, meaning about 30% of the [people who got the letter]{.groupb} at age 27 voted.
+
+## Making Predictions
 
 Let's consider a practical scenario. Suppose you work on a political campaign where your candidate lost by a small margin. You learn about this experiment and wonder if sending out high-pressure letters (like the neighbors letter) might have helped you win. Of course, you would only send these letters to people you're confident would vote for your candidate, and you'd do it anonymously to avoid influencing how people vote.
 
-## Your Imaginary Mailer Campaign
-
-Let's make this more concrete. Suppose people aged 25-35 are extremely likely to vote for your candidate - they would vote for your candidate every time they vote. The challenge is that many of them don't vote in mid-term primaries. You know how many of them actually voted (this is public record), but you need to know how many would have voted if they had received the neighbors letter. The difference between these numbers would tell you how many additional votes your imaginary mailer campaign might have generated.
-
-## Step 1a. Individual-Level Prediction
+Let's make this more concrete. Suppose people aged 25-35 are extremely likely to vote for your candidate --- they would vote for your candidate every time they vote. The challenge is that many of them don't vote in mid-term primaries. You know how many of them actually voted (this is public record), but you need to know how many would have voted if they had received the neighbors letter. The difference between these numbers would tell you how many additional votes your imaginary mailer campaign might have generated.
 
 ::: {.panel-tabset}
 
@@ -141,59 +144,57 @@ Let's start by trying to predict turnout for individual people. Consider two vot
 
 | Name | Age | Voted 2002 | Voted 2006 | if sent letter |
 |------|-----|------------|------------|----------------|
-| Rush Hoogendyk | 27  | Yes | No  | ? |
-| Mitt DeVos     | 31  | No  | No  | ? |
+| Rush Hoogendyk | 27  | `r triangle` Yes | No  | ? |
+| Mitt DeVos     | 31  | `r circle` No   | No  | ? |
 
-How do you think Rush and Mitt would have voted if they'd gotten the [neighbors letter]{.groupb}? Use the plot. 
+How do you think Rush and Mitt would have voted if they'd gotten the [neighbors letter]{.groupb}? Look at @fig-social-pressure. 
 *Hint*. What information do you have to help you guess?
 
-### An Answer Or Two
+### An Answer
 
 My guess is that neither would have voted. Letter or no, very few people did. 
 
-To be more precise, let's take a look the [people who got the letter]{.groupb} features matching Rush and Mitt.
-- Rush-types are [`r triangle`s]{.groupb} in the x=27 column. 
-  `r sum(rush.votes)`/`r length(rush.votes)` voted. `r percent(mean(rush.votes))`.
-- Mitt-types are [`r circle`s]{.groupb} in the x=31 column. 
-  `r sum(mitt.votes)`/`r length(mitt.votes)` voted. `r percent(mean(mitt.votes))`.
+To be more precise, let's look at the [people who got the letter]{.groupb} with features matching Rush and Mitt in @fig-social-pressure. 
 
-Looking at rates within-group, which seems better, doesn't change our conclusion: They probably didn't. 
+- Rush-types are [`r triangle`s]{.groupb} in the x=27 column. `r sum(rush.votes)`/`r length(rush.votes)` voted. `r percent(mean(rush.votes))`.
+- Mitt-types are [`r circle`s]{.groupb} in the x=31 column. `r sum(mitt.votes)`/`r length(mitt.votes)` voted. `r percent(mean(mitt.votes))`.
 
-Note the percentages above are based all data from the experiment, not just the dots shown. Using only those ...
-- `r sum(drush.votes)`/`r length(drush.votes)` (`r percent(mean(drush.votes))`) *displayed* Rush-types voted.
-- `r sum(dmitt.votes)`/`r length(dmitt.votes)` (`r percent(mean(dmitt.votes))`), *displayed* Mitt-types voted.
+Looking at rates within-group like this doesn't change our conclusion. People like Rush and Mitt, like most people outright, tended not to vote. 
+
+Now that we've worked out how to make predictions for Rush and Mitt, we can do it for everyone in our list. That is, we can fill in all the **?**s in our table below. I did one more.
+
+::: { #tbl-predictions }
+
+| Name | Age | Voted 2002 | Voted 2006 | if sent letter |
+|------|-----|------------|------------|----------------|
+| Rush | 27 | `r triangle` Yes | No  | No (`r percent(mean(rush.votes))` of [Rush-types]{.groupb} voted) |
+| Mitt | 31 | `r circle` No   | No  | No (`r percent(mean(mitt.votes))` of [Mitt-types]{.groupb} voted) |
+| Al   | 34 | `r circle` No   | No  | No (`r percent(mean(al.votes))`   of [Al-types]{.groupb} voted) |
+| ...  | ... | ...  | ...  | ? |
+
+Counterfactual Vote Predictions
+:::
+
+Note that the frequencies in the table above are based on all data from the experiment, not just the dots shown. But we get the same conclusion if we use only the dots we're displaying.
+
+- `r sum(drush.votes)`/`r length(drush.votes)` (`r percent(mean(drush.votes))`) of the *displayed* Rush-types voted
+- `r sum(dmitt.votes)`/`r length(dmitt.votes)` (`r percent(mean(dmitt.votes))`) of the *displayed* Mitt-types voted
 
 :::
 
-## Step 1b. Implementing the Approach
+## Predicting Summaries 
 
-::: {.panel-tabset}
+There's not a whole lot we can do with this answer. We want to know how many votes we'd have gotten if we mailed everyone in this table the [letter]{.groupb}. How could we use @tbl-predictions to find out?
 
-### Question
+One approach is to just count up the number of predicted Yeses in the last column of our table. It turns out that doesn't work. We were choosing Yes/No by majority rule, but the majority within almost every group is No. To see this, we can look at the frequency of "Yes" votes within each age group shown in @fig-social-pressure-frequencies. If we think of "Yes" as 1 and "No" as 0, majority rule would say "No" if the fraction is below the midline. For people in our target age group (25-35), the majority says "No" in almost every group: `r sum(summary$mean.voted <= 1/2)`/`r nrow(summary)` of the groups.
 
-This doesn't quite answer our question. 
-We want to know how many votes we'd have gotten if we mailed everyone in this table the [letter]{.groupb}.
-How can we use the table to find out?
+Let's do better. We're still going to count. But this time, we're not going to think of Rush, Mitt, and Al as 3 Nos. We're going to think of Rush as `r percent(mean(rush.votes))` of a Yes; Mitt as `r percent(mean(mitt.votes))` of a Yes; and Al as `r percent(mean(al.votes))` of a Yes. Even though the thing we're predicting is binary, our prediction is a fraction. This sounds a bit odd but the math tends to work out. That way, if we counted up our predictions for 100 people like Rush, we get `r round(100*mean(rush.votes),2)` Yeses. Not zero. Some people call this kind of fractional answer to a Yes/No question probabilistic classification.
 
-### Something That Doesn't Work
+But we don't have 100 people like Rush (`r circle`s in the $x=27$ column). We have `r n.rush` of them. So when we count the number of predicted Yeses in this group, we get $`r n.rush` \times `r round(mean(rush.votes),2)` = `r round(n.rush * mean(rush.votes),2)`$. We can repeat this process to predict the number of Yeses we'd get if we didn't mail the letter to anyone: it's $`r n.rush` \times `r round(mean(rush.votes.no),2)` = `r round(n.rush * mean(rush.votes.no),2)`$. We can think of the difference between these two numbers as the *effect* of mailing the letter to people like Rush. Roughly `r round(n.rush * (mean(rush.votes) - mean(rush.votes.no)))` more Yeses. 
 
-Let's consider a different approach to making predictions. We could simply count the number of "Yes" votes in our predictions column. However, this approach doesn't work well because the majority within almost every group is "No". To illustrate this, we can look at the fraction of "Yes" votes within each group. If we think of "Yes" as 1 and "No" as 0, majority rule would say "No" if the fraction is below the midline.
+Repeating that process for every group in our target age range of 25-35, we predict an increase in this group's turnout rate from `r percent(control.rate)` to `r percent(neighbors.rate)` which would give us a total of roughly `r round(n.age * (neighbors.rate - control.rate))` more Yeses. Not bad!
 
-For people in our target age group (25-35), the majority says "No" in almost every group: `r sum(summary$mean.voted <= 1/2)`/`r nrow(summary)` of the groups.
-
-Flip to the "With Group Means" tab to see this illustrated with the fraction of Yeses within each group shown as a bigger dot.
-
-:::
-
-## Step 2. Statistical Inference
-
-::: {.callout-note #inference-note}
-This summary suggests the letter makes a big difference, but that alone isn't particularly interesting. We need to know if our estimate is accurate - if the letter actually improved turnout from about `r percent(control.rate)` to about `r percent(neighbors.rate)`. What's particularly challenging here is that we're asking about what would have happened if we'd done something we didn't do.
-:::
-
-Let's imagine we actually did mail the letter to every voter in Michigan, and the data we've used for our predictions (the green dots in @fig-social-pressure) is just a random sample of voters. If this were the case, we'd be dealing with a statistical inference problem. We'd want to know how the turnout rate we've estimated using our sample compares to the rate in the population.
-
-We can think of our estimate as the result of a procedure we could apply to any sample. If we applied this procedure to 100 different samples, we'd get 100 different numbers. While we don't have multiple samples (we'd need to time-travel to 2006 and mail letters multiple times), we can simulate this process to get a sense of the uncertainty in our estimates.
+## Statistical Inference 
 
 ```{r}
 #| cache: true
@@ -226,14 +227,9 @@ B = length(bootstrap.rate)
 bootstrap.reps = data.frame(rate=100*bootstrap.rate, y=2*(1:B)/B)
 ```
 
-```{r}
-#| label: fig-bootstrap-distribution
-estimates.plot +
-    strong.interval + 
-    geom_histogram(aes(x=rate, y=3*after_stat(density)), alpha=.2, data=bootstrap.reps, binwidth=.2) +
-    geom_point(aes(x=rate, y=y), data=bootstrap.reps, color='purple', alpha=.2) + 
-    scales
-```
+We've predicted that the letter makes a big difference, but that alone isn't particularly interesting. It's only interesting if our prediction is accurate, i.e. if mailing the letter would really turnout would really increase turnout from [`r percent(control.rate)`]{.groupa} to [`r percent(neighbors.rate)`]{.groupb}. What's particularly challenging here is that we're asking about what would have happened if we'd done something we didn't do.
+
+We call a one-number prediction like [`r percent(neighbors.rate)`]{.groupb} a *point estimate*. But there are other kinds of estimates we can use to tell us a bit more about our prediction's accuracy. The simplest is an *interval estimate*: a range of values that we're fairly confident that the true value is in.
 
 ::: {.panel-tabset}
 ### Point Estimates
@@ -241,19 +237,17 @@ estimates.plot +
 estimates.plot + scales
 ```
 
-### With Confidence Interval
+### Interval Estimates
 ```{r}
 estimates.plot + strong.interval + scales
 ```
 
-Flip to the "With Confidence Interval" tab to see the range we're claiming contains the true turnout rate.
-
-### Bootstrap Samples
+### Simulated Samples
 ```{r}
 estimates.plot + strong.interval + geom_point(aes(x=rate, y=y), data=bootstrap.reps, color='purple', alpha=.2) + scales
 ```
 
-### Full Distribution
+### Our Estimate's Distribution
 ```{r}
 estimates.plot +
     strong.interval + 
@@ -262,11 +256,15 @@ estimates.plot +
     scales
 ```
 
-Flip to the "Full Distribution" tab to see the complete distribution of our bootstrap samples.
-
 :::
 
-## Step 3. Causality
+
+What's this confidence actually based on? 
+Let's imagine we actually did mail the letter to every Michigan voter in our age range, and the data we've based our predictions on (the green dots in @fig-social-pressure) is just a random sample of these voters. If this were the case, we'd be dealing with a statistical inference problem. We'd want to know how the turnout rate we've estimated using our random sample compares to the rate in the population.
+
+We can think of our estimate as the result of a procedure we could apply to any sample. If we applied this procedure to 100 different samples, we'd get 100 different numbers. While we don't have multiple samples (we'd need to time-travel to 2006 and mail letters multiple times), we can simulate this process to get a sense of the uncertainty in our estimates. And by simulating it over and over, we can get a sense of our estimate's *probability distribution*.
+
+## Causality
 
 Now let's return to the issue we set aside earlier. We've been talking as if we'd mailed the letter to every voter in Michigan and were using a random sample of them to make our predictions. But that's not what happened. Gerber, Green, and Larimer didn't mail the letter to every voter in Michigan. Instead, they:
 
@@ -278,7 +276,7 @@ Now let's return to the issue we set aside earlier. We've been talking as if we'
 annotated.social.pressure.plot
 ```
 
-The key question is whether the sample we got looks like one we'd get if we'd mailed the letter to everyone. Is it similar enough that we can get away with pretending that it is? We'll explore this question in more detail on Friday when we start using mathematical tools to think about sampling.
+The key question is whether the sample we got looks like one we'd get if we'd mailed the letter to everyone. Is it similar enough that we can get away with pretending that it is? That's a question we'll explore in detail using mathematical tools to think about sampling and randomization.
 
 # Appendix
 
