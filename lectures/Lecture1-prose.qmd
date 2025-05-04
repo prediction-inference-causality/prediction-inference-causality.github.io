@@ -1,0 +1,312 @@
+---
+title: "Lecture 1"
+subtitle: "Introduction"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+{{< include shared-code.qmd >}}
+
+```{r}
+set.seed(0)
+social.pressure = read.csv('data/social-pressure-data.csv') 
+social.pressure$age = 2006-social.pressure$yob
+
+pop = social.pressure[social.pressure$treatment %in% c(' Control', ' Neighbors'), ] 
+
+J = sample(1:nrow(pop), , replace=TRUE)
+sam = pop[J,]
+
+display.frac = 1/10
+n.display = round(display.frac * nrow(pop))
+j.plot = sample(1:nrow(pop))[1:n.display]
+
+xco = function(w,x,scale=.3) { x + (scale/2)*(2*as.numeric(w) - 1) }
+
+social.pressure.plot = ggplot(pop[j.plot,], aes(x=xco(treatment==' Neighbors', age), y=as.numeric(voted=='Yes'), color=treatment, shape=p2002)) +
+  geom_point(alpha=.2, size=1, position=position_jitter(h=.1, w=.05, seed=0)) +
+  guides(color='none', shape='none') + 
+  scale_y_continuous(breaks=c(0,.5, 1), labels=c('No','','Yes')) + 
+  scale_x_continuous(breaks=seq(20,105,5)) 
+
+annotated.social.pressure.plot = social.pressure.plot + 
+  stat_summary(geom='point', fun=mean, data=pop)
+
+mitt.votes = pop$voted[pop$treatment==' Neighbors' & pop$age==31 & pop$p2002=='no'] == 'Yes'
+rush.votes = pop$voted[pop$treatment==' Neighbors' & pop$age==27 & pop$p2002=='yes'] == 'Yes'
+al.votes = pop$voted[pop$treatment==' Neighbors' & pop$age==34 & pop$p2002=='yes'] == 'Yes'
+
+dpop = pop[j.plot,]
+dmitt.votes = dpop$voted[dpop$treatment==' Neighbors' & dpop$age==31 & dpop$p2002=='no'] == 'Yes'
+drush.votes = dpop$voted[dpop$treatment==' Neighbors' & dpop$age==27 & dpop$p2002=='yes'] == 'Yes'
+
+summary = social.pressure |>
+    filter(age >= 25 & age <= 35 & treatment==' Neighbors') |>
+    group_by(age, p2002) |> 
+    summarize(mean.voted=mean(voted=='Yes'), .groups = 'drop')  
+
+voting_rate = function(letter, data=social.pressure) {
+  summary = data |>
+    filter(age >= 25 & age <= 35 & treatment==letter) |>
+    group_by(age, p2002) |> 
+    summarize(mean.voted=mean(voted=='Yes'), .groups = 'drop')  
+
+  proportions = data |>
+   filter(age >= 25 & age <= 35) |>
+    group_by(age, p2002) |>
+    summarize(count=n(), .groups = 'drop')
+  
+  sum(summary$mean.voted * proportions$count) / sum(proportions$count)
+}
+
+control.rate = voting_rate(' Control')
+neighbors.rate = voting_rate(' Neighbors')
+n.age = nrow(filter(social.pressure, age >= 25 & age <= 35))
+```
+
+# Introduction
+
+Today we'll introduce the main ideas we'll cover in this course through the lens of a real study. We'll touch on many concepts that we'll explore in detail throughout the semester, just to give you a sense of the big picture and identify where we'll start digging in. You can find the full syllabus at [qtm285-1.github.io](https://qtm285-1.github.io), which includes the schedule, assignments, and assessment details.
+
+As we work through our example today, you'll notice that the process isn't always smooth. We'll take some wrong turns that we'll need to back out of, and we'll make some jumps that aren't fully justified. This is intentional - I want to give you a sense of what it's like to do this kind of work on your own. Most days in this class will be different; I'll guide you through the material smoothly, and I've chosen topics that fit together well (that's why we're doing Trees and Forests at the end instead of Neural Nets, for example).
+
+But today's approach reflects an important truth about learning and doing this work: it's not about following a recipe. While you can learn recipes, they don't always work perfectly. Good bakers adjust for altitude and humidity, and similarly, you'll need to adapt your approach to different situations. Others might not follow the same methods you know, and you'll need to understand why things work (or don't) to get consistent results and diagnose problems.
+
+Learning is about trying things, seeing how they go, and understanding the underlying principles. While we can eventually write smooth explanations of why things work, that's not how we get there. The process of getting there and writing those explanations are important skills that this class will help you develop. Even with guidance, it takes practice.
+
+# The Social Pressure Experiment
+
+Prediction, Inference, and Causality. And how they fit together.
+
+## The Experiment
+
+::: {.panel-tabset}
+### Basic Plot
+```{r}
+social.pressure.plot
+```
+
+### With Group Means
+```{r}
+annotated.social.pressure.plot
+```
+:::
+
+### The Idea 
+
+In 2006, Gerber, Green, and Larimer ran an experiment in Michigan. They wanted to see what kinds of messages would get people to vote in the primary. So they wrote five letters exercising increasing levels of social pressure:
+
+1. No letter. This one was easier to write and cheaper to mail. Let's still count it as 'a letter'.
+2. A letter saying it was your civic duty to vote. @fig-civic-duty-letter
+3. A letter saying that your vote is public record. @fig-public-record-letter
+4. A letter saying that they'd be watching to see if you voted. @fig-watched-letter
+5. A letter saying that they'd tell your neighbors whether you voted. @fig-neighbors-letter
+   - This one was pretty intense. It included a list of your neighbors.
+   - And it told you whether they'd voted in the last couple elections.
+
+### The Experiment Details
+
+Starting with the complete list of registered voters in Michigan ...
+
+1. They randomly selected 180,000 households to include in their experiment.
+2. They randomly assigned each of these households one of five letters.
+3. They mailed the letters 11 days before the primary.
+4. Then they checked to see who voted.
+
+We have that data. We're looking at some of it. We're looking at the people in the households sent either [no letter]{.groupa} or the [*neighbors* letter]{.groupb}. We've got a dot for each one--- `r nrow(pop)` dots in all.^[We're not actually showing a dot for each person. To make the visualization manageable for your browser, we're randomly selecting `r percent(display.frac)` of the data points to display.] What does a person's dot look like?
+
+- Their current age determines where it is on the x-axis.
+- It's a `r triangle` if they voted in the 2002 primary and a `r circle` if they didn't.
+- It's [green]{.groupb} if they got the [neighbors letter]{.groupb} and [red]{.groupa} if they got [no letter]{.groupa}.
+- Its location on the y-axis indicates whether they voted in the 2006 primary.  
+  - Yeses in the top row; nos on the bottom.
+
+## A Missed Opportunity?
+
+Let's consider a practical scenario. Suppose you work on a political campaign where your candidate lost by a small margin. You learn about this experiment and wonder if sending out high-pressure letters (like the neighbors letter) might have helped you win. Of course, you would only send these letters to people you're confident would vote for your candidate, and you'd do it anonymously to avoid influencing how people vote.
+
+## Your Imaginary Mailer Campaign
+
+Let's make this more concrete. Suppose people aged 25-35 are extremely likely to vote for your candidate - they would vote for your candidate every time they vote. The challenge is that many of them don't vote in mid-term primaries. You know how many of them actually voted (this is public record), but you need to know how many would have voted if they had received the neighbors letter. The difference between these numbers would tell you how many additional votes your imaginary mailer campaign might have generated.
+
+## Step 1a. Individual-Level Prediction
+
+::: {.panel-tabset}
+
+### A Question
+
+Let's start by trying to predict turnout for individual people. Consider two voters from your list:
+
+| Name | Age | Voted 2002 | Voted 2006 | if sent letter |
+|------|-----|------------|------------|----------------|
+| Rush Hoogendyk | 27  | Yes | No  | ? |
+| Mitt DeVos     | 31  | No  | No  | ? |
+
+How do you think Rush and Mitt would have voted if they'd gotten the [neighbors letter]{.groupb}? Use the plot. 
+*Hint*. What information do you have to help you guess?
+
+### An Answer Or Two
+
+My guess is that neither would have voted. Letter or no, very few people did. 
+
+To be more precise, let's take a look the [people who got the letter]{.groupb} features matching Rush and Mitt.
+- Rush-types are [`r triangle`s]{.groupb} in the x=27 column. 
+  `r sum(rush.votes)`/`r length(rush.votes)` voted. `r percent(mean(rush.votes))`.
+- Mitt-types are [`r circle`s]{.groupb} in the x=31 column. 
+  `r sum(mitt.votes)`/`r length(mitt.votes)` voted. `r percent(mean(mitt.votes))`.
+
+Looking at rates within-group, which seems better, doesn't change our conclusion: They probably didn't. 
+
+Note the percentages above are based all data from the experiment, not just the dots shown. Using only those ...
+- `r sum(drush.votes)`/`r length(drush.votes)` (`r percent(mean(drush.votes))`) *displayed* Rush-types voted.
+- `r sum(dmitt.votes)`/`r length(dmitt.votes)` (`r percent(mean(dmitt.votes))`), *displayed* Mitt-types voted.
+
+:::
+
+## Step 1b. Implementing the Approach
+
+::: {.panel-tabset}
+
+### Question
+
+This doesn't quite answer our question. 
+We want to know how many votes we'd have gotten if we mailed everyone in this table the [letter]{.groupb}.
+How can we use the table to find out?
+
+### Something That Doesn't Work
+
+Let's consider a different approach to making predictions. We could simply count the number of "Yes" votes in our predictions column. However, this approach doesn't work well because the majority within almost every group is "No". To illustrate this, we can look at the fraction of "Yes" votes within each group. If we think of "Yes" as 1 and "No" as 0, majority rule would say "No" if the fraction is below the midline.
+
+For people in our target age group (25-35), the majority says "No" in almost every group: `r sum(summary$mean.voted <= 1/2)`/`r nrow(summary)` of the groups.
+
+Flip to the "With Group Means" tab to see this illustrated with the fraction of Yeses within each group shown as a bigger dot.
+
+:::
+
+## Step 2. Statistical Inference
+
+::: {.callout-note #inference-note}
+This summary suggests the letter makes a big difference, but that alone isn't particularly interesting. We need to know if our estimate is accurate - if the letter actually improved turnout from about `r percent(control.rate)` to about `r percent(neighbors.rate)`. What's particularly challenging here is that we're asking about what would have happened if we'd done something we didn't do.
+:::
+
+Let's imagine we actually did mail the letter to every voter in Michigan, and the data we've used for our predictions (the green dots in @fig-social-pressure) is just a random sample of voters. If this were the case, we'd be dealing with a statistical inference problem. We'd want to know how the turnout rate we've estimated using our sample compares to the rate in the population.
+
+We can think of our estimate as the result of a procedure we could apply to any sample. If we applied this procedure to 100 different samples, we'd get 100 different numbers. While we don't have multiple samples (we'd need to time-travel to 2006 and mail letters multiple times), we can simulate this process to get a sense of the uncertainty in our estimates.
+
+```{r}
+#| cache: true
+#| label: bootstrap-neighbors-rate 
+bootstrap.rate = replicate(400, voting_rate(' Neighbors', social.pressure[sample(1:nrow(social.pressure), replace=TRUE), ]))
+```
+
+```{r}
+neighbors.rate = voting_rate(' Neighbors')
+control.rate = voting_rate(' Control')
+
+estimates = data.frame(treatment=c(' Neighbors', ' Control'), 
+                       mean=c(voting_rate(' Neighbors'), voting_rate(' Control')),
+                       se = c(sd(bootstrap.rate), sd(bootstrap.rate)),
+                       y=c(1,1))
+vlines = data.frame(x=c(24.7, 100*bootstrap.rate[1]), treatment=c(' Control',' Neighbors'))
+
+scales = list(scale_x_continuous(breaks=c(24:33), labels=sprintf('%d%%', 24:33)),
+              scale_y_continuous(breaks=c(), labels=c()),
+              coord_cartesian(xlim=c(24,33), ylim=c(0,2)))
+faint.intervals = geom_pointrange(aes(x=100*mean, y=y, xmin=100*(mean-2*se), xmax=100*(mean+2*se), color=treatment), alpha=.05, data=estimates)
+strong.interval = geom_pointrange(aes(x=100*mean, y=y, xmin=100*(mean-2*se), xmax=100*(mean+2*se), color=treatment), alpha=.7, data=estimates[1,])
+
+estimates.plot = ggplot() + 
+  geom_point(aes(x=100*mean, y=y, color=treatment), data=estimates) +  
+  geom_vline(aes(xintercept=x, color=treatment), data=vlines) +
+  guides(color='none', linetype='none') 
+
+B = length(bootstrap.rate)
+bootstrap.reps = data.frame(rate=100*bootstrap.rate, y=2*(1:B)/B)
+```
+
+```{r}
+#| label: fig-bootstrap-distribution
+estimates.plot +
+    strong.interval + 
+    geom_histogram(aes(x=rate, y=3*after_stat(density)), alpha=.2, data=bootstrap.reps, binwidth=.2) +
+    geom_point(aes(x=rate, y=y), data=bootstrap.reps, color='purple', alpha=.2) + 
+    scales
+```
+
+::: {.panel-tabset}
+### Point Estimates
+```{r}
+estimates.plot + scales
+```
+
+### With Confidence Interval
+```{r}
+estimates.plot + strong.interval + scales
+```
+
+Flip to the "With Confidence Interval" tab to see the range we're claiming contains the true turnout rate.
+
+### Bootstrap Samples
+```{r}
+estimates.plot + strong.interval + geom_point(aes(x=rate, y=y), data=bootstrap.reps, color='purple', alpha=.2) + scales
+```
+
+### Full Distribution
+```{r}
+estimates.plot +
+    strong.interval + 
+    geom_histogram(aes(x=rate, y=3*after_stat(density)), alpha=.2, data=bootstrap.reps, binwidth=.2) +
+    geom_point(aes(x=rate, y=y), data=bootstrap.reps, color='purple', alpha=.2) + 
+    scales
+```
+
+Flip to the "Full Distribution" tab to see the complete distribution of our bootstrap samples.
+
+:::
+
+## Step 3. Causality
+
+Now let's return to the issue we set aside earlier. We've been talking as if we'd mailed the letter to every voter in Michigan and were using a random sample of them to make our predictions. But that's not what happened. Gerber, Green, and Larimer didn't mail the letter to every voter in Michigan. Instead, they:
+
+1. Randomly selected 180,000 households to include in their experiment
+2. Randomly assigned each of these households one of five letters
+
+```{r}
+#| label: fig-annotated-social-pressure
+annotated.social.pressure.plot
+```
+
+The key question is whether the sample we got looks like one we'd get if we'd mailed the letter to everyone. Is it similar enough that we can get away with pretending that it is? We'll explore this question in more detail on Friday when we start using mathematical tools to think about sampling.
+
+# Appendix
+
+## Terminology
+
+::: {.callout-note #terminology-note}
+- *Estimand*: What we actually want to estimate
+- *Population*: The group of people (or whatever) that exists but which we haven't collected data on in entirety
+- *Sample*: The data we use to estimate our estimand
+- *Inference*: Making statements about our estimand using our sample
+- *Interval estimate*: A claim that our estimand is in some range of values
+- *Point estimate*: A single value estimate, like our green dot
+- *Counterfactual population*: A population that doesn't exist because we didn't do something (like mail letters to everyone)
+- *Causality*: When we say mailing the letter *caused* an increase in turnout, we mean the increase was the *effect* of mailing the letter
+:::
+
+## The Letters
+
+::: {.panel-tabset}
+### Civic Duty
+![](figs/gerber-green-larimer-civic-duty.png){#fig-civic-duty-letter}
+
+### Public Record
+![](figs/gerber-green-larimer-public-record.png){#fig-public-record-letter}
+
+### Watched
+![](figs/gerber-green-larimer-watched.png){#fig-watched-letter}
+
+### Neighbors
+![](figs/gerber-green-larimer-neighbors.png){#fig-neighbors-letter}
+:::
