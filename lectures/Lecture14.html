@@ -1,0 +1,2514 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.6.24">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>29&nbsp; Inverse Probability Weighting – Prediction, Inference, and Causality</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../lectures/Lecture15.html" rel="next">
+<link href="../lectures/Lab7.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-88e56ac79f6d00081da8a857611ab47f.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-885f6d74d0dbe14d618e9fd67ad53520.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="../site_libs/quarto-contrib/live-runtime/live-runtime.js" type="module"></script>
+<link href="../site_libs/quarto-contrib/live-runtime/live-runtime.css" rel="stylesheet">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script type="module" src="../site_libs/quarto-ojs/quarto-ojs-runtime.js"></script>
+<link href="../site_libs/quarto-ojs/quarto-ojs.css" rel="stylesheet">
+<link href="../site_libs/pagedtable-1.1/css/pagedtable.css" rel="stylesheet">
+<script src="../site_libs/pagedtable-1.1/js/pagedtable.js"></script>
+<script>
+  window.MathJax = {
+    options : {
+      menuOptions: {
+        settings: {
+          assistiveMml: false,
+          collapsible: false,  
+          explorer: false    
+        }
+      }
+    },
+    loader: {load: ['[tex]/physics', '[tex]/unicode']},
+    tex: {packages: {'[+]': ['physics', 'unicode']}}
+  }
+</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part3.html">Linear Regression with Arbitrary Models</a></li><li class="breadcrumb-item"><a href="../lectures/Lecture14.html"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Inverse Probability Weighting</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="../">Prediction, Inference, and Causality</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Introduction</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="../part1.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">One and Two-Sample Problems</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab1-prose.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Sampling</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week0-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Homework: Review</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture2-prose.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Point and Interval Estimates</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab2.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Probability Background: Random Variables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week1-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Homework: The Idea of Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture3.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Calibrating Interval Estimates with Binary Observations</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week2-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Homework: Calibration with Binary Outcomes</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture4.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Calibrating Interval Estimates using the Bootstrap</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture5.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Normal Approximation and Sample Size Calculation</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab4.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Probability Review: Conditional Expectations</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week3-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Homework: Comparing Estimators</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture6.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Comparing Two Groups</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../exams/practice-midterm-1.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Practice Midterm 1</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week5-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Homework: Loose Ends</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="../part2.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Linear Regression with Saturated Models</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture7.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Summarizing Trends involving Many Groups</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture9.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Multivariate Analysis and Adjustment</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week7-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Homework: Covariate Shift</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab5.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">A Game of Telephone</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture8.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Inference for Complicated Summaries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week9-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Homework: Calibration for Complex Summaries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture10.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Potential Outcomes and Causality</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../exams/practice-midterm-2.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Practice Midterm 2</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="../part3.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Linear Regression with Arbitrary Models</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture11.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Least Squares Regression in Linear Models</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab6.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Least Squares in <strong>R</strong></span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture12.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">The Behavior of Least Squares Predictors</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture13.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Misspecification and Inference</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab7.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Misspecification and Averaging</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture14.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Inverse Probability Weighting</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture15.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">30</span>&nbsp; <span class="chapter-title">Application: Profit vs.&nbsp;Outcomes in Heart Attack Patients</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../exams/practice-final.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">31</span>&nbsp; <span class="chapter-title">Practice Final</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="-1">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#summary" id="toc-summary" class="nav-link active" data-scroll-target="#summary">Summary</a></li>
+  <li><a href="#a-simplification" id="toc-a-simplification" class="nav-link" data-scroll-target="#a-simplification">A Simplification</a></li>
+  <li><a href="#least-squares-and-noise-a-warm-up-exercise" id="toc-least-squares-and-noise-a-warm-up-exercise" class="nav-link" data-scroll-target="#least-squares-and-noise-a-warm-up-exercise">Least Squares and ‘Noise’: A Warm-up Exercise</a></li>
+  <li><a href="#the-idea" id="toc-the-idea" class="nav-link" data-scroll-target="#the-idea">The Idea</a>
+  <ul class="collapse">
+  <li><a href="#least-squares-and-covariate-shift" id="toc-least-squares-and-covariate-shift" class="nav-link" data-scroll-target="#least-squares-and-covariate-shift">Least Squares and Covariate Shift</a></li>
+  <li><a href="#a-very-simple-improvement" id="toc-a-very-simple-improvement" class="nav-link" data-scroll-target="#a-very-simple-improvement">A Very Simple Improvement</a></li>
+  <li><a href="#flat-vs-mild" id="toc-flat-vs-mild" class="nav-link" data-scroll-target="#flat-vs-mild">A Very Simple Improvement: Flat vs.&nbsp;Mild</a></li>
+  <li><a href="#using-a-sample" id="toc-using-a-sample" class="nav-link" data-scroll-target="#using-a-sample">Using a Sample</a></li>
+  <li><a href="#this-works-perfectly" id="toc-this-works-perfectly" class="nav-link" data-scroll-target="#this-works-perfectly">This Works <em>Perfectly</em></a></li>
+  <li><a href="#or-almost-perfectly." id="toc-or-almost-perfectly." class="nav-link" data-scroll-target="#or-almost-perfectly.">Or Almost <em>Perfectly</em>.</a></li>
+  </ul></li>
+  <li><a href="#sec-generalizing" id="toc-sec-generalizing" class="nav-link" data-scroll-target="#sec-generalizing">Generalizing the Idea</a>
+  <ul class="collapse">
+  <li><a href="#delta_0" id="toc-delta_0" class="nav-link" data-scroll-target="#delta_0"><span class="math inline">\(\Delta_0\)</span></a></li>
+  <li><a href="#delta_1" id="toc-delta_1" class="nav-link" data-scroll-target="#delta_1"><span class="math inline">\(\Delta_1\)</span></a></li>
+  <li><a href="#delta_textall" id="toc-delta_textall" class="nav-link" data-scroll-target="#delta_textall"><span class="math inline">\(\Delta_{\text{all}}\)</span></a></li>
+  </ul></li>
+  <li><a href="#proving-unbiasedness" id="toc-proving-unbiasedness" class="nav-link" data-scroll-target="#proving-unbiasedness">Proving Unbiasedness</a>
+  <ul class="collapse">
+  <li><a href="#goal" id="toc-goal" class="nav-link" data-scroll-target="#goal">Goal</a></li>
+  <li><a href="#approach" id="toc-approach" class="nav-link" data-scroll-target="#approach">Approach</a></li>
+  <li><a href="#the-orthogonality-condition" id="toc-the-orthogonality-condition" class="nav-link" data-scroll-target="#the-orthogonality-condition">The Orthogonality Condition</a>
+  <ul class="collapse">
+  <li><a href="#derivation" id="toc-derivation" class="nav-link" data-scroll-target="#derivation">Derivation</a></li>
+  </ul></li>
+  <li><a href="#showing-error-terms-are-zero" id="toc-showing-error-terms-are-zero" class="nav-link" data-scroll-target="#showing-error-terms-are-zero">Showing Error Terms are Zero</a></li>
+  <li><a href="#a-follow-up-question" id="toc-a-follow-up-question" class="nav-link" data-scroll-target="#a-follow-up-question">A Follow-Up Question</a></li>
+  <li><a href="#it-does-work-for-other-models" id="toc-it-does-work-for-other-models" class="nav-link" data-scroll-target="#it-does-work-for-other-models">It Does Work for Other Models</a></li>
+  <li><a href="#why-ipw" id="toc-why-ipw" class="nav-link" data-scroll-target="#why-ipw">Why IPW?</a></li>
+  </ul></li>
+  <li><a href="#appendix-answers" id="toc-appendix-answers" class="nav-link" data-scroll-target="#appendix-answers">Appendix: Answers</a>
+  <ul class="collapse">
+  <li><a href="#sec-q1-answer" id="toc-sec-q1-answer" class="nav-link" data-scroll-target="#sec-q1-answer">Q1 Answer</a></li>
+  <li><a href="#sec-q2-answer" id="toc-sec-q2-answer" class="nav-link" data-scroll-target="#sec-q2-answer">Q2 Answer</a></li>
+  <li><a href="#sec-q3-answer" id="toc-sec-q3-answer" class="nav-link" data-scroll-target="#sec-q3-answer">Q3 Answer</a></li>
+  <li><a href="#sec-lines-get-lucky" id="toc-sec-lines-get-lucky" class="nav-link" data-scroll-target="#sec-lines-get-lucky">Why the Lines Model ‘Gets Lucky’</a>
+  <ul class="collapse">
+  <li><a href="#lesson" id="toc-lesson" class="nav-link" data-scroll-target="#lesson">Lesson</a></li>
+  </ul></li>
+  </ul></li>
+  <li><a href="#appendix-two-versions-of-hatdelta" id="toc-appendix-two-versions-of-hatdelta" class="nav-link" data-scroll-target="#appendix-two-versions-of-hatdelta">Appendix: Two Versions of <span class="math inline">\(\hat\Delta\)</span></a>
+  <ul class="collapse">
+  <li><a href="#sec-deltahat0-pop-version" id="toc-sec-deltahat0-pop-version" class="nav-link" data-scroll-target="#sec-deltahat0-pop-version">The version where we use the population covariate distribution</a></li>
+  <li><a href="#sec-deltahat0-sample-version" id="toc-sec-deltahat0-sample-version" class="nav-link" data-scroll-target="#sec-deltahat0-sample-version">The version where we use the sample covariate distribution</a></li>
+  </ul></li>
+  <li><a href="#appendix-models" id="toc-appendix-models" class="nav-link" data-scroll-target="#appendix-models">Appendix: Models</a>
+  <ul class="collapse">
+  <li><a href="#the-horizontal-lines-model-1" id="toc-the-horizontal-lines-model-1" class="nav-link" data-scroll-target="#the-horizontal-lines-model-1">The Horizontal Lines Model</a></li>
+  <li><a href="#the-parallel-lines-model-1" id="toc-the-parallel-lines-model-1" class="nav-link" data-scroll-target="#the-parallel-lines-model-1">The Parallel Lines Model</a></li>
+  <li><a href="#the-not-necessarily-parallel-lines-model" id="toc-the-not-necessarily-parallel-lines-model" class="nav-link" data-scroll-target="#the-not-necessarily-parallel-lines-model">The (Not-Necessarily-Parallel) Lines Model</a></li>
+  <li><a href="#the-additive-model-1" id="toc-the-additive-model-1" class="nav-link" data-scroll-target="#the-additive-model-1">The Additive Model</a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part3.html">Linear Regression with Arbitrary Models</a></li><li class="breadcrumb-item"><a href="../lectures/Lecture14.html"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Inverse Probability Weighting</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Inverse Probability Weighting</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<div class="hidden">
+$$ \newcommand{X}{} \newcommand{Y}{}
+<p>$$</p>
+</div>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-8-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<ul>
+<li>Today, we’re going to talk about <em>inverse probability weighting</em>.</li>
+<li>This is a simple technique for getting unbiased estimates …
+<ul>
+<li>of targets like adjusted differences in means…</li>
+<li>even when your model is badly misspecified.</li>
+</ul></li>
+<li>You can use it even when it’s impossible to avoid bias using the ‘all functions’ model.
+<ul>
+<li>e.g., when you have empty columns. This often happens when you have a small sample.</li>
+<li>Or when you have many columns, i.e.&nbsp;many covariates to adjust for or one with many levels.</li>
+</ul></li>
+<li>The essential idea is to fit the data <em>where it’s used in your comparison</em>, not where most of the data is.</li>
+</ul>
+</section>
+<section id="a-simplification" class="level2">
+<h2 class="anchored" data-anchor-id="a-simplification">A Simplification</h2>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true" aria-current="page">Sample Least Squares Predictor</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false">Population Least Squares Predictor</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-3" role="tab" aria-controls="tabset-1-3" aria-selected="false">The Sampling Distribution of <span class="math inline">\(\hat\Delta_0\)</span></a></li></ul>
+<div class="tab-content">
+<div id="tabset-1-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-1-1-tab">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-9-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-10-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-1-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-3-tab">
+<div id="fig-sampling-Delta0-lsq" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-sampling-Delta0-lsq-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-11-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-sampling-Delta0-lsq-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;29.1: The sampling distribution of the adjusted difference in means <span class="math inline">\(\hat\Delta_0\)</span> when we use <span class="math inline">\(\hat\mu\)</span> as an estimator of <span class="math inline">\(\mu\)</span>. Its center <span class="math inline">\(\mathop{\mathrm{E}}\hat\Delta_0\)</span> is shown in blue. The target <span class="math inline">\(\Delta_0\)</span> is shown in green. And the population version of the estimator, <span class="math inline">\(\tilde\Delta_0\)</span>, is shown in pink. You can see that the sampling distribution of <span class="math inline">\(\hat\Delta_0\)</span> is centered on <span class="math inline">\(\tilde\Delta_0\)</span>.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<ul>
+<li>To keep things simple, we’ll start by thinking about the <em>population least squares predictor</em>.</li>
+</ul>
+<p><span class="math display">\[
+\begin{aligned}
+\tilde\mu
+&amp;\overset{\texttip{\small{\unicode{x2753}}}{it minimizes the average of the squared errors we make on the population}}{=}
+  \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \frac{1}{m}\sum_{j=1}^m \qty{ y_j - m(w_j,x_j) }^2  \\
+&amp;\overset{\texttip{\small{\unicode{x2753}}}{this average can be rewritten as the expected squared error for $(W_i,X_i,Y_i)$ drawn uniformly-at-random from the population}}{=}
+  \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \mathop{\mathrm{E}}\qty[ \qty{ Y_i - m(W_i,X_i) }^2 ] \\
+\end{aligned}
+\]</span></p>
+<ul>
+<li>We saw in <a href="https://qtm285-1.github.io/assets/lectures/Lecture12.html">Lecture 12</a> that <span class="math inline">\(\tilde\mu(w,x)\)</span> is the <em>expected value</em> of the (sample) least squares predictor<br>
+when <span class="math inline">\((W_i,X_i,Y_i)\)</span> are drawn uniformly-at-random from the population.</li>
+</ul>
+<p><span class="math display">\[
+\tilde\mu(w,x) = \mathop{\mathrm{E}}[ \hat\mu(w,x) ] \qfor \hat\mu = \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \frac{1}{n}\sum_{i=1}^n \qty{ Y_i - m(W_i,X_i) }^2.
+\]</span></p>
+<ul>
+<li>So if we’re estimating a target like <span class="math inline">\(\Delta_0\)</span>, the error we get using <span class="math inline">\(\tilde\mu\)</span> is the <em>bias</em> we get using <span class="math inline">\(\hat\mu\)</span>. <span class="math display">\[
+\mathop{\mathrm{E}}[\hat\Delta_0] - \Delta_0 = \tilde\Delta_0 - \Delta_0
+\]</span></li>
+</ul>
+</section>
+<section id="least-squares-and-noise-a-warm-up-exercise" class="level2">
+<h2 class="anchored" data-anchor-id="least-squares-and-noise-a-warm-up-exercise">Least Squares and ‘Noise’: A Warm-up Exercise</h2>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-12-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<ul>
+<li>When we’re doing this, it’ll be helpful to know something about the population least squares predictor <span class="math inline">\(\tilde\mu(w,x)\)</span>.
+<ul>
+<li>It depends <em>only</em> on the column means <span class="math inline">\(\mu(w,x)\)</span>.</li>
+<li>The rest—how our observations vary around them—doesn’t matter.</li>
+</ul></li>
+</ul>
+<p><span class="math display">\[
+\begin{aligned}
+\tilde\mu
+&amp;= \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \sum_{j=1}^n \left\{ y_j - m(w_j,x_j) \right\}^2 \\
+&amp;= \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \sum_{j=1}^n \left\{ \mu(w_j,x_j) - m(w_j,x_j) \right\}^2.
+\end{aligned}
+\]</span></p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-2-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-2-1" role="tab" aria-controls="tabset-2-1" aria-selected="true">Notation and Terminology</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-2-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-2-2" role="tab" aria-controls="tabset-2-2" aria-selected="false"></a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-2-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-2-3" role="tab" aria-controls="tabset-2-3" aria-selected="false">Proof</a></li></ul>
+<div class="tab-content">
+<div id="tabset-2-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-2-1-tab">
+<ul>
+<li>That’s why, in Machine Learning tradition, we call <span class="math inline">\(\mu(w,x)\)</span> the <em>signal</em> and everything else the <em>noise</em>. <span class="math display">\[
+y_j = \underset{\text{signal}}{\mu(w_j, x_j)} + \underset{\text{noise}}{\varepsilon_j} \qfor \mu(w,x)=\frac{1}{m_{w,x}}\sum_{j:w_j=w, x_j=x} y_j
+\]</span></li>
+<li>When we talk about a random variable <span class="math inline">\((W_i,X_i,Y_i)\)</span> drawn uniformly-at-random from the population, we can phrase this in terms of <em>conditioning</em>.</li>
+</ul>
+<p><span class="math display">\[
+Y_i = \mu(W_i,X_i) + \varepsilon_i \qqtext{ where } \mathop{\mathrm{E}}[\varepsilon_i \mid W_i, X_i] = 0.
+\]</span></p>
+<ul>
+<li><span class="math inline">\(\mu\)</span> here is the same function.</li>
+<li><span class="math inline">\(\varepsilon_i\)</span> is drawn uniformly-at-random from the set of deviations from the column mean in the population. <span class="math display">\[
+\varepsilon_i \text{ is drawn uniformly-at-random from } \{ \varepsilon_j \ : \ w_j = W_i, x_j = X_i \}.
+\]</span></li>
+</ul>
+</div>
+<div id="tabset-2-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-2-2-tab">
+
+</div>
+<div id="tabset-2-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-2-3-tab">
+<ul>
+<li>Let’s look at what <span class="math inline">\(\tilde\mu\)</span> minimizes in random variable terms. <span class="math display">\[
+\begin{aligned}
+\text{MSE}(m)
+&amp;= \mathop{\mathrm{E}}\qty[ \qty{ Y_i - m(W_i,X_i) }^2 ] \\
+&amp;= \mathop{\mathrm{E}}\qty[ \qty{ \varepsilon_i + \mu(W_i,X_i) - m(W_i,X_i) }^2 ] \\
+&amp;= \mathop{\mathrm{E}}\qty[ \qty{ \varepsilon_i + \qty{\mu(W_i,X_i) - m(W_i,X_i)}}^2 ] \\
+&amp;= \mathop{\mathrm{E}}\qty[ \varepsilon_i^2 + 2 \varepsilon_i \qty{\mu(W_i,X_i) - m(W_i,X_i)} + \qty{\mu(W_i,X_i) - m(W_i,X_i)}^2 ] \\
+&amp;= \mathop{\mathrm{E}}[\varepsilon_i^2] + 0 + \mathop{\mathrm{E}}[\qty{\mu(W_i,X_i) + m(W_i,X_i)}^2 ]
+\end{aligned}
+\]</span></li>
+<li>The difference between the version with <span class="math inline">\(Y\)</span> and the version with <span class="math inline">\(\mu\)</span> is a constant.</li>
+<li>It doesn’t depend on <span class="math inline">\(m\)</span>. So it doesn’t influence which <span class="math inline">\(m\)</span> minimizes the (population) mean squared prediction error <span class="math inline">\(\text{MSE}(m)\)</span>.</li>
+</ul>
+</div>
+</div>
+</div>
+</section>
+<section id="the-idea" class="level1">
+<h1>The Idea</h1>
+<p>Intuition and Empirical Evidence.</p>
+<section id="least-squares-and-covariate-shift" class="level2">
+<h2 class="anchored" data-anchor-id="least-squares-and-covariate-shift">Least Squares and Covariate Shift</h2>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-3-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-1" role="tab" aria-controls="tabset-3-1" aria-selected="true">Mild Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-3-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-2" role="tab" aria-controls="tabset-3-2" aria-selected="false">Moderate Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-3-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-3" role="tab" aria-controls="tabset-3-3" aria-selected="false">Extreme Covariate Shift</a></li></ul>
+<div class="tab-content">
+<div id="tabset-3-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-3-1-tab">
+<div id="fig-mildshift-lsq" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-mildshift-lsq-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-13-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-mildshift-lsq-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;30.1: A population with mild covariate shift and the population least squares predictor <span class="math inline">\(\tilde\mu\)</span> in the <em>horizontal lines model</em> (<a href="#eq-horizontal-lines-model" class="quarto-xref">eq&nbsp;<span>35.1</span></a>).
+</figcaption>
+</figure>
+</div>
+</div>
+<div id="tabset-3-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-3-2-tab">
+<div id="fig-modshift-lsq" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-modshift-lsq-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-14-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-modshift-lsq-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;30.2: A population with moderate covariate shift and the population least squares predictor <span class="math inline">\(\tilde\mu\)</span> in the <em>horizontal lines model</em> (<a href="#eq-horizontal-lines-model" class="quarto-xref">eq&nbsp;<span>35.1</span></a>)
+</figcaption>
+</figure>
+</div>
+</div>
+<div id="tabset-3-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-3-3-tab">
+<div id="fig-extshift-lsq" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-extshift-lsq-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-15-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-extshift-lsq-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;30.3: A population with extreme covariate shift and the population least squares predictor <span class="math inline">\(\tilde\mu\)</span> in the <em>horizontal lines model</em> (<a href="#eq-horizontal-lines-model" class="quarto-xref">eq&nbsp;<span>35.1</span></a>)
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<p><span class="math display">\[
+\color{gray}
+\begin{aligned}
+\Delta_{\text{raw}}
+&amp;=
+\textcolor[RGB]{0,191,196}{\frac{1}{m_1}\sum_{j:w_j=1} y_j} - \textcolor[RGB]{248,118,109}{\frac{1}{m_0}\sum_{j:w_j=0} y_j}
+&amp;&amp;\overset{\texttip{\small{\unicode{x2753}}}{translated into histogram form}}{=} \quad
+\sum_{x} \textcolor[RGB]{0,191,196}{p_{x \mid 1} \ \mu(1,x)} - \sum_{x} \textcolor[RGB]{248,118,109}{p_{x \mid 0} \ \mu(0,x)}  \\
+\tilde\Delta_{0}
+&amp;=
+\textcolor[RGB]{248,118,109}{\frac{1}{m_0}\sum_{j:w_j=0}} \color{gray}\left\{ \color{black}  \textcolor[RGB]{0,191,196}{\tilde \mu(1,x)} - \textcolor[RGB]{248,118,109}{\tilde\mu(0,x) } \color{gray} \right\} \color{black}
+&amp;&amp;\overset{\texttip{\small{\unicode{x2753}}}{translated into histogram form}}{=} \quad
+\sum_x \textcolor[RGB]{248,118,109}{p_{x \mid 0}} \ \textcolor[RGB]{0,191,196}{\tilde \mu(1,x)} -
+\sum_x \textcolor[RGB]{248,118,109}{p_{x \mid 0}} \ \textcolor[RGB]{248,118,109}{\tilde\mu(0,x) }.
+\end{aligned}
+\]</span></p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-4-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-4-1" role="tab" aria-controls="tabset-4-1" aria-selected="true">Question 1</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-4-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-4-2" role="tab" aria-controls="tabset-4-2" aria-selected="false">Question 2</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-4-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-4-3" role="tab" aria-controls="tabset-4-3" aria-selected="false">Question 3</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-4-4-tab" data-bs-toggle="tab" data-bs-target="#tabset-4-4" role="tab" aria-controls="tabset-4-4" aria-selected="false">The Essential Problem</a></li></ul>
+<div class="tab-content">
+<div id="tabset-4-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-4-1-tab">
+<p>How does the <em>raw difference in means</em> <span class="math inline">\(\Delta_{\text{raw}}\)</span> compare to the adjusted difference <span class="math inline">\(\tilde\Delta_{0}\)</span><br>
+when our adjustment uses the least squares predictor in the <em>all functions model</em>?</p>
+<p>See <a href="#sec-q1-answer" class="quarto-xref"><span>Section 33.1</span></a> for the answer.</p>
+</div>
+<div id="tabset-4-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-4-2-tab">
+<p>How does the <em>raw difference in means</em> <span class="math inline">\(\Delta_{\text{raw}}\)</span> compare to the adjusted difference <span class="math inline">\(\tilde\Delta_{0}\)</span><br>
+when our adjustment uses the least squares predictor in the <em>horizontal lines</em> model?</p>
+<p>See <a href="#sec-q2-answer" class="quarto-xref"><span>Section 33.2</span></a> for the answer.</p>
+</div>
+<div id="tabset-4-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-4-3-tab">
+<p>Why, in intuitive terms, is the constant <span class="groupb"><span class="math inline">\(\tilde\mu(1,x)\)</span></span> <em>not</em> the right prediction to use in this comparison? <em>Hint</em>. Think about the extreme covariate shift case. Which green dots does fit well? Which does it not fit well? Why?</p>
+<p>See <a href="#sec-q3-answer" class="quarto-xref"><span>Section 33.3</span></a> for the answer.</p>
+</div>
+<div id="tabset-4-4" class="tab-pane" role="tabpanel" aria-labelledby="tabset-4-4-tab">
+<p>What we want <span class="math inline">\(\tilde\mu(1,x)\)</span> to be good at (when we’re using it in <span class="math inline">\(\tilde\Delta_{0}\)</span>) and what we’re asking it to be good at (when we’re doing least squares) are different things. When there’s a lot of covariate shift, they’re very different things.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="a-very-simple-improvement" class="level2">
+<h2 class="anchored" data-anchor-id="a-very-simple-improvement">A Very Simple Improvement</h2>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-5-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-5-1" role="tab" aria-controls="tabset-5-1" aria-selected="true">Mild Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-5-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-5-2" role="tab" aria-controls="tabset-5-2" aria-selected="false">Moderate Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-5-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-5-3" role="tab" aria-controls="tabset-5-3" aria-selected="false">Extreme Covariate Shift</a></li></ul>
+<div class="tab-content">
+<div id="tabset-5-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-5-1-tab">
+<div id="fig-mildshift-ipw" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-mildshift-ipw-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-16-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-mildshift-ipw-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;30.4: A population with mild covariate shift and the <em>inverse probability weighted</em> population least squares predictor <span class="math inline">\(\tilde\mu\)</span> in the <em>horizontal lines model</em> (<a href="#eq-horizontal-lines-model" class="quarto-xref">eq&nbsp;<span>35.1</span></a>) after inverse probability weighting.
+</figcaption>
+</figure>
+</div>
+</div>
+<div id="tabset-5-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-5-2-tab">
+<div id="fig-modshift-ipw" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-modshift-ipw-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-17-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-modshift-ipw-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;30.5: A population with moderate covariate shift and the <em>inverse probability weighted</em> population least squares predictor <span class="math inline">\(\tilde\mu\)</span> in the <em>horizontal lines model</em> (<a href="#eq-horizontal-lines-model" class="quarto-xref">eq&nbsp;<span>35.1</span></a>) after inverse probability weighting.
+</figcaption>
+</figure>
+</div>
+</div>
+<div id="tabset-5-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-5-3-tab">
+<div id="fig-extshift-ipw" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-extshift-ipw-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-18-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-extshift-ipw-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;30.6: A population with extreme covariate shift and the <em>weighted</em> population least squares predictor <span class="math inline">\(\tilde\mu\)</span> in the <em>horizontal lines model</em> (<a href="#eq-horizontal-lines-model" class="quarto-xref">eq&nbsp;<span>35.1</span></a>).
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-6-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-6-1" role="tab" aria-controls="tabset-6-1" aria-selected="true">Pretending our way out of covariate shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-6-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-6-2" role="tab" aria-controls="tabset-6-2" aria-selected="false">Visualization</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-6-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-6-3" role="tab" aria-controls="tabset-6-3" aria-selected="false">What it means to pretend</a></li></ul>
+<div class="tab-content">
+<div id="tabset-6-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-6-1-tab">
+<ul>
+<li>Misspecification is a problem <em>because of</em> covariate shift. We’re fitting the wrong green dots.</li>
+<li>And we can’t really make the shift go away. In the moderate case above…
+<ul>
+<li>At <span class="math inline">\(x=10\)</span>, we have <span class="groupa">150</span> red dots and <span class="groupb">50</span> green dots.</li>
+<li>At <span class="math inline">\(x=12\)</span>, we have <span class="groupa">125</span> red dots and <span class="groupb">75</span> green dots.</li>
+<li>At <span class="math inline">\(x=14\)</span>, we have <span class="groupa">100</span> red dots and <span class="groupb">100</span> green dots.</li>
+</ul></li>
+<li>But we can pretend that we see each green dot we do have multiple times. We pretend that …
+<ul>
+<li>we see each one in the <span class="math inline">\(x=10\)</span> column <span class="math inline">\(\textcolor[RGB]{248,118,109}{150} / \textcolor[RGB]{0,191,196}{50} = 3\)</span> times.</li>
+<li>we see each one in the <span class="math inline">\(x=12\)</span> column <span class="math inline">\(\textcolor[RGB]{248,118,109}{125} / \textcolor[RGB]{0,191,196}{75} \approx 1.67\)</span> times.</li>
+<li>we see each one in the <span class="math inline">\(x=14\)</span> column <span class="math inline">\(\textcolor[RGB]{248,118,109}{100} / \textcolor[RGB]{0,191,196}{100} = 1\)</span> time.<br>
+</li>
+</ul></li>
+<li>Or possibly a fewer times. Since that’s fewer times than 1, fewer means a fraction.
+<ul>
+<li>We pretend that we see each one in the <span class="math inline">\(x=16\)</span> column <span class="math inline">\(\textcolor[RGB]{248,118,109}{75} / \textcolor[RGB]{0,191,196}{125} \approx 0.6\)</span> times.</li>
+<li>We pretend that we see each one in the <span class="math inline">\(x=18\)</span> column <span class="math inline">\(\textcolor[RGB]{248,118,109}{50} / \textcolor[RGB]{0,191,196}{150} \approx 0.33\)</span> times.</li>
+<li>Those are the ratios of red dots to green dots in those columns.</li>
+</ul></li>
+</ul>
+</div>
+<div id="tabset-6-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-6-2-tab">
+<ul>
+<li>In the plots above, we scale each dot by the number of times we pretend we see it.
+<ul>
+<li>In particular, we scale each dot’s <em>area</em>.</li>
+<li>The total area of the red and green dots in each column is the same.</li>
+</ul></li>
+<li>When we have extreme shift, that means we get some really big green dots.
+<ul>
+<li>That’s because we’re pretending that each observation is <em>a lot</em> of observations.</li>
+</ul></li>
+</ul>
+</div>
+<div id="tabset-6-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-6-3-tab">
+<ul>
+<li><p>Let’s think about what the population least squares predictor <span class="math inline">\(\tilde\mu(w,x)\)</span> looks like in histogram form. <span class="math display">\[
+\begin{aligned}
+\tilde\mu = \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \ \text{MSE}(m) \qfor
+\text{MSE}(m)
+&amp;= \frac{1}{m}\sum_{wx}\sum_{j:w_j=w, x_j=x} \color{gray}\left\{ \color{black}  \mu(w_j,x_j) - m(w_j,x_j)  \color{gray} \right\} \color{black}^2 \\
+&amp;= \frac{1}{m}\sum_{wx}\sum_{j:w_j=w, x_j=x}  \color{gray}\left\{ \color{black}  \mu(w, x) - m(w,x)  \color{gray} \right\} \color{black}^2 \\
+&amp;= \frac{1}{m}\sum_{wx} m_{wx} \color{gray}\left\{ \color{black}  \mu(w, x) - m(w,x)  \color{gray} \right\} \color{black}^2 \\
+\end{aligned}
+\]</span></p></li>
+<li><p>To <em>pretend</em> that we have the same number of green dots as red dots in each column …</p>
+<ul>
+<li>we just replace the number of dots <span class="math inline">\(m_{wx}\)</span> that are actually there …</li>
+<li>with the number of dots we want to <em>pretend</em> there are: <span class="math inline">\(m_{0x}\)</span>.</li>
+</ul></li>
+<li><p>Equivalently, we <em>weight</em> each term by a factor of <span class="math inline">\(m_{0x}/m_{wx}\)</span>. We’ll call this weight <span class="math inline">\(\gamma(w,x)\)</span>. <span class="math display">\[
+\begin{aligned}
+\tilde\mu^{\text{IPW}} = \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \ \text{WMSE}(m) \qfor
+\text{WMSE}(m)
+&amp;= \frac{1}{m}\sum_{wx} \textcolor[RGB]{248,118,109}{m_{0x}} \color{gray}\left\{ \color{black}  \mu(w, x) - m(w,x)  \color{gray} \right\} \color{black}^2 \\
+&amp;= \frac{1}{m}\sum_{wx} \gamma(w,x) m_{wx}\color{gray}\left\{ \color{black}  \mu(w, x) - m(w,x)  \color{gray} \right\} \color{black}^2  \\
+\qfor &amp;\gamma(w,x) = \frac{m_{0x}}{m_{wx}} = \begin{cases} 1 &amp; \text{if } w=0 \\ \frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{\textcolor[RGB]{0,191,196}{m_{1x}}} &amp; \text{if } w=1 \end{cases}
+\end{aligned}
+\]</span></p></li>
+<li><p>And if we want to think about this as a sum over the population …</p></li>
+<li><p>we can just give each person in our sum the weight <span class="math inline">\(\gamma(w_j,x_j)\)</span> for their column.</p></li>
+</ul>
+<p><span class="math display">\[
+\begin{aligned}
+\tilde\mu^{\text{IPW}} = \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \ \text{WMSE}(m) \qfor
+\text{WMSE}(m)
+&amp;= \frac{1}{m}\sum_{j=1}^m \gamma(w_j,x_j) \color{gray}\left\{ \color{black}  \mu(w_j, x_j) - m(w_j,x_j)  \color{gray} \right\} \color{black}^2  
+\end{aligned}
+\]</span></p>
+</div>
+</div>
+</div>
+</section>
+<section id="flat-vs-mild" class="level2">
+<h2 class="anchored" data-anchor-id="flat-vs-mild">A Very Simple Improvement: Flat vs.&nbsp;Mild</h2>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-7-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-7-1" role="tab" aria-controls="tabset-7-1" aria-selected="true">Mild Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-7-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-7-2" role="tab" aria-controls="tabset-7-2" aria-selected="false">Moderate Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-7-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-7-3" role="tab" aria-controls="tabset-7-3" aria-selected="false">Extreme Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-7-4-tab" data-bs-toggle="tab" data-bs-target="#tabset-7-4" role="tab" aria-controls="tabset-7-4" aria-selected="false"></a></li></ul>
+<div class="tab-content">
+<div id="tabset-7-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-7-1-tab">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-20-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-7-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-7-2-tab">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-21-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-7-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-7-3-tab">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-22-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-7-4" class="tab-pane" role="tabpanel" aria-labelledby="tabset-7-4-tab">
+
+</div>
+</div>
+</div>
+<ul>
+<li>Here’s a version of the same comparison when we …
+<ul>
+<li>make the shift in <span class="groupb"><span class="math inline">\(p_{x \mid 1}\)</span></span> more and more extreme</li>
+<li>but keep <span class="groupa"><span class="math inline">\(p_{x \mid 0}\)</span></span> flat.</li>
+</ul></li>
+<li>Notice that the least squares predictor <span class="math inline">\(\tilde\mu\)</span> doesn’t change at all.
+<ul>
+<li>That’s because it’s doing what we asked it to do: minimize error over the red distribution.</li>
+<li>That’s not changing, so neither are our least squares predictors.</li>
+</ul></li>
+</ul>
+</section>
+<section id="using-a-sample" class="level2">
+<h2 class="anchored" data-anchor-id="using-a-sample">Using a Sample</h2>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-8-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-8-1" role="tab" aria-controls="tabset-8-1" aria-selected="true">Mild Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-8-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-8-2" role="tab" aria-controls="tabset-8-2" aria-selected="false">Moderate Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-8-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-8-3" role="tab" aria-controls="tabset-8-3" aria-selected="false">Extreme Covariate Shift</a></li></ul>
+<div class="tab-content">
+<div id="tabset-8-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-8-1-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-23-1.svg" class="img-fluid figure-img"></p>
+<figcaption>A sample and the weighted least squares predictor in the horizontal lines model.</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-23-2.svg" class="img-fluid figure-img"></p>
+<figcaption>The population it’s drawn from and corresponding weighted population least squares predictor.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-8-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-8-2-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-24-1.svg" class="img-fluid figure-img"></p>
+<figcaption>A sample and the weighted least squares predictor in the horizontal lines model.</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-24-2.svg" class="img-fluid figure-img"></p>
+<figcaption>The population it’s drawn from and corresponding weighted population least squares predictor.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-8-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-8-3-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-25-1.svg" class="img-fluid figure-img"></p>
+<figcaption>A sample and the weighted least squares predictor in the horizontal lines model.</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-25-2.svg" class="img-fluid figure-img"></p>
+<figcaption>The population it’s drawn from and corresponding weighted population least squares predictor.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<ul>
+<li>In reality, we don’t have the population. We have (hopefully) a sample drawn uniformly-at-random from it.</li>
+<li>To make this work like a sample drawn from the population we’ve been pretending to have ….</li>
+<li>… we weight the people in our sample exactly the same way when we estimate <span class="math inline">\(\hat\mu\)</span>.</li>
+</ul>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-9-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-9-1" role="tab" aria-controls="tabset-9-1" aria-selected="true">Math</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-9-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-9-2" role="tab" aria-controls="tabset-9-2" aria-selected="false"><strong>R</strong></a></li></ul>
+<div class="tab-content">
+<div id="tabset-9-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-9-1-tab">
+<p><span class="math display">\[
+\begin{aligned}
+\hat\Delta_0 &amp;= \frac{1}{m_0} \sum_{j:w_j=0} \qty{ \hat\mu(1,x_j) - \hat\mu(0,x_j) } \\
+&amp; \qfor \hat\mu = \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \frac{1}{n}\sum_{i=1}^n \gamma(W_i,X_i) \color{gray}\left\{ \color{black}  Y_i - m(W_i,X_i)  \color{gray} \right\} \color{black}^2 \\
+&amp; \qand \gamma(w,x) = \frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{m_{wx}} = \begin{cases} 1 &amp; \text{if } w=0 \\ \frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{\textcolor[RGB]{0,191,196}{m_{1x}}} &amp; \text{if } w=1 \end{cases}
+\end{aligned}
+\]</span></p>
+</div>
+<div id="tabset-9-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-9-2-tab">
+<div class="cell">
+<div class="sourceCode cell-code" id="annotated-cell-5"><pre class="sourceCode r code-annotation-code code-with-copy code-annotated"><code class="sourceCode r"><button class="code-annotation-anchor" data-target-cell="annotated-cell-5" data-target-annotation="1">1</button><span id="annotated-cell-5-1" class="code-annotation-target"><a href="#annotated-cell-5-1" aria-hidden="true" tabindex="-1"></a>pop.summaries <span class="ot">=</span> pop <span class="sc">|&gt;</span> <span class="fu">group_by</span>(w,x) <span class="sc">|&gt;</span> <span class="fu">summarize</span>(<span class="at">mwx=</span><span class="fu">n</span>(), <span class="at">.groups=</span><span class="st">'drop'</span>)</span>
+<span id="annotated-cell-5-2"><a href="#annotated-cell-5-2" aria-hidden="true" tabindex="-1"></a>mwx <span class="ot">=</span> <span class="fu">summary.lookup</span>(<span class="st">'mwx'</span>, pop.summaries)</span>
+<button class="code-annotation-anchor" data-target-cell="annotated-cell-5" data-target-annotation="2">2</button><span id="annotated-cell-5-3" class="code-annotation-target"><a href="#annotated-cell-5-3" aria-hidden="true" tabindex="-1"></a>gamma <span class="ot">=</span> <span class="cf">function</span>(w,x) <span class="fu">mwx</span>(<span class="dv">0</span>,x) <span class="sc">/</span> <span class="fu">mwx</span>(<span class="dv">1</span>,x)</span>
+<span id="annotated-cell-5-4"><a href="#annotated-cell-5-4" aria-hidden="true" tabindex="-1"></a></span>
+<button class="code-annotation-anchor" data-target-cell="annotated-cell-5" data-target-annotation="3">3</button><span id="annotated-cell-5-5" class="code-annotation-target"><a href="#annotated-cell-5-5" aria-hidden="true" tabindex="-1"></a>sam<span class="sc">$</span>weights <span class="ot">=</span> <span class="fu">gamma</span>(sam<span class="sc">$</span>w, sam<span class="sc">$</span>x)</span>
+<span id="annotated-cell-5-6"><a href="#annotated-cell-5-6" aria-hidden="true" tabindex="-1"></a>fitted.model <span class="ot">=</span> <span class="fu">lm</span>(y<span class="sc">~</span><span class="dv">1</span><span class="sc">+</span>w, <span class="at">weights=</span>weights, <span class="at">data=</span>sam)</span>
+<span id="annotated-cell-5-7"><a href="#annotated-cell-5-7" aria-hidden="true" tabindex="-1"></a>muhat <span class="ot">=</span> <span class="cf">function</span>(w,x) <span class="fu">predict</span>(fitted.model, <span class="at">newdata=</span><span class="fu">data.frame</span>(<span class="at">w=</span>w,<span class="at">x=</span>x))</span>
+<span id="annotated-cell-5-8"><a href="#annotated-cell-5-8" aria-hidden="true" tabindex="-1"></a></span>
+<button class="code-annotation-anchor" data-target-cell="annotated-cell-5" data-target-annotation="4">4</button><span id="annotated-cell-5-9" class="code-annotation-target"><a href="#annotated-cell-5-9" aria-hidden="true" tabindex="-1"></a>Delta0.hat <span class="ot">=</span> <span class="fu">mean</span>(<span class="fu">muhat</span>(<span class="dv">1</span>,pop<span class="sc">$</span>x) <span class="sc">-</span> <span class="fu">muhat</span>(<span class="dv">0</span>,pop<span class="sc">$</span>x))</span>
+<span id="annotated-cell-5-10"><a href="#annotated-cell-5-10" aria-hidden="true" tabindex="-1"></a>Delta0.hat </span><div class="code-annotation-gutter-bg"></div><div class="code-annotation-gutter"></div></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-annotation">
+<dl class="code-annotation-container-hidden code-annotation-container-grid">
+<dt data-target-cell="annotated-cell-5" data-target-annotation="1">1</dt>
+<dd>
+<span data-code-cell="annotated-cell-5" data-code-lines="1,2" data-code-annotation="1">Here we’re calculating <span class="math inline">\(m_{wx}\)</span> as a function of <span class="math inline">\(w\)</span> and <span class="math inline">\(x\)</span>. This uses the tidyverse functions <code>group_by</code> and <code>summarize</code> and the function <code>summary.lookup</code> from the Week 9 homework.</span>
+</dd>
+<dt data-target-cell="annotated-cell-5" data-target-annotation="2">2</dt>
+<dd>
+<span data-code-cell="annotated-cell-5" data-code-lines="3" data-code-annotation="2">This is the function we weight our observations using.<br>
+</span>
+</dd>
+<dt data-target-cell="annotated-cell-5" data-target-annotation="3">3</dt>
+<dd>
+<span data-code-cell="annotated-cell-5" data-code-lines="5,6,7" data-code-annotation="3">We fit our model using the <strong>R</strong> built-in function <code>lm</code>, telling it to use the weights we’ve put in the column <code>sam$weights</code>.</span>
+</dd>
+<dt data-target-cell="annotated-cell-5" data-target-annotation="4">4</dt>
+<dd>
+<span data-code-cell="annotated-cell-5" data-code-lines="9" data-code-annotation="4">We use it in our formula for <span class="math inline">\(\Delta_0\)</span> from <a href="#sec-deltahat0-pop-version" class="quarto-xref"><span>Section 34.1</span></a>.</span>
+</dd>
+</dl>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] -10526.25</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<ul>
+<li>Note that the weights <span class="math inline">\(\gamma(w,x)\)</span> we are based on knowledge of the <em>population’s covariate distribution</em>.</li>
+<li>Sometimes we have that information.
+<ul>
+<li>E.g. when we survey registered voters, some information about every registered voter is public record.</li>
+</ul></li>
+<li>Sometimes we don’t, so we have to use an estimate <span class="math inline">\(\hat\gamma\)</span> of these weights.
+<ul>
+<li>E.g., we can use the corresponding ratios of red and green dots in the sample.</li>
+</ul></li>
+</ul>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-10-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-10-1" role="tab" aria-controls="tabset-10-1" aria-selected="true">Math</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-10-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-10-2" role="tab" aria-controls="tabset-10-2" aria-selected="false"><strong>R</strong></a></li></ul>
+<div class="tab-content">
+<div id="tabset-10-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-10-1-tab">
+<p><span class="math display">\[
+\hat\gamma(w,x) = \frac{\textcolor[RGB]{248,118,109}{N_{0x}}}{N_{wx}} = \begin{cases} 1 &amp; \text{if } w=0 \\ \frac{\textcolor[RGB]{248,118,109}{N_{0x}}}{\textcolor[RGB]{0,191,196}{N_{1x}}} &amp; \text{if } w=1 \end{cases} \qfor N_{wx} = \sum_{i:W_i=w, X_i=x} 1
+\]</span></p>
+</div>
+<div id="tabset-10-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-10-2-tab">
+<div class="cell">
+<div class="sourceCode cell-code" id="annotated-cell-7"><pre class="sourceCode r code-annotation-code code-with-copy code-annotated"><code class="sourceCode r"><button class="code-annotation-anchor" data-target-cell="annotated-cell-7" data-target-annotation="1">1</button><span id="annotated-cell-7-1" class="code-annotation-target"><a href="#annotated-cell-7-1" aria-hidden="true" tabindex="-1"></a>sam.summaries <span class="ot">=</span> sam <span class="sc">|&gt;</span> <span class="fu">group_by</span>(w,x) <span class="sc">|&gt;</span> <span class="fu">summarize</span>(<span class="at">Nwx=</span><span class="fu">n</span>(), <span class="at">.groups=</span><span class="st">'drop'</span>)</span>
+<span id="annotated-cell-7-2"><a href="#annotated-cell-7-2" aria-hidden="true" tabindex="-1"></a>Nwx <span class="ot">=</span> <span class="fu">summary.lookup</span>(<span class="st">'Nwx'</span>, sam.summaries)</span>
+<button class="code-annotation-anchor" data-target-cell="annotated-cell-7" data-target-annotation="2">2</button><span id="annotated-cell-7-3" class="code-annotation-target"><a href="#annotated-cell-7-3" aria-hidden="true" tabindex="-1"></a>gammahat <span class="ot">=</span> <span class="cf">function</span>(w,x) <span class="fu">Nwx</span>(<span class="dv">0</span>,x) <span class="sc">/</span> <span class="fu">Nwx</span>(<span class="dv">1</span>,x)</span>
+<span id="annotated-cell-7-4"><a href="#annotated-cell-7-4" aria-hidden="true" tabindex="-1"></a></span>
+<button class="code-annotation-anchor" data-target-cell="annotated-cell-7" data-target-annotation="3">3</button><span id="annotated-cell-7-5" class="code-annotation-target"><a href="#annotated-cell-7-5" aria-hidden="true" tabindex="-1"></a>sam<span class="sc">$</span>weights <span class="ot">=</span> <span class="fu">gammahat</span>(sam<span class="sc">$</span>w, sam<span class="sc">$</span>x)</span>
+<span id="annotated-cell-7-6"><a href="#annotated-cell-7-6" aria-hidden="true" tabindex="-1"></a>fitted.model <span class="ot">=</span> <span class="fu">lm</span>(y<span class="sc">~</span><span class="dv">1</span><span class="sc">+</span>w, <span class="at">weights=</span>weights, <span class="at">data=</span>sam)</span>
+<span id="annotated-cell-7-7"><a href="#annotated-cell-7-7" aria-hidden="true" tabindex="-1"></a>muhat <span class="ot">=</span> <span class="cf">function</span>(w,x) <span class="fu">predict</span>(fitted.model, <span class="at">newdata=</span><span class="fu">data.frame</span>(<span class="at">w=</span>w,<span class="at">x=</span>x))</span>
+<span id="annotated-cell-7-8"><a href="#annotated-cell-7-8" aria-hidden="true" tabindex="-1"></a></span>
+<button class="code-annotation-anchor" data-target-cell="annotated-cell-7" data-target-annotation="4">4</button><span id="annotated-cell-7-9" class="code-annotation-target"><a href="#annotated-cell-7-9" aria-hidden="true" tabindex="-1"></a>Delta0.hat <span class="ot">=</span> <span class="fu">mean</span>(<span class="fu">muhat</span>(<span class="dv">1</span>,sam<span class="sc">$</span>x) <span class="sc">-</span> <span class="fu">muhat</span>(<span class="dv">0</span>,sam<span class="sc">$</span>x))</span>
+<span id="annotated-cell-7-10"><a href="#annotated-cell-7-10" aria-hidden="true" tabindex="-1"></a>Delta0.hat</span><div class="code-annotation-gutter-bg"></div><div class="code-annotation-gutter"></div></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-annotation">
+<dl class="code-annotation-container-hidden code-annotation-container-grid">
+<dt data-target-cell="annotated-cell-7" data-target-annotation="1">1</dt>
+<dd>
+<span data-code-cell="annotated-cell-7" data-code-lines="1,2" data-code-annotation="1">Here we’re calculating <span class="math inline">\(N_{wx}\)</span> as a function of <span class="math inline">\(w\)</span> and <span class="math inline">\(x\)</span>. This is like we did for <span class="math inline">\(m_{wx}\)</span> in the population case.</span>
+</dd>
+<dt data-target-cell="annotated-cell-7" data-target-annotation="2">2</dt>
+<dd>
+<span data-code-cell="annotated-cell-7" data-code-lines="3" data-code-annotation="2">We’re calculating the weights using <span class="math inline">\(N_{wx}\)</span> instead of <span class="math inline">\(m_{wx}\)</span> now.</span>
+</dd>
+<dt data-target-cell="annotated-cell-7" data-target-annotation="3">3</dt>
+<dd>
+<span data-code-cell="annotated-cell-7" data-code-lines="5,6,7" data-code-annotation="3">We fit our model using the <strong>R</strong> built-in function <code>lm</code>, telling it to use the weights we’ve put in the column <code>sam$weights</code>.</span>
+</dd>
+<dt data-target-cell="annotated-cell-7" data-target-annotation="4">4</dt>
+<dd>
+<span data-code-cell="annotated-cell-7" data-code-lines="9,10" data-code-annotation="4">We use it in our formula for <span class="math inline">\(\Delta_0\)</span> from <a href="#sec-deltahat0-sample-version" class="quarto-xref"><span>Section 34.2</span></a>.</span>
+</dd>
+</dl>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] -11989.62</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="this-works-perfectly" class="level2">
+<h2 class="anchored" data-anchor-id="this-works-perfectly">This Works <em>Perfectly</em></h2>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-11-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-11-1" role="tab" aria-controls="tabset-11-1" aria-selected="true">Mild Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-11-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-11-2" role="tab" aria-controls="tabset-11-2" aria-selected="false">Moderate Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-11-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-11-3" role="tab" aria-controls="tabset-11-3" aria-selected="false">Extreme Covariate Shift</a></li></ul>
+<div class="tab-content">
+<div id="tabset-11-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-11-1-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-29-1.svg" class="img-fluid figure-img"></p>
+<figcaption>A sample and the weighted least squares predictor in the horizontal lines model.</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-29-2.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of the corresponding adjusted difference in means estimator.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-11-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-11-2-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-30-1.svg" class="img-fluid figure-img"></p>
+<figcaption>A sample and the weighted least squares predictor in the horizontal lines model.</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-30-2.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of the corresponding adjusted difference in means estimator.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-11-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-11-3-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-31-1.svg" class="img-fluid figure-img"></p>
+<figcaption>A sample and the weighted least squares predictor in the horizontal lines model.</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-31-2.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of the corresponding adjusted difference in means estimator.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<ul>
+<li>When we weight based on the <em>population covariate distribution</em>, we get an unbiased estimator.<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a></li>
+</ul>
+<p><span class="math display">\[
+\mathop{\mathrm{E}}[\hat\Delta_0] = \Delta_0 \qfor \Delta_0 = \frac{1}{m_0} \sum_{j:w_j=0} \qty{ \mu(1,x_j) - \mu(0,x_j) }
+\]</span></p>
+</section>
+<section id="or-almost-perfectly." class="level2">
+<h2 class="anchored" data-anchor-id="or-almost-perfectly.">Or Almost <em>Perfectly</em>.</h2>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-12-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-12-1" role="tab" aria-controls="tabset-12-1" aria-selected="true">Mild Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-12-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-12-2" role="tab" aria-controls="tabset-12-2" aria-selected="false">Moderate Covariate Shift</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-12-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-12-3" role="tab" aria-controls="tabset-12-3" aria-selected="false">Extreme Covariate Shift</a></li></ul>
+<div class="tab-content">
+<div id="tabset-12-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-12-1-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-32-1.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of our adjusted difference in means estimator (using sample proportions).</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-32-2.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of our adjusted difference in means estimator (using population proportions).</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-12-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-12-2-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-33-1.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of our adjusted difference in means estimator (using sample proportions).</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-33-2.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of our adjusted difference in means estimator (using population proportions).</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-12-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-12-3-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-34-1.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of our adjusted difference in means estimator (using sample proportions).</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-34-2.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of our adjusted difference in means estimator (using population proportions).</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<ul>
+<li>We actually do better when we weight using the <em>sample covariate distribution</em>.<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a>
+<ul>
+<li>It has lower variance than the population-based version.</li>
+<li>Especially when there’s a lot of covariate shift.</li>
+<li>This is pretty interesting, but we won’t have time to get into it.</li>
+</ul></li>
+</ul>
+</section>
+</section>
+<section id="sec-generalizing" class="level1">
+<h1>Generalizing the Idea</h1>
+<p>An Exercise.</p>
+<section id="delta_0" class="level2">
+<h2 class="anchored" data-anchor-id="delta_0"><span class="math inline">\(\Delta_0\)</span></h2>
+<p>How should we weight to estimate <span class="math inline">\(\Delta_0\)</span>?<a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a></p>
+</section>
+<section id="delta_1" class="level2">
+<h2 class="anchored" data-anchor-id="delta_1"><span class="math inline">\(\Delta_1\)</span></h2>
+<p>How should we weight to estimate <span class="math inline">\(\Delta_1\)</span>?<a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a></p>
+</section>
+<section id="delta_textall" class="level2">
+<h2 class="anchored" data-anchor-id="delta_textall"><span class="math inline">\(\Delta_{\text{all}}\)</span></h2>
+<p>How should we weight to estimate <span class="math inline">\(\Delta_{\text{all}}\)</span>?<a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a></p>
+</section>
+</section>
+<section id="proving-unbiasedness" class="level1">
+<h1>Proving Unbiasedness</h1>
+<section id="goal" class="level2">
+<h2 class="anchored" data-anchor-id="goal">Goal</h2>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-35-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<ul>
+<li><p>Suppose we have this inverse probability weighted population least squares predictor <span class="math inline">\(\tilde\mu\)</span>. <span class="math display">\[
+\begin{aligned}
+\tilde\mu= \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \ \text{WMSE}(m) \qfor
+\text{WMSE}(m)
+&amp;= \sum_{wx} \gamma(w,x) m_{wx} \color{gray}\left\{ \color{black}  \mu(w, x) - m(w,x)  \color{gray} \right\} \color{black}^2  \\
+\qand &amp;\gamma(w,x) = \frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{m_{wx}}.
+\end{aligned}
+\]</span></p></li>
+<li><p>We want to show that when we plug it in to our formula for <span class="math inline">\(\tilde\Delta_0\)</span>, we get our estimation target <span class="math inline">\(\Delta_0\)</span>. <span class="math display">\[
+\begin{aligned}
+\tilde\Delta_0 &amp;= \frac{1}{m_0} \sum_{j:w_j=0} \qty{ \tilde\mu(1,x_j) - \tilde\mu(0,x_j) }  &amp;&amp; \text{ the population version of our estimator} \\
+\Delta_0 &amp;= \frac{1}{m_0} \sum_{j:w_j=0} \qty{ \mu(1,x_j) - \mu(0,x_j) } &amp;&amp; \text{ our target}
+\end{aligned}
+\]</span></p></li>
+</ul>
+</section>
+<section id="approach" class="level2">
+<h2 class="anchored" data-anchor-id="approach">Approach</h2>
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-36-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<ul>
+<li>We’ll start by writing out <span class="math inline">\(\tilde\Delta_0\)</span> and <span class="math inline">\(\Delta_0\)</span> as the sum of a <span class="groupa">matched term</span> and a <span class="groupa">mismatched</span> <span class="groupb">term</span>.</li>
+</ul>
+<p><span class="math display">\[
+\begin{aligned}
+\tilde\Delta_0 &amp;= \textcolor[RGB]{248,118,109}{\frac{1}{m_0} \sum_{j:w_j=0}} \textcolor[RGB]{0,191,196}{\tilde\mu(1,x_j)} -
+\textcolor[RGB]{248,118,109}{\frac{1}{m_0} \sum_{j:w_j=0}} \textcolor[RGB]{248,118,109}{\tilde\mu(0,x_j)} \\
+\Delta_0 &amp;= \textcolor[RGB]{248,118,109}{\frac{1}{m_0} \sum_{j:w_j=0}} \textcolor[RGB]{0,191,196}{\mu(1,x_j)} -
+\textcolor[RGB]{248,118,109}{\frac{1}{m_0} \sum_{j:w_j=0}} \textcolor[RGB]{248,118,109}{\mu(0,x_j)}
+\end{aligned}
+\]</span></p>
+<ul>
+<li>And then write the difference between them as the sum of matched and mismatched terms.</li>
+</ul>
+<p><span class="math display">\[
+\Delta_0-\tilde\Delta_0 = \textcolor[RGB]{248,118,109}{\frac{1}{m_0} \sum_{j:w_j=0}} \color{gray}\left\{ \color{black} \textcolor[RGB]{0,191,196}{\mu(1,x_j) - \tilde\mu(1,x_j)} \color{gray} \right\} \color{black} - \textcolor[RGB]{248,118,109}{\frac{1}{m_0} \sum_{j:w_j=0}}\color{gray}\left\{ \color{black} \textcolor[RGB]{248,118,109}{\mu(0,x_j)} - \textcolor[RGB]{248,118,109}{\tilde\mu(0,x_j)} \color{gray} \right\} \color{black}.
+\]</span></p>
+<ul>
+<li>We’ll work out an <em>orthogonality condition</em> characterizing the errors <span class="math inline">\(\mu(w,x)-\tilde\mu(w,x)\)</span>.</li>
+<li>And then use it to show that both the matched and mismatched error terms are zero.</li>
+</ul>
+</section>
+<section id="the-orthogonality-condition" class="level2">
+<h2 class="anchored" data-anchor-id="the-orthogonality-condition">The Orthogonality Condition</h2>
+<p><span id="eq-weighted-orthogonality-condition"><span class="math display">\[
+\begin{aligned}
+0 &amp;\overset{\texttip{\small{\unicode{x2753}}}{histogram form}}{=}
+\sum_{wx} \textcolor[RGB]{248,118,109}{m_{0x}} \color{gray}\left\{ \color{black}  \mu(w, x) - \tilde\mu(w,x)  \color{gray} \right\} \color{black} m(w,x) \\
+&amp;\overset{\texttip{\small{\unicode{x2753}}}{summing over $x$, then $w$}}{=}
+\sum_{w \in 0,1} \sum_x \textcolor[RGB]{248,118,109}{m_{0x}} \color{gray}\left\{ \color{black}  \mu(w, x) - \tilde\mu(w,x)  \color{gray} \right\} \color{black} m(w,x) \\
+&amp;\overset{\texttip{\small{\unicode{x2753}}}{rewriting the histogram-form sum over $x$ as a sum over the population}}{=}
+\sum_{w \in 0,1} \sum_{j:w_j=0} \color{gray}\left\{ \color{black}  \mu(w, x_j) - \tilde\mu(w,x_j)  \color{gray} \right\} \color{black} m(w,x_j) \qqtext{ for all } m \in \mathcal{M}.
+\end{aligned}
+\tag{32.1}\]</span></span></p>
+<section id="derivation" class="level3">
+<h3 class="anchored" data-anchor-id="derivation">Derivation</h3>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-13-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-13-1" role="tab" aria-controls="tabset-13-1" aria-selected="true">Idea</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-13-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-13-2" role="tab" aria-controls="tabset-13-2" aria-selected="false">Calculation</a></li></ul>
+<div class="tab-content">
+<div id="tabset-13-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-13-1-tab">
+<ul>
+<li>We’ll do the derivation in histogram form.</li>
+<li>The key idea is optimality along <em>paths</em> (see <a href="https://qtm285-1.github.io/assets/lectures/Lecture13.html#/optimality-paths">here</a> in Lecture 12). Let’s review that.</li>
+<li>Because <span class="math inline">\(\tilde \mu\)</span> minimizes weighted mean squared error over all <span class="math inline">\(m \in \mathcal{M}\)</span> …
+<ul>
+<li>it minimizes the weighted mean squared error along all <em>paths</em> <span class="math inline">\(\{m_t = \tilde\mu + tm : t \in \mathbb{R}\}\)</span> for <span class="math inline">\(m \in \mathcal{M}\)</span></li>
+<li>because every function <span class="math inline">\(m_t\)</span> on this path is in the model <span class="math inline">\(\mathcal{M}\)</span>.</li>
+</ul></li>
+<li>It follows that <span class="math inline">\(\text{WMSE}(\tilde\mu + tm)\)</span> is minimized at <span class="math inline">\(t=0\)</span> for every <span class="math inline">\(m \in \mathcal{M}\)</span>.</li>
+<li>So the derivative with respect to <span class="math inline">\(t\)</span> is zero at <span class="math inline">\(t=0\)</span>.</li>
+</ul>
+</div>
+<div id="tabset-13-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-13-2-tab">
+<p><span class="math display">\[
+\begin{aligned}
+0 &amp;= \frac{d}{dt}\mid_{t=0} \text{WMSE}(\tilde \mu + t m) \\
+&amp;\overset{\texttip{\small{\unicode{x2753}}}{plugging in the definition of WMSE and distributing the derivative over terms in the sum}}{=}
+\sum_{wx} \gamma(w,x) m_{wx} \times \frac{d}{dt}\mid_{t=0} \color{gray}\left\{ \color{black}  \mu(w, x) - \color[RGB]{239,71,111}\left\{ \color{black} \tilde\mu(w,x) + t m(w,x) \color[RGB]{239,71,111} \right\} \color{black}  \color{gray} \right\} \color{black}^2 \\
+&amp;\overset{\texttip{\small{\unicode{x2753}}}{via the chain rule}}{=}
+\sum_{wx} \gamma(w,x) m_{wx} \times 2 \ \color{gray}\left\{ \color{black}  \mu(w, x) - \tilde\mu(w,x)  \color{gray} \right\} \color{black} \ \frac{d}{dt}\mid_{t=0} \color{gray}\left\{ \color{black}  \mu(w, x) - \color[RGB]{239,71,111}\left\{ \color{black} \tilde\mu(w,x) + t m(w,x) \color[RGB]{239,71,111} \right\} \color{black}  \color{gray} \right\} \color{black} \\
+&amp;\overset{\texttip{\small{\unicode{x2753}}}{differentiating the last factor}}{=}
+\sum_{wx} \gamma(w,x) m_{wx} \times 2 \ \color{gray}\left\{ \color{black}  \mu(w, x) - \tilde\mu(w,x)  \color{gray} \right\} \color{black} \times -m(w,x) \\
+&amp;\overset{\texttip{\small{\unicode{x2753}}}{pulling constants out of the sum}}{=}
+-2 \sum_{wx} \gamma(w,x) m_{wx} \color{gray}\left\{ \color{black}  \mu(w, x) - \tilde\mu(w,x)  \color{gray} \right\} \color{black} \ m(w,x) \\
+&amp;\overset{\texttip{\small{\unicode{x2753}}}{observing that $\gamma(w,x)m_{wx} = \textcolor[RGB]{248,118,109}{m_{0x}}$. That's why we chose $\gamma$ as we did.}}{=}
+-2 \sum_{wx} \textcolor[RGB]{248,118,109}{m_{0x}} \color{gray}\left\{ \color{black}  \mu(w, x) - \tilde\mu(w,x)  \color{gray} \right\} \color{black} m(w,x).
+\end{aligned}
+\]</span></p>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="showing-error-terms-are-zero" class="level2">
+<h2 class="anchored" data-anchor-id="showing-error-terms-are-zero">Showing Error Terms are Zero</h2>
+<ul>
+<li><p>We’ll plug in group indicators <span class="groupa"><span class="math inline">\(m(w,x)=1_{=0}(w)\)</span></span> and <span class="groupb"><span class="math inline">\(m(w,x)=1_{=x}(x)\)</span></span> to this orthogonality condition <span class="math display">\[
+\begin{aligned}
+0 &amp;= \sum_{w \in 0,1} \sum_{j:w_j=0} \color{gray}\left\{ \color{black}  \mu(w, x_j) - \tilde\mu(w,x_j)  \color{gray} \right\} \color{black} m(w,x_j) \qqtext{ for all } m \in \mathcal{M}.
+\end{aligned}
+\]</span></p></li>
+<li><p>To show that the matched and mismatched error terms in this error decomposition are zero.</p></li>
+</ul>
+<p><span class="math display">\[
+\Delta_0-\tilde\Delta_0 = \textcolor[RGB]{248,118,109}{\frac{1}{m_0} \sum_{j:w_j=0}} \color{gray}\left\{ \color{black} \textcolor[RGB]{0,191,196}{\mu(1,x_j) - \tilde\mu(1,x_j)} \color{gray} \right\} \color{black} - \textcolor[RGB]{248,118,109}{\frac{1}{m_0} \sum_{j:w_j=0}}\color{gray}\left\{ \color{black} \textcolor[RGB]{248,118,109}{\mu(0,x_j)} - \textcolor[RGB]{248,118,109}{\tilde\mu(0,x_j)} \color{gray} \right\} \color{black}.
+\]</span></p>
+<ul>
+<li>Because of our weighting, the case of the mismatched term is exactly like the case of the matched term.</li>
+</ul>
+<div class="columns">
+<div class="column">
+<p><strong>The Matched Term</strong> <span class="math display">\[
+\begin{aligned}
+0
+&amp;= \sum_{w \in 0,1} \sum_{j:w_j=0} \color{gray}\left\{ \color{black}  \mu(w, x_j) - \tilde\mu(w,x_j)  \color{gray} \right\} \color{black} \textcolor[RGB]{248,118,109}{1_{=0}(w)} \\
+&amp;\overset{\texttip{\small{\unicode{x2753}}}{This is a version of the 'indicator trick'. We drop terms where $w=1$ from our sum because $1_{=0}(1)=0$.}}{=}
+\textcolor[RGB]{248,118,109}{\frac{1}{m_0} \sum_{j:w_j=0}} \color{gray}\left\{ \color{black}  \textcolor[RGB]{248,118,109}{\mu(0, x_j)} - \textcolor[RGB]{248,118,109}{\tilde\mu(0,x_j)}  \color{gray} \right\} \color{black}
+\end{aligned}
+\]</span></p>
+</div><div class="column">
+<p><strong>The Mismatched Term</strong> <span class="math display">\[
+\begin{aligned}
+0
+&amp;= \sum_{w \in 0,1} \sum_{j:w_j=0} \color{gray}\left\{ \color{black}  \mu(w, x_j) - \tilde\mu(w,x_j)  \color{gray} \right\} \color{black} \textcolor[RGB]{0,191,196}{1_{=1}(w)} \\
+&amp;\overset{\texttip{\small{\unicode{x2753}}}{Via the indicator trick, as in the matched term.}}{=}
+\textcolor[RGB]{248,118,109}{\frac{1}{m_0} \sum_{j:w_j=0}} \color{gray}\left\{ \color{black}  \textcolor[RGB]{0,191,196}{\mu(1, x_j)} - \textcolor[RGB]{0,191,196}{\tilde\mu(1,x_j)}  \color{gray} \right\} \color{black}
+\end{aligned}
+\]</span></p>
+</div>
+</div>
+</section>
+<section id="a-follow-up-question" class="level2">
+<h2 class="anchored" data-anchor-id="a-follow-up-question">A Follow-Up Question</h2>
+<ul>
+<li>We’ve shown unbiasedness when we use the horizontal lines model (<a href="#eq-horizontal-lines-model" class="quarto-xref">Equation&nbsp;<span>35.1</span></a>).
+<ul>
+<li>That’s what we’ve been visualizing.</li>
+<li>And our proof relies on it to some extent.</li>
+</ul></li>
+<li>Do we get an unbiased estimator with these other models?
+<ul>
+<li>The parallel lines model (<a href="#eq-parallel-lines-model" class="quarto-xref">Equation&nbsp;<span>35.2</span></a>).</li>
+<li>The lines model (<a href="#eq-lines-model" class="quarto-xref">Equation&nbsp;<span>35.3</span></a>).</li>
+<li>The additive model (<a href="#eq-additive-model" class="quarto-xref">Equation&nbsp;<span>35.4</span></a>).</li>
+</ul></li>
+</ul>
+</section>
+<section id="it-does-work-for-other-models" class="level2">
+<h2 class="anchored" data-anchor-id="it-does-work-for-other-models">It Does Work for Other Models</h2>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-14-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-14-1" role="tab" aria-controls="tabset-14-1" aria-selected="true">Horizontal Lines Model</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-14-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-14-2" role="tab" aria-controls="tabset-14-2" aria-selected="false">Parallel Lines Model</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-14-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-14-3" role="tab" aria-controls="tabset-14-3" aria-selected="false">Lines Model</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-14-4-tab" data-bs-toggle="tab" data-bs-target="#tabset-14-4" role="tab" aria-controls="tabset-14-4" aria-selected="false">Additive Model</a></li></ul>
+<div class="tab-content">
+<div id="tabset-14-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-14-1-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-38-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-38-2.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-14-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-14-2-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-39-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-39-2.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-14-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-14-3-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-40-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-40-2.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-14-4" class="tab-pane" role="tabpanel" aria-labelledby="tabset-14-4-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-41-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-41-2.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<ul>
+<li>All of these models include indicators for each group.</li>
+<li>When we weight like this, that’s all we need to get unbiasedness <em>for the target <span class="math inline">\(\Delta_0\)</span></em>.</li>
+<li>For other targets, we need other weights.<a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a></li>
+</ul>
+</section>
+<section id="why-ipw" class="level2">
+<h2 class="anchored" data-anchor-id="why-ipw">Why IPW?</h2>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-15-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-15-1" role="tab" aria-controls="tabset-15-1" aria-selected="true">The Horizontal Lines Model</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-15-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-15-2" role="tab" aria-controls="tabset-15-2" aria-selected="false">The Parallel Lines Model</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-15-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-15-3" role="tab" aria-controls="tabset-15-3" aria-selected="false">The Lines Model</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-15-4-tab" data-bs-toggle="tab" data-bs-target="#tabset-15-4" role="tab" aria-controls="tabset-15-4" aria-selected="false">The Additive Model</a></li></ul>
+<div class="tab-content">
+<div id="tabset-15-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-15-1-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-43-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-43-2.svg" class="img-fluid"></p>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-43-3.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-43-4.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-15-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-15-2-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-44-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-44-2.svg" class="img-fluid"></p>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-44-3.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-44-4.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-15-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-15-3-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-45-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-45-2.svg" class="img-fluid"></p>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-45-3.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-45-4.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-15-4" class="tab-pane" role="tabpanel" aria-labelledby="tabset-15-4-tab">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-46-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-46-2.svg" class="img-fluid"></p>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-46-3.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-46-4.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-16-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-16-1" role="tab" aria-controls="tabset-16-1" aria-selected="true">What We See</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-16-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-16-2" role="tab" aria-controls="tabset-16-2" aria-selected="false">The Special Case of the Lines Model</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-16-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-16-3" role="tab" aria-controls="tabset-16-3" aria-selected="false">Conclusion</a></li></ul>
+<div class="tab-content">
+<div id="tabset-16-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-16-1-tab">
+<ul>
+<li>On the left, we see the <em>weighted</em> least squares predictor and the sampling distribution of <span class="math inline">\(\hat\Delta_0\)</span> when we use it.
+<ul>
+<li>For all of our models—the ones shown in tabs above—this is unbiased.</li>
+<li>We’ve proven that and seen it a moment ago.</li>
+</ul></li>
+<li>On the right, we see the <em>unweighted</em> least squares predictor and the sampling distribution of <span class="math inline">\(\hat\Delta_0\)</span> when we use it.
+<ul>
+<li>The bias we get here depends on the model.</li>
+<li>Usually there is some, but there isn’t always any with the <em>lines model</em>.</li>
+</ul></li>
+</ul>
+</div>
+<div id="tabset-16-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-16-2-tab">
+<ul>
+<li>This is the case we looked at in the exercise at the end on <a href="https://qtm285-1.github.io/assets/lectures/Lab7.html#a-caricature-of-the-california-data">Lab 7</a>.</li>
+<li>Sometimes something close to this happens, but it’s fragile. You have to get lucky. See <a href="#sec-lines-get-lucky" class="quarto-xref"><span>Section 33.4</span></a>.
+<ul>
+<li>It happens because the covariate distributions in our two groups have a very special relationship.</li>
+<li>The ratio of the covariate distributions <em>is a line</em>: <span class="math inline">\(\textcolor[RGB]{248,118,109}{p_{0 \mid x}} / \textcolor[RGB]{0,191,196}{p_{1 \mid x}} = a+bx\)</span>.</li>
+<li><span class="math inline">\(\textcolor[RGB]{248,118,109}{p_{0 \mid x}}\)</span> is a line and <span class="math inline">\(\textcolor[RGB]{0,191,196}{p_{0 \mid x}}\)</span> is flat.</li>
+<li>When we change the covariate distribution, we get bias again. If we don’t weight, we get bias.
+<ul>
+<li>Below, noth <span class="math inline">\(\textcolor[RGB]{248,118,109}{p_{0 \mid x}}\)</span> and <span class="math inline">\(\textcolor[RGB]{0,191,196}{p_{1 \mid x}}\)</span> are (non-horizontal) lines Their ratio is not a line.</li>
+</ul></li>
+</ul></li>
+</ul>
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-47-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-47-2.svg" class="img-fluid"></p>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-47-3.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-47-4.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+</div>
+<div id="tabset-16-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-16-3-tab">
+<ul>
+<li>Inverse probability weighting is great idea. You should do it.
+<ul>
+<li>It’s easy. It’s basically a one-line change to your <strong>R</strong> code.</li>
+<li>It makes sense. You’re focusing on the data that’s relevant to your question (i.e.&nbsp;your target).</li>
+</ul></li>
+<li>People often don’t do it.
+<ul>
+<li>They say it increases variance, so you’re less likely to get an answer other than ‘I don’t know’.</li>
+<li>And that you don’t have (much) bias anyway your model (almost) isn’t misspecified.</li>
+<li>And that misspecification usually doesn’t matter anyway because it averages out.
+<ul>
+<li>They’ll point to something like this special lines example.</li>
+</ul></li>
+</ul></li>
+<li>I think that ‘it usually works out’ claims are missing the point of doing statistics at all.
+<ul>
+<li>A confidence interval says that people can expect you to be right 95% of the time.</li>
+<li>What does it mean to ‘usually be right’ 95% of the time? Nothing. Your calibration is just gone.</li>
+</ul></li>
+<li>The point isn’t to get an answer other than ‘I don’t know’.</li>
+<li>It’s to get the answer ‘I don’t know’ when you don’t know.</li>
+</ul>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="appendix-answers" class="level1">
+<h1>Appendix: Answers</h1>
+<section id="sec-q1-answer" class="level2">
+<h2 class="anchored" data-anchor-id="sec-q1-answer">Q1 Answer</h2>
+<p>The raw difference is bigger. In comparison with the adjusted one, the average of <span class="math inline">\(\textcolor[RGB]{0,191,196}{\mu(1,x)}\)</span> is taken over a covariate distribution that’s shifted to the right, where it’s bigger.</p>
+</section>
+<section id="sec-q2-answer" class="level2">
+<h2 class="anchored" data-anchor-id="sec-q2-answer">Q2 Answer</h2>
+<p>They’re the same. When we use the horizontal lines model, <span class="math inline">\(\tilde\mu(1,x)\)</span> and <span class="math inline">\(\tilde\mu(0,x)\)</span> are constant and equal to the within-group means. So in the first term in <span class="math inline">\(\tilde\Delta_{0}\)</span>, we’re taking the average of a constant—and that constant is the first term of <span class="math inline">\(\Delta_\text{raw}\)</span>. And the same happens for the second term.</p>
+</section>
+<section id="sec-q3-answer" class="level2">
+<h2 class="anchored" data-anchor-id="sec-q3-answer">Q3 Answer</h2>
+<p>It fits the green dots on the right well because that’s where most of the green dots are. But we’re averaging it over the distribution of the red dots, which are on the left.</p>
+</section>
+<section id="sec-lines-get-lucky" class="level2">
+<h2 class="anchored" data-anchor-id="sec-lines-get-lucky">Why the Lines Model ‘Gets Lucky’</h2>
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-48-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-48-2.svg" class="img-fluid"></p>
+</div>
+</div>
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-48-3.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-48-4.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+<ul>
+<li>Our <em>unweighted</em> least squares predictor in the lines model gives us an unbiased estimate of <span class="math inline">\(\Delta_0\)</span> when when the ratio of the covariate distributions is a line.<a href="#fn7" class="footnote-ref" id="fnref7" role="doc-noteref"><sup>7</sup></a></li>
+</ul>
+<p><span class="math display">\[
+\textcolor[RGB]{192,192,192}{
+  \frac{m_0}{m_1} \times \frac{p_{x \mid 0}}{p_{x \mid 1}}
+  =
+} \frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{\textcolor[RGB]{0,191,196}{m_{1x}}} = a+bx
+\]</span></p>
+<ul>
+<li>Let’s see why by plugging a very special pair of lines into our orthogonality condition.</li>
+</ul>
+<p><span class="math display">\[
+\begin{aligned}
+0 &amp;= \sum_{j=1}^n \color{gray}\left\{ \color{black}  \mu(w_j, x_j) - \tilde\mu(w_j,x_j)  \color{gray} \right\} \color{black} m(w,x) \qqtext{ for any } &amp;&amp; m \in \{ a(w)+b(w)x \} \\
+&amp;\qqtext{ and therefore for } &amp;&amp; m(w,x) = \begin{cases}
+0 &amp; \text{if } w=0 \\
+a+bx = \frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{\textcolor[RGB]{0,191,196}{m_{1x}}}  &amp; \text{if } w=1 \end{cases}.
+\end{aligned}
+\]</span></p>
+<p>Simplifying, using the indicator trick, we get…</p>
+<p><span class="math display">\[
+\begin{aligned}
+0 &amp;= \sum_{w\in 0,1} \sum_{j:w_j=1} \color{gray}\left\{ \color{black}  \mu(w_j, x_j) - \tilde\mu(w_j,x_j)  \color{gray} \right\} \color{black} \times \begin{cases}
+0 &amp; \text{if } w=0 \\
+\frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{\textcolor[RGB]{0,191,196}{m_{1x}}} &amp; \text{if } w=1
+\end{cases} \\
+&amp;= \sum_{j:w_j=1} \color{gray}\left\{ \color{black}  \textcolor[RGB]{0,191,196}{\mu(1, x_j) - \tilde\mu(1,x_j)}  \color{gray} \right\} \color{black} \frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{\textcolor[RGB]{0,191,196}{m_{1x}}} \\
+  &amp;= \sum_x \textcolor[RGB]{0,191,196}{m_{1x}} \color{gray}\left\{ \color{black}  \textcolor[RGB]{0,191,196}{\mu(1, x) - \tilde\mu(1,x)}  \color{gray} \right\} \color{black} \frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{\textcolor[RGB]{0,191,196}{m_{1x}}} \\
+  &amp;= \sum_x \textcolor[RGB]{248,118,109}{m_{0x}} \color{gray}\left\{ \color{black}  \textcolor[RGB]{0,191,196}{\mu(1, x) - \tilde\mu(1,x)}  \color{gray} \right\} \color{black}.
+\end{aligned}
+\]</span></p>
+<ul>
+<li>This says that the mismatched term in our decomposition of <span class="math inline">\(\Delta_0-\tilde\Delta_0\)</span> is zero.</li>
+<li>Plugging in <span class="math inline">\(m(w,x)=1_{=0}(w)\)</span> shows the matched term is zero.</li>
+<li>To show both terms are zero at once, we can plug in a <em>signed version</em> of the inverse probability weights <span class="math inline">\(\gamma(w,x)\)</span>.</li>
+</ul>
+<p><span class="math display">\[
+\gamma_{\pm}(w,x) = \begin{cases} 1 &amp; \text{if } w=0 \\ -(a+bx)=-\frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{\textcolor[RGB]{0,191,196}{m_{1x}}} &amp; \text{if } w=1 \end{cases}
+\]</span></p>
+<section id="lesson" class="level3">
+<h3 class="anchored" data-anchor-id="lesson">Lesson</h3>
+<ul>
+<li>Unweighted least squares is unbiased <em>if</em> the (signed) inverse probability weights are in the model.</li>
+<li>This is interesting, but it’s a lot to expect.
+<ul>
+<li>Unless you intentionally include <span class="math inline">\(\gamma_{\pm}\)</span> in the model.</li>
+<li>That’s an option, but people usually weight instead.</li>
+</ul></li>
+</ul>
+</section>
+</section>
+</section>
+<section id="appendix-two-versions-of-hatdelta" class="level1">
+<h1>Appendix: Two Versions of <span class="math inline">\(\hat\Delta\)</span></h1>
+<section id="sec-deltahat0-pop-version" class="level2">
+<h2 class="anchored" data-anchor-id="sec-deltahat0-pop-version">The version where we use the population covariate distribution</h2>
+<p><span class="math display">\[
+\begin{aligned}
+\hat\Delta_0 &amp;= \frac{1}{m_0} \sum_{j:w_j=0} \qty{ \hat\mu(1,x_j) - \hat\mu(0,x_j) } \\
+&amp; \qfor \hat\mu = \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \frac{1}{n}\sum_{i=1}^n \gamma(W_i,X_i) \color{gray}\left\{ \color{black}  Y_i - m(W_i,X_i)  \color{gray} \right\} \color{black}^2 \\
+&amp; \qand \gamma(w,x) = \frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{m_{wx}} = \begin{cases} 1 &amp; \text{if } w=0 \\ \frac{\textcolor[RGB]{248,118,109}{m_{0x}}}{\textcolor[RGB]{0,191,196}{m_{1x}}} &amp; \text{if } w=1 \end{cases}
+\end{aligned}
+\]</span></p>
+</section>
+<section id="sec-deltahat0-sample-version" class="level2">
+<h2 class="anchored" data-anchor-id="sec-deltahat0-sample-version">The version where we use the sample covariate distribution</h2>
+<p><span class="math display">\[
+\begin{aligned}
+\hat\Delta_0 &amp;= \frac{1}{N_0} \sum_{i:W_i=0} \qty{ \hat\mu(1,X_i) - \hat\mu(0,X_i) } \\
+&amp; \qfor \hat\mu = \mathop{\mathrm{argmin}}_{m \in \mathcal{M}} \frac{1}{n}\sum_{i=1}^n \gamma(W_i,X_i) \color{gray}\left\{ \color{black}  Y_i - m(W_i,X_i)  \color{gray} \right\} \color{black}^2 \\
+&amp; \qand \gamma(w,x) = \frac{\textcolor[RGB]{248,118,109}{N_{0x}}}{N_{wx}} = \begin{cases} 1 &amp; \text{if } w=0 \\ \frac{\textcolor[RGB]{248,118,109}{N_{0x}}}{\textcolor[RGB]{0,191,196}{N_{1x}}} &amp; \text{if } w=1 \end{cases}
+\end{aligned}
+\]</span></p>
+</section>
+</section>
+<section id="appendix-models" class="level1">
+<h1>Appendix: Models</h1>
+<section id="the-horizontal-lines-model-1" class="level2">
+<h2 class="anchored" data-anchor-id="the-horizontal-lines-model-1">The Horizontal Lines Model</h2>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-50-1.svg" class="img-fluid figure-img"></p>
+<figcaption>A sample and the least squares fit in the model.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p><span id="eq-horizontal-lines-model"><span class="math display">\[
+\mathcal{M}=\{m(w,x)=a(w) \qqtext{ for all functions } a\}
+\tag{35.1}\]</span></span></p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>formula <span class="ot">=</span> y <span class="sc">~</span> w</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="the-parallel-lines-model-1" class="level2">
+<h2 class="anchored" data-anchor-id="the-parallel-lines-model-1">The Parallel Lines Model</h2>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-52-1.svg" class="img-fluid figure-img"></p>
+<figcaption>A sample and the least squares fit in the model.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p><span id="eq-parallel-lines-model"><span class="math display">\[
+\mathcal{M}=\{m(w,x)=a(w)+bx \qqtext{ for all functions } a \qqtext{and numbers} b\}
+\tag{35.2}\]</span></span></p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>formula <span class="ot">=</span> y <span class="sc">~</span> w<span class="sc">+</span>x</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="the-not-necessarily-parallel-lines-model" class="level2">
+<h2 class="anchored" data-anchor-id="the-not-necessarily-parallel-lines-model">The (Not-Necessarily-Parallel) Lines Model</h2>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-54-1.svg" class="img-fluid figure-img"></p>
+<figcaption>A sample and the least squares fit in the model.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p><span id="eq-lines-model"><span class="math display">\[
+\mathcal{M}=\{m(w,x)=a(w)+b(w)x \qqtext{ for all functions } a,b\}
+\tag{35.3}\]</span></span></p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>formula <span class="ot">=</span> y <span class="sc">~</span> w<span class="sc">*</span>x</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="the-additive-model-1" class="level2">
+<h2 class="anchored" data-anchor-id="the-additive-model-1">The Additive Model</h2>
+<div class="cell">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="Lecture14_files/figure-html/unnamed-chunk-56-1.svg" class="img-fluid figure-img"></p>
+<figcaption>A sample and the least squares fit in the model.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p><span id="eq-additive-model"><span class="math display">\[
+\mathcal{M}=\{m(w,x)=a(w)+b(x) \qqtext{ for all functions } a,b\}
+\tag{35.4}\]</span></span></p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>formula <span class="ot">=</span> y <span class="sc">~</span> w <span class="sc">+</span> <span class="fu">factor</span>(x)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+
+
+<script type="ojs-module-contents">
+eyJjb250ZW50cyI6W119
+</script>
+<div id="exercise-loading-indicator" class="exercise-loading-indicator d-none d-flex align-items-center gap-2">
+<div id="exercise-loading-status" class="d-flex gap-2">
+
+</div>
+<div class="spinner-grow spinner-grow-sm">
+
+</div>
+</div>
+<script type="vfs-file">
+W10=
+</script>
+</section>
+</section>
+<section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes">
+<hr>
+<ol>
+<li id="fn1"><p>Here, for the sake of clarity, we’re talking about <span class="math inline">\(\hat\Delta_0\)</span> defined in <a href="#sec-deltahat0-pop-version" class="quarto-xref"><span>Section 34.1</span></a>.<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn2"><p>Here, for the sake of clarity, we’re talking about <span class="math inline">\(\hat\Delta_0\)</span> defined in <a href="#sec-deltahat0-sample-version" class="quarto-xref"><span>Section 34.2</span></a>.<a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3"><p>We just did this, but go ahead and copy it out here for reference.<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn4"><p><em>Hint</em>. For <span class="math inline">\(\Delta_0\)</span>, we wanted to make the distribution of the pretend (i.e.&nbsp;weighted) green dots like that of the red dots. Now the situation is reversed.<a href="#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn5"><p><em>Hint</em>. Now we’re averaging over the distribution of <em>all dots</em>. How do we duplicate the red dots to get that distribution? What about the green dots?<a href="#fnref5" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn6"><p>We talked about what these should be for <span class="math inline">\(\Delta_1\)</span> and <span class="math inline">\(\Delta_{\text{all}}\)</span> earlier (<a href="#sec-generalizing" class="quarto-xref"><span>Chapter 31</span></a>). If you got them right, you should be able to prove that you get unbiasedness for those targets when you use them. Prove it!<a href="#fnref6" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn7"><p>Up to a constant factor <span class="math inline">\(\textcolor[RGB]{248,118,109}{m_0}/\textcolor[RGB]{0,191,196}{m_1}\)</span>, the ratio <span class="math inline">\(\gamma(w,x)=\textcolor[RGB]{248,118,109}{p_{x \mid 0}}/\textcolor[RGB]{0,191,196}{p_{x \mid 1}}\)</span> of the number of dots in each column agrees with the ratio of the proportions <span class="math inline">\(\textcolor[RGB]{248,118,109}{p_{x\mid 0}}/\textcolor[RGB]{0,191,196}{p_{x \mid 1}}\)</span>, so it’s equivalent to use either ratio in your weights. That equivalence is shown faintly, so as not to distract, below.<a href="#fnref7" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section>
+
+</main> <!-- /main -->
+<script type="ojs-module-contents">
+eyJjb250ZW50cyI6W119
+</script>
+<script type="module">
+if (window.location.protocol === "file:") { alert("The OJS runtime does not work with file:// URLs. Please use a web server to view this document."); }
+window._ojs.paths.runtimeToDoc = "../../lectures";
+window._ojs.paths.runtimeToRoot = "../..";
+window._ojs.paths.docToRoot = "..";
+window._ojs.selfContained = false;
+window._ojs.runtime.interpretFromScriptTags();
+</script>
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const onCopySuccess = function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  }
+  const getTextToCopy = function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+    text: getTextToCopy
+  });
+  clipboard.on('success', onCopySuccess);
+  if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+    // For code content inside modals, clipBoardJS needs to be initialized with a container option
+    // TODO: Check when it could be a function (https://github.com/zenorocha/clipboard.js/issues/860)
+    const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+      text: getTextToCopy,
+      container: window.document.getElementById('quarto-embedded-source-code-modal')
+    });
+    clipboardModal.on('success', onCopySuccess);
+  }
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      const annoteTargets = window.document.querySelectorAll('.code-annotation-anchor');
+      for (let i=0; i<annoteTargets.length; i++) {
+        const annoteTarget = annoteTargets[i];
+        const targetCell = annoteTarget.getAttribute("data-target-cell");
+        const targetAnnotation = annoteTarget.getAttribute("data-target-annotation");
+        const contentFn = () => {
+          const content = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          if (content) {
+            const tipContent = content.cloneNode(true);
+            tipContent.classList.add("code-annotation-tip-content");
+            return tipContent.outerHTML;
+          }
+        }
+        const config = {
+          allowHTML: true,
+          content: contentFn,
+          onShow: (instance) => {
+            selectCodeLines(instance.reference);
+            instance.reference.classList.add('code-annotation-active');
+            window.tippy.hideAll();
+          },
+          onHide: (instance) => {
+            unselectCodeLines();
+            instance.reference.classList.remove('code-annotation-active');
+          },
+          maxWidth: 300,
+          delay: [50, 0],
+          duration: [200, 0],
+          offset: [5, 10],
+          arrow: true,
+          appendTo: function(el) {
+            return el.parentElement.parentElement.parentElement;
+          },
+          interactive: true,
+          interactiveBorder: 10,
+          theme: 'quarto',
+          placement: 'right',
+          popperOptions: {
+            modifiers: [
+            {
+              name: 'flip',
+              options: {
+                flipVariations: false, // true by default
+                allowedAutoPlacements: ['right'],
+                fallbackPlacements: ['right', 'top', 'top-start', 'top-end', 'bottom', 'bottom-start', 'bottom-end', 'left'],
+              },
+            },
+            {
+              name: 'preventOverflow',
+              options: {
+                mainAxis: false,
+                altAxis: false
+              }
+            }
+            ]        
+          }      
+        };
+        window.tippy(annoteTarget, config); 
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../lectures/Lab7.html" class="pagination-link" aria-label="Misspecification and Averaging">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Misspecification and Averaging</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../lectures/Lecture15.html" class="pagination-link" aria-label="Application: Profit vs. Outcomes in Heart Attack Patients">
+        <span class="nav-page-text"><span class="chapter-number">30</span>&nbsp; <span class="chapter-title">Application: Profit vs.&nbsp;Outcomes in Heart Attack Patients</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

@@ -1,0 +1,2432 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.6.24">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>18&nbsp; Homework: Covariate Shift – Prediction, Inference, and Causality</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../lectures/Lab5.html" rel="next">
+<link href="../lectures/Lecture9.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-88e56ac79f6d00081da8a857611ab47f.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-369b45ba9ab8ff1f156918ee88e4f6e1.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="../site_libs/quarto-contrib/live-runtime/live-runtime.js" type="module"></script>
+<link href="../site_libs/quarto-contrib/live-runtime/live-runtime.css" rel="stylesheet">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script type="module" src="../site_libs/quarto-ojs/quarto-ojs-runtime.js"></script>
+<link href="../site_libs/quarto-ojs/quarto-ojs.css" rel="stylesheet">
+<link href="../site_libs/pagedtable-1.1/css/pagedtable.css" rel="stylesheet">
+<script src="../site_libs/pagedtable-1.1/js/pagedtable.js"></script>
+<script>
+  window.MathJax = {
+    options : {
+      menuOptions: {
+        settings: {
+          assistiveMml: false,
+          collapsible: false,  
+          explorer: false    
+        }
+      }
+    },
+    loader: {load: ['[tex]/physics', '[tex]/unicode']},
+    tex: {packages: {'[+]': ['physics', 'unicode']}}
+  }
+</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part2.html">Linear Regression with Saturated Models</a></li><li class="breadcrumb-item"><a href="../homework/week7-homework.html"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Homework: Covariate Shift</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="../">Prediction, Inference, and Causality</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Introduction</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="../part1.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">One and Two-Sample Problems</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab1-prose.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Sampling</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week0-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Homework: Review</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture2-prose.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Point and Interval Estimates</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab2.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Probability Background: Random Variables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week1-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Homework: The Idea of Calibration</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture3.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Calibrating Interval Estimates with Binary Observations</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week2-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Homework: Calibration with Binary Outcomes</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture4.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Calibrating Interval Estimates using the Bootstrap</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture5.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Normal Approximation and Sample Size Calculation</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab4.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Probability Review: Conditional Expectations</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week3-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Homework: Comparing Estimators</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture6.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Comparing Two Groups</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../exams/practice-midterm-1.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Practice Midterm 1</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week5-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Homework: Loose Ends</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="../part2.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Linear Regression with Saturated Models</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture7.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Summarizing Trends involving Many Groups</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture9.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Multivariate Analysis and Adjustment</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week7-homework.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Homework: Covariate Shift</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab5.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">A Game of Telephone</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture8.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Inference for Complicated Summaries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../homework/week9-homework.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Homework: Calibration for Complex Summaries</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture10.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Potential Outcomes and Causality</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../exams/practice-midterm-2.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Practice Midterm 2</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="../part3.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Linear Regression with Arbitrary Models</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture11.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Least Squares Regression in Linear Models</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab6.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Least Squares in <strong>R</strong></span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture12.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">The Behavior of Least Squares Predictors</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture13.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Misspecification and Inference</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lab7.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Misspecification and Averaging</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture14.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Inverse Probability Weighting</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../lectures/Lecture15.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">30</span>&nbsp; <span class="chapter-title">Application: Profit vs.&nbsp;Outcomes in Heart Attack Patients</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../exams/practice-final.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">31</span>&nbsp; <span class="chapter-title">Practice Final</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active" data-toc-expanded="-1">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#summary" id="toc-summary" class="nav-link active" data-scroll-target="#summary">Summary</a></li>
+  <li><a href="#review" id="toc-review" class="nav-link" data-scroll-target="#review">Review</a></li>
+  <li><a href="#complex-summaries-and-covariate-shift" id="toc-complex-summaries-and-covariate-shift" class="nav-link" data-scroll-target="#complex-summaries-and-covariate-shift">Complex Summaries and Covariate Shift</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part2.html">Linear Regression with Saturated Models</a></li><li class="breadcrumb-item"><a href="../homework/week7-homework.html"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Homework: Covariate Shift</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Homework: Covariate Shift</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="summary" class="level1">
+<h1>Summary</h1>
+<div class="hidden">
+$$ \newcommand{X}{} \newcommand{Y}{}
+<p>$$</p>
+</div>
+<p>In this one, we’re going to review some stuff that people mixed up on the exam and work on visualization and computation for complex summaries of data with multiple and multivalued covariates.</p>
+</section>
+<section id="review" class="level1">
+<h1>Review</h1>
+<div id="fig-histogram-data" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-histogram-data-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-5-1.svg" class="img-fluid figure-img"></p>
+<figcaption>A histogram of the population, <span class="math inline">\(y_1 \ldots y_{m}\)</span> for <span class="math inline">\(m=10,000,000\)</span>.</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-5-2.svg" class="img-fluid figure-img"></p>
+<figcaption>A histogram of the sample, <span class="math inline">\(Y_1 \ldots Y_n\)</span> for <span class="math inline">\(n=10,000\)</span>.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-histogram-data-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;20.1: A histogram of the sample <span class="math inline">\(Y_1 \ldots Y_{10000}\)</span>. The mean of each distribution is marked with a blue line and the mean plus and minus one standard deviation are marked with dashed blue lines.
+</figcaption>
+</figure>
+</div>
+<div id="fig-histogram-theta-star" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-histogram-theta-star-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="3">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 33.3%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-6-1.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of estimator A.</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 33.3%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-6-2.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of estimator B.</figcaption>
+</figure>
+</div>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 33.3%;justify-content: flex-start;">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-6-3.svg" class="img-fluid figure-img"></p>
+<figcaption>The sampling distribution of estimator C.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-histogram-theta-star-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;20.2: The bootstrap sampling distributions of our three estimators. The mean of each distribution is marked with a blue line.
+</figcaption>
+</figure>
+</div>
+<p>In <a href="#fig-histogram-data" class="quarto-xref">Figure&nbsp;<span>20.1</span></a>, I’ve drawn two histograms. The first shows a population <span class="math inline">\(y_1 \ldots y_m\)</span> with mean <span class="math inline">\(\mu = \frac1m \sum_{j=1}^m y_j\)</span> and variance <span class="math inline">\(\sigma^2 = \frac1m \sum_{j=1}^m (y_j - \mu)^2\)</span>. The second shows a sample <span class="math inline">\(Y_1 \ldots Y_n\)</span> drawn with replacement from this population—the sample that was used in Problem 1 of Midterm 1.</p>
+<p>In <a href="#fig-histogram-theta-star" class="quarto-xref">Figure&nbsp;<span>20.2</span></a>, I’ve drawn the bootstrap sampling distributions of three estimators of the population mean.</p>
+<ol type="1">
+<li><span class="math inline">\(\hat\mu = \bar{Y}/2\)</span> for <span class="math inline">\(\bar{Y} = \frac1n \sum_{i=1}^n Y_i\)</span></li>
+<li><span class="math inline">\(\hat\mu = 1 + \bar{Y}/2\)</span>.</li>
+<li><span class="math inline">\(\hat\mu = Y_2\)</span>.</li>
+</ol>
+<div id="exr-match-theta-hat-star" class="callout callout-style-simple callout-exercise no-icon callout-titled theorem exercise">
+<p><span class="theorem-title"><strong>Exercise 20.1</strong></span> &nbsp;</p>
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="callout-exercise">
+<p>Match each estimator to the plot of its bootstrap sampling distribution. That is, say something like <code>1:A</code>, <code>2:B</code>, <code>3:C</code>. But not exactly that.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-2-contents" aria-controls="callout-2" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-2" class="callout-2-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<p>1:A, 2:C, 3:B.</p>
+</div>
+</div>
+</div>
+</div>
+<div id="exr-mean" class="callout callout-style-simple callout-exercise no-icon callout-titled theorem exercise">
+<p><span class="theorem-title"><strong>Exercise 20.2</strong></span> &nbsp;</p>
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="callout-exercise">
+<p>For each of these estimators, say whether it is <em>unbiased</em> and whether it is <em>consistent</em>.</p>
+<p><em>Tip</em>. Each part of this is a Yes or No question. There are estimators that are unbiased or consistent for some populations and not for others, so if I were asking about a population I’d told you nothing concrete about, the answer might be <em>maybe</em>. But I’m asking about the specific population plotted above and the plot does give you enough information to determine the answer.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-4-contents" aria-controls="callout-4" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-4" class="callout-4-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<ol type="1">
+<li>unbiased and consistent.<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a></li>
+<li>neither unbiased nor consistent.<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a></li>
+<li>unbiased but not consistent.</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div id="exr-mean-vis" class="callout callout-style-simple callout-exercise no-icon callout-titled theorem exercise">
+<p><span class="theorem-title"><strong>Exercise 20.3</strong></span> &nbsp;</p>
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="callout-exercise">
+<p>For any estimator you described as <em>biased</em> or <em>inconsistent</em>, describe what you see in the plots above that suggests this is the case.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-6-contents" aria-controls="callout-6" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-6" class="callout-6-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<ol start="2" type="1">
+<li>The sampling distribution is centered in the same place at every sample size, and gets narrower and narrower, but the place it’s centered isn’t the sample mean.</li>
+<li>The sampling distribution doesn’t get narrower.</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div id="exr-variance" class="callout callout-style-simple callout-exercise no-icon callout-titled theorem exercise">
+<p><span class="theorem-title"><strong>Exercise 20.4</strong></span> &nbsp;</p>
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="callout-exercise">
+<p>For each of the three estimators, do the following.</p>
+<ol type="1">
+<li>Write a formula for its standard deviation. Your formula may involve the sample size <span class="math inline">\(n\)</span> and some summaries of the population, e.g.&nbsp;<span class="math inline">\(m\)</span>, <span class="math inline">\(\mu\)</span>, or <span class="math inline">\(\sigma\)</span>.</li>
+<li>Using information shown in <a href="#fig-histogram-data" class="quarto-xref">Figure&nbsp;<span>20.1</span></a>, calculate it approximately and report the number.</li>
+<li>Check that your answer looks about right using <a href="#fig-histogram-theta-star" class="quarto-xref">Figure&nbsp;<span>20.2</span></a> and <em>describe how you checked</em>.</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-8-contents" aria-controls="callout-8" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-8" class="callout-8-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<p>From the plot, we can see that <span class="math display">\[
+\begin{aligned}
+\mathop{\mathrm{\mathop{\mathrm{V}}}}(\barY / 2) &amp;= \qty(\frac{1}{2})^2 \mathop{\mathrm{\mathop{\mathrm{V}}}}(\barY) = \frac{1}{4} \frac{\sigma^2}{n} \\
+\mathop{\mathrm{\mathop{\mathrm{V}}}}(1 + \barY / 2) &amp;= \mathop{\mathrm{\mathop{\mathrm{V}}}}(\barY / 2) = \frac{1}{4} \frac{\sigma^2}{n} \\
+\mathop{\mathrm{\mathop{\mathrm{V}}}}(Y_2) &amp;= \sigma^2
+\end{aligned}
+\]</span> It follows that the standard deviations are <span class="math inline">\(\sigma/2\sqrt{n} = 3/(2\times 100) = 0.015\)</span> for the first two and <span class="math inline">\(\sigma = 3\)</span> for the third, since we can see from dashed lines inthe population plot that <span class="math inline">\(\sigma=3\)</span> and from the caption in the sample plot that <span class="math inline">\(n=10,000=100^2\)</span>.</p>
+<p>The first two being averages and therefore approximately normal, we can check out calculation by going out 2 standard deviations from the mean in the bootstrap sampling distribution and seeing that it gives us about 95% of the distribution. For these two estimators (i.e.&nbsp;estimators A and C), this is about <span class="math inline">\(\pm 0.03\)</span> and it looks good. For Estimator 3/B, since our estimator <span class="math inline">\(Y_2\)</span> is sampled uniformly-at-random from the population, its sampling distribution looks exactly like the distribution of the population, which is where we got the number <span class="math inline">\(\sigma=3\)</span>.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section id="complex-summaries-and-covariate-shift" class="level1">
+<h1>Complex Summaries and Covariate Shift</h1>
+<p>In this section, we’ll work with a subset of the California income data considered in lecture. We’ll look at incomes of CA residents who responded to the Current Population Survey in 2022, were in the age range 25-25, and graduated from high school. I’ve plotted this data below. As in lecture:</p>
+<ul>
+<li><span class="groupa"><span class="math inline">\(W_i=0\)</span> for male residents</span> and <span class="groupb"><span class="math inline">\(W_i=1\)</span> for female residents</span>;</li>
+<li><span class="math inline">\(X_i\)</span> is years of schooling.</li>
+<li><span class="math inline">\(Y_i\)</span> is income in dollars.</li>
+</ul>
+<div id="fig-greenred-scatter" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-greenred-scatter-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-10-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-greenred-scatter-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.1: Scatter plot of <code>education</code> vs <code>income</code> colored by <code>sex</code> with histograms of <code>education</code> overlaid. Note that, because incomes are on a very different scale than the proportions we’re displaying in the histogram, two different scales for the y-axis are used. The scale on the left is for income. The scale on the right is for the proportions.
+</figcaption>
+</figure>
+</div>
+<div id="fig-greenred-histograms" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-greenred-histograms-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-11-1.svg" class="img-fluid figure-img"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-11-2.svg" class="img-fluid figure-img"></p>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-greenred-histograms-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.2: Histograms of <code>education</code> colored by <code>sex</code> in two layouts. On the left, they’re plotted one above the other. On the right, they’re overlaid.
+</figcaption>
+</figure>
+</div>
+<div class="columns">
+<div class="column" style="width:35%;">
+<div class="cell">
+<div class="cell-output-display">
+<div id="ogqyvckatq" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<style>#ogqyvckatq table {
+  font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#ogqyvckatq thead, #ogqyvckatq tbody, #ogqyvckatq tfoot, #ogqyvckatq tr, #ogqyvckatq td, #ogqyvckatq th {
+  border-style: none;
+}
+
+#ogqyvckatq p {
+  margin: 0;
+  padding: 0;
+}
+
+#ogqyvckatq .gt_table {
+  display: table;
+  border-collapse: collapse;
+  line-height: normal;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#ogqyvckatq .gt_caption {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+#ogqyvckatq .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#ogqyvckatq .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 3px;
+  padding-bottom: 5px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#ogqyvckatq .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#ogqyvckatq .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#ogqyvckatq .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#ogqyvckatq .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#ogqyvckatq .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#ogqyvckatq .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#ogqyvckatq .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#ogqyvckatq .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#ogqyvckatq .gt_spanner_row {
+  border-bottom-style: hidden;
+}
+
+#ogqyvckatq .gt_group_heading {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  text-align: left;
+}
+
+#ogqyvckatq .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#ogqyvckatq .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#ogqyvckatq .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#ogqyvckatq .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#ogqyvckatq .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#ogqyvckatq .gt_stub_row_group {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+  vertical-align: top;
+}
+
+#ogqyvckatq .gt_row_group_first td {
+  border-top-width: 2px;
+}
+
+#ogqyvckatq .gt_row_group_first th {
+  border-top-width: 2px;
+}
+
+#ogqyvckatq .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#ogqyvckatq .gt_first_summary_row {
+  border-top-style: solid;
+  border-top-color: #D3D3D3;
+}
+
+#ogqyvckatq .gt_first_summary_row.thick {
+  border-top-width: 2px;
+}
+
+#ogqyvckatq .gt_last_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#ogqyvckatq .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#ogqyvckatq .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#ogqyvckatq .gt_last_grand_summary_row_top {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: double;
+  border-bottom-width: 6px;
+  border-bottom-color: #D3D3D3;
+}
+
+#ogqyvckatq .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#ogqyvckatq .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#ogqyvckatq .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#ogqyvckatq .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#ogqyvckatq .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#ogqyvckatq .gt_sourcenote {
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#ogqyvckatq .gt_left {
+  text-align: left;
+}
+
+#ogqyvckatq .gt_center {
+  text-align: center;
+}
+
+#ogqyvckatq .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#ogqyvckatq .gt_font_normal {
+  font-weight: normal;
+}
+
+#ogqyvckatq .gt_font_bold {
+  font-weight: bold;
+}
+
+#ogqyvckatq .gt_font_italic {
+  font-style: italic;
+}
+
+#ogqyvckatq .gt_super {
+  font-size: 65%;
+}
+
+#ogqyvckatq .gt_footnote_marks {
+  font-size: 75%;
+  vertical-align: 0.4em;
+  position: initial;
+}
+
+#ogqyvckatq .gt_asterisk {
+  font-size: 100%;
+  vertical-align: 0;
+}
+
+#ogqyvckatq .gt_indent_1 {
+  text-indent: 5px;
+}
+
+#ogqyvckatq .gt_indent_2 {
+  text-indent: 10px;
+}
+
+#ogqyvckatq .gt_indent_3 {
+  text-indent: 15px;
+}
+
+#ogqyvckatq .gt_indent_4 {
+  text-indent: 20px;
+}
+
+#ogqyvckatq .gt_indent_5 {
+  text-indent: 25px;
+}
+
+#ogqyvckatq .katex-display {
+  display: inline-flex !important;
+  margin-bottom: 0.75em !important;
+}
+
+#ogqyvckatq div.Reactable > div.rt-table > div.rt-thead > div.rt-tr.rt-tr-group-header > div.rt-th-group:after {
+  height: 0px !important;
+}
+</style>
+
+<table class="gt_table caption-top table table-sm table-striped small" data-quarto-postprocess="true" data-quarto-disable-processing="false" data-quarto-bootstrap="false">
+<thead>
+<tr class="gt_col_headings header">
+<th id="W" class="gt_col_heading gt_columns_bottom_border gt_right" data-quarto-table-cell-role="th" scope="col">W</th>
+<th id="X" class="gt_col_heading gt_columns_bottom_border gt_right" data-quarto-table-cell-role="th" scope="col">X</th>
+<th id="mu.hat" class="gt_col_heading gt_columns_bottom_border gt_left" data-quarto-table-cell-role="th" scope="col">mu.hat</th>
+<th id="N.wx" class="gt_col_heading gt_columns_bottom_border gt_right" data-quarto-table-cell-role="th" scope="col">N.wx</th>
+</tr>
+</thead>
+<tbody class="gt_table_body">
+<tr class="odd">
+<td class="gt_row gt_right" headers="W">0</td>
+<td class="gt_row gt_right" headers="X">12</td>
+<td class="gt_row gt_left" headers="mu.hat">35k</td>
+<td class="gt_row gt_right" headers="N.wx">353</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_right" headers="W">0</td>
+<td class="gt_row gt_right" headers="X">13</td>
+<td class="gt_row gt_left" headers="mu.hat">41k</td>
+<td class="gt_row gt_right" headers="N.wx">179</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_right" headers="W">0</td>
+<td class="gt_row gt_right" headers="X">14</td>
+<td class="gt_row gt_left" headers="mu.hat">50k</td>
+<td class="gt_row gt_right" headers="N.wx">110</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_right" headers="W">0</td>
+<td class="gt_row gt_right" headers="X">16</td>
+<td class="gt_row gt_left" headers="mu.hat">70k</td>
+<td class="gt_row gt_right" headers="N.wx">311</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_right" headers="W">0</td>
+<td class="gt_row gt_right" headers="X">18</td>
+<td class="gt_row gt_left" headers="mu.hat">100k</td>
+<td class="gt_row gt_right" headers="N.wx">107</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_right" headers="W">0</td>
+<td class="gt_row gt_right" headers="X">20</td>
+<td class="gt_row gt_left" headers="mu.hat">110k</td>
+<td class="gt_row gt_right" headers="N.wx">35</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_right" headers="W">1</td>
+<td class="gt_row gt_right" headers="X">12</td>
+<td class="gt_row gt_left" headers="mu.hat">21k</td>
+<td class="gt_row gt_right" headers="N.wx">252</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_right" headers="W">1</td>
+<td class="gt_row gt_right" headers="X">13</td>
+<td class="gt_row gt_left" headers="mu.hat">27k</td>
+<td class="gt_row gt_right" headers="N.wx">178</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_right" headers="W">1</td>
+<td class="gt_row gt_right" headers="X">14</td>
+<td class="gt_row gt_left" headers="mu.hat">30k</td>
+<td class="gt_row gt_right" headers="N.wx">110</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_right" headers="W">1</td>
+<td class="gt_row gt_right" headers="X">16</td>
+<td class="gt_row gt_left" headers="mu.hat">58k</td>
+<td class="gt_row gt_right" headers="N.wx">329</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_right" headers="W">1</td>
+<td class="gt_row gt_right" headers="X">18</td>
+<td class="gt_row gt_left" headers="mu.hat">77k</td>
+<td class="gt_row gt_right" headers="N.wx">140</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_right" headers="W">1</td>
+<td class="gt_row gt_right" headers="X">20</td>
+<td class="gt_row gt_left" headers="mu.hat">107k</td>
+<td class="gt_row gt_right" headers="N.wx">36</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+</div><div class="column" style="width:65%;">
+<p>We’ll consider the following four estimators of the difference in income between the male and female CA residents in our sample.<br>
+<span class="math display">\[
+\color{gray}
+\begin{aligned}
+\hat \Delta_{\text{raw}} &amp;= \frac{1}{N_1}\sum_{i: W_i=1} Y_i - \frac{1}{N_0}\sum_{i: W_i=0} Y_i \\
+\hat\Delta_0  &amp;=\frac{1}{N_0}\sum_{i: W_i=0} \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} \\
+\hat \Delta_1 &amp;= \frac{1}{N_1}\sum_{i: W_i=1} \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)} \\
+\hat \Delta_{\text{all}} &amp;= \frac{1}{n} \sum_{i=1}^n \qty{\hat\mu(1,X_i) - \hat \mu(0, X_i)}
+\end{aligned}
+\]</span></p>
+<div id="exr-calc-ca-estimator" class="callout callout-style-simple callout-exercise no-icon callout-titled theorem exercise">
+<p><span class="theorem-title"><strong>Exercise 21.1</strong></span> &nbsp;</p>
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="callout-exercise">
+<p>Using the data in the table to the left, calculate each of these four estimators.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-10-contents" aria-controls="callout-10" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-10" class="callout-10-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<p>To use the data in the table, we’ll need these written in ‘histogram form.’ <span class="math display">\[
+\color{gray}
+\begin{aligned}
+\hat \Delta_{\text{raw}}
+&amp;= \sum_x P_{x\mid 1} \hat\mu(1,x) - \sum_x P_{x \mid 0} \hat\mu(0,x) \\
+\hat\Delta_0  
+&amp;= \sum_x P_{x \mid 0} \qty{\hat\mu(1,x) - \hat \mu(0, x)} \\
+\hat \Delta_1
+&amp;= \sum_x P_{x \mid 1} \qty{\hat\mu(1,x) - \hat \mu(0, x)} \\
+\hat \Delta_{\text{all}}
+&amp;= \sum_x P_{x} \qty{\hat\mu(1,x) - \hat \mu(0, x)}
+\end{aligned}
+\]</span> for <span class="math display">\[
+\begin{aligned}
+P_{x \mid 1} &amp;= \frac{N_{1x}}{N_1} = \frac{N_{1x}}{\sum_x N_{1x}} \\
+P_{x \mid 0} &amp;= \frac{N_{0x}}{N_0} = \frac{N_{0x}}{\sum_x N_{0x}} \\
+P_{x} &amp;= \frac{N_{x}}{n}
+      = \frac{N_{0x} + N_{1x}}{\sum_{w,x} N_{wx}} \\
+      &amp;= \frac{N_{0x}}{\sum_{x} N_{0x}} \times \frac{\sum_{x} N_{0x}}{\sum_{w,x} N_{wx}}
+       + \frac{N_{1x}}{\sum_{x} N_{1x}} \times \frac{\sum_{x} N_{1x}}{\sum_{w,x} N_{wx}} \\
+      &amp;= P_{x \mid 0} \times P_0 + P_{x \mid 1} P_1 \qfor P_w = \sum_{x} \frac{N_{wx}}{\sum_{wx}N_{w,x}}
+\end{aligned}
+\]</span> Let’s make a table of these quantities.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th><span class="math inline">\(x\)</span></th>
+<th><span class="math inline">\(P_{x \mid 0}\)</span></th>
+<th><span class="math inline">\(P_{x \mid 1}\)</span></th>
+<th><span class="math inline">\(P_x\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>12</td>
+<td><span class="math inline">\(\frac{353}{1095} \approx 0.32\)</span></td>
+<td><span class="math inline">\(\frac{252}{1045} \approx 0.24\)</span></td>
+<td><span class="math inline">\(0.32 \times 0.51 + 0.24 \times 0.49 \approx 0.28\)</span></td>
+</tr>
+<tr class="even">
+<td>13</td>
+<td><span class="math inline">\(\frac{179}{1095} \approx 0.16\)</span></td>
+<td><span class="math inline">\(\frac{178}{1045} \approx 0.17\)</span></td>
+<td><span class="math inline">\(0.16 \times 0.51 + 0.17 \times 0.49 \approx 0.17\)</span></td>
+</tr>
+<tr class="odd">
+<td>14</td>
+<td><span class="math inline">\(\frac{110}{1095} \approx 0.1\)</span></td>
+<td><span class="math inline">\(\frac{110}{1045} \approx 0.11\)</span></td>
+<td><span class="math inline">\(0.1 \times 0.51 + 0.11 \times 0.49 \approx 0.1\)</span></td>
+</tr>
+<tr class="even">
+<td>16</td>
+<td><span class="math inline">\(\frac{311}{1095} \approx 0.28\)</span></td>
+<td><span class="math inline">\(\frac{329}{1045} \approx 0.31\)</span></td>
+<td><span class="math inline">\(0.28 \times 0.51 + 0.31 \times 0.49 \approx 0.3\)</span></td>
+</tr>
+<tr class="odd">
+<td>18</td>
+<td><span class="math inline">\(\frac{107}{1095} \approx 0.1\)</span></td>
+<td><span class="math inline">\(\frac{140}{1045} \approx 0.13\)</span></td>
+<td><span class="math inline">\(0.1 \times 0.51 + 0.13 \times 0.49 \approx 0.12\)</span></td>
+</tr>
+<tr class="even">
+<td>20</td>
+<td><span class="math inline">\(\frac{35}{1095} \approx 0.03\)</span></td>
+<td><span class="math inline">\(\frac{36}{1045} \approx 0.03\)</span></td>
+<td><span class="math inline">\(0.03 \times 0.51 + 0.03 \times 0.49 \approx 0.03\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>Substituting these and values from our table of <span class="math inline">\(\hat\mu(w,x)\)</span> into our ‘histogram form’ formulas, we get these numbers.</p>
+<p><span class="math display">\[
+\begin{aligned}
+\hat\Delta_{\text{raw}} &amp;\approx -11.3k \\
+\hat \Delta_0 &amp;\approx -14.8k\\
+\hat \Delta_1 &amp;\approx -15.1k\\
+\hat \Delta_{\text{all}} &amp;\approx -14.9k
+\end{aligned}
+\]</span></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p>In Lecture 9, we decomposed the raw difference <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> as a sum of the adjusted difference <span class="math inline">\(\hat\Delta_1\)</span> and a <em>covariate shift term</em>. And we talked about how to use plots like the ones above to understand what the covariate shift term would look like. In this next exercise, we’ll get in some practice interpreting plots like these. We’ll work with three samples. Each sample is shown in a tab below.</p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true" aria-current="page">Income in LA vs SFBay</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false">Unemployment Rates in Southern California</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-3" role="tab" aria-controls="tabset-1-3" aria-selected="false">Primary Turnout in MI</a></li></ul>
+<div class="tab-content">
+<div id="tabset-1-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-1-1-tab">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-17-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-18-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-18-2.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+<ul>
+<li><span class="math inline">\(W_i\)</span> is an indicator for county.
+<ul>
+<li><span class="groupa">0 for residents of Los Angeles County</span></li>
+<li><span class="groupb">1 for residents of San Francisco and Alameda Counties</span></li>
+</ul></li>
+<li><span class="math inline">\(X_i\)</span> is education in years of schooling</li>
+<li><span class="math inline">\(Y_i\)</span> is income in dollars.</li>
+</ul>
+</div>
+<div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-19-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-20-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-20-2.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+<ul>
+<li><span class="math inline">\(W_i\)</span> is an indicator for county.
+<ul>
+<li><span class="groupa">0 for residents of San Diego</span></li>
+<li><span class="groupb">1 for residents of Orange County</span></li>
+</ul></li>
+<li><span class="math inline">\(X_i\)</span> is education in years of schooling</li>
+<li><span class="math inline">\(Y_i\)</span> is unemployment status: 0 for employed and 1 for unemployed.</li>
+</ul>
+</div>
+<div id="tabset-1-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-3-tab">
+<div class="cell">
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-21-1.svg" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<div>
+
+</div>
+<div class="cell quarto-layout-panel" data-layout-ncol="2">
+<div class="quarto-layout-row">
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-22-1.svg" class="img-fluid"></p>
+</div>
+<div class="quarto-layout-cell" style="flex-basis: 50.0%;justify-content: center;">
+<p><img src="week7-homework_files/figure-html/unnamed-chunk-22-2.svg" class="img-fluid"></p>
+</div>
+</div>
+</div>
+<ul>
+<li><span class="math inline">\(W_i\)</span> is an indicator for voting in the 2004 primary.
+<ul>
+<li><span class="groupb">1 if they voted</span> in the last primary,</li>
+<li><span class="groupa">0 if they didn’t</span>.</li>
+</ul></li>
+<li><span class="math inline">\(X_i\)</span> is birth-year.</li>
+<li><span class="math inline">\(Y_i\)</span> is an indicator for voting in the 2006 primary.
+<ul>
+<li>1 if they voted</li>
+<li>0 if they didn’t</li>
+</ul></li>
+</ul>
+</div>
+</div>
+</div>
+<div id="exr-shift-interp-practice" class="callout callout-style-simple callout-exercise no-icon callout-titled theorem exercise">
+<p><span class="theorem-title"><strong>Exercise 21.2</strong></span> &nbsp;</p>
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="callout-exercise">
+<p>For each of the three samples, answer these Yes or No questions. No need to explain.</p>
+<ol type="1">
+<li>Is the raw difference <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> larger or smaller than the adjusted difference <span class="math inline">\(\hat\Delta_1\)</span>?</li>
+<li>Is the magnitude of the raw difference, <span class="math inline">\(| \hat\Delta_{\text{raw}}|\)</span>, larger or smaller than the magnitude of the adjusted difference, <span class="math inline">\(|\hat\Delta_1|\)</span>?</li>
+</ol>
+<p><em>Tip</em>. The second question is a bit hard. You should be able to use the plot to know the sign (+/-) of the adjusted difference and covariate shift term. If the signs are the same, you know the magnitude of the raw difference is larger. But if the signs are opposite, it’s a bit more subtle. What happens depends on the relative magnitudes of the adjusted difference and covariate shift term. Usually, the magnitude of the covariate shift is less than twice the magnitude of the adjusted difference, which makes the raw difference smaller in magnitude than the adjusted one. But if the magnitude of the covariate shift term is more than twice the magnitude of the adjusted difference, we have an extreme case of Simpson’s paradox: the raw difference is larger in magnitude but opposite in sign to the adjusted difference. For the purpose of this assignment, don’t worry about this happening.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-12-contents" aria-controls="callout-12" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution. Income in LA vs SFBay
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-12" class="callout-12-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<ol type="1">
+<li>Yes, <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> is larger than <span class="math inline">\(\hat\Delta_1\)</span>. Explanation: Rightward covariate shift, increasing function <span class="math inline">\(\hat\mu(0,x)\)</span>.</li>
+<li>Yes, it’s larger in magnitude as well. Explanation: <span class="math inline">\(\hat\Delta_1\)</span> is positive because the typical within-group differences are positive.</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-13-contents" aria-controls="callout-13" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution.Unemployment in SD vs OC
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-13" class="callout-13-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<ol type="1">
+<li>Yes, <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> is larger than <span class="math inline">\(\hat\Delta_1\)</span>. Explanation: Leftward covariate shift, decreasing function <span class="math inline">\(\hat\mu(0,x)\)</span>.</li>
+<li>No, it’s smaller in magnitude. But visually, it’s not that obvious.</li>
+</ol>
+<p>Explanation: The within-group differences <span class="math inline">\(\hat\mu(1,x) - \hat\mu(0,x)\)</span> are negative, so <span class="math inline">\(\hat\Delta_1\)</span> is negative. The raw difference, being bigger in signed terms because of covariate shift, could be negative but smaller in magnitude or positive and either smaller or larger in magnitude. My guess was that there isn’t enough covariate shift to make the raw difference positive. And looking at the numbers in the table in <a href="#nte-actual-numbers" class="quarto-xref">Note&nbsp;<span>21.1</span></a> confirms this: the raw difference is -0.023 and the adjusted one in -0.041.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-14-contents" aria-controls="callout-14" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution. Primary Turnout in MI
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-14" class="callout-14-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<ol type="1">
+<li>Yes, <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> is larger than <span class="math inline">\(\hat\Delta_1\)</span>. Explanation: Leftward covariate shift, decreasing function <span class="math inline">\(\hat\mu(0,x)\)</span>.</li>
+<li>Yes, it’s larger in magnitude as well. Explanation: <span class="math inline">\(\hat\Delta_1\)</span> is positive because the typical within-group differences are positive.</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div id="nte-actual-numbers" class="callout callout-style-simple callout-note no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-15-contents" aria-controls="callout-15" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note&nbsp;21.1: The Actual Numbers <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> and <span class="math inline">\(\hat\Delta_1\)</span>
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-15" class="callout-15-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>I wanted this to be an exercise in interpreting plots, so I didn’t give you the data you’d need to calculate these. But, if you’re curious, here they are.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>comparison</th>
+<th><span class="math inline">\(\hat\Delta_{\text{raw}}\)</span></th>
+<th><span class="math inline">\(\hat\Delta_1\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Income in LA vs SFBay</td>
+<td>39k</td>
+<td>24k</td>
+</tr>
+<tr class="even">
+<td>Unemployment in SD vs OC</td>
+<td>-0.023</td>
+<td>-0.041</td>
+</tr>
+<tr class="odd">
+<td>Primary Turnout in MI</td>
+<td>0.159</td>
+<td>0.147</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<p>We can derive similar decompositions for our other adjusted differences <span class="math inline">\(\hat\Delta_0\)</span> and <span class="math inline">\(\hat\Delta_{\text{all}}\)</span>. That is, we can decompose <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> as the sum of <span class="math inline">\(\hat\Delta_0\)</span> or <span class="math inline">\(\hat\Delta_{\text{all}}\)</span> and a different, but conceptually similar covariate shift term.</p>
+<div id="exr-decompose-ca-estimator" class="callout callout-style-simple callout-exercise no-icon callout-titled theorem exercise">
+<p><span class="theorem-title"><strong>Exercise 21.3</strong></span> &nbsp;</p>
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="callout-exercise">
+<p>Derive a formula for <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> as the sum of <span class="math inline">\(\hat\Delta_0\)</span> and a covariate shift term. Show your work.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-17-contents" aria-controls="callout-17" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-17" class="callout-17-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<p><span class="math display">\[
+\color{gray}
+\begin{aligned}
+\hat\Delta_{\text{raw}}
+&amp;= \textcolor[RGB]{0,191,196}{\frac{1}{N_1}\sum_{i:W_i=1} \hat\mu(1,X_i)} - \textcolor[RGB]{248,118,109}{\frac{1}{N_0}\sum_{i:W_i=0} \hat\mu(0,X_i)} \\
+&amp;=
+\sum_{x} \textcolor[RGB]{0,191,196}{P_{x\mid 1} \ \hat\mu(1,x)} - \sum_{x} \textcolor[RGB]{248,118,109}{P_{x\mid 0} \  \hat\mu(0,x)}  \\
+&amp;=
+\sum_{x} (\textcolor[RGB]{0,191,196}{P_{x\mid 1}} + \textcolor[RGB]{248,118,109}{P_{x\mid 0}} - \textcolor[RGB]{248,118,109}{P_{x\mid 0}}) \ \textcolor[RGB]{0,191,196}{\hat\mu(1,x)} - \sum_{x}  \textcolor[RGB]{248,118,109}{P_{x\mid 0}} \ \textcolor[RGB]{248,118,109}{\hat\mu(0,x)}  \\
+&amp;= \underset{\text{covariate shift term}}{\sum_x (\textcolor[RGB]{0,191,196}{P_{x\mid 1}} - \textcolor[RGB]{248,118,109}{P_{x\mid 0}}) \ \textcolor[RGB]{0,191,196}{\hat \mu(1,x)}} + \underset{\text{adjusted difference}\  \hat\Delta_0}{\sum_x \textcolor[RGB]{248,118,109}{P_{x \mid 0}} \qty{ \textcolor[RGB]{0,191,196}{\hat\mu(1,x)} \ - \ \textcolor[RGB]{248,118,109}{\hat\mu(0,x)}}}  
+\end{aligned}
+\]</span></p>
+<p>The raw difference differs from <span class="math inline">\(\hat\Delta_0\)</span> by the red-to-green shift in the average of<br>
+the function <span class="math inline">\(\textcolor[RGB]{0,191,196}{\hat\mu(1,x)}\)</span>. When comparing to <span class="math inline">\(\hat\Delta_1\)</span>, it was the same shift in <span class="math inline">\(\textcolor[RGB]{248,118,109}{\hat\mu(0,x)}\)</span>. So we can use the same visualization techniques and heuristics, we just have to look at the green curve instead of the red one.</p>
+</div>
+</div>
+</div>
+</div>
+<div id="nte-decompose-ca-estimator" class="callout callout-style-simple callout-note no-icon callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note&nbsp;21.2: A correction.
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>In a previously posted version of this assignment, <a href="#exr-decompose-ca-estimator" class="quarto-xref">Exercise&nbsp;<span>21.3</span></a> asked you to do the same with <span class="math inline">\(\hat\Delta_{\text{all}}\)</span> in place of <span class="math inline">\(\hat\Delta_0\)</span>. That’s a bad exercise because there isn’t a two-term decomposition of <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> as the sum of <span class="math inline">\(\hat\Delta_{\text{all}}\)</span> and a single covariate shift term. You can, however, get a useful <em>three-term</em> decomposition.</p>
+<p>To do this, start with your formula for <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> in terms of <span class="math inline">\(\hat\Delta_1\)</span>. Then think of the difference <span class="math inline">\(\hat\Delta_1 - \hat\Delta_{\text{all}}\)</span> as <em>another</em> covariate shift term—only this time, the function we’re averaging over our two histograms is <span class="math inline">\(\hat\mu(1,x) - \hat\mu(0,x)\)</span> instead of <span class="math inline">\(\hat\mu(0,x)\)</span>.</p>
+<p><span class="math display">\[
+\begin{aligned}
+\hat\Delta_{\text{raw}}
+&amp;= \hat\Delta_1 + (\hat\Delta_{\text{raw}} - \hat\Delta_1) \\
+&amp;= \hat\Delta_{\text{all}}
++ \underset{\text{new covariate shift term}}{\qty(\hat\Delta_{1} - \hat\Delta_{\text{all}})}
++ \underset{\text{$\hat\Delta_1$'s covariate shift term}}{(\hat\Delta_{\text{raw}} - \hat\Delta_1)}
+\end{aligned}
+\]</span></p>
+<p>I’ve added an Extra Credit version of this exercise, <a href="#exr-decompose-ca-estimator-ec" class="quarto-xref">Exercise&nbsp;<span>21.7</span></a>, on deriving and using this three-term decomposition.</p>
+</div>
+</div>
+<p>Now that we have these new decompositions, let’s use them.</p>
+<div id="exr-using-decompositions" class="callout callout-style-simple callout-exercise no-icon callout-titled theorem exercise">
+<p><span class="theorem-title"><strong>Exercise 21.4</strong></span> &nbsp;</p>
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="callout-exercise">
+<p>Forget the calculations you did in <a href="#exr-calc-ca-estimator" class="quarto-xref">Exercise&nbsp;<span>21.1</span></a> for a moment. Explain how, using only <a href="#fig-greenred-scatter" class="quarto-xref">Figure&nbsp;<span>21.1</span></a> and <a href="#fig-greenred-histograms" class="quarto-xref">Figure&nbsp;<span>21.2</span></a>, you could predict whether <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> or <span class="math inline">\(\hat\Delta_0\)</span> would be larger. Do the same for <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> and <span class="math inline">\(\hat\Delta_{\text{all}}\)</span>.</p>
+<p>Are your answers here are consistent with what you calculated in <a href="#exr-calc-ca-estimator" class="quarto-xref">Exercise&nbsp;<span>21.1</span></a>?</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-20-contents" aria-controls="callout-20" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-20" class="callout-20-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<p><span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> is larger than <span class="math inline">\(\hat\Delta_0\)</span>. The trend <span class="math inline">\(\textcolor[RGB]{0,191,196}{\hat\mu(1,x)}\)</span> is increasing and the distribution of <span class="math inline">\(x\)</span> shifts to the right, so its average over <span class="math inline">\(\textcolor[RGB]{0,191,196}{P_{x\mid 1}}\)</span> is larger than its average over <span class="math inline">\(\textcolor[RGB]{248,118,109}{P_{x\mid 0}}\)</span>. This is consistent with the numbers from <a href="#exr-calc-ca-estimator" class="quarto-xref">Exercise&nbsp;<span>21.1</span></a>.</p>
+<p>The case of <span class="math inline">\(\hat\Delta_{\text{all}}\)</span> has been moved to the extra credit exercise <a href="#exr-decompose-ca-estimator-ec" class="quarto-xref">Exercise&nbsp;<span>21.7</span></a> below. If you did it here, getting it wrong here won’t count against you, but getting it right earns you some of those extra credit points.</p>
+</div>
+</div>
+</div>
+</div>
+<p>Covariate shift isn’t just the phenomenon behind the difference between raw and adjusted differences. It shows up wherever we’re comparing averages over different groups. One example is comparing different adjusted differences, e.g.&nbsp;<span class="math inline">\(\hat \Delta_1\)</span> and <span class="math inline">\(\hat \Delta_0\)</span>. The following exercises will explore that. These are extra credit exercises, but I encourage you to look them over and think about them at least for a minute or two. There’s a good chance that, having made it this far, you’ll find them pretty easy.</p>
+<div id="exr-shift-between-adjusted" class="callout callout-style-simple callout-exercise no-icon callout-titled theorem exercise">
+<p><span class="theorem-title"><strong>Exercise 21.5</strong></span> &nbsp;</p>
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="callout-exercise">
+<p><em>Extra Credit</em>. Explain how, using only <a href="#fig-greenred-scatter" class="quarto-xref">Figure&nbsp;<span>21.1</span></a> and <a href="#fig-greenred-histograms" class="quarto-xref">Figure&nbsp;<span>21.2</span></a>, you could predict whether <span class="math inline">\(\hat\Delta_{1}\)</span> or <span class="math inline">\(\hat\Delta_0\)</span> would be larger.</p>
+<p><em>Hint</em>. Compare the ‘histogram form’ formulas for <span class="math inline">\(\hat\Delta_1\)</span> and <span class="math inline">\(\hat\Delta_0\)</span>.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-22-contents" aria-controls="callout-22" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-22" class="callout-22-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<p>This is a tricky one. The formula you need is simple. Observe that the difference <span class="math inline">\(\hat\Delta_1 - \hat\Delta_0\)</span> is a shift between averages of the function <span class="math inline">\(f(x)=\hat\mu(1,x) - \hat\mu(0,x)\)</span>. <span class="math display">\[
+\color{gray}
+\begin{aligned}
+\hat\Delta_1 - \hat\Delta_0
+&amp;= \sum_x \textcolor[RGB]{0,191,196}{P_{x \mid 1}} \qty{ \textcolor[RGB]{0,191,196}{\hat\mu(1,x)} - \textcolor[RGB]{248,118,109}{\hat\mu(0,x)}}
+- \sum_x \textcolor[RGB]{248,118,109}{P_{x \mid 0}} \qty{ \textcolor[RGB]{0,191,196}{\hat\mu(1,x)} - \textcolor[RGB]{248,118,109}{\hat\mu(0,x)}}.
+\end{aligned}
+\]</span></p>
+<p>What’s subtle is making sense of this visually. It’s not going to be a big difference because this function <span class="math inline">\(\textcolor[RGB]{0,191,196}{\hat\mu(1,x)} - \textcolor[RGB]{248,118,109}{\hat\mu(0,x)}\)</span> isn’t changing much over <span class="math inline">\(x\)</span> and there’s not a ton of covariate shift either. But if you look very carefully, you can see that <span class="math inline">\(\hat\Delta_1\)</span> is a bit smaller (i.e.&nbsp;bigger in magnitude) than <span class="math inline">\(\hat\Delta_0\)</span>. How? You have to be a bit subtle about how you think the shift in the distribution of <span class="math inline">\(x\)</span>.</p>
+<p>The green and red histograms are roughly equal at <span class="math inline">\(x=13\)</span>,<span class="math inline">\(14\)</span>, and <span class="math inline">\(20\)</span>. So what’s happening is that the extra mass that’s in the red histogram at <span class="math inline">\(x=12\)</span> is getting split between <span class="math inline">\(x=16\)</span> and <span class="math inline">\(x=18\)</span> in the green histogram. The function <span class="math inline">\(\textcolor[RGB]{0,191,196}{\hat\mu(1,x)} - \textcolor[RGB]{248,118,109}{\hat\mu(0,x)}\)</span> is roughly the same at <span class="math inline">\(x=12\)</span> and <span class="math inline">\(x=16\)</span>, but it’s smaller (more negative) at <span class="math inline">\(x=18\)</span>. As a result, the average of this function over the green histogram will be a bit smaller (again, more negative) than the average over the red one.</p>
+<p>Does this bear out in the numbers? Yes. If you do the calculations precisely, it does. In <a href="#exr-calc-ca-estimator" class="quarto-xref">Exercise&nbsp;<span>21.1</span></a>, we calculated <span class="math inline">\(\hat\Delta_1\)</span> to be about $600 less than <span class="math inline">\(\hat\Delta_0\)</span>.</p>
+</div>
+</div>
+</div>
+</div>
+<div id="exr-shift-between-adjusted-all" class="callout callout-style-simple callout-exercise no-icon callout-titled theorem exercise">
+<p><span class="theorem-title"><strong>Exercise 21.6</strong></span> &nbsp;</p>
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="callout-exercise">
+<p><em>Extra Credit</em>.</p>
+<ol type="1">
+<li>Write the simplest formula you can expressing <span class="math inline">\(\hat\Delta_{\text{all}}\)</span> in terms of <span class="math inline">\(\hat\Delta_0\)</span> and <span class="math inline">\(\hat\Delta_1\)</span> and other numbers you can compute from the sample. It should be very simple.</li>
+<li>Referring to the formula, explain why, if you know which of <span class="math inline">\(\hat\Delta_0\)</span> or <span class="math inline">\(\hat\Delta_1\)</span> is larger, you also know whether <span class="math inline">\(\hat\Delta_0\)</span> or <span class="math inline">\(\hat\Delta_{\text{all}}\)</span> is larger and whether <span class="math inline">\(\hat\Delta_1\)</span> or <span class="math inline">\(\hat\Delta_{\text{all}}\)</span> is larger.</li>
+<li>Explain why in visual terms, too.</li>
+</ol>
+<p><em>Hint</em>. How does the purple histogram in <a href="#fig-greenred-scatter" class="quarto-xref">Figure&nbsp;<span>21.1</span></a> relate to the green and red ones? This is not just relevant to the in-visual-terms part; if you don’t already have a formula, what you see may guide you toward one.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-24-contents" aria-controls="callout-24" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-24" class="callout-24-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<ol type="1">
+<li><p>Here’s the formula. It’s a weighted average of the two summaries <span class="math inline">\(\hat\Delta_0\)</span> and <span class="math inline">\(\hat\Delta_1\)</span> where the weights are proportional to number of people averaged over in each summary, i.e., the proportions of red (w=0) and green (w=1) dots in the sample. <span class="math display">\[
+\hat\Delta_{\text{all}} = P_{w=0} \hat\Delta_0 + P_{w=1} \hat\Delta_1 \qfor P_{w=w'} = \frac{1}{n}\sum_{i=1}^n 1_{=w'}(W_i).
+\]</span></p></li>
+<li><p>Because <span class="math inline">\(\hat\Delta_{\text{all}}\)</span> is a weighted average of <span class="math inline">\(\hat\Delta_0\)</span> and <span class="math inline">\(\hat\Delta_1\)</span>, you know it’s going to be in between the two.</p></li>
+<li><p>All three summaries are averages of the <span class="math inline">\(f(x)=\hat\mu(1,x)-\hat\mu(0,x)\)</span> over different distributions. And the height of the purple histogram is always between the green and red histograms.</p></li>
+</ol>
+<p>I didn’t ask for a derivation of the formula <span class="math inline">\(\hat\Delta_{\text{all}}\)</span>, but here it is. It’s just a matter of recognizing that the purple histogram is the same weighted average of the green and red histograms. <span class="math display">\[
+\begin{aligned}
+P_x
+&amp;= \frac{N_{0x} + N_{1x}}{n} \\
+&amp;= \frac{N_{0x}}{\sum_x N_{0x}} \times \frac{\sum_x N_{0x}}{n} + \frac{N_{1x}}{\sum_x N_{1x}} \times \frac{\sum_x N_{1x}}{n} \\
+&amp;= P_{x\mid 0} \times P_{w=0} + P_{x\mid 1} \times P_{w=1} \qfor P_{w=w'} = \frac{1}{n}\sum_x N_{w'x} = \frac{1}{n}\sum_{i=1}^n 1_{=w'}(W_i).
+\end{aligned}
+\]</span></p>
+<p>Substituting this into the formula for <span class="math inline">\(\hat\Delta_{\text{all}}\)</span>, we get <span class="math display">\[
+\begin{aligned}
+\hat\Delta_{\text{all}}
+&amp;= \sum_x P_x \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&amp;= \sum_x \qty{ P_{x\mid 0} P_{w=0} + P_{x\mid 1} P_{w=1}} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&amp;= \sum_x P_{x\mid 0} P_{w=0} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} + \sum_x P_{x\mid 1} P_{w=1} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&amp;= P_{w=0} \sum_x P_{x\mid 0} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} + P_{w=1} \sum_x P_{x\mid 1} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&amp;= P_{w=0} \hat\Delta_0 + P_{w=1} \hat\Delta_1.
+\end{aligned}
+\]</span></p>
+</div>
+</div>
+</div>
+</div>
+<div id="exr-decompose-ca-estimator-ec" class="callout callout-style-simple callout-exercise no-icon callout-titled theorem exercise">
+<p><span class="theorem-title"><strong>Exercise 21.7</strong></span> &nbsp;</p>
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="callout-exercise">
+<p><em>Extra Credit</em>. Write out the three-term decomposition for <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> described above in <a href="#nte-decompose-ca-estimator" class="quarto-xref">Note&nbsp;<span>21.2</span></a>. And, with reference to the California income data shown in <a href="#fig-greenred-scatter" class="quarto-xref">Figure&nbsp;<span>21.1</span></a> and <a href="#fig-greenred-histograms" class="quarto-xref">Figure&nbsp;<span>21.2</span></a>, explain how to use this to see whether <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> or <span class="math inline">\(\hat\Delta_{\text{all}}\)</span> is larger.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-26-contents" aria-controls="callout-26" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Solution
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-26" class="callout-26-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<p>We’ll start with the decomposition from <a href="#nte-decompose-ca-estimator" class="quarto-xref">Note&nbsp;<span>21.2</span></a> and expand. <span class="math display">\[
+\begin{aligned}
+\hat\Delta_{\text{raw}}
+&amp;= \hat\Delta_1 + (\hat\Delta_{\text{raw}} - \hat\Delta_1) \\
+&amp;= \hat\Delta_{\text{all}}
++ \underset{\text{new covariate shift term}}{\qty(\hat\Delta_{1} - \hat\Delta_{\text{all}})}
++ \underset{\text{$\hat\Delta_1$'s covariate shift term}}{(\hat\Delta_{\text{raw}} - \hat\Delta_1)} \\
+&amp;= \hat\Delta_{\text{all}} \\
+&amp;+ \sum_x P_{x\mid 1} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} - \sum_x P_{x} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&amp;+ \sum_x P_{x\mid 1} \hat\mu(0,x) - \sum_x P_{x \mid 0} \hat\mu(0,x) \\
+\end{aligned}
+\]</span> and analogously, making a comparison between <span class="math inline">\(\hat\Delta_{\text{all}}\)</span> and <span class="math inline">\(\hat\Delta_0\)</span>, <span class="math display">\[
+\begin{aligned}
+\hat\Delta_{\text{raw}}
+&amp;= \hat\Delta_{\text{all}} + (\hat\Delta_{0} - \hat\Delta_{\text{all}})
++ (\hat\Delta_\text{raw} - \hat\Delta_{0}) \\
+&amp;+\sum_x P_{x\mid 0} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} - \sum_x P_{x} \qty{ \hat\mu(1,x) - \hat\mu(0,x)} \\
+&amp;+ \sum_x P_{x\mid 1} \hat\mu(1,x) - \sum_x P_{x \mid 0} \hat\mu(1,x)
+\end{aligned}
+\]</span></p>
+<p>We’ve seen in <a href="#exr-decompose-ca-estimator" class="quarto-xref">Exercise&nbsp;<span>21.3</span></a> that the last term is positive — <span class="math inline">\(\hat\Delta_{\text{raw}} &gt; \hat\Delta_0\)</span>. So is the middle term. We’ve seen in <a href="#exr-shift-between-adjusted" class="quarto-xref">Exercise&nbsp;<span>21.5</span></a> that <span class="math inline">\(\hat\Delta_0 &gt; \hat\Delta_{1}\)</span> and it follows from <a href="#exr-shift-between-adjusted-all" class="quarto-xref">Exercise&nbsp;<span>21.6</span></a> that <span class="math inline">\(\hat\Delta_0 &gt; \hat\Delta_\text{all} &gt; \hat\Delta_1\)</span>.<a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a></p>
+</div>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-solution no-icon callout-titled">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-27-contents" aria-controls="callout-27" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+A simpler explanation of which is bigger.
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-27" class="callout-27-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<div class="callout-solution">
+<p>This is based on <a href="#exr-shift-between-adjusted-all" class="quarto-xref">Exercise&nbsp;<span>21.6</span></a>. If <span class="math inline">\(\hat\Delta_\text{raw}\)</span> is bigger than both <span class="math inline">\(\hat\Delta_0\)</span> and <span class="math inline">\(\hat\Delta_1\)</span>, then because <span class="math inline">\(\hat\Delta_{\text{all}}\)</span> is between <span class="math inline">\(\hat\Delta_0\)</span> and <span class="math inline">\(\hat\Delta_1\)</span>, <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> is bigger than <span class="math inline">\(\hat\Delta_{\text{all}}\)</span>.</p>
+<p>We’ve shown that this applies here above. We’ve seen that <span class="math inline">\(\hat\Delta_{\text{raw}}\)</span> is bigger than <span class="math inline">\(\hat\Delta_1\)</span> and <span class="math inline">\(\hat\Delta_0\)</span> in <a href="#exr-decompose-ca-estimator-ec" class="quarto-xref">Exercise&nbsp;<span>21.7</span></a> and <a href="#exr-using-decompositions" class="quarto-xref">Exercise&nbsp;<span>21.4</span></a> respectively.</p>
+</div>
+</div>
+</div>
+</div>
+
+
+<script type="ojs-module-contents">
+eyJjb250ZW50cyI6W119
+</script>
+<div id="exercise-loading-indicator" class="exercise-loading-indicator d-none d-flex align-items-center gap-2">
+<div id="exercise-loading-status" class="d-flex gap-2">
+
+</div>
+<div class="spinner-grow spinner-grow-sm">
+
+</div>
+</div>
+<script type="vfs-file">
+W10=
+</script>
+</section>
+<section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes">
+<hr>
+<ol>
+<li id="fn1"><p>We got lucky here. This is a version of our prior-observations-estimator where <span class="math inline">\(n_\text{prior}=n\)</span> and <span class="math inline">\(\theta_\text{prior}=0\)</span> was exactly equal to <span class="math inline">\(\theta\)</span>. If <span class="math inline">\(\theta\)</span> weren’t zero, we’d be neither unbiased nor consistent.<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn2"><p>This is another prior observations estimator with <span class="math inline">\(n_\text{prior}=n\)</span> and <span class="math inline">\(\theta_\text{prior}=2\)</span>. We’re not lucky with our prior observations here.<a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3"><p>You could, if you prefer, use a version of <a href="#exr-shift-between-adjusted" class="quarto-xref">Exercise&nbsp;<span>21.5</span></a> to see that <span class="math inline">\(\hat\Delta_0 &gt; \hat\Delta_\text{all}\)</span> directly. Instead of thinking about distributing mass from the left side of the red histogram to the right to get the green one, think about distributing mass from the left side of the red histogram to the right to get the purple one.<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section>
+
+</main> <!-- /main -->
+<script type="ojs-module-contents">
+eyJjb250ZW50cyI6W119
+</script>
+<script type="module">
+if (window.location.protocol === "file:") { alert("The OJS runtime does not work with file:// URLs. Please use a web server to view this document."); }
+window._ojs.paths.runtimeToDoc = "../../homework";
+window._ojs.paths.runtimeToRoot = "../..";
+window._ojs.paths.docToRoot = "..";
+window._ojs.selfContained = false;
+window._ojs.runtime.interpretFromScriptTags();
+</script>
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const onCopySuccess = function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  }
+  const getTextToCopy = function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+    text: getTextToCopy
+  });
+  clipboard.on('success', onCopySuccess);
+  if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+    // For code content inside modals, clipBoardJS needs to be initialized with a container option
+    // TODO: Check when it could be a function (https://github.com/zenorocha/clipboard.js/issues/860)
+    const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+      text: getTextToCopy,
+      container: window.document.getElementById('quarto-embedded-source-code-modal')
+    });
+    clipboardModal.on('success', onCopySuccess);
+  }
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      const annoteTargets = window.document.querySelectorAll('.code-annotation-anchor');
+      for (let i=0; i<annoteTargets.length; i++) {
+        const annoteTarget = annoteTargets[i];
+        const targetCell = annoteTarget.getAttribute("data-target-cell");
+        const targetAnnotation = annoteTarget.getAttribute("data-target-annotation");
+        const contentFn = () => {
+          const content = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          if (content) {
+            const tipContent = content.cloneNode(true);
+            tipContent.classList.add("code-annotation-tip-content");
+            return tipContent.outerHTML;
+          }
+        }
+        const config = {
+          allowHTML: true,
+          content: contentFn,
+          onShow: (instance) => {
+            selectCodeLines(instance.reference);
+            instance.reference.classList.add('code-annotation-active');
+            window.tippy.hideAll();
+          },
+          onHide: (instance) => {
+            unselectCodeLines();
+            instance.reference.classList.remove('code-annotation-active');
+          },
+          maxWidth: 300,
+          delay: [50, 0],
+          duration: [200, 0],
+          offset: [5, 10],
+          arrow: true,
+          appendTo: function(el) {
+            return el.parentElement.parentElement.parentElement;
+          },
+          interactive: true,
+          interactiveBorder: 10,
+          theme: 'quarto',
+          placement: 'right',
+          popperOptions: {
+            modifiers: [
+            {
+              name: 'flip',
+              options: {
+                flipVariations: false, // true by default
+                allowedAutoPlacements: ['right'],
+                fallbackPlacements: ['right', 'top', 'top-start', 'top-end', 'bottom', 'bottom-start', 'bottom-end', 'left'],
+              },
+            },
+            {
+              name: 'preventOverflow',
+              options: {
+                mainAxis: false,
+                altAxis: false
+              }
+            }
+            ]        
+          }      
+        };
+        window.tippy(annoteTarget, config); 
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../lectures/Lecture9.html" class="pagination-link" aria-label="Multivariate Analysis and Adjustment">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Multivariate Analysis and Adjustment</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../lectures/Lab5.html" class="pagination-link" aria-label="A Game of Telephone">
+        <span class="nav-page-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">A Game of Telephone</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
