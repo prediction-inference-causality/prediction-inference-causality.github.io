@@ -1,0 +1,306 @@
+---
+title: "Sampling"
+format: "live-html"
+---
+
+![](figs/big-hairy-question.jpg)
+
+# Making an Important Decision
+
+{{< include ../_extensions/r-wasm/live/_knitr.qmd >}}
+{{< include shared-code-webr.qmd >}}
+
+In this chapter, we'll explore different sampling methods and their implications for statistical inference. We'll need six participants to help us make an important decision. While this is a paid position, the real benefit of participating is influence. These people will be our **population**, and we'll poll them to find out which of two things they tend to prefer. Of course, we won't talk to our whole population. That would be too much work.
+
+# Understanding Sampling
+
+![](figs/halving-watermelon.png)
+
+Sampling allows us to cut our effort by half. However, people often aren't clear about how they actually get their sample, or they do the math as if they'd sampled some other way. This might be okay if doing the math 'right' and doing it 'wrong' lead to the same inferences. In that case, you might say you're using a *simplifying approximation*. Today, we'll look into how much **how we sample** affects inference.
+
+# Our Population
+
+Now that we have our population, we need a way to represent them mathematically. When doing math, we tend to refer to a version of the population without irrelevant detail. We boil them down to a list of numbers. In this case, preferences. We'll use 0 for thing A and 1 for thing B.
+
+$$
+y_1 \ldots y_m \qqtext{ is the standard notation. }
+$$
+
+To get a sense of what a population looks like, we can plot one. Since we're not going to talk to our whole population, we'll have to make one up.
+
+```{webr}
+#| label: fig-population
+m = 6
+pop = data.frame(j=1:m, 
+                 y=rep(c(0,1), m/2))
+                 
+scales = list(scale_x_continuous(breaks = 1:m),
+              scale_y_continuous(breaks = (0:3/3), labels=sprintf("%d/3", 0:3))) 
+
+pop.plot = ggplot(pop, aes(x = j, y = y)) + 
+           geom_point(shape='circle', alpha=.1, size=5) + 
+           scales               
+pop.plot
+```
+
+## Setting Up Our Analysis
+
+We define our population with $m=6$ people, using the letter $j$ when counting them out. We record their preferences and calculate x and y 'scales' to make our plots nice. The x-coordinate in our plot represents the person's position in our list.
+
+## What We're Estimating
+
+We want to estimate the proportion of these people who prefer *B*, i.e., who have $y_j=1$. While this could be easy since we've just looked at all the *y*s, we'll make it hard for ourselves by acting as if we haven't. This practice of *fake data simulation* is an important tool when understanding methods.
+
+This is what we do.
+
+1. Making up a fake population
+2. Running a fake (simulated) study on them exactly like we're planning to do
+3. Comparing the resulting estimate to the thing we wanted to estimate
+
+Because it's fake, we get to poll the whole population so we know what the right answer is (if we don't, we don't have a well-defined question) and we can run the study over and over again to look at the *distribution* of estimates.
+
+If we're not satisfied with that distribution, that's evidence it's a study we shouldn't be running. Once we've done this for a few study designs and seen what works --- or at least what doesn't --- we'll choose one to use on our actual population. In mathematical notation, our estimand looks like this.
+$$
+\text{estimand} = \frac{1}{m}\sum_{j=1}^m y_j  
+$$
+
+```{webr}
+#| label: fig-estimand
+estimand = mean(pop$y)       
+estimand
+```
+
+```{webr}
+#| label: fig-estimand-visual
+pop.plot + geom_hline(yintercept=estimand,
+                      color='green', linewidth=2, alpha=.2)
+```
+
+# Estimating It
+
+Let's assume we've been *given* a sample. Some list of preferences. 
+$$
+Y_1 \ldots Y_N \qqtext{ is the standard notation }
+$$
+
+We'll take our plot of the population and *color in* the dots we talked to.
+
+```{webr}
+#| label: fig-sample
+sampling.rate = 1/2
+
+N = round(m * sampling.rate)
+sam = pop[1:N, ]
+
+sam.plot = pop.plot + geom_point(aes(x=j, y=y), data=sam, 
+                                 size=5, color='blue', alpha=.5) 
+sam.plot 
+```
+
+## Mathematical Formulation
+
+$$
+\text{estimator} = \frac{1}{N}\sum_{i=1}^N Y_i  \qqtext{ where } Y_1 \ldots Y_N \qqtext{ is our sample } 
+$$
+
+```{webr}
+#| label: fig-estimator
+estimator = function(sam) { 
+  Y = sam$y     
+  mean(Y) 
+}
+estimator(sam)
+```
+
+```{webr}
+#| label: fig-estimator-visual
+sam.plot + geom_hline(yintercept=estimator(sam))
+```
+
+The horizontal line shows the mean of our sample $Y_1 \ldots Y_n$. It's the fraction of times we heard 'I prefer B' when asking someone's preference.
+
+## Understanding the Notation
+
+People often talk as if both $Y_i$ and $y_j$ are the same kind of thing (e.g., people's preferences). This can be a source of confusion because they aren't. To make this clear, let's be concrete.
+
+Calling someone to find out their preference is how we do it.
+
+- $y_j$ is *a person's preference*. A real person (e.g., the $j$th one in the phone book)
+- $Y_i$ is *an utterance*. It's *what we hear* on our $i$th call
+
+In this class, no matter what the context, we'll say '$i$th call' and '$j$th' person. It could be a quality control application in a brewery where we're opening and pouring a few beers to check that we haven't overcarbonated. In that case, our $j$th person is a can and our $i$th call is a glass.
+
+Using different letters for samples and population is how we distinguish them.
+
+- We use the same letter to communicate that each (big) $Y$ is *somebody's* (little) $y$
+- We capitalize to communicate that $Y_1$ isn't $y_1$
+- In this class, we count them out with different letters:
+  - $Y_i$ for $i$ from $1$ to $n$
+  - $y_j$ from $j$ from $1$ to $m$
+
+# Repeated Sampling
+
+We'll repeat the sampling process many times to understand the distribution of our estimates.
+
+```{webr}
+#| label: fig-repetitions
+R = 1000
+```
+
+To do this efficiently, we'll use the function *map_vec* from the package **purrr**. This function takes two arguments --- a list and a function --- and calls the function on every element of the list, returning a vector of the results. This saves us from writing a for loop and handling the 'filing' ourselves.
+
+```{webr}
+#| label: fig-map-example
+plus.one = function(x) { x + 1 }
+one.to.ten = 0:9 |> map_vec(plus.one)
+one.to.ten
+```
+
+We can also use an *anonymous function* to make it a one-liner:
+
+```{webr}
+#| label: fig-map-anonymous
+one.to.ten.again = 0:9 |> map_vec(\(x) x+1)
+one.to.ten.again
+```
+
+We'll write a function that ...
+1. Takes as input a population
+2. Samples the population
+3. Returns the sample's mean---an estimate of the population mean
+
+We'll run it `R` times on our population by *mapping* our function over a list containing `R` copies of the population.
+
+```{webr}
+#| label: fig-population-copies
+pops = rep(list(pop), R)
+grid_along = function(x) seq_along(x)/length(x)
+```
+
+# Different Sampling Methods
+
+## Sampling with Replacement
+
+To sample *with* replacement, we roll a ($m$-sided) die $N$ times. Since we're using $m=6$, it's the kind of die you see a lot. We're rolling $N=3$ times. The first roll tells us who we call first, the second who we call second, etc. If our $i$th roll is $4$, $Y_i=y_4$.
+
+- You can also pick balls numbered 1...m out of a hat. Or an urn. Whatever is at hand.
+- But you have to *replace* the ball you picked before you pick again.
+
+```{webr}
+#| label: fig-with-replacement
+with.replacement = function(pop, sampling.rate=1/2) { 
+  N = round(m * sampling.rate) 
+  J = sample(1:m, N, replace=TRUE)
+  sam = pop[J,]
+  estimator(sam)
+}
+
+estimator.samples =  pops |> map_vec(with.replacement)
+
+ggplot(data.frame(sample=estimator.samples, rep=grid_along(estimator.samples))) + 
+  geom_bar(aes(x=sample, y=after_stat(prop)), alpha=.3) +
+  geom_point(aes(x=sample, y=rep), position=position_jitter(w=.01,h=0), color='purple', alpha=.3) + 
+  geom_vline(xintercept=estimand, color='green') +
+  geom_vline(xintercept=estimator.samples[1], color='blue')
+```
+
+Some might find it wasteful to call the same person twice. If you were willing to make three calls, you could've gained more information. However, the math is easy with this method. We say the $Y$s in our sample are *independent* and *identically distributed*.
+
+- *Independent* means that what you hear on one call tells you nothing about what you'll hear on another because you're rolling the die again each time. Each call is a fresh start.
+- *Identically distributed* means that each call has the same chance of reaching any person in the population --- the die doesn't change between rolls. 
+
+## Sampling without Replacement
+
+To sample *without* replacement, we pick balls from a hat but don't replace the ball we picked. In R, this is just a one-line change to the sampling code.
+
+```{webr}
+#| label: fig-without-replacement
+without.replacement = function(pop, sampling.rate=1/2) {
+  N = round(m * sampling.rate) 
+  J = sample(1:m, N, replace=FALSE)
+  sam = pop[J,]
+  estimator(sam)
+}
+
+estimator.samples = pops |> map_vec(without.replacement)
+estimate = estimator.samples[1]  # take first sample as our estimate
+
+ggplot(data.frame(sample=estimator.samples, rep=grid_along(estimator.samples))) + 
+  geom_bar(aes(x=sample, y=after_stat(prop)), alpha=.3) +
+  geom_point(aes(x=sample, y=rep), position=position_jitter(w=.01,h=0), color='purple', alpha=.3) + 
+  geom_vline(xintercept=estimand, color='green') +
+  geom_vline(xintercept=estimate, color='blue')
+```
+
+People like this because it doesn't feel wasteful. You don't call the same person twice. However, it makes the math a bit harder because calls *aren't independent*. So people often *do* this, and *do the math* as if they'd sampled with replacement, justifying it by saying that with enough balls, you weren't going to pick the same one twice anyway.
+
+## Convenience Sampling
+
+A convenience sample is what it sounds like. Pick any 3 people you want to minimize effort. This raises important questions about how to analyze such samples and whether we have enough intuition to sketch their distribution.
+
+```{webr}
+#| label: fig-convenience
+by.convenience = function(pop, sampling.rate=1/2) {
+  N = round(m * sampling.rate) 
+  sam = pop[1:N,]  # Just take the first N people
+  estimator(sam)
+}
+
+estimator.samples =  pops |> map_vec(by.convenience)
+
+ggplot(data.frame(sample=estimator.samples, rep=(1:R)/R)) + 
+  geom_bar(aes(x=sample, y=after_stat(prop)), alpha=.3) +
+  geom_point(aes(x=sample, y=rep), position=position_jitter(w=.01,h=0), color='purple', alpha=.3) + 
+  geom_vline(xintercept=estimand, color='green') +
+  geom_vline(xintercept=estimator.samples[1], color='blue')
+```
+
+## Randomization (Bernoulli Sampling)
+
+To sample by randomization, we have everyone in our population flip a coin. Our sample is everyone who flips heads.
+
+```{webr}
+#| label: fig-randomization
+by.randomization = function(pop, sampling.rate=1/2) {
+  flips = rbinom(m, 1, sampling.rate)
+  sam = pop[flips==1,]
+  if (nrow(sam) == 0) return(NA)  # Return NA if we get no heads
+  estimator(sam)
+}
+
+estimator.samples = pops |> map_vec(by.randomization)
+# Filter out NA samples - these occur when we get no heads in our coin flips
+estimator.samples = estimator.samples[!is.na(estimator.samples)]
+estimate = estimator.samples[1]  # take first sample as our estimate
+
+ggplot(data.frame(sample=estimator.samples, rep=grid_along(estimator.samples))) + 
+  geom_bar(aes(x=sample, y=after_stat(prop)), alpha=.3) +
+  geom_point(aes(x=sample, y=rep), position=position_jitter(w=.01,h=0), color='purple', alpha=.3) + 
+  geom_vline(xintercept=estimand, color='green') +
+  geom_vline(xintercept=estimate, color='blue')
+```
+
+This method combines some of the benefits of the previous two. We don't call anyone twice and the math is easy because *flips* are independent.
+
+However, there's a price: the sample size is random and zero is an option. When we get no heads in our coin flips, we get an empty sample.
+When plotting our estimates above, we've just thrown out the empty samples we got. But to do the math when you're using this sampling method, you really need to specify what it does when it has no data to work with. 
+
+
+## Comparing the Results
+
+```{webr}
+#| label: fig-comparison
+sampling.rate = 1/2
+all.samples = pops |> map(function(...) {
+  data.frame(with.replacement=with.replacement(pop, sampling.rate),
+             without.replacement=without.replacement(pop, sampling.rate),
+             by.randomization=by.randomization(pop, sampling.rate))
+}) |> bind_rows() |> 
+      pivot_longer(cols=everything(), 
+      names_to='sampling', values_to='estimate') |> 
+      filter(!is.na(estimate))  # Filter out NA values
+
+ggplot(all.samples) + 
+  geom_histogram(aes(x=estimate, y=after_stat(density)), alpha=.2, binwidth=0.1) +
+  facet_wrap(.~sampling, ncol=3)
+``` 
