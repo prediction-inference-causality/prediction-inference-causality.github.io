@@ -33,6 +33,36 @@ Be extremely careful with LaTeX math environments (`$...$` and `$$...$$`). Edits
 
 ### Code Chunk Integrity
 Verify that code chunks (` ```{r} ... ``` `) remain intact. Ensure the opening and closing delimiters are present and correct. Check that no code *within* the chunks has been accidentally deleted or altered. Pay attention to chunk options like `#| label:` and ensure they are preserved. A deleted or corrupted code chunk can cause hard-to-diagnose render errors.
+
+### Column Syntax (`::: columns`)
+Pay close attention to the syntax for column divs:
+```markdown
+::: {.columns}
+
+::: {.column width="60%"}
+Content for column 1...
+:::
+
+::: {.column width="40%"}
+Content for column 2...
+:::
+
+:::
+```
+Ensure each opening `:::` has a corresponding closing `:::`. Incorrect nesting or missing closers will cause `quarto render` warnings or errors (often about fenced divs). Blank lines around the `:::` delimiters can sometimes help prevent render issues.
+:::
+
+::: {.callout-info}
+## AI Assistant Tool Limitations
+The editing tools used by the AI assistant may occasionally make mistakes, such as:
+- Incorrectly applying edits (e.g., adding/deleting extra lines).
+- Deleting entire code chunks or sections accidentally.
+- Introducing syntax errors (especially with LaTeX or column divs).
+
+If an edit seems incorrect or causes rendering errors, please:
+1. Point out the specific error to the assistant.
+2. Ask the assistant to revert the change or re-apply the edit carefully.
+3. If errors persist after retries, manual correction might be necessary.
 :::
 
 # Critical Warning About Math and Code Modifications
@@ -66,9 +96,11 @@ When reorganizing content into tabs or merging sections:
 This guide describes how to translate a lecture presentation (lecture/LectureX.qmd) into a prose version (lecture/LectureX-prose.qmd). The goal is to maintain all content while improving readability and flow, **primarily by converting bullet points to prose and preserving the original wording.**
 
 ## Writing Style Preferences
+- **Primary Goal:** Preserve the original text verbatim unless specifically asked to change it. The main focus is structural conversion (bullets to prose).
+- **Secondary Goal (If requested *after* structural conversion):** Adjustments for conversational tone or flow.
+- Use shorter, more direct sentences (if rewriting).
 - Preserve the original text unless specifically asked to change it
 - **Focus on structural conversion (bullets to prose) first.** Stylistic adjustments should only be made if explicitly requested *after* the structural conversion is complete and verified.
-- Use shorter, more direct sentences
 - Replace colons and m-dashes with periods where appropriate
 - Keep sentence fragments when they serve the pedagogical purpose
 - Maintain a conversational, lecture-like quality
@@ -80,6 +112,12 @@ This guide describes how to translate a lecture presentation (lecture/LectureX.q
 
 ## Translation Process
 
+This process is typically done in two stages.
+
+**Stage 1: Structural Translation (Preserve Content & Wording)**
+
+*Goal: Convert the presentation structure to a basic prose structure while preserving all original content and wording.* 
+
 ### Before Starting
 1. Read several homework/homework*.qmd files to understand the prose style
 2. Ask which lecture to translate if not specified
@@ -90,52 +128,74 @@ This guide describes how to translate a lecture presentation (lecture/LectureX.q
    ```
 5. IMPORTANT: Never make any changes to the original LectureX.qmd file
 
-### Translation Steps
+### Stage 1 Steps
 
-1. **Initial Pass: Convert Bullet Points to Prose (Preserving Wording)**
-   - Convert each bullet point into a complete sentence or integrate it naturally into surrounding sentences.
-   - **Crucially, preserve the original wording from the source file.**
-   - Maintain the same section structure as the presentation.
-   - Keep all content, even if it seems redundant.
-   - Maintain original order of all content.
+1.  **Initial Pass: Convert Bullet Points to Prose (Preserving Wording)**
+    -   Convert each bullet point into a complete sentence or integrate it naturally into surrounding sentences.
+    -   **Crucially, preserve the original wording from the source file.** Do not rephrase or change terminology.
+    -   Maintain the same section structure and headings as the presentation.
+    -   Keep all content, even if it seems redundant.
+    -   Maintain original order of all content.
 
-2. **Title and Structure Changes**
-   - Use the presentation's subtitle as the main title.
-   - Remove the original title if it's just "Lecture X".
-   - **Do not change section headers.** Maintain the original section titles from the source file.
+2.  **Title Change**
+    -   Ensure the `title:` field in the YAML header of the prose file (`LectureX-prose.qmd`) contains the descriptive title for the lecture content.
+    -   This title is usually found in the `title:` field of the original presentation file (`LectureX.qmd`).
+    -   If the original file has only a generic `title:` (e.g., "Lecture X"), ask the user for an appropriate title for the prose version.
+    -   Adjust the `title:` field in the prose file's YAML header accordingly.
 
-3. **Prose Style and Flow (If Requested)**
-   - **Only perform this step if explicitly asked by the user.**
-   - If requested, study the style in `homework/homework*.qmd`.
-   - Match the level of detail and explanation.
-   - Use similar sentence structures and paragraph organization.
-   - Maintain consistent voice and perspective.
+3.  **Figure Labels**
+    -   **Figure Options:** For figure-generating code chunks, add a Quarto label option (`#| label: fig-...`, using a descriptive name based on the section/content). Remove any existing caption options (`#| fig-cap:`). Preserve other chunk options. Check for correct syntax (`#| label: ...`, not `# label: ...`).
 
-4. **Content Organization**
-   - Convert panel-tabsets into flowing prose, except for:
-     - Visualizations showing different views of the same data
-     - Code examples that benefit from side-by-side comparison
-   - Add transitions between sections to improve narrative flow (use original wording where possible).
-   - **Complex Layouts (`columns`, `panel-tabset`):** Exercise caution when editing content inside complex Quarto structures like `:::: columns ... ::: ... ::::`, `::: {.panel-tabset} ... :::`, etc. Ensure all opening/closing delimiters (`:::` and `::::`) are correctly maintained and nested. If `quarto render` gives warnings about 'fenced divs', check for missing/extra delimiters or try adding blank lines before `:::: columns` blocks.
+4.  **Initial Verification**
+    -   Run `quarto render <filename.qmd>`. Check for and fix any critical errors (especially LaTeX, code execution, or column div errors) introduced during the initial conversion.
+    -   Ensure all original headings are present.
 
-5. **References and Labels**
-   - **Figure Options:** For figure-generating code chunks, add a Quarto label option (`#| label: fig-...`, using a descriptive name based on the section/content). Remove any existing caption options (`#| fig-cap:`). Preserve other chunk options.
-   - Add proper labels to all tables (e.g., `#tbl-predictions`).
-   - Add descriptive captions to tables (`#| tbl-cap:`).
-   - Add cross-references between sections using `@fig-` and `@tbl-` labels where appropriate (e.g., referencing a figure discussed in the text).
-   - Convert vague references ("see the figure above") to explicit cross-references if a label exists.
+**Stage 2: Prose Refinement (Improve Flow & Structure)**
 
-6. **Specific Text Changes (Use with Caution)**
-   - Consider replacing "Today we'll" with "In this chapter, we'll" (confirm if necessary).
-   - Remove references to specific class days (e.g., "On Friday, we...") unless it provides essential context.
-   - Ensure consistent formatting of percentages and numbers.
+*Goal: Restructure and rewrite the Stage 1 output to create a cohesive, flowing prose document suitable for reading.* 
 
-7. **Final Verification (Frequent Render Checks)**
-   - Run `quarto render <filename.qmd>` **frequently**, especially after edits involving LaTeX, code chunks, or complex layouts like `columns`.
-   - **Do not proceed if errors or warnings occur.** Analyze the error messages (paying attention to line numbers or specific warnings like 'fenced div' or LaTeX errors), identify the cause (often related to recent edits), fix the issue, and re-render successfully before continuing.
-   - Ensure all cross-references work.
-   - Check that all figures and tables are properly labeled as requested.
-   - Verify that the prose flows naturally (if stylistic edits were requested).
-   - If compilation warnings or errors persist after attempts to fix:
-     - DO report them clearly to the user, explaining the error and the attempted fixes.
-     - DO wait for user guidance before proceeding. 
+### Stage 2 Steps
+
+1.  **Identify Merge/Restructure Opportunities:** Review the Stage 1 document. Identify consecutive sections covering related topics, series of examples, or overly granular subsections that could be combined or restructured for better narrative flow.
+
+2.  **Merge & Restructure Sections:**
+    -   Combine related sections. This might involve:
+        -   Removing intermediate headings and letting the text flow under the main section heading.
+        -   Consolidating content under a revised heading (confirm title changes if necessary).
+    -   Reorganize content presentation, for example:
+        -   Grouping related figures or code examples into a `panel-tabset` under a single heading (e.g., multiple simulated polls, different views of interval estimates).
+        -   Converting minor `###` subsections into integrated prose with bold text or paragraph breaks if it improves flow.
+
+3.  **Adjust Headings:**
+    -   Unlike Stage 1, headings *can* be adjusted in Stage 2 for prose clarity:
+        -   Rename headings if the merged content warrants a different title (confirm if unsure).
+        -   Adjust heading levels (e.g., H2 `##` to H3 `###` or vice-versa) as needed by the new structure.
+
+4.  **Rewrite Prose & Transitions:**
+    -   Rewrite text as needed to create smooth transitions between previously separate sections.
+    -   Rephrase sentences for clarity and flow in the prose format (while still aiming to retain the core meaning and key terms).
+    -   Explicitly reference figures/tabs when needed (e.g., "See the second tab (@fig-...) for an example...").
+
+5.  **Handle Asides/Footnotes:**
+    -   Convert `:::: aside` blocks into footnotes `^[...]` or integrate their content directly into the main text where appropriate.
+
+6.  **Refine Code/Figures (Use Caution!):**
+    -   Minor adjustments to figure aesthetics (e.g., removing `fill` if faceting is used) or chunk labels (`#| label: ...`) *may* be acceptable if they improve clarity in the static prose format.
+    -   Redundant figures (e.g., overview plots made unnecessary by tabsets) *may* be removed.
+    -   **CRITICAL:** Do *not* alter core code logic, variable names, or calculations. Ensure changes do not break execution. **Confirm significant code/figure changes** before implementing.
+
+7.  **Add Cross-References & Table Formatting:**
+    -   Add proper labels to all tables (e.g., `#tbl-predictions`).
+    -   Add descriptive captions to tables (`#| tbl-cap:`).
+    -   Add cross-references between sections using `@fig-` and `@tbl-` labels where appropriate (e.g., referencing a figure discussed in the text).
+    -   Convert vague references ("see the figure above") to explicit cross-references if a label exists.
+
+8.  **Final Verification (Frequent Render Checks)**
+    -   Run `quarto render <filename.qmd>` **frequently** during Stage 2 edits, especially after changes involving columns, LaTeX, or code chunks.
+    -   **Do not proceed if errors or warnings occur.** Analyze the error messages (paying attention to line numbers or specific warnings like 'fenced div' or LaTeX errors), identify the cause (often related to recent edits), fix the issue, and re-render successfully before continuing.
+    -   Ensure all cross-references work.
+    -   Check that all figures and tables are properly labeled/captioned as requested.
+    -   Verify that the final prose flows naturally.
+    -   If compilation warnings or errors persist after attempts to fix:
+        -   DO report them clearly to the user, explaining the error and the attempted fixes.
+        -   DO wait for user guidance before proceeding. 
